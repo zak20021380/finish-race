@@ -230,6 +230,16 @@ export interface Stats {
    */
   pvpStreak: number;
   pvpBest: number;
+  /**
+   * The PUBLIC career: strictly human-vs-human. A board the machine filled — a solo practice race,
+   * a friends room backfilled with bots — never touches these four, so the competitive profile
+   * cannot be inflated by farming the AI. `pvpRun` is the pure consecutive-win run (no defense
+   * gate); the defense-gated `pvpBest` above stays the honor's own instrument.
+   */
+  pvpGames: number;
+  pvpWins: number;
+  pvpRun: number;
+  pvpRunBest: number;
   modes: Partial<Record<Mode, number>>;
 }
 
@@ -353,7 +363,11 @@ function fresh(): Save {
     coins: START_COINS,
     owned: { ball: [STARTERS.ball], wall: [STARTERS.wall], board: [STARTERS.board] },
     equipped: { ...STARTERS },
-    stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, pvpStreak: 0, pvpBest: 0, modes: {} },
+    stats: {
+      games: 0, wins: 0, losses: 0, streak: 0, best: 0,
+      pvpStreak: 0, pvpBest: 0, pvpGames: 0, pvpWins: 0, pvpRun: 0, pvpRunBest: 0,
+      modes: {},
+    },
     country: null,
     age: null,
     dob: null,
@@ -471,7 +485,10 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   const st = raw.stats;
   if (st) {
-    for (const key of ['games', 'wins', 'losses', 'streak', 'best', 'pvpStreak', 'pvpBest'] as const) {
+    for (const key of [
+      'games', 'wins', 'losses', 'streak', 'best', 'pvpStreak', 'pvpBest',
+      'pvpGames', 'pvpWins', 'pvpRun', 'pvpRunBest',
+    ] as const) {
       if (whole(st[key])) s.stats[key] = Math.max(0, Math.floor(st[key] as number));
     }
     for (const m of ['bot', 'online'] as const) {
@@ -480,6 +497,9 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   s.stats.best = Math.max(s.stats.best, s.stats.streak);
   s.stats.pvpBest = Math.max(s.stats.pvpBest, s.stats.pvpStreak);
+  /* the public career can never claim more wins than duels, or a longer run than its own best */
+  s.stats.pvpWins = Math.min(s.stats.pvpWins, s.stats.pvpGames);
+  s.stats.pvpRunBest = Math.max(s.stats.pvpRunBest, s.stats.pvpRun);
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
 
@@ -741,6 +761,17 @@ export function recordGame(
     s.streak = 0;
   }
   if (live) {
+    /* THE PUBLIC CAREER. Only a board with a person on the far side reaches this block: `mode` is
+       `bot` for a solo practice race and for a friends room the machine backfilled, so a farmed
+       AI seat can never move a number the competitive profile prints. */
+    s.pvpGames++;
+    if (r.won) {
+      s.pvpWins++;
+      s.pvpRun++;
+      s.pvpRunBest = Math.max(s.pvpRunBest, s.pvpRun);
+    } else {
+      s.pvpRun = 0;
+    }
     /* A live win extends the run only while the seat's defense held; a low-integrity
        win breaks it exactly like a loss, so the badge cannot be farmed by trading walls. */
     if (r.won && r.defenseHeld === true) {
@@ -761,6 +792,32 @@ export function recordGame(
  * missing or false flag (fresh install, older save, refused storage backend) is a first launch.
  */
 export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted === true;
+
+/** The public competitive record: human-vs-human only, with the rate derived — never stored. */
+export interface PvpCareer {
+  matches: number;
+  wins: number;
+  /** `(pvpWins / pvpGames) * 100`, rounded; 0 when no duel has ever settled. */
+  rate: number;
+  /** The run in progress — broken by the next settled PvP loss. */
+  run: number;
+  /** The longest consecutive PvP win run this seat has ever strung together. */
+  best: number;
+}
+
+export function pvpCareer(): PvpCareer {
+  const s = profile.stats;
+  const matches = Math.max(0, Math.floor(s.pvpGames));
+  const wins = Math.min(matches, Math.max(0, Math.floor(s.pvpWins)));
+  const best = Math.max(0, Math.floor(s.pvpRunBest));
+  return {
+    matches,
+    wins,
+    rate: matches > 0 ? Math.round((wins / matches) * 100) : 0,
+    run: Math.min(best, Math.max(0, Math.floor(s.pvpRun))),
+    best,
+  };
+}
 
 /**
  * Every race this profile has ever settled, across the tally, the win/loss pair and the per-mode

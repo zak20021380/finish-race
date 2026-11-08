@@ -612,7 +612,9 @@ export function badgeStatus(id: string, equipped: boolean): BadgeStatus {
   if (!def) return { kind: 'editions', text: '—' };
   if (equipped) return { kind: 'equipped', text: 'EQUIPPED' };
   const ed = badgeEdition(def.id);
-  if (ed.serial !== null) return { kind: 'serial', text: `${editionSerialLabel(ed.serial)} / ${ed.cap}` };
+  /* `№ 001 / 100` — the edition plate is a ledger code, so it keeps its Latin figures and its
+     numero sign in every language; only the number is a number. */
+  if (ed.serial !== null) return { kind: 'serial', text: `№ ${pad3(ed.serial)} / ${ed.cap}` };
   if (ed.minting) return { kind: 'minting', text: 'MINTING…' };
   if (isBadgeUnlocked(def.id)) return { kind: 'unlocked', text: 'UNLOCKED' };
   return { kind: 'editions', text: `${def.cap} EDITIONS` };

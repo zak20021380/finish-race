@@ -17,7 +17,7 @@
     <title>Tactix</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- AdsGram V1 rewarded video. Loaded async on purpose: the first ad is minutes away, and a
          blocked CDN must never hold up the race — `src/ads.ts` answers `no_sdk` and the UI moves on. -->
@@ -1656,7 +1656,7 @@
             <div class="p-card wide pf-hero pf-hero-v2">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
 
-              <!-- tier 1 · identity: avatar + equipped crest pin · name · competitive division -->
+              <!-- tier 1 · identity: avatar + level plate + equipped crest pin · name · arena bracket -->
               <div class="pf-hero-top">
                 <div class="pf-avatar-slot">
                   <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
@@ -1666,6 +1666,11 @@
                       <span id="pf-avatar-t">P</span>
                     </span>
                   </button>
+                  <!-- the level plate: struck into the avatar's lower-left lip, physically pinned so
+                       no avatar frame, flag or mirrored row can ever move it. Latin figures only. -->
+                  <span class="pf-lvl" id="pf-lvl" aria-label="Level 1">
+                    <span class="pf-lvl-k" data-i18n="pfLevelShort">Lv.</span><b id="pf-lvl-n">1</b>
+                  </span>
                   <!-- the equipped honor rides the avatar's bottom-right corner as a prestige pin.
                        It is its own control: tapping opens the honor's certificate. -->
                   <button class="pf-equipped-badge" type="button" id="pf-equipped-badge" hidden
@@ -1685,6 +1690,12 @@
                       <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
                     </button>
                   </div>
+                  <!-- the arena bracket this seat currently holds, read off the live division
+                       ladder: the realm the player actually unlocked, never a static label -->
+                  <span class="pf-arena-plaque" id="pf-arena-plaque" data-tier="bronze">
+                    <span class="pf-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-chess-king" /></svg></span>
+                    <span class="pf-arena-t" id="pf-arena-t">Arena 1: Bronze</span>
+                  </span>
                   <!-- inline rename: one Dark-Clay field, a live counter and Save / Cancel -->
                   <form class="pf-name-form" id="pf-name-form" novalidate hidden>
                     <label class="pf-name-field">
@@ -1705,23 +1716,46 @@
                 </div>
               </div>
 
-              <!-- tier 2 · the twin gold stat capsules, then the XP rail (level left, XP right) -->
-              <div class="pf-xp-block">
-                <div class="pf-stat-row">
-                  <span class="pf-tiq-pill" id="pf-tiq-pill" aria-label="Tactical IQ 0">
-                    <span class="pf-tiq-token" aria-hidden="true"><svg class="ico"><use href="#i-brain" /></svg></span>
-                    <b id="pf-tiq">0</b><span class="pf-tiq-k">TIQ</span>
+              <!-- tier 2 · the Tactical Intelligence slab: one obsidian card, a specular gold
+                   hairline, the percentile meter and the flagship figure. -->
+              <div class="pf-tiq-card" id="pf-tiq-card">
+                <span class="pf-tiq-meter">
+                  <svg class="pf-tiq-arc" viewBox="0 0 44 44" aria-hidden="true">
+                    <circle class="pf-tiq-track" cx="22" cy="22" r="19" fill="none" />
+                    <circle class="pf-tiq-fill" id="pf-tiq-fill" cx="22" cy="22" r="19" fill="none"
+                      pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="100" />
+                  </svg>
+                  <b class="pf-tiq-pct" id="pf-tiq-pct">0%</b>
+                  <span class="pf-tiq-cap" data-i18n="percentile">Percentile</span>
+                </span>
+                <span class="pf-tiq-body">
+                  <span class="pf-tiq-kicker">
+                    <i class="pf-tiq-dot" aria-hidden="true"></i>
+                    <span data-i18n="pfTacticalIq">Tactical Intelligence</span>
                   </span>
-                  <span class="coin-pill pf-coin-pill"><span class="pf-coin-token" aria-hidden="true"><span class="coin" data-coin></span></span><b id="pf-coins">0</b><span class="pf-coin-k" data-i18n="coins">Coins</span></span>
-                </div>
+                  <span class="pf-tiq-val" id="pf-tiq-pill" aria-label="Tactical IQ 0">
+                    <svg class="ico pf-tiq-brain" aria-hidden="true"><use href="#i-brain" /></svg>
+                    <b id="pf-tiq">0</b>
+                    <span class="pf-tiq-k">TIQ</span>
+                  </span>
+                  <span class="pf-tiq-rank" id="pf-tiq-rank">#1 · 0%</span>
+                </span>
+              </div>
+
+              <!-- tier 3 · the XP rail, with the purse as a quiet chip on the same line -->
+              <div class="pf-xp-block">
                 <div class="pf-xp-meta-row">
                   <span class="pf-xp-lvl" id="pf-xp-lvl" aria-label="Level 1">LVL <b id="pf-level">1</b></span>
                   <span class="pf-xp-meta" id="pf-xp">0 / 10 XP</span>
+                  <span class="pf-wallet" id="pf-wallet" aria-label="Coin balance">
+                    <span class="pf-wallet-token" aria-hidden="true"><span class="coin" data-coin></span></span>
+                    <b id="pf-coins">0</b>
+                  </span>
                 </div>
                 <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
               </div>
 
-              <!-- tier 3 · actions: two equal pills -->
+              <!-- tier 4 · the two identity doors: the nation and the squad -->
               <div class="pf-hero-chip-row">
                 <button class="pf-chip pf-chip-nation" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
                   <!-- a pre-rendered radial wash: national ambient light with no blur pass -->
@@ -1749,6 +1783,10 @@
               </div>
             </div>
             <div class="pf-sec pf-quest-sec">
+              <h2 class="eq-h pf-sec-h">
+                <span data-i18n="pfCareerTitle">Career</span>
+                <span class="pf-sec-sub" data-i18n="pfCareerSub">Ranked duels only</span>
+              </h2>
               <div class="pf-quest" id="pf-quest" data-empty="true">
                 <span class="pf-quest-bg" aria-hidden="true"></span>
                 <div class="pf-quest-empty" id="pf-quest-empty">
@@ -1756,29 +1794,27 @@
                     <svg class="ico"><use href="#i-swords" /></svg>
                   </span>
                   <div class="pf-quest-copy">
-                    <p class="pf-quest-title">Play your first match</p>
-                    <p class="pf-quest-sub">Win races, climb the ranks and light up your trophy shelf.</p>
+                    <p class="pf-quest-title">No ranked duels yet</p>
+                    <p class="pf-quest-sub">Face a real rival — every duel you settle is written to this card. Practice races never are.</p>
                   </div>
                   <button class="pf-play-cta" type="button" id="pf-play">
                     <span class="pf-play-face"><svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play Now</span></span>
                   </button>
                 </div>
                 <div class="pf-quest-stats" id="pf-quest-stats" hidden>
-                  <dl class="p-stats quad pf-stats pf-hud pf-career">
-                    <div class="stat stat-games">
-                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="stat-lbl">Games</span></dt>
-                      <dd id="pf-games">0</dd>
+                  <!-- three human-vs-human readings. No bot board may ever move one of them,
+                       so this matrix is the public competitive record and nothing else. -->
+                  <dl class="p-stats trio pf-stats pf-hud pf-career">
+                    <div class="stat stat-duels">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg><span class="stat-lbl" data-i18n="pfPvpDuels">Online PvP Duels</span></dt>
+                      <dd id="pf-duels">0</dd>
                     </div>
-                    <div class="stat stat-wins">
-                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg><span class="stat-lbl">Wins</span></dt>
-                      <dd id="pf-wins">0</dd>
-                    </div>
-                    <div class="stat stat-losses">
-                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg><span class="stat-lbl">Losses</span></dt>
-                      <dd id="pf-losses">0</dd>
+                    <div class="stat stat-rate">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg><span class="stat-lbl" data-i18n="pfPvpRate">PvP Win Rate</span></dt>
+                      <dd id="pf-rate">0%</dd>
                     </div>
                     <div class="stat stat-best">
-                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-flame" /></svg><span class="stat-lbl">Best run</span></dt>
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-flame" /></svg><span class="stat-lbl" data-i18n="pfPvpBest">Best Win Streak</span></dt>
                       <dd id="pf-best">0</dd>
                     </div>
                   </dl>
@@ -1823,7 +1859,7 @@
                 </button>
                 <div class="pf-tile row">
                   <span class="pf-tile-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-                  <span class="row-txt"><span class="row-t" data-i18n="profileWinStreak">Win streak</span><span class="row-s" data-i18n="profileBotOnly">Bot races only</span></span>
+                  <span class="row-txt"><span class="row-t" data-i18n="profileWinStreak">Win streak</span><span class="row-s" data-i18n="pfCareerSub">Ranked duels only</span></span>
                   <span class="row-v" id="pf-streak">0</span>
                 </div>
               </div>
@@ -1898,6 +1934,22 @@
             <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden>
               <span class="coin" data-coin aria-hidden="true"></span><span id="pf-toast-t">+100 Coins</span>
             </div>
+          </div>
+          <!-- the card's two doors, pinned under the scroll: the duel that moves the record,
+               and the squad the seat rides for. The pane scrolls; this rail never does. -->
+          <div class="pf-actions">
+            <button class="pf-act pf-act-duel" type="button" id="pf-duel" data-i18n-aria="pfDuelBadgeAria">
+              <span class="pf-act-face">
+                <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+                <span class="pf-act-t" data-i18n="pfDuelBadge">Duel for the Badge</span>
+              </span>
+            </button>
+            <button class="pf-act pf-act-squad" type="button" id="pf-squad" data-i18n-aria="pfViewSquadAria">
+              <span class="pf-act-face">
+                <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
+                <span class="pf-act-t" data-i18n="pfViewSquad">View Squad</span>
+              </span>
+            </button>
           </div>
         </section>
 

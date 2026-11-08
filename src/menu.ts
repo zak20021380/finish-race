@@ -14,7 +14,7 @@ import {
 import {
   ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
   DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue,
-  IDENTITY_REWARD, joinTeam, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile,
+  IDENTITY_REWARD, joinTeam, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile, pvpCareer,
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
@@ -49,7 +49,8 @@ import {
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
-import { openSeize, relicShelter, seizeTargetOf } from './seize';
+import { isSeizable, openSeize, relicShelter, seizeTargetOf } from './seize';
+import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type PieceColor } from './themes';
@@ -116,6 +117,47 @@ const compact = (n: number): string => {
   if (n >= 999_500) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return en(n);
+};
+
+/* ---------- the arena bracket: the division ladder, read off the save ---------- */
+
+/** Where this TIQ stands on the live arena ladder, 1-based. `pct` is the share of the published
+ *  ladder the seat has already cleared — the number the profile's percentile meter fills to. */
+interface ArenaBracket {
+  n: number;
+  total: number;
+  id: ArenaTierId;
+  pct: number;
+}
+
+const ARENA_TIER_KEY: Record<ArenaTierId, string> = {
+  bronze: 'arenaTierBronze',
+  silver: 'arenaTierSilver',
+  gold: 'arenaTierGold',
+  platinum: 'arenaTierPlatinum',
+  diamond: 'arenaTierDiamond',
+  challenger: 'arenaTierChallenger',
+};
+
+/**
+ * The highest division whose TIQ gate this seat has passed. The ladder is the server's
+ * (`arenaState.divisions`), normalized to six rising rows, so a hand-edited blob or a closed
+ * season can never leave the plaque naming a bracket the player does not hold.
+ */
+function arenaBracket(tiq: number): ArenaBracket {
+  const rows = arena().divisions;
+  const total = Math.max(1, rows.length);
+  let idx = 0;
+  for (let i = 0; i < rows.length; i++) if (tiq >= rows[i].min) idx = i;
+  const id = (rows[idx]?.id ?? 'bronze') as ArenaTierId;
+  return { n: idx + 1, total, id, pct: Math.round(((idx + 1) / total) * 100) };
+}
+
+/** The division's own name, translated; a dictionary that predates the key still names it. */
+const arenaTierName = (id: ArenaTierId): string => {
+  const key = ARENA_TIER_KEY[id];
+  const word = t(key);
+  return word === key ? ARENA_TIER_NAMES[id] : word;
 };
 
 export function createMenu(api: MenuApi): Menu {
@@ -2065,15 +2107,54 @@ export function createMenu(api: MenuApi): Menu {
       pfBar.setAttribute('aria-valuemax', String(lv.need));
       pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
     }
-    /* TIQ is the flagship stat: the number and the unit, with no league word beside it. */
+    /* the level plate on the avatar's lip: the same figure the XP rail fills toward, struck in
+       Latin numerals and never localised into Persian glyphs */
+    const lvlN = document.getElementById('pf-lvl-n');
+    if (lvlN) lvlN.textContent = String(lv.n);
+    const lvlPlate = document.getElementById('pf-lvl');
+    if (lvlPlate) lvlPlate.setAttribute('aria-label', `${t('pfLevelShort')} ${lv.n}`);
+    /* TIQ is the flagship stat: the number, the unit and the meter it fills. */
     const tiq = myTiq();
     const tiqValue = document.getElementById('pf-tiq');
     if (tiqValue) tiqValue.textContent = en(tiq);
+    const bracket = arenaBracket(tiq);
     const tiqPill = document.getElementById('pf-tiq-pill');
     if (tiqPill) {
-      const label = `${en(tiq)} Tactical IQ`;
+      const label = `${en(tiq)} ${t('pfTacticalIq')}`;
       tiqPill.setAttribute('aria-label', label);
       tiqPill.setAttribute('title', label);
+    }
+    /* the percentile meter: one arc, one figure. `pct` is the share of the published arena
+       ladder this seat has already cleared, so the ring and the bracket pill always agree. */
+    const arc = document.getElementById('pf-tiq-fill') as unknown as SVGCircleElement | null;
+    if (arc) arc.style.strokeDashoffset = String(100 - Math.max(0, Math.min(100, bracket.pct)));
+    const pctEl = document.getElementById('pf-tiq-pct');
+    if (pctEl) pctEl.textContent = `${bracket.pct}%`;
+    const meter = document.querySelector<HTMLElement>('#pf-tiq-card .pf-tiq-meter');
+    if (meter) {
+      meter.setAttribute('title', t('pfArenaPercentile')
+        .replace('{n}', String(bracket.n))
+        .replace('{total}', String(bracket.total)));
+    }
+    const rankEl = document.getElementById('pf-tiq-rank');
+    if (rankEl) {
+      rankEl.textContent = `#${bracket.n} · ${bracket.pct}%`;
+      rankEl.setAttribute('aria-label', t('pfArenaPercentile')
+        .replace('{n}', String(bracket.n))
+        .replace('{total}', String(bracket.total)));
+    }
+    /* the arena plaque: the realm this seat actually holds, named in the player's own language */
+    const plaque = document.getElementById('pf-arena-plaque');
+    if (plaque) {
+      const name = arenaTierName(bracket.id);
+      plaque.dataset.tier = bracket.id;
+      const title = t('pfArenaPlaque')
+        .replace('{n}', String(bracket.n))
+        .replace('{name}', name);
+      const label = document.getElementById('pf-arena-t');
+      if (label) label.textContent = title;
+      plaque.setAttribute('aria-label', title);
+      plaque.title = title;
     }
     /* the level lives in the XP rail's left label now — it is the same figure the bar fills */
     const levelCaption = document.getElementById('pf-xp-lvl');
@@ -3171,6 +3252,7 @@ export function createMenu(api: MenuApi): Menu {
     const s = profile.stats;
     const squad = getMySquad();
     const dob = dobValue();
+    const bracket = arenaBracket(myTiq());
     return [
       lang,
       profile.displayName ?? '',
@@ -3183,7 +3265,9 @@ export function createMenu(api: MenuApi): Menu {
       profile.coins,
       profile.tiqBonus,
       myTiq(),
+      bracket.n, bracket.id,
       s.games, s.wins, s.losses, s.streak, s.best,
+      s.pvpGames, s.pvpWins, s.pvpRun, s.pvpRunBest,
       profile.referral.joins, profile.referral.unclaimed, profile.referral.code ?? '',
       profile.rewards.country ? 1 : 0, profile.rewards.age ? 1 : 0,
       profile.equipped.ball, profile.equipped.wall, profile.equipped.board,
@@ -3196,19 +3280,19 @@ export function createMenu(api: MenuApi): Menu {
     if (!force && profileDrawn && key === profileKey) return;
     profileKey = key;
     profileDrawn = true;
-    const s = profile.stats;
+    const career = pvpCareer();
     paintIdentity();
-    $('pf-games').textContent = en(s.games);
-    $('pf-wins').textContent = en(s.wins);
-    $('pf-losses').textContent = en(s.losses);
-    $('pf-best').textContent = en(s.best);
-    $('pf-streak').textContent = en(s.streak);
-    /* empty stats become an exciting quest card until the first race lands */
+    /* the public career: human-vs-human only, so a bot board can never move a figure here */
+    $('pf-duels').textContent = en(career.matches);
+    $('pf-rate').textContent = `${career.rate}%`;
+    $('pf-best').textContent = en(career.best);
+    $('pf-streak').textContent = en(career.run);
+    /* empty stats become an exciting quest card until the first duel lands */
     const quest = document.getElementById('pf-quest');
     const empty = document.getElementById('pf-quest-empty');
     const stats = document.getElementById('pf-quest-stats');
     if (quest && empty && stats) {
-      const isNew = s.games === 0;
+      const isNew = career.matches === 0;
       quest.dataset.empty = String(isNew);
       empty.hidden = !isNew;
       stats.hidden = isNew;
@@ -3250,6 +3334,31 @@ export function createMenu(api: MenuApi): Menu {
 
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
+  /* the arena ladder is the server's: a season edit can move the bracket under a parked
+     profile, so the card re-reads it — the signature keeps an unchanged ladder free. */
+  onArena(() => { if (!pfScreen.hidden) paintProfile(); });
+
+  /* ---- the card's two doors ----
+     The crimson key opens the honor this seat is closest to claiming: a live exposed serial is
+     the literal duel, otherwise the collector card states the exact gap. The squad key is the
+     same sheet the Nation/Squad tile opens. */
+  document.getElementById('pf-duel')?.addEventListener('click', () => {
+    const chasing = [...BADGES]
+      .filter((b) => !isBadgeUnlocked(b.id))
+      .sort((a, b) => badgeProgress(b.id).pct - badgeProgress(a.id).pct)[0]
+      ?? equippedBadge() ?? BADGES[0];
+    if (!chasing) return;
+    const mine = badgeEdition(chasing.id).serial;
+    const rival = (badgeHolders(chasing.id) ?? [])
+      .find((h) => h.serial !== mine && isSeizable(chasing, h.serial));
+    if (rival) {
+      impact('medium');
+      openSeize(seizeTargetOf(chasing, rival.serial, rival.name));
+      return;
+    }
+    openBadge(chasing.id);
+  });
+  document.getElementById('pf-squad')?.addEventListener('click', () => { openSquad(); });
 
   /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
   document.getElementById('pf-avatar-wrap')?.addEventListener('click', () => {
