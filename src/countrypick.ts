@@ -9,9 +9,11 @@
  * 60fps and every nation remains one keystroke away.
  */
 import { COUNTRIES, guessCountry, knownCountry, search } from './countries';
-import { claimIdentityReward, profile, setCountry } from './storage';
+import { claimIdentityReward, countryLocked, profile, setCountry } from './storage';
 import { flagPhoto } from './flags';
 import { impact, languageCode, notify } from './telegram';
+import { t } from './settings';
+import { showRoyalToast } from './toast';
 import type { Sheets } from './sheets';
 
 export type CountryPicked = (code: string, paid: number) => void;
@@ -121,7 +123,13 @@ function build(sheets: Sheets): Picker {
 
   function choose(code: string): void {
     if (!knownCountry(code)) return;
-    setCountry(code);
+    /* national allegiance is settled once: a sheet left open across the lock still cannot write */
+    if (countryLocked()) {
+      sheets.close();
+      showNationLockToast();
+      return;
+    }
+    if (!setCountry(code)) return;
     const paid = claimIdentityReward('country');
     notify('success');
     sheets.close();
@@ -178,8 +186,22 @@ function build(sheets: Sheets): Picker {
 
 let picker: Picker | null = null;
 
+/**
+ * The rejection a locked flag earns. Obsidian and gold, one shield, no picker: the allegiance
+ * is permanent, and the refusal should feel like a salute rather than an error.
+ */
+export function showNationLockToast(): void {
+  impact('light');
+  showRoyalToast(t('nationLockTitle'), t('nationLockBody'), 'i-shield', 4600);
+}
+
 /** Open the shared picker. `onPick` lets the caller celebrate a first claim. */
 export function openCountryPicker(sheets: Sheets, onPick?: CountryPicked): void {
+  /* the one door every country trigger passes through: once the flag is set it never reopens */
+  if (countryLocked()) {
+    showNationLockToast();
+    return;
+  }
   if (!picker) picker = build(sheets);
   if (onPick) picker.onPick = onPick;
   picker.open();

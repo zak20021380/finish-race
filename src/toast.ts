@@ -53,6 +53,57 @@ export function showToast(message: string, tone: ToastTone = 'success', ms = 320
 }
 
 /**
+ * The ceremonial toast: obsidian glass, one gold rim, an engraved mark and the copy.
+ * Used where a reading has to explain itself, or where a rule must refuse with dignity.
+ * It rides the shared host but never stacks: the newest royal toast replaces the last.
+ */
+export function showRoyalToast(
+  title: string,
+  body: string,
+  icon = 'i-shield',
+  ms = 4200,
+): void {
+  const root = hostEl();
+  if (!root) return;
+  for (const old of root.querySelectorAll('.toast-royal')) old.remove();
+
+  const el = document.createElement('div');
+  el.className = 'toast toast-royal is-rich';
+  el.setAttribute('role', 'status');
+
+  const mark = document.createElement('span');
+  mark.className = 'toast-mark toast-medallion';
+  mark.setAttribute('aria-hidden', 'true');
+  mark.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#${icon}" /></svg>`;
+
+  const copy = document.createElement('span');
+  copy.className = 'toast-copy toast-detail';
+  const lang = (document.documentElement.getAttribute('data-lang') || '').toLowerCase();
+  if (lang === 'fa' || lang === 'ar') copy.setAttribute('dir', 'rtl');
+
+  if (title) {
+    const head = document.createElement('span');
+    head.className = 'toast-title';
+    head.textContent = title;
+    copy.append(head);
+  }
+  const line = document.createElement('span');
+  line.className = 'toast-body';
+  line.textContent = body;
+  copy.append(line);
+
+  el.append(mark, copy);
+  root.append(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+
+  window.setTimeout(() => {
+    el.classList.remove('in');
+    el.classList.add('out');
+    window.setTimeout(() => el.remove(), 260);
+  }, ms);
+}
+
+/**
  * The canonical toast, with a second line of guidance under the headline. Used where the
  * message is not just an acknowledgement but an instruction — the room code, for instance,
  * says what to do with the number that was just copied.

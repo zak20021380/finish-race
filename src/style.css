@@ -26273,6 +26273,50 @@ html[data-lang="fa"] #enlist-input::placeholder {
 }
 .toast-copy[dir="rtl"] .toast-title { line-height: 1.45; }
 .toast-copy[dir="rtl"] .toast-body { line-height: 1.8; }
+/* ---- the royal toast: obsidian glass, a gold rim and one engraved medallion ----
+   The metric's explanation and the locked-flag salute share this one face. It is an
+   overlay on the fixed host, so showing it never moves a pixel of the page behind. */
+.toast.toast-royal {
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 15px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(245, 158, 11, .16) 0%, rgba(245, 158, 11, 0) 55%),
+    linear-gradient(180deg, rgba(19, 27, 42, .98) 0%, rgba(8, 12, 20, .99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(252, 211, 77, .42),
+    0 18px 34px -18px rgba(0, 0, 0, .95),
+    0 0 24px -14px rgba(245, 158, 11, .8);
+  transform: translateY(-12px) scale(.97);
+  transition: opacity .26s ease, transform .34s cubic-bezier(.2, .9, .3, 1.15);
+}
+.toast.toast-royal.in { opacity: 1; transform: none; }
+.toast.toast-royal.out {
+  opacity: 0;
+  transform: translateY(-9px) scale(.985);
+  transition: opacity .2s ease, transform .22s ease;
+}
+.toast-royal .toast-medallion {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(252, 211, 77, .38);
+  background: radial-gradient(80% 80% at 50% 28%, rgba(253, 230, 138, .22) 0%, rgba(245, 158, 11, .1) 55%, rgba(8, 12, 20, .4) 100%);
+  color: #FDE68A;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 12px -5px rgba(245, 158, 11, .9);
+}
+.toast-royal .toast-medallion .ico { width: 14px; height: 14px; }
+.toast-royal .toast-title {
+  color: #FDE68A;
+  letter-spacing: .01em;
+}
+.toast-royal .toast-body { color: #C6D2E2; }
+html[data-lang="fa"] .toast.toast-royal,
+html[data-lang="ar"] .toast.toast-royal { direction: rtl; }
+html.reduced-motion .toast.toast-royal { transition: none; }
 /* Found a Squad: one clay invitation between the tabs and the ladder. The icon,
    the two-line promise and the single cyan key share one card; no loose caption. */
 .squad-reg-bar {
@@ -27842,6 +27886,17 @@ html[data-lang="fa"] #enlist-input::placeholder {
     inset 0 -1px 0 rgba(255, 255, 255, .06),
     0 0 10px -4px rgba(56, 189, 248, .35);
 }
+/* a locked flag wears the seal, not a door: gold-trimmed, quiet, permanent */
+#s-profile .pf-chip.is-locked .pf-chip-action,
+#s-profile .pf-chip.is-locked:hover .pf-chip-action {
+  color: #FDE68A;
+  border-color: rgba(252, 211, 77, .34);
+  background: rgba(245, 158, 11, .1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 12px -5px rgba(245, 158, 11, .9);
+}
+#s-profile .pf-chip.is-locked .pf-chip-action .ico { opacity: 1; }
 
 /* ---- 380px: keep the twin geometry; shrink the type, never the token ---- */
 @media (max-width: 380px) {
@@ -36891,7 +36946,7 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
   font-feature-settings: "tnum" 1, "lnum" 1;
   white-space: nowrap;
 }
-/* the gauge: one ring, the figure and its caption centred in the same optical column */
+/* the standing gauge: one ring, the figure and its two-word metric in one optical column */
 #s-profile .pf-tiq-meter {
   position: relative;
   flex: none;
@@ -36902,39 +36957,61 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
   gap: 1px;
   width: 60px;
   height: 60px;
+  margin: 0;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: radial-gradient(70% 70% at 50% 32%, rgba(245, 158, 11, .12) 0%, rgba(8, 12, 20, 0) 72%);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .16s ease;
+}
+#s-profile .pf-tiq-meter:active { transform: scale(.955); }
+#s-profile .pf-tiq-meter:focus-visible {
+  outline: 2px solid rgba(252, 211, 77, .75);
+  outline-offset: 3px;
 }
 #s-profile .pf-tiq-pct {
   position: relative;
   margin: 0;
   font-family: var(--font-numeric);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 1;
   letter-spacing: 0;
   color: #FDE68A;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .8);
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 #s-profile .pf-tiq-cap {
   position: static;
   left: auto;
   right: auto;
   bottom: auto;
-  max-width: 50px;
+  display: block;
+  max-width: 40px;
   text-align: center;
   font-size: 6px;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.18;
   letter-spacing: .03em;
   text-transform: uppercase;
-  color: #8FA0B8;
+  color: #B4C2D4;
   pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  overflow: visible;
+  text-overflow: clip;
+  text-wrap: balance;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
 }
 
 /* ---- tier 3 · the XP rail and purse on one balanced line ------------------ */
@@ -37133,7 +37210,7 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
   #s-profile .pf-tiq-pct { font-size: 12.5px; }
   #s-profile .pf-tiq-val b { font-size: 26px; }
   #s-profile .pf-tiq-brain { width: 17px; height: 17px; }
-  #s-profile .pf-tiq-cap { max-width: 40px; font-size: 6px; }
+  #s-profile .pf-tiq-cap { max-width: 38px; font-size: 6px; }
 }
 @media (max-width: 330px) {
   #s-profile .pf-tiq-meter { width: 50px; height: 50px; }
@@ -37141,7 +37218,7 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
   #s-profile .pf-tiq-val b { font-size: 24px; }
   #s-profile .pf-tiq-kicker { font-size: 8.5px; }
   /* the caption is part of the gauge reading, not a casualty of the narrow floor */
-  #s-profile .pf-tiq-cap { display: block; max-width: 34px; font-size: 5px; }
+  #s-profile .pf-tiq-cap { display: block; max-width: 36px; font-size: 5.75px; }
 }
 
 /* joined-script corrections for the new shelf */
@@ -37169,5 +37246,11 @@ html[data-lang="ar"] #s-profile .pf-tiq-cap {
   letter-spacing: 0;
   text-transform: none;
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-size: 7.5px;
+  font-size: 7px;
+  line-height: 1.25;
+  color: #C3CEDC;
+}
+@media (max-width: 330px) {
+  html[data-lang="fa"] #s-profile .pf-tiq-cap,
+  html[data-lang="ar"] #s-profile .pf-tiq-cap { font-size: 6.5px; max-width: 36px; }
 }

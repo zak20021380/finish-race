@@ -27,7 +27,7 @@ import { MAX_BALLS, newGame } from './rules';
 import { createRenderer, type View } from './render';
 import { setBalance } from './coin';
 import { nameOf } from './countries';
-import { openCountryPicker } from './countrypick';
+import { openCountryPicker, showNationLockToast } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
@@ -40,7 +40,7 @@ import {
   arrangeRoster, buildSquadRoster,
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
-import { showToast } from './toast';
+import { showRoyalToast, showToast } from './toast';
 import {
   decideSquadRequest, fetchSquad, joinSquadOnServer, kickSquadMember, leaveSquadOnServer,
   refreshSquadBoard, refreshMySquad, refreshSquadRequests, registerSquadWithTelegram,
@@ -1946,6 +1946,8 @@ export function createMenu(api: MenuApi): Menu {
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', () => {
+    /* a set flag is permanent: the drawer offers the salute, never a second choice */
+    if (profile.country) { showNationLockToast(); return; }
     openCountryPicker(api.sheets, (_code, paid) => {
       if (paid > 0) showPfToast(`+${paid} Coins · Country set`);
     });
@@ -2133,17 +2135,23 @@ export function createMenu(api: MenuApi): Menu {
       tiqPill.setAttribute('aria-label', label);
       tiqPill.setAttribute('title', label);
     }
-    /* the percentile meter: one arc, one figure. `pct` is the share of the published arena
-       ladder this seat has already cleared, so the ring and the bracket pill always agree. */
+    /* the standing meter: one arc, one figure. `pct` is the share of the published arena
+       ladder this seat has already cleared, so the ring and the bracket pill always agree.
+       The figure is always Latin and isolated, so an RTL sheet cannot re-order it. */
     const arc = document.getElementById('pf-tiq-fill') as unknown as SVGCircleElement | null;
     if (arc) arc.style.strokeDashoffset = String(100 - Math.max(0, Math.min(100, bracket.pct)));
     const pctEl = document.getElementById('pf-tiq-pct');
-    if (pctEl) pctEl.textContent = `${bracket.pct}%`;
-    const meter = document.querySelector<HTMLElement>('#pf-tiq-card .pf-tiq-meter');
+    if (pctEl) {
+      pctEl.textContent = `${en(bracket.pct)}%`;
+      pctEl.setAttribute('dir', 'ltr');
+    }
+    const meter = document.getElementById('pf-tiq-meter');
     if (meter) {
+      const explain = t('beatsRivalsToast').replace('{pct}', en(bracket.pct));
       meter.setAttribute('title', t('pfArenaPercentile')
         .replace('{n}', String(bracket.n))
         .replace('{total}', String(bracket.total)));
+      meter.setAttribute('aria-label', explain);
     }
     const rankEl = document.getElementById('pf-tiq-rank');
     if (rankEl) {
@@ -2222,6 +2230,18 @@ export function createMenu(api: MenuApi): Menu {
       }
     }
   };
+
+  /* The gauge explains itself: one tap reads the standing in plain words — the share of the
+     arena this seat has already beaten — never a textbook term. */
+  document.getElementById('pf-tiq-meter')?.addEventListener('click', () => {
+    const bracket = arenaBracket(myTiq());
+    impact('light');
+    showRoyalToast(
+      t('pfTacticalIq'),
+      t('beatsRivalsToast').replace('{pct}', en(bracket.pct)),
+      'i-brain',
+    );
+  });
 
   /* Honor & Badges: the Genius Triad on one focused shelf. Three archetype
      tiles — crest, title, archetype — and the tile itself is the equip control:
@@ -3193,7 +3213,15 @@ export function createMenu(api: MenuApi): Menu {
     }
     document.getElementById('pf-country-ico')?.classList.toggle('has-flag', !!c);
     const countryCard = document.getElementById('pf-country');
-    countryCard?.classList.toggle('is-set', !!c);
+    if (countryCard) {
+      countryCard.classList.toggle('is-set', !!c);
+      countryCard.classList.toggle('is-locked', !!c);
+      /* the chevron becomes a seal: the card still answers a tap, but only to explain the lock */
+      const cardAction = countryCard.querySelector<SVGUseElement>('.pf-chip-action use');
+      if (cardAction) cardAction.setAttribute('href', c ? '#i-lock' : '#i-next');
+      if (c) countryCard.removeAttribute('aria-haspopup');
+      else countryCard.setAttribute('aria-haspopup', 'dialog');
+    }
     const countryMeta = document.getElementById('pf-country-meta');
     if (countryMeta) {
       countryMeta.textContent = '';
@@ -3208,7 +3236,7 @@ export function createMenu(api: MenuApi): Menu {
       }
     }
     const countryLabel = c
-      ? `${nameOf(c)}. ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}.`
+      ? `${nameOf(c)}. ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}. ${t('nationLockTitle')}.`
       : `${t('addCountry')} · +${IDENTITY_REWARD} ${t('coins')}`;
     $('pf-country').setAttribute('aria-label', countryLabel);
     /* Home name flag: a real vector plate next to the name — never a regional-indicator

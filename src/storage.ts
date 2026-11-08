@@ -694,9 +694,12 @@ export function hydrate(raw: string | null) {
   const wasCompleted = sameOwner && profile.tutorialCompleted === true;
   const wasBonusClaimed = sameOwner && profile.firstDuelBonusClaimed === true;
   const wasLangChosen = sameOwner && profile.langChosen === true;
+  /* National allegiance is settled once per account: a stale cloud blob may never repaint it. */
+  const settledCountry = sameOwner ? profile.country : null;
   const next = migrate(parsed);
   Object.assign(profile, next);
   profile.ownerTgId = activeTgId;
+  if (settledCountry) profile.country = settledCountry;
   if (wasCompleted) profile.tutorialCompleted = true;
   /* An older cloud blob has no idea the welcome bonus was paid. Keep it paid, or the next
      settled race would mint a second +200 from a save that predates the field. */
@@ -1034,9 +1037,21 @@ export function levelInfo() {
   return { n, got: x, need };
 }
 
-export function setCountry(code: string | null) {
-  profile.country = code ? code.toUpperCase() : null;
+/** True once the flag is set: national allegiance is a one-time choice, never a setting. */
+export const countryLocked = (): boolean => profile.country !== null;
+
+/**
+ * The one-time national allegiance. The first choice is final: a save that already carries a
+ * flag refuses every later write, so no edit path can repaint the nation the arena ranks you
+ * under. Returns whether the save took the code.
+ */
+export function setCountry(code: string | null): boolean {
+  if (profile.country !== null) return false;
+  const next = code ? code.toUpperCase() : null;
+  if (!next) return false;
+  profile.country = next;
   flush();
+  return true;
 }
 
 /** The locked birthdate, parsed back from the save, or null while the entry is still open. */

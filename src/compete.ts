@@ -2250,8 +2250,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, `
       + `${mine.toLocaleString('en-US')} Tactical IQ earned, `
       + (hasAverage ? `${average.toLocaleString('en-US')} national average` : 'national average pending');
-    hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
-    hud.title = 'Tap to change your nation';
+    hud.setAttribute('aria-label', `Your Nation: ${seen}. National allegiance is permanently locked.`);
+    hud.title = 'National allegiance locked — your flag is permanent';
     hud.addEventListener('click', openPicker);
     return hud;
   }
