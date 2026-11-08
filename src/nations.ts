@@ -8,16 +8,15 @@
  * down. A nation is never deleted for being young or quiet, and its average is divided by the
  * sample it actually has, so a flag carried by one warrior is quoted at full strength.
  *
- * The founding baseline is folded in here as well as in the Worker: a flag the registry has
- * not produced yet is painted as a floor under the live board, never above it. That is the
- * only seeded row on this board, and it can never take the throne.
+ * There is no baseline, seed or placeholder anywhere in this feed. Every row is a flag the
+ * Worker folded from active, unbanned registry seats; a database holding two countries yields
+ * exactly two rows, and rank #1 is always the flag with the highest calculated average TIQ.
  *
  * The season's banked win points ride along as a separate award. A read carries the caller's
  * profile flag, so a country picked before the first race is folded into that registry, and
  * their own TIQ, so their seat is quoted back. This module validates the wire and remembers
  * each nation's previous rank, so a rise or fall is real movement between reads.
  */
-import { NATION_BASELINE } from '../shared/nations';
 import { workerUrl } from './adminApi';
 import { profile, readJson, writeJson } from './storage';
 import { tgInitData } from './telegram';
@@ -38,10 +37,8 @@ export interface NationRow {
   warriors: number;
   /** The TIQ every rated warrior carries, added up. */
   totalTiq: number;
-  /** The Worker's top-ten representative average; the number the board is ranked by. */
+  /** The Worker's top-ten representative average (avgTiq); the number the board is ranked by. */
   avg: number;
-  /** True for a founding baseline row: a floor under the live board, never a live warrior. */
-  seeded: boolean;
   trend: NationTrend;
   /** Positive = climbed, negative = slipped, 0 without a previous reading. */
   delta: number;
@@ -108,7 +105,6 @@ interface WireNation {
   rank?: unknown;
   totalTiq?: unknown;
   averageTiq?: unknown;
-  seeded?: unknown;
 }
 
 interface WireYou {
@@ -179,7 +175,7 @@ function writeRanks(season: number, ranks: Record<string, number>): void {
   writeJson(RANK_KEY, { season, at: Date.now(), ranks });
 }
 
-/** Validate the wire, rank it, then stamp real movement against the last reading. */
+/** Validate the wire, sort it by avgTiq DESC, rank it 1..N, then stamp real movement. */
 function adopt(data: WireFeed): NationFeed | null {
   if (!data || data.ok !== true) return null;
   const seasonNo = whole(data.seasonNo);
@@ -212,48 +208,20 @@ function adopt(data: WireFeed): NationFeed | null {
       warriors,
       totalTiq,
       avg,
-      seeded: raw.seeded === true,
       trend: 'same',
       delta: 0,
     });
     if (rows.length >= MAX_ROWS) break;
-  }
-
-  /* The baseline: a founding flag the Worker has not produced yet — a thin registry, a stale
-     deployment, a season that just rolled over — is filled in here so the cup can never
-     collapse to one solitary country. A baseline row always ranks below every scored row. */
-  const present = new Set(rows.map((row) => row.code));
-  for (const seed of NATION_BASELINE) {
-    if (rows.length >= MAX_ROWS) break;
-    if (present.has(seed.code)) continue;
-    present.add(seed.code);
-    rows.push({
-      rank: 0,
-      code: seed.code,
-      name: '',
-      points: 0,
-      players: 0,
-      warriors: 0,
-      totalTiq: 0,
-      avg: seed.base,
-      seeded: true,
-      trend: 'same',
-      delta: 0,
-    });
   }
   if (!rows.length) return { rows: [], total: 0, standing: null, seasonNo, live: true };
 
-  /* Three tiers: scored flags, then the baseline, then flags that are enrolled but carry no
-     rated warrior yet. A country with no score is listed, never crowned. The Worker ranks ties
-     by registration age, which the wire alone cannot reconstruct; its ranks are authoritative
-     when they form one continuous 1..N sequence, otherwise the field is ranked here. */
-  const tier = (row: NationRow): number => (row.seeded ? 1 : row.avg > 0 ? 0 : 2);
-  const ranked = rows.every((row) => row.rank >= 1)
-    && new Set(rows.map((row) => row.rank)).size === rows.length;
-  if (ranked) rows.sort((a, b) => a.rank - b.rank);
-  else rows.sort((a, b) => (
-    tier(a) - tier(b)
-    || b.avg - a.avg
+  /* Strict mathematical descending sort by the calculated avgTiq. The ranks below are then
+     reassigned 1..N in that order, so rank #1 always holds the highest score, #2 the next,
+     #3 the next — regardless of the order (or rank stamps) an older Worker sent. Everything
+     after the first term only orders exact ties; it can never promote a lower average above
+     a higher one. No row is synthesized here: `rows` is exactly the live wire field. */
+  rows.sort((a, b) => (
+    b.avg - a.avg
     || b.totalTiq - a.totalTiq
     || b.warriors - a.warriors
     || b.players - a.players
@@ -319,10 +287,11 @@ async function readBoard(url: string): Promise<NationFeed | null> {
 
 /**
  * The nations ladder, ranked by the top-ten representative average TIQ each flag's rated
- * warriors carry, plus the caller's standing. Every enrolled flag is on the board, and the
- * founding baseline fills whatever the registry has not produced yet. The read carries the
- * caller's flag so a chosen nation is enrolled, and their own TIQ so their seat is quoted
- * back — never so a query string can move a national score. Never throws.
+ * warriors carry, plus the caller's standing. Only flags folded from real registered seats
+ * are on the board — there is no baseline, seed or filler, so a thin registry returns exactly
+ * the countries it holds. The read carries the caller's flag so a chosen nation is enrolled,
+ * and their own TIQ so their seat is quoted back — never so a query string can move a
+ * national score. Never throws.
  */
 export async function fetchNationBoard(tiq: number): Promise<NationFeed> {
   const country = iso2(profile.country ?? '');

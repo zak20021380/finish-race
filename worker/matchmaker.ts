@@ -79,7 +79,7 @@ import {
   type RegisteredSquad, type SquadAnnouncementRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
-import { NATION_BASELINE, NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
+import { NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
@@ -3875,9 +3875,8 @@ export class MatchmakerDO {
       players: number;
       warriorCount: number;
       totalTiq: number;
+      /** The calculated representative TIQ: the figure the whole board is sorted by. */
       averageTiq: number;
-      /** True for a founding baseline row: a floor under the live board, never a live warrior. */
-      seeded: boolean;
     }>;
     you: { code: string; rank: number; points: number; tiq: number; averageTiq: number; total: number } | null;
   }> {
@@ -3903,7 +3902,6 @@ export class MatchmakerDO {
       points: row.points,
       totalTiq: row.totalTiq,
       averageTiq: row.averageTiq,
-      seeded: row.seeded,
     }));
 
     const myCode = normalizeCountry(mine?.country);
@@ -3977,20 +3975,22 @@ export class MatchmakerDO {
    * divisor is the size of that sample, so a nation carried by one warrior is quoted at that
    * warrior's own TIQ; it is never halved for being small.
    *
-   * The founding baseline is painted underneath the live board for any flag the registry has
-   * not produced yet, so the cup always opens on a full field. A baseline row ranks below every
-   * scored row, so a seeded flag can never take the throne.
+   * There is no baseline and no filler: a flag exists only because at least one active,
+   * unbanned registry seat carries it. A thin registry returns a thin array — two real
+   * countries produce exactly two rows, never a padded field.
    *
-   * Total TIQ breaks an equal average (a deeper rated pool ranks higher), then the sample size,
-   * then head-count, then the flag whose earliest player registered first. Banked season points
-   * are an award, not the ranking metric. The code is the final, deterministic tie-break.
+   * The order is strictly descending by the calculated representative average TIQ, so rank
+   * #1 always holds the highest score. Only genuinely equal scores are broken by total TIQ
+   * (a deeper rated pool ranks higher), then the sample size, then head-count, then the flag
+   * whose earliest player registered first. Banked season points are an award, not the
+   * ranking metric. The code is the final, deterministic tie-break.
    */
   private nationStandings(
     ledger: NationLedger,
     now = Date.now(),
   ): Array<{
     code: string; name: string; points: number; players: number; warriorCount: number;
-    totalTiq: number; averageTiq: number; since: number; seeded: boolean;
+    totalTiq: number; averageTiq: number; since: number;
   }> {
     const activeSince = now - NATION_ACTIVE_MS;
     const enrolled = new Map<string, {
@@ -4040,35 +4040,14 @@ export class MatchmakerDO {
         averageTiq: representativeAverage(sample),
         points: Math.max(0, whole(ledger.points[code])),
         since: row.since,
-        seeded: false,
       };
     });
 
-    /* The baseline: a founding flag with no registry presence is a floor under the live
-       board, never a claim on it. */
-    const present = new Set(live.map((row) => row.code));
-    const seeded = NATION_BASELINE
-      .filter((seed) => !present.has(seed.code))
-      .map((seed) => ({
-        code: seed.code,
-        name: countryName(seed.code),
-        players: 0,
-        warriorCount: 0,
-        totalTiq: 0,
-        averageTiq: seed.base,
-        points: Math.max(0, whole(ledger.points[seed.code])),
-        since: Number.MAX_SAFE_INTEGER,
-        seeded: true,
-      }));
-
-    /* Three tiers: scored flags, then the baseline, then flags that are enrolled but carry no
-       rated warrior yet. A country with no score is listed, never crowned. */
-    const tier = (row: { seeded: boolean; averageTiq: number }): number =>
-      (row.seeded ? 1 : row.averageTiq > 0 ? 0 : 2);
-
-    return [...live, ...seeded].sort((a, b) => (
-      tier(a) - tier(b)
-      || b.averageTiq - a.averageTiq
+    /* Strictly descending by the calculated average: rank #1 is always the highest score.
+       Everything after the first term only orders exact ties, it can never promote a lower
+       average above a higher one. `live` is already the complete board — no rows are added. */
+    return live.sort((a, b) => (
+      b.averageTiq - a.averageTiq
       || b.totalTiq - a.totalTiq
       || b.warriorCount - a.warriorCount
       || b.players - a.players

@@ -1174,17 +1174,21 @@
                     <span class="pill live pulse cup-live"><i class="live-dot" aria-hidden="true"></i><span class="cup-live-t" data-i18n="countryLive">Live</span></span>
                     <div class="nations-cup-subtitle" data-i18n="countrySubtitle">Based on Top 10 warriors average TIQ</div>
                   </div>
+                  <!-- TOP-3 PREVIEW ONLY: three 44px rows, no 4th/5th line. The full ladder
+                       lives in the slide-out Nations board behind the card's one CTA. These
+                       three shells are loading placeholders, not country records — the live
+                       Worker feed replaces all of them with real rows. -->
                   <ol class="mini-rank nations-rank" id="home-countries">
-                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
-                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                     <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                     <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                     <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                   </ol>
                   <div class="slide-foot">
                     <!-- the personal standing bar: one structured 3-zone HUD row, a plain
-                         flow item of the foot — [ flag + nation ] [ standing pill ] [ score ].
-                         It sits under row #5, never over it. -->
+                         flow item of the foot — [ flag + nation ] [ reigning-champion pill ]
+                         [ score ]. The centre pill is the "LEADING NATION / کشور صدرنشین"
+                         badge and mirrors nations[0] from the live board, never a fixed
+                         country. It sits under row #3, never over it. -->
                     <div class="hud-mine nations-mine" id="home-nation-mine" role="group" aria-label="Your national standing">
                       <span class="hm-l">
                         <span class="hm-flag" id="home-nation-flag" aria-hidden="true"></span>

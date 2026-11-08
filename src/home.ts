@@ -232,13 +232,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   }
   window.addEventListener('resize', remeasure);
 
-  /* ---------- Nations Cup: 30px rows + user row / pick-country CTA ----------
-     Top 5 fill the card to the dots with no dead void (the 40px→30px row is
-     layout only — the row recipe is identical for ranks 1-5). Data is the live
-     Worker ledger (`fetchNationBoard`): every enrolled nation, with the founding
-     baseline painted underneath so the cup is never one solitary country. A
-     baseline row is labelled as such and can never outrank a scored one. Flags
-     come from the shared CDN resolver in a 28px circle. */
+  /* ---------- Nations Cup: a spacious Top-3 preview + standing bar / full-board CTA ----------
+     The carousel slide is a PREVIEW, hard-limited to three 44px rows. The complete ladder
+     lives only in the Ranks board behind `#home-cup-table` (`#sheet-nations` drawer). Data
+     is the live Worker ledger (`fetchNationBoard`): real registered players grouped by
+     country, strictly descending by calculated avgTiq, with no baseline, seed or filler —
+     a registry holding two nations paints exactly two rows. Flags come from the shared CDN
+     resolver in a 28px circle. The foot pill mirrors `nations[0]`, the reigning champion. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
   /** The last live board read — kept so a language switch or an offline poll can repaint the
@@ -290,22 +290,18 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add('nations-row');
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
-    if (c.seeded) li.classList.add('is-seeded');
     const label = c.name || nameOf(c.code);
     /* The board's figures are Latin integers in both languages: `en-US` grouping keeps the
        thousands separators, and the rounded value is the Worker's own representative average. */
     const avg = Math.round(c.avg);
     const pts = avg.toLocaleString('en-US');
-    /* A baseline row has no warriors behind it: quoting a sample size for one would invent
-       people. It is stated as the floor it is. */
+    /* Every row is a real flag: the sample it quotes is the sample the Worker actually used. */
     const sample = Math.min(10, Math.max(1, c.warriors));
-    const sampleText = c.seeded
-      ? 'national baseline'
-      : `top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
+    const sampleText = `top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    const rosterText = c.seeded ? 'national baseline' : `${c.warriors.toLocaleString('en-US')} rated warriors`;
+    const rosterText = `${c.warriors.toLocaleString('en-US')} rated warriors`;
     li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} average TIQ, ${rosterText}, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
@@ -346,17 +342,25 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
 
   /** The player's own national standing, painted into the 3-zone HUD bar.
-   *  LEFT = flag + nation · CENTER = the nation's real position badge and the percentile it
-   *  sits in · RIGHT = the flag's representative average TIQ, the exact figure the rows above
-   *  are ranked by, ending in the same brain token they wear.
-   *  Every zone is a separate node, so a long country name ellipsizes instead of shoving the
-   *  pill or the score out of the bar. */
+   *  LEFT = flag + nation · CENTER = the reigning-champion pill, a live mirror of
+   *  `nations[0]` ("LEADING NATION" / "کشور صدرنشین") · RIGHT = the flag's representative
+   *  average TIQ, the exact figure the rows above are ranked by, ending in the same brain
+   *  token they wear. Every zone is a separate node, so a long country name ellipsizes instead
+   *  of shoving the pill or the score out of the bar. No nation is ever authored here: the
+   *  pill's label, code and accessible text all come from row #1 of the live board. */
   let nationMineKey = '';
   const paintNationMine = (feed: NationFeed | null): void => {
     const code = (profile.country ?? '').trim().toUpperCase();
-    const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
-    const key = `${lang}|${profile.country ?? ''}|${feed?.live ? 1 : 0}|${feed?.rows.length ?? 0}`
-      + `|${mine?.rank ?? ''}/${mine?.avg ?? ''}/${mine?.warriors ?? ''}`;
+    const nations = feed?.rows ?? [];
+    const mine = code ? nations.find((c) => c.code === code) : undefined;
+    /* Rank #1 of the descending board is the reigning champion. Everything the bottom pill
+       quotes is derived from that one row, so it can never disagree with the rows above it. */
+    const champion = nations[0] ?? null;
+    const championLabel = champion ? (champion.name || nameOf(champion.code)) : '';
+    const championScore = champion ? Math.round(champion.avg).toLocaleString('en-US') : '0';
+    const key = `${lang}|${profile.country ?? ''}|${feed?.live ? 1 : 0}|${nations.length}`
+      + `|${mine?.rank ?? ''}/${mine?.avg ?? ''}/${mine?.warriors ?? ''}`
+      + `|${champion?.code ?? ''}/${champion?.avg ?? ''}/${championLabel}`;
     if (key === nationMineKey) return;
     nationMineKey = key;
     const bar = document.getElementById('home-nation-mine');
@@ -382,13 +386,35 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (pts) pts.textContent = avgText;
     const unit = bar.querySelector<HTMLElement>('.hm-u');
     if (unit) unit.textContent = 'AVG TIQ';
+
+    /* The bottom champion pill mirrors nations[0]. Its code is a Latin token, isolated so a
+       Persian label cannot reorder it; the full name and score ride on the title/aria text. */
+    if (pillK) pillK.textContent = champion ? t('countryTopNation') : t('hudYourNation');
+    if (pct) {
+      pct.hidden = !champion;
+      pct.textContent = champion?.code ?? '';
+      pct.dir = 'ltr';
+      pct.title = championLabel;
+    }
+    if (pill) {
+      pill.classList.toggle('is-off', !champion);
+      pill.title = champion
+        ? `${t('countryTopNation')}: ${championLabel} · ${championScore} AVG TIQ`
+        : '';
+    }
+
+    const total = nations.length;
+    const share = mine && total > 0
+      ? Math.max(1, Math.round((mine.rank / total) * 100))
+      : 0;
+    const standing = mine ? `rank #${mine.rank} of ${total}` : 'unranked';
+    const championFact = champion
+      ? ` · ${t('countryTopNation')}: ${championLabel} (${champion.code})`
+      : '';
     if (!code) {
       if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
       if (name) { name.textContent = t('hudPickNation'); name.removeAttribute('title'); }
-      if (pillK) pillK.textContent = t('hudYourNation');
-      if (pct) { pct.hidden = true; pct.textContent = ''; }
-      pill?.classList.add('is-off');
-      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${avgText} AVG TIQ`);
+      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${avgText} AVG TIQ${championFact}`);
       bar.removeAttribute('title');
       return;
     }
@@ -399,40 +425,24 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       flag.append(flagPhoto(code, 'hm-flag-plate'));
     }
     if (name) { name.textContent = label; name.title = label; }
-    const total = feed?.rows.length ?? 0;
-    const share = mine && total > 0
-      ? Math.max(1, Math.round((mine.rank / total) * 100))
-      : 0;
-    /* The pill is the nation's real position, not a static label. Until the first live read the
-       rank is simply unknown — never painted as "unranked". A nation that leads the board is
-       stated as the fact it is: the percentile is already implied by "leading". */
-    const leading = mine?.rank === 1;
-    if (pillK) {
-      pillK.textContent = mine
-        ? (leading ? t('countryTopNation') : `#${mine.rank}`)
-        : '#—';
-    }
-    if (pct) {
-      pct.hidden = !mine || leading;
-      pct.textContent = mine && !leading ? `${share}%` : '';
-    }
-    pill?.classList.toggle('is-off', !mine);
     bar.setAttribute('aria-label', mine
-      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${avgText} AVG TIQ`
-      : `${label} · ${avgText} AVG TIQ`);
-    bar.setAttribute('title', mine
-      ? `You fight for ${label} — rank #${mine.rank} of ${total} · ${avg.toLocaleString('en-US')} average TIQ`
-      : `You fight for ${label}`);
+      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${avgText} AVG TIQ${championFact}`
+      : `${label} · ${avgText} AVG TIQ${championFact}`);
+    bar.setAttribute('title', champion
+      ? `You fight for ${label} — ${standing}. ${t('countryTopNation')}: ${championLabel} · ${championScore} average TIQ`
+      : `You fight for ${label} — ${standing}`);
   };
 
-  /** Paint the standings band from the last board we hold — five rows, or the honest
-   *  empty line. One painter for both the poll and a language switch, so the digits and
-   *  the empty-state copy always match the language on screen. */
+  /** The carousel is a PREVIEW only: three spacious rows, or the honest empty line. The full
+   *  ladder lives exclusively in the slide-out Nations board behind `#home-cup-table`.
+   *  One painter for both the poll and a language switch, so the digits and the empty-state
+   *  copy always match the language on screen. */
   let nationListKey = '';
   const paintNationList = (): void => {
-    const rows = nationFeed?.rows.slice(0, 5) ?? [];
+    const nations = nationFeed?.rows ?? [];
+    const preview = nations.slice(0, 3);
     const feedKey = nationFeed
-      ? `${nationFeed.live ? 1 : 0}:${rows.map((c) => `${c.rank},${c.code},${c.avg},${c.warriors},${c.trend},${c.delta}`).join(';')}`
+      ? `${nationFeed.live ? 1 : 0}:${preview.map((c) => `${c.rank},${c.code},${c.avg},${c.warriors},${c.trend},${c.delta}`).join(';')}`
       : 'none';
     const key = `${lang}|${profile.country ?? ''}|${feedKey}`;
     if (key === nationListKey) return;
@@ -443,11 +453,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       list.append(emptyNationRow(t('countryBoardOffline')));
       return;
     }
-    if (!nationFeed.rows.length) {
+    if (!nations.length) {
       list.append(emptyNationRow(t('countryBoardEmpty')));
       return;
     }
-    for (const c of nationFeed.rows.slice(0, 5)) list.append(rowEl(c, (profile.country ?? '').trim().toUpperCase() === c.code));
+    /* A registry with one or two real countries paints one or two rows. Never pad to three. */
+    const myCode = (profile.country ?? '').trim().toUpperCase();
+    for (const c of preview) list.append(rowEl(c, myCode === c.code));
   };
 
   /** Freshness gate for returning to the tab: a switch inside this window shows

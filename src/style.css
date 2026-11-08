@@ -5688,11 +5688,7 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   border-top-color: rgba(125, 211, 252, .35);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
 }
-/* a founding baseline row is a floor under the live board, not a scored flag: it reads one
-   step quieter. Opacity only — every track keeps its width, so nothing reflows and the row
-   still lands in the same columns on all five lines. */
-.mini-rank.nations-rank li.nations-row.is-seeded .nm,
-.mini-rank.nations-rank li.nations-row.is-seeded .nation-score-wrap { opacity: .84; }
+/* every row on the board is a real flag now: there is no baseline tier to dim */
 .mini-rank.nations-rank li.is-error { grid-template-columns: 1fr; text-align: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 /* rank: gold / silver / bronze for 1-3, plain number otherwise */
 .mini-rank.nations-rank .rk {
@@ -36362,3 +36358,283 @@ html[data-lang="fa"] #s-profile .pf-tiq-card,
 html[data-lang="ar"] #s-profile .pf-tiq-card,
 html[data-lang="fa"] #s-profile .pf-actions,
 html[data-lang="ar"] #s-profile .pf-actions { direction: rtl; }
+
+/* ============================================================================================
+   NATIONS HERO BANNER — ABSOLUTE INTERNAL CONTAINMENT + BULLETPROOF TOP-3 LAYOUT
+   ============================================================================================
+   This is the last word on `.car-card.nations-cup`: every wrapper in the banner is a
+   closed paint box, so no row, badge, flag, score or button can paint one pixel past the
+   card stroke. ID-scoped so the later `!important` performance layer and the CSS files
+   that bundle after style.css can never reopen a gap. The card holds EXACTLY three 44px
+   rows with 8px of air; the full ladder lives in the Ranks board, never in this slide.
+   ============================================================================================ */
+
+/* 1 — THE CLOSED BOX MODEL. Every banner wrapper is a paint-contained, rounded,
+   border-box clipped container. `overflow: clip` (not hidden) means there is no scroll
+   container to leak a horizontal or vertical scrollbar on a 320-390px phone. */
+#s-home .car-card.nations-cup,
+#s-home .car-card.nations-cup > .slide-inner,
+#s-home .car-card.nations-cup .nations-head,
+#s-home .car-card.nations-cup .mini-rank.nations-rank,
+#s-home .car-card.nations-cup .slide-foot,
+#s-home .car-card.nations-cup .hud-mine {
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  contain: paint;
+  border-radius: 20px;
+}
+#s-home .car-card.nations-cup :is(
+  .slide-inner, .nations-head, .mini-rank.nations-rank, .slide-foot, .hud-mine
+) {
+  overflow: clip;
+  overscroll-behavior: contain;
+}
+
+/* 2 — THE FRAME. Structured flex bounds replace any rigid height; the card owns all of
+   its internal air (12px top / 14px sides / 30px pager lane at the bottom), so content
+   never touches the outer stroke and the dots still sit inside the card. */
+#s-home .car-card.nations-cup {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: auto;
+  max-height: 100%;
+  height: auto;
+  padding: 12px 14px 30px;
+  margin: 0;
+  border-radius: 20px;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(125, 211, 252, .16),
+    inset 0 2px 2px rgba(255, 255, 255, .08),
+    var(--lobby-lift) !important;
+}
+#s-home .car-card.nations-cup > .slide-inner {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: auto;
+  max-height: 100%;
+  height: auto;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+#s-home .car-card.nations-cup .nations-head {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+#s-home .car-card.nations-cup .slide-foot {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+}
+#s-home .car-card.nations-cup .slide-foot::before { margin: 0; }
+#s-home .car-card.nations-cup .hud-mine {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 10px;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* 3 — THE TOP-3 BAND. One flex column, explicit 8px gaps, three fixed 44px rows.
+   Rows never grow, never shrink into a smear, and never render a 4th or 5th line. */
+#s-home .car-card.nations-cup .mini-rank.nations-rank {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 22px 28px minmax(0, 1fr) 20px 92px;
+  align-items: center;
+  column-gap: 6px;
+  padding: 4px 8px;
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  contain: paint;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li.is-error {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  text-align: center;
+}
+/* Every child is vertically centred and clamped to its own row; no negative margins. */
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li > * {
+  align-self: center;
+  max-height: 100%;
+  min-width: 0;
+  margin: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .rk {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .fl {
+  flex-basis: 28px;
+  width: 28px;
+  height: 28px;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nm {
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .tr {
+  width: 20px;
+  font-size: 10px;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nation-score-wrap {
+  width: 92px;
+  max-width: 92px;
+  justify-content: flex-end;
+  gap: 3px;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 14px; }
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-tiq { font-size: 8px; letter-spacing: .04em; }
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { width: 16px; height: 16px; }
+
+/* 4 — NO BLEED, NO EXTERNAL OUTLINES. Badges and the CTA wear inset rings; the
+   button's hit-area pseudo is clamped to its own box instead of reaching -4px out. */
+#s-home .car-card.nations-cup .pill.live.pulse {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+#s-home .car-card.nations-cup .nations-ico {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -2px 3px rgba(0, 0, 0, .22);
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank li.nations-row.me {
+  box-shadow: inset 0 0 0 1.5px rgba(125, 211, 252, .72);
+}
+#s-home .car-card.nations-cup .slide-cta,
+#s-home .car-card.nations-cup .card-cta {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+#s-home .car-card.nations-cup .slide-cta:hover:not(:active) { transform: none; }
+#s-home .car-card.nations-cup .slide-cta::before { inset: 1px 1px auto; }
+#s-home .car-card.nations-cup .card-cta::after { inset: 0; }
+#s-home .car-card.nations-cup .slide-cta:focus-visible,
+#s-home .car-card.nations-cup .card-cta:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(196, 181, 253, .72),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -1px 0 rgba(0, 0, 0, .55);
+}
+#home-dots .dot::after { inset: 0; }
+/* An author `display` on the pill beats the UA [hidden] rule: keep it truly hidden. */
+#home-nation-pct[hidden] { display: none !important; }
+
+/* 5 — RTL + LATIN NUMERALS. Persian mirrors the bar and the header, never the digits.
+   The champion code and every score stay on a Latin, tabular, lining-figure axis. */
+html[data-lang="fa"] #s-home .car-card.nations-cup .hm-pill { direction: rtl; }
+html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  letter-spacing: 0;
+}
+#s-home .car-card.nations-cup :is(
+  .rk, .nm, .tr, .nation-score-wrap, .score-val, .score-tiq, #home-nation-pct
+) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* 6 — THE NARROW PHONE (320-360px). The trend column steps aside so the nation name
+   keeps real width; four grid tracks for the four children that remain. No track can
+   run wider than the row, so there is no horizontal scroll leak at any width. */
+@media (max-width: 360px) {
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    grid-template-columns: 20px 26px minmax(0, 1fr) 86px;
+    column-gap: 5px;
+    padding: 4px 6px;
+  }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .tr { display: none; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .fl { flex-basis: 26px; width: 26px; height: 26px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .rk { width: 20px; height: 20px; font-size: 11px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .nm { font-size: 12.5px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .nation-score-wrap { width: 86px; max-width: 86px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 13px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-tiq { font-size: 8px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { width: 15px; height: 15px; }
+  #s-home .car-card.nations-cup .slide-cta,
+  #s-home .car-card.nations-cup .card-cta { padding: 8px 10px; font-size: 11.5px; }
+}
+
+/* 7 — SHORT VIEWPORTS. Chrome gives up space first; the three rows stay legible rather
+   than being clipped. Only genuinely tiny windows step the row down from 44px. */
+@media (max-height: 700px) {
+  #s-home .car-card.nations-cup { padding: 8px 12px 28px; }
+  #s-home .car-card.nations-cup > .slide-inner { gap: 5px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank { gap: 6px; }
+  #s-home .car-card.nations-cup .slide-foot { gap: 5px; }
+  #s-home .car-card.nations-cup .slide-cta,
+  #s-home .car-card.nations-cup .card-cta { min-height: 38px; padding: 6px 10px; }
+  #s-home .car-card.nations-cup .hud-mine { min-height: 28px; padding: 4px 8px; }
+}
+@media (max-height: 600px) {
+  #s-home .car-card.nations-cup .nations-cup-subtitle,
+  #s-home .car-card.nations-cup .slide-foot::before { display: none; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    flex-basis: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+  }
+}
+/* Only a genuinely tiny window may trade a few pixels of row height. Rows shrink inside
+   the band instead of being clipped by it — a clipped row is the one thing this card
+   must never produce. */
+@media (max-height: 560px) {
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    flex: 0 1 40px;
+    min-height: 0;
+  }
+}
