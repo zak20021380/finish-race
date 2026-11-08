@@ -12,6 +12,7 @@
  * so the operator sees the same numbers the rest of the app shows.
  */
 import { adoptUserStorageKey, profile, readJson, writeJson } from './storage';
+import { tgUser } from './telegram';
 import { vipMatchesPlanFilter, type VipPlanFilter } from '../shared/vip';
 
 /** One row of the directory. Mirrors `PlayerRecord` in `worker/matchmaker.ts`. */
@@ -85,6 +86,21 @@ export interface DirPage {
 
 /** The device's own seat id: stable across reloads, distinct from every registry id. */
 export const YOU_ID = 'you';
+
+/**
+ * Whether a directory, ladder or ledger id names this device's own player. The ladder's local row
+ * says `you`, the Worker's registry keys a signed seat `tg-<id>`, and a harness may hand over the
+ * bare Telegram id — all three are one person, and none of them may be challenged for a relic.
+ */
+export function isSelfPlayerId(id: string | null | undefined): boolean {
+  const value = (id ?? '').trim();
+  if (!value) return false;
+  if (value === YOU_ID) return true;
+  const tgId = tgUser()?.id;
+  if (tgId === undefined || tgId === null) return false;
+  const bare = String(tgId).replace(/[^0-9-]/g, '');
+  return bare !== '' && (value === bare || value === `tg-${bare}`);
+}
 
 const KEY = adoptUserStorageKey('detour.players.v1');
 /** v2 dropped the generated roster; v1 blobs are read once to keep the live seat's flags. */

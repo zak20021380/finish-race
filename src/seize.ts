@@ -4,9 +4,9 @@
  * A medallion is minted once and kept once: the ledger has no path that moves a serial from one
  * player to another (`worker/badges.ts` answers only supply, mint and progress). What this module
  * can honestly stage is the *duel* — the seat is real, the room is real, and the rival's own app
- * already knows how to answer a `duel_relic_` link. So the card names the honor on the line, the
- * entry the seat asks for and the shelter the holder is standing under, then hands the whole thing
- * to the one challenge path the app has (`throwDuelChallenge`), which arms a room and shares it.
+ * answers the challenge over its live socket. So the card names the honor on the line, the entry
+ * the seat asks for and the shelter the holder is standing under, then dispatches the challenge
+ * inside the game (`RELIC_CHALLENGE_SEND`). Nothing leaves Telegram.
  *
  * Two things are deliberately absent, because nothing behind them exists:
  *
@@ -15,59 +15,28 @@
  *  - no ownership is asserted on a win. The card says the duel is thrown, not that the serial is
  *    won, so the certificate and the registry keep reading the server rather than this screen.
  *
- * The shelter clock is derived, not stored: it folds the honor's id and its serial into one hash,
- * so every device that looks at serial #042 sees the same countdown and the same verdict. A random
- * per-paint shield would let the same relic read as guarded to one player and exposed to the next.
+ * The shelter clock is derived, not stored: it folds the honor's id and its serial into one hash
+ * (`shared/relic.ts`), so every device and the Worker see the same countdown and the same verdict.
  */
 import { badgeCrestHtml, type BadgeDef } from './badges';
-import { senderName, throwDuelChallenge } from './duelInvite';
+import { sendRelicChallenge } from './network';
 import { myTiq } from './matchmaking';
+import { isSelfPlayerId } from './players';
 import { t } from './settings';
-import { impact, notify, relicDuelShareUrl } from './telegram';
-import { showToast } from './toast';
+import { impact, notify } from './telegram';
+import { showRoyalToast, showToast } from './toast';
+import { relicShelter, type RelicShelter } from '../shared/relic';
 import type { Sheets } from './sheets';
 
-const HOUR = 3_600_000;
-/** One shelter cycle: a relic stands guarded for its own length, then exposed until the cycle turns. */
-const CYCLE = 72 * HOUR;
+export { relicShelter, type RelicShelter };
 
-export interface RelicShelter {
-  /** True while the holder is still under the shield — the relic cannot be called out. */
-  sheltered: boolean;
-  /** Whole hours left on the shield, rounded up; 0 once exposed. */
-  hoursLeft: number;
-}
-
-/** FNV-1a over the honor and its serial — the same relic must never disagree with itself. */
-function shelterSeed(seed: string, salt = ''): number {
-  const text = `${seed}${salt}`;
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-export function relicShelter(badgeId: string, serial: number): RelicShelter {
-  const relic = `${badgeId}|${serial}`;
-  const seed = shelterSeed(relic);
-  /* the length comes off this hash and the phase off a second one over the same relic: folding both
-     out of one 32-bit value would cap the phase at a fraction of the cycle, and every serial would
-     land exposed (or guarded) at the same time of day rather than spreading across the clock */
-  const length = (18 + (seed % 30)) * HOUR;
-  const phase = shelterSeed(relic, 'phase') % CYCLE;
-  const rel = (((Date.now() % CYCLE) - phase) % CYCLE + CYCLE) % CYCLE;
-  return rel < length
-    ? { sheltered: true, hoursLeft: Math.max(1, Math.ceil((length - rel) / HOUR)) }
-    : { sheltered: false, hoursLeft: 0 };
-}
-
-/** The medallion a duel is being thrown over, and the seat it asks for. */
+/** The medallion a duel is being thrown over, the seat it asks for and the player behind it. */
 export interface SeizeTarget {
   def: BadgeDef;
   serial: number;
   holderName: string;
+  /** The holder's verified session id — the only address the in-game challenge can reach. */
+  targetUserId?: string;
   shelter: RelicShelter;
 }
 
@@ -130,7 +99,7 @@ function startTicker(): void {
     if (next.sheltered !== current.shelter.sheltered || next.hoursLeft !== current.shelter.hoursLeft) {
       current = { ...current, shelter: next };
       paintShelter();
-      if (els.cta) els.cta.disabled = next.sheltered;
+      if (els.cta) els.cta.disabled = next.sheltered || !current.targetUserId;
     }
   }, 30_000);
 }
@@ -153,32 +122,44 @@ function paint(target: SeizeTarget): void {
   if (els.risk) els.risk.textContent = latin(seizeRisk());
   if (els.bounty) els.bounty.textContent = t('seizeBounty').replace('{name}', target.def.name);
   paintShelter();
-  if (els.cta) els.cta.disabled = target.shelter.sheltered;
+  if (els.cta) {
+    els.cta.style.display = '';
+    els.cta.disabled = target.shelter.sheltered || !target.targetUserId;
+  }
 }
 
 /**
- * Throw it: the same duel the result capsule throws, reached through the `duel_relic_` payload so
- * the rival's app greets them with the challenge. Nothing here settles the medallion afterwards.
+ * Dispatch it: one wire action to the matchmaker, which pushes the challenge to the holder's live
+ * socket (or files it in their mailbox when they are away). No Telegram share, no copied link.
  */
 function confirmSeize(): void {
   const target = current;
-  if (!target) return;
-  impact('heavy');
-  const line = t('seizeTaunt')
-    .replace('{relic}', `#${String(target.serial).padStart(3, '0')}`)
-    .replace('{holder}', target.holderName || t('seizeUnlisted'))
-    .replace('{name}', senderName());
-  if (!throwDuelChallenge({
-    link: relicDuelShareUrl,
-    text: line,
-    waiting: t('seizeWaitingRival'),
-    armed: t('seizeArmed'),
-  })) {
+  if (!target || target.shelter.sheltered) return;
+  if (!target.targetUserId || isSelfPlayerId(target.targetUserId)) {
     notify('error');
-    showToast(t('seizeFailed'), 'error');
+    showToast(t('relicDuelNoTarget'), 'error');
+    return;
+  }
+  impact('heavy');
+  const sent = sendRelicChallenge({
+    targetUserId: target.targetUserId,
+    relicId: target.def.id,
+    relicSerial: target.serial,
+  });
+  if (!sent) {
+    notify('error');
+    showToast(t('relicDuelOffline'), 'error');
     return;
   }
   notify('success');
+  showRoyalToast('', t('relicDuelSent').replace('{name}', target.holderName || t('seizeUnlisted')), 'i-swords');
+  /* The footer dies with the card: a dispatched challenge must not leave a live key on screen. */
+  if (els.cta) {
+    els.cta.disabled = true;
+    els.cta.style.display = 'none';
+  }
+  current = null;
+  stopTicker();
   sheets?.close();
 }
 
@@ -203,18 +184,32 @@ export function initSeize(api: SeizeApi): void {
   els.cta?.addEventListener('click', confirmSeize);
 }
 
-/** Open the confrontation card. No-op when the sheet was never installed. */
+/** Open the confrontation card. No-op when the sheet was never installed, or when the holder is you. */
 export function openSeize(target: SeizeTarget): void {
   if (!els.sheet || !sheets) return;
+  if (target.targetUserId && isSelfPlayerId(target.targetUserId)) return;
   paint(target);
   impact('light');
   sheets.open(els.sheet);
   startTicker();
 }
 
+/** Drop any open confrontation and forget its target — called when the Profile tab takes the screen. */
+export function resetSeizeContext(): void {
+  stopTicker();
+  current = null;
+  crestFor = '';
+  if (els.sheet && !els.sheet.hidden) sheets?.close();
+}
+
 /** The honor a dossier or a registry row is offering to duel over, with its shelter read fresh. */
-export function seizeTargetOf(def: BadgeDef, serial: number, holderName: string): SeizeTarget {
-  return { def, serial, holderName, shelter: relicShelter(def.id, serial) };
+export function seizeTargetOf(
+  def: BadgeDef,
+  serial: number,
+  holderName: string,
+  targetUserId?: string,
+): SeizeTarget {
+  return { def, serial, holderName, targetUserId, shelter: relicShelter(def.id, serial) };
 }
 
 /** Whether this seat may be called out at all — the one question both entry points ask. */

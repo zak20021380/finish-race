@@ -128,13 +128,15 @@ interface StoredHolder {
   serial: number;
   /** Verified Telegram name; '' when the claim predates the holder index. */
   name: string;
+  /** The holder's matchmaker seat id, so a real-time relic challenge can address them. */
+  playerId?: string;
 }
 
 interface SupplyRow {
   cap: number;
   minted: number;
   remaining: number;
-  /** Serial + holder name, ascending. A public hall of fame, never a player id. */
+  /** Serial + holder name/id, ascending. */
   holders: StoredHolder[];
 }
 
@@ -152,18 +154,21 @@ const holderName = (raw: unknown): string =>
     ? raw.replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 20)
     : '';
 
+const sanitizePlayerId = (raw: unknown): string =>
+  typeof raw === 'string' ? raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) : '';
+
 const readHolders = (raw: unknown, cap: number): StoredHolder[] => {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<number>();
   const rows: StoredHolder[] = [];
   for (const value of raw) {
     if (!value || typeof value !== 'object') continue;
-    const row = value as { serial?: unknown; name?: unknown };
+    const row = value as { serial?: unknown; name?: unknown; playerId?: unknown };
     const serial = row.serial;
     if (typeof serial !== 'number' || !Number.isInteger(serial) || serial < 1 || serial > cap) continue;
     if (seen.has(serial)) continue;
     seen.add(serial);
-    rows.push({ serial, name: holderName(row.name) || 'Unlisted' });
+    rows.push({ serial, name: holderName(row.name) || 'Unlisted', playerId: sanitizePlayerId(row.playerId) });
   }
   return rows.sort((a, b) => a.serial - b.serial);
 };
@@ -224,7 +229,15 @@ export class BadgeMintDO {
 
       const index = await storage.get<unknown>(holdersKey(id));
       if (Array.isArray(index)) {
-        this.holders.set(id, readHolders(index, BADGE_CAPS[id]));
+        const rows = readHolders(index, BADGE_CAPS[id]);
+        /* An index written before player ids were stored still names the serials: fold the claim
+           keys back in so a challenge can address the holder instead of only printing a name. */
+        if (rows.some((row) => !row.playerId)) {
+          const claims = await this.holdersFromClaims(id);
+          const bySerial = new Map(claims.map((row) => [row.serial, row.playerId]));
+          for (const row of rows) if (!row.playerId) row.playerId = bySerial.get(row.serial) ?? '';
+        }
+        this.holders.set(id, rows);
       } else if (n > 0) {
         /* Ledgers written before the holder index still deserve a hall of fame; name the
            serials we can, and let the next mint persist the rebuilt index. */
@@ -239,10 +252,14 @@ export class BadgeMintDO {
     const cap = BADGE_CAPS[id];
     const listed = await storage.list<unknown>({ prefix: claimPrefix(id), limit: cap + 25 });
     const rows: StoredHolder[] = [];
-    for (const value of listed.values()) {
+    for (const [key, value] of listed) {
       const claim = readClaim(value, cap);
       if (!claim) continue;
-      rows.push({ serial: claim.serial, name: holderName((value as { name?: unknown } | null)?.name) || 'Unlisted' });
+      rows.push({
+        serial: claim.serial,
+        name: holderName((value as { name?: unknown } | null)?.name) || 'Unlisted',
+        playerId: sanitizePlayerId(key.slice(claimPrefix(id).length)),
+      });
     }
     return rows.sort((a, b) => a.serial - b.serial);
   }
@@ -263,7 +280,11 @@ export class BadgeMintDO {
         cap,
         minted,
         remaining: Math.max(0, cap - minted),
-        holders: (this.holders.get(id) ?? []).map((h) => ({ serial: h.serial, name: h.name })),
+        holders: (this.holders.get(id) ?? []).map((h) => ({
+          serial: h.serial,
+          name: h.name,
+          ...(h.playerId ? { playerId: h.playerId } : {}),
+        })),
       };
     }
     return out;
@@ -360,7 +381,7 @@ export class BadgeMintDO {
 
     const serial = minted + 1;
     const claim: StoredClaim = { serial, cap, mintedAt: new Date().toISOString() };
-    const nextHolders = [...(this.holders.get(badgeId) ?? []), { serial, name: name || 'Unlisted' }]
+    const nextHolders = [...(this.holders.get(badgeId) ?? []), { serial, name: name || 'Unlisted', playerId: sanitizePlayerId(player) }]
       .sort((a, b) => a.serial - b.serial);
     if (this.storage) {
       await this.storage.put({

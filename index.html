@@ -1947,15 +1947,9 @@
               <span class="coin" data-coin aria-hidden="true"></span><span id="pf-toast-t">+100 Coins</span>
             </div>
           </div>
-          <!-- the card's two doors, pinned under the scroll: the duel that moves the record,
-               and the squad the seat rides for. The pane scrolls; this rail never does. -->
+          <!-- the card's one door, pinned under the scroll: the squad the seat rides for. A relic
+               challenge belongs to a rival's dossier, never to this personal profile. -->
           <div class="pf-actions">
-            <button class="pf-act pf-act-duel" type="button" id="pf-duel" data-i18n-aria="pfDuelBadgeAria">
-              <span class="pf-act-face">
-                <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
-                <span class="pf-act-t" data-i18n="pfDuelBadge">Duel for the Badge</span>
-              </span>
-            </button>
             <button class="pf-act pf-act-squad" type="button" id="pf-squad" data-i18n-aria="pfViewSquadAria">
               <span class="pf-act-face">
                 <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
@@ -4354,7 +4348,7 @@
         </header>
         <div class="sheet-body ms-body" id="ms-body" data-scroll></div>
         <div class="ms-acts">
-          <button class="ms-challenge" type="button" id="ms-challenge" aria-label="Challenge mind: start a race" disabled aria-disabled="true">
+          <button class="ms-challenge btn-duel-badge" type="button" id="ms-challenge" aria-label="Challenge mind: start a race" disabled aria-disabled="true" hidden>
             <svg class="ico ms-ico-key" aria-hidden="true"><use href="#i-swords" /></svg>
             <svg class="ico ms-ico-lock" aria-hidden="true"><use href="#i-lock" /></svg>
             <span>Challenge mind</span>

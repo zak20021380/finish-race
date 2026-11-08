@@ -28,7 +28,9 @@ import { createCompete } from './compete';
 import { createArenaRoad } from './arena';
 import { flagPhoto } from './flags';
 import { createShop } from './shop';
-import { createNotifications } from './notifications';
+import { createNotifications, clearRelicChallenges, dismissRelicChallenge, noteRelicMissed, showRelicChallenge } from './notifications';
+import { fetchRelicMailbox, startRelicChannel } from './network';
+import { showToast } from './toast';
 import { mountCoins } from './coin';
 import { appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import {
@@ -65,7 +67,7 @@ import {
   onGameModeChange, openInviteRoom, resumeRoom, setGameMode, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
-import { initSeize } from './seize';
+import { initSeize, resetSeizeContext } from './seize';
 import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
@@ -677,7 +679,7 @@ function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
 }
 
 let home: { setRoute(id: string): void } | null = null;
-let compete: { setRoute(id: string): void } | null = null;
+let compete: { setRoute(id: string): void; clearRivalContext(): void } | null = null;
 let arenaRoad: { setRoute(id: string): void } | null = null;
 
 const router = createRouter($('screens'), (id, prev, phase) => {
@@ -685,6 +687,15 @@ const router = createRouter($('screens'), (id, prev, phase) => {
      data paint below is queued for the frame after the new tab has painted, so a
      tab tap never waits on a list rebuild or a network read. */
   menu.setRoute(id);
+  /* Any screen change drops a rival confrontation card: the challenge belongs to the panel that
+     opened it, never to the screen the player just moved to. */
+  resetSeizeContext();
+  /* The Profile tab is always the personal, pristine card. A rival inspection that was open on
+     Ranks — and any challenge key it mounted — is torn down before the tab paints. */
+  if (id === 'profile') {
+    menu.clearRivalContext();
+    compete?.clearRivalContext();
+  }
   // the light finish is a race-stage skin: it comes and goes with the board, never with the shell
   document.documentElement.classList.toggle('light-game', appearance() === 'light' && id === 'game');
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
@@ -4268,6 +4279,70 @@ compete = createCompete({
 /* the Arena tab is a showcase, not a lobby: the road takes no match action */
 arenaRoad = createArenaRoad();
 createNotifications({ sheets });
+
+/* ---- the in-game relic-duel channel ----
+   One ambient socket listens for challenges; an accepted challenge becomes a live 1v1 on that same
+   socket and routes straight to the board. The mailbox covers a challenge filed while away. */
+startRelicChannel({
+  onIncoming: (challenge) => {
+    showRelicChallenge(challenge);
+  },
+  onStart: (session) => { startRelicDuel(session); },
+  onDeclined: () => {
+    impact('light');
+    showToast(t('relicDuelDeclined'), 'warning', 3000);
+  },
+  onExpired: () => {
+    impact('light');
+    showToast(t('relicDuelExpired'), 'warning', 3000);
+  },
+  onClosed: (challengeId) => { dismissRelicChallenge(challengeId); },
+  onRefused: (reason) => {
+    impact('light');
+    const line =
+      reason === 'SHIELDED' ? t('relicDuelShielded')
+        : reason === 'TARGET_BUSY' ? t('relicDuelBusy')
+          : reason === 'BUSY' ? t('relicDuelSelfBusy')
+            : reason === 'SELF' ? t('relicDuelNoTarget')
+              : t('relicDuelOffline');
+    showToast(line, 'error', 3000);
+  },
+});
+void syncRelicMailbox();
+
+/** A challenge accepted by the holder: leave whatever sheet/search was up and take the board. */
+function startRelicDuel(session: OnlineSession): void {
+  clearRelicChallenges();
+  compete?.clearRivalContext();
+  resetSeizeContext();
+  matchmaking.abandon();
+  sheets.close();
+  impact('heavy');
+  notify('success');
+  startGame({
+    difficulty: menuState.difficulty,
+    sizes: [session.sizes[0], session.sizes[1]],
+    online: session,
+    quiet: true,
+  });
+}
+
+/** The next-boot half: a challenge filed while this seat had no session socket. */
+async function syncRelicMailbox(): Promise<void> {
+  const rows = await fetchRelicMailbox();
+  if (!rows.length) return;
+  const now = Date.now();
+  for (const row of rows) {
+    if (row.status === 'pending' && row.expiresAt > now) {
+      showRelicChallenge(row);
+      continue;
+    }
+    /* An unexpired challenge is answered live; anything else is history worth one inbox row. */
+    if (row.status === 'pending' || row.status === 'expired') {
+      noteRelicMissed(row);
+    }
+  }
+}
 
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
 admin = createAdmin({

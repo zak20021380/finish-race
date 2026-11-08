@@ -49,7 +49,8 @@ import {
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
-import { isSeizable, openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
+import { openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
+import { isSelfPlayerId } from './players';
 import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
@@ -74,6 +75,11 @@ export interface Menu {
   setRoute(id: string): void;
   /** Phase 2: paint the screen's data after the new panel has been shown. */
   refresh(id: string): void;
+  /**
+   * Drop any rival-inspection action the Profile could inherit. The personal profile has no duel
+   * CTA at all: a dispatched challenge must never leave a live key on this screen.
+   */
+  clearRivalContext(): void;
   /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
   /**
@@ -2767,10 +2773,17 @@ export function createMenu(api: MenuApi): Menu {
       return guard;
     }
     /* An exposed rival gets a named door, not a bare red square: the swords are the same pair the
-       dossier key wears, and the word is the one every language already uses for a relic duel. */
+       dossier key wears, and the word is the one every language already uses for a relic duel. A
+       ledger row with no session id behind it cannot be called out, so it gets no key at all. */
+    if (!holder.playerId) {
+      const unlisted = document.createElement('span');
+      unlisted.className = 'bo-shelter is-guarded';
+      unlisted.textContent = t('seizeUnlisted');
+      return unlisted;
+    }
     const key = document.createElement('button');
     key.type = 'button';
-    key.className = 'bo-duel';
+    key.className = 'bo-duel btn-duel-badge';
     key.setAttribute('aria-label', t('seizeAria'));
     key.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>';
     const label = document.createElement('span');
@@ -2779,7 +2792,7 @@ export function createMenu(api: MenuApi): Menu {
     key.append(label);
     key.addEventListener('click', () => {
       impact('medium');
-      openSeize(seizeTargetOf(def, holder.serial, holder.name));
+      openSeize(seizeTargetOf(def, holder.serial, holder.name, holder.playerId));
     });
     return key;
   }
@@ -2935,7 +2948,11 @@ export function createMenu(api: MenuApi): Menu {
 
     const rows = holders ?? [];
     if (rows.length > 0) {
-      for (const holder of rows) owners.list.append(holderRow(def, holder, holder.serial === edition.serial));
+      for (const holder of rows) {
+        /* A serial this device holds, or the same player id, is a deed — never a challenge door. */
+        const mine = holder.serial === edition.serial || isSelfPlayerId(holder.playerId);
+        owners.list.append(holderRow(def, holder, mine));
+      }
       owners.list.hidden = false;
     } else if (holders === null) {
       /* the ledger has published no name for this honor: say so rather than
@@ -3410,26 +3427,9 @@ export function createMenu(api: MenuApi): Menu {
      profile, so the card re-reads it — the signature keeps an unchanged ladder free. */
   onArena(() => { if (!pfScreen.hidden) paintProfile(); });
 
-  /* ---- the card's two doors ----
-     The crimson key opens the honor this seat is closest to claiming: a live exposed serial is
-     the literal duel, otherwise the collector card states the exact gap. The squad key is the
-     same sheet the Nation/Squad tile opens. */
-  document.getElementById('pf-duel')?.addEventListener('click', () => {
-    const chasing = [...BADGES]
-      .filter((b) => !isBadgeUnlocked(b.id))
-      .sort((a, b) => badgeProgress(b.id).pct - badgeProgress(a.id).pct)[0]
-      ?? equippedBadge() ?? BADGES[0];
-    if (!chasing) return;
-    const mine = badgeEdition(chasing.id).serial;
-    const rival = (badgeHolders(chasing.id) ?? [])
-      .find((h) => h.serial !== mine && isSeizable(chasing, h.serial));
-    if (rival) {
-      impact('medium');
-      openSeize(seizeTargetOf(chasing, rival.serial, rival.name));
-      return;
-    }
-    openBadge(chasing.id);
-  });
+  /* ---- the profile rail ----
+     The personal Profile is not a rival dossier: it carries no relic-duel key, because a challenge
+     needs an external holder in front of it. The squad key is the sheet the Nation/Squad tile opens. */
   document.getElementById('pf-squad')?.addEventListener('click', () => { openSquad(); });
 
   /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
@@ -4099,6 +4099,19 @@ export function createMenu(api: MenuApi): Menu {
     f.value = cleanCode(invite[1]);
   }
 
+  /**
+   * The personal Profile owns no rival CTA. Anything a previous inspection mounted under this
+   * screen is removed here — on boot, on every profile refresh, and on every route into the tab.
+   */
+  function clearRivalContext(): void {
+    document
+      .querySelectorAll<HTMLElement>('#s-profile .btn-duel-badge, #s-profile .pf-act-duel')
+      .forEach((node) => node.remove());
+    /* the rail keeps its one surviving door (squad); an inspection never disables it */
+    const rail = document.querySelector<HTMLElement>('#s-profile .pf-actions');
+    if (rail) rail.hidden = false;
+  }
+
   return {
     setRoute(id) {
       /* Only what the tap must show before the next frame: the dock's active key
@@ -4114,6 +4127,7 @@ export function createMenu(api: MenuApi): Menu {
     },
     refresh(id) {
       if (id === 'profile') {
+        clearRivalContext();                      // the personal card never inherits a rival action
         paintProfile();                           // the equipped row is only laid out once it is showing
         paintBadges();                            // the shelf mounts on first entry, not at boot
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
@@ -4128,6 +4142,7 @@ export function createMenu(api: MenuApi): Menu {
         paintCustom();
       }
     },
+    clearRivalContext,
     openLanguagePicker(onPick, context) { openLanguageGate(onPick, context); },
     closeLanguagePicker() { closeLanguageGate(); },
     isLanguagePickerOpen() { return !langGate.hidden; },

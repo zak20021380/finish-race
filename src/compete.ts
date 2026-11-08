@@ -40,6 +40,7 @@ import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribu
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
+import { isSelfPlayerId } from './players';
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
 import type { Router } from './router';
@@ -160,7 +161,7 @@ function percentRing(pct: number, inner: HTMLElement, extraCls = ''): HTMLElemen
 /* One shared resolver (`flags.ts`) serves the ladder, the HUD, the profile and the
    picker: flagcdn PNG → circle-flags SVG → the clay ISO chip / globe. */
 
-export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
+export function createCompete(api: CompeteApi): { setRoute(id: string): void; clearRivalContext(): void } {
   const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
   const seasonChip = document.getElementById('ranks-season');
@@ -1313,7 +1314,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   interface SeizeOffer { def: BadgeDef; serial: number }
 
   /** What the two keys at the foot of the open sheet are allowed to do right now. */
-  let msPending: { kind: 'mind'; name: string; tiq: number; squad: RankedSquad | null; seize: SeizeOffer | null } | { kind: 'guild'; squad: RankedSquad } | null = null;
+  let msPending: { kind: 'mind'; id: string; name: string; tiq: number; squad: RankedSquad | null; seize: SeizeOffer | null } | { kind: 'guild'; squad: RankedSquad } | null = null;
 
   /** A guild wears a community photo and one rank badge; clearing them keeps a mind clean. */
   function msClearGuild(): void {
@@ -1508,7 +1509,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const holders = badgeHolders(def.id);
       if (holders === null) continue;
       read = true;
-      const hit = holders.find((h) => h.name.trim().toLowerCase() === wanted);
+      /* The ledger's player id is exact; an older row without one still falls back to its name. */
+      const hit = holders.find((h) => (h.playerId ? h.playerId === p.id : h.name.trim().toLowerCase() === wanted));
       if (hit) held.push({ def, serial: hit.serial });
     }
     if (!read) return null;
@@ -1674,18 +1676,24 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     btn?.querySelector('use')?.setAttribute('href', href);
   }
 
-  /** Two fixed keys: a mind's challenge stays parked unless one of its relics stands exposed,
-      and a squad's join/invite key stays live. */
-  function msActions(kind: 'mind' | 'guild', label: string, hint: string, seize?: SeizeOffer | null): void {
+  /**
+   * Two fixed keys: a mind's relic challenge mounts only for an external holder with an exposed
+   * relic, and a squad's join/invite key stays live. The personal dossier mounts neither.
+   */
+  function msActions(kind: 'mind' | 'guild', label: string, hint: string, seize?: SeizeOffer | null, visible = true): void {
+    const acts = document.querySelector<HTMLElement>('#sheet-mind .ms-acts');
+    if (acts) acts.hidden = !visible;
     const ch = msEls.challenge;
     const gu = msEls.guild;
     if (ch) {
       const span = ch.querySelector<HTMLElement>('span');
+      const offered = kind === 'mind' && visible && !!seize;
+      ch.hidden = kind === 'mind' && !offered;
       if (span) span.textContent = label;
       ch.setAttribute('aria-label', hint);
-      ch.disabled = kind === 'mind' && !seize;
+      ch.disabled = kind === 'mind' && !offered;
       /* the parked key and the live one are the same plate: only the aura and the lock change */
-      ch.classList.toggle('is-seize', kind === 'mind' && !!seize);
+      ch.classList.toggle('is-seize', offered);
       if (ch.disabled) ch.setAttribute('aria-disabled', 'true');
       else ch.removeAttribute('aria-disabled');
     }
@@ -1696,6 +1704,22 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (span) span.textContent = kind === 'guild' ? t('squadViewChannel') : t('msViewSquad');
       gu.setAttribute('aria-label', kind === 'guild' ? t('squadViewChannel') : t('msViewSquad'));
     }
+  }
+
+  /** Drop the rival dossier's state entirely; a tab switch or the Profile door calls this. */
+  function clearRivalContext(): void {
+    msPending = null;
+    msPhotoSeq++;
+    const acts = document.querySelector<HTMLElement>('#sheet-mind .ms-acts');
+    if (acts) acts.hidden = true;
+    if (msEls.challenge) {
+      msEls.challenge.hidden = true;
+      msEls.challenge.classList.remove('is-seize');
+      msEls.challenge.disabled = true;
+      msEls.challenge.setAttribute('aria-disabled', 'true');
+    }
+    if (msEls.body) msEls.body.replaceChildren();
+    if (msEls.sheet && !msEls.sheet.hidden) api.sheets.close();
   }
 
   /** The squad a ladder name rides for, when the local registry knows one. */
@@ -1729,7 +1753,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
     const relics = relicsOf(p);
-    const rival = p.id !== 'you';
+    /* Strict scope: the personal dossier is a mirror, not a challenge surface. A rival's key
+       mounts only when the ladder says their id is someone else. */
+    const rival = p.id !== 'you' && !isSelfPlayerId(p.id);
     /* rarest first, so the offer on the line is the honor that actually costs something */
     const seize = relics && rival
       ? relics.find((w): w is WornEdition & { serial: number } =>
@@ -1737,6 +1763,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       : null;
     msPending = {
       kind: 'mind',
+      id: p.id,
       name: p.name,
       tiq: p.points,
       squad,
@@ -1756,6 +1783,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         ? `${t('seizeCta')} · ${seize.def.name} · ${editionSerialLabel(seize.serial)}`
         : `${t('msChallengeMind')} · ${t('msChallengeSoon')}`,
       seize,
+      rival,
     );
     const gu = msEls.guild;
     if (gu && squad) {
@@ -2125,8 +2153,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!p) return;
     if (p.kind === 'mind') {
       /* a mind's key only answers when a medallion is actually standing exposed */
-      if (!p.seize) return;
-      openSeize(seizeTargetOf(p.seize.def, p.seize.serial, p.name));
+      if (!p.seize || !p.id) return;
+      openSeize(seizeTargetOf(p.seize.def, p.seize.serial, p.name, p.id));
       return;
     }
     const wasMine = getMySquad()?.id === p.squad.id;
@@ -2784,6 +2812,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   return {
     setRoute(id: string) {
+      /* a rival dossier belongs to the Ranks tab; every other destination drops it in full */
+      if (id !== 'ranks') clearRivalContext();
       if (id === 'ranks') {
         paintRanks();
         startTick();
@@ -2793,5 +2823,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         stopTick();
       }
     },
+    clearRivalContext,
   };
 }

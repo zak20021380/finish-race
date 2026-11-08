@@ -353,6 +353,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* The relic-duel mailbox: challenges filed while this player was away. The room proves the
+     signed initData itself and answers only that player's rows. */
+  if (url.pathname === '/api/client/relic/challenges') {
+    if (!env.MATCHMAKER) return json({ error: 'matchmaker_unbound' }, 503);
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   /* The public Nations Cup: enrolled nations ranked by the points the room banked for them. */
   if (url.pathname === '/api/nations/leaderboard' || url.pathname === '/api/nations/roster') {
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);

@@ -19,8 +19,14 @@
  */
 import { adoptUserStorageKey, earnCoins } from './storage';
 import { impact, notify } from './telegram';
-import { motionReduced, settings } from './settings';
+import { lang, langDef, motionReduced, onLang, settings, t } from './settings';
 import { audioContext } from './sound';
+import { badgeById, badgeCrestHtml } from './badges';
+import {
+  acceptRelicChallenge, declineRelicChallenge,
+  type RelicChallenge, type RelicMailboxItem,
+} from './network';
+import { showToast } from './toast';
 import type { Sheets } from './sheets';
 
 export type NotificationKind = 'squad' | 'tournament' | 'reward' | 'announcement';
@@ -591,3 +597,380 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
   paintBadge();
   return { refresh };
 }
+
+/* ------------------------------------------------------------------ */
+/* Relic duel challenge modal                                          */
+/* ------------------------------------------------------------------ */
+
+interface RelicModalEls {
+  host: HTMLElement;
+  card: HTMLElement;
+  title: HTMLElement;
+  kicker: HTMLElement;
+  challengerLabel: HTMLElement;
+  stakeLabel: HTMLElement;
+  avatar: HTMLElement;
+  avatarImg: HTMLImageElement;
+  monogram: HTMLElement;
+  name: HTMLElement;
+  tiq: HTMLElement;
+  relicCrest: HTMLElement;
+  relicName: HTMLElement;
+  relicSerial: HTMLElement;
+  fill: HTMLElement;
+  seconds: HTMLElement;
+  accept: HTMLButtonElement;
+  decline: HTMLButtonElement;
+  acceptLabel: HTMLElement;
+  declineLabel: HTMLElement;
+}
+
+let relicEls: RelicModalEls | null = null;
+let relicCurrent: RelicChallenge | null = null;
+let relicQueue: RelicChallenge[] = [];
+let relicTimer = 0;
+let relicCloseTimer = 0;
+let relicOpener: HTMLElement | null = null;
+let relicLangBound = false;
+
+const relicIcon = (href: string, cls = 'rd-ico'): SVGSVGElement => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', cls);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#${href}`);
+  svg.append(use);
+  return svg;
+};
+
+const relicSerialCode = (serial: number): string => `№ ${String(serial).padStart(3, '0')}`;
+
+function buildRelicModal(): RelicModalEls | null {
+  if (relicEls) return relicEls;
+  const host = document.createElement('div');
+  host.className = 'rd';
+  host.id = 'relic-duel-modal';
+  host.setAttribute('role', 'dialog');
+  host.setAttribute('aria-modal', 'true');
+  host.setAttribute('aria-labelledby', 'rd-title');
+
+  const card = document.createElement('div');
+  card.className = 'rd-card';
+
+  const head = document.createElement('header');
+  head.className = 'rd-head';
+  const crest = document.createElement('span');
+  crest.className = 'rd-mark';
+  crest.append(relicIcon('i-swords'));
+  const title = document.createElement('h2');
+  title.className = 'rd-title';
+  title.id = 'rd-title';
+  const kicker = document.createElement('p');
+  kicker.className = 'rd-kicker';
+  head.append(crest, title, kicker);
+
+  const challenger = document.createElement('section');
+  challenger.className = 'rd-challenger';
+  const challengerLabel = document.createElement('p');
+  challengerLabel.className = 'rd-label';
+  const face = document.createElement('div');
+  face.className = 'rd-face';
+  const avatar = document.createElement('span');
+  avatar.className = 'rd-av';
+  const monogram = document.createElement('b');
+  monogram.className = 'rd-mono';
+  const avatarImg = document.createElement('img');
+  avatarImg.className = 'rd-av-img';
+  avatarImg.alt = '';
+  avatarImg.decoding = 'async';
+  avatarImg.referrerPolicy = 'no-referrer';
+  avatarImg.hidden = true;
+  avatar.append(monogram, avatarImg);
+  const who = document.createElement('div');
+  who.className = 'rd-who';
+  const name = document.createElement('b');
+  name.className = 'rd-name';
+  name.dir = 'auto';
+  const tiq = document.createElement('span');
+  tiq.className = 'rd-tiq';
+  tiq.append(relicIcon('i-brain', 'rd-tiq-ico'));
+  const tiqNum = document.createElement('b');
+  tiqNum.className = 'rd-tiq-n';
+  tiq.append(tiqNum);
+  who.append(name, tiq);
+  face.append(avatar, who);
+  challenger.append(challengerLabel, face);
+
+  const stake = document.createElement('section');
+  stake.className = 'rd-stake';
+  const stakeLabel = document.createElement('p');
+  stakeLabel.className = 'rd-label';
+  const relic = document.createElement('div');
+  relic.className = 'rd-relic';
+  const relicCrest = document.createElement('span');
+  relicCrest.className = 'rd-relic-crest';
+  const relicId = document.createElement('span');
+  relicId.className = 'rd-relic-id';
+  const relicName = document.createElement('b');
+  relicName.className = 'rd-relic-name';
+  const relicSerial = document.createElement('span');
+  relicSerial.className = 'rd-relic-serial';
+  relicSerial.dir = 'ltr';
+  relicId.append(relicName, relicSerial);
+  relic.append(relicCrest, relicId);
+  stake.append(stakeLabel, relic);
+
+  const timer = document.createElement('div');
+  timer.className = 'rd-timer';
+  const track = document.createElement('div');
+  track.className = 'rd-track';
+  track.setAttribute('aria-hidden', 'true');
+  const fill = document.createElement('span');
+  fill.className = 'rd-fill';
+  track.append(fill);
+  const seconds = document.createElement('p');
+  seconds.className = 'rd-seconds';
+  seconds.setAttribute('role', 'timer');
+  timer.append(track, seconds);
+
+  const actions = document.createElement('footer');
+  actions.className = 'rd-actions';
+  const accept = document.createElement('button');
+  accept.type = 'button';
+  accept.className = 'rd-accept';
+  const acceptLabel = document.createElement('span');
+  accept.append(relicIcon('i-swords'), acceptLabel);
+  const decline = document.createElement('button');
+  decline.type = 'button';
+  decline.className = 'rd-decline';
+  const declineLabel = document.createElement('span');
+  decline.append(declineLabel);
+  actions.append(accept, decline);
+
+  card.append(head, challenger, stake, timer, actions);
+  host.append(card);
+
+  /* Backdrop taps are ignored on purpose: a 25s duel offer is answered, not dismissed by accident. */
+  accept.addEventListener('click', () => respondRelic(true));
+  decline.addEventListener('click', () => respondRelic(false));
+
+  relicEls = {
+    host, card, title, kicker, challengerLabel, stakeLabel, avatar, avatarImg, monogram, name, tiq,
+    relicCrest, relicName, relicSerial, fill, seconds, accept, decline, acceptLabel, declineLabel,
+  };
+  /* the TIQ figure sits inside `tiq`, keep the direct reference through a property lookup */
+  (relicEls as RelicModalEls & { tiqNum?: HTMLElement }).tiqNum = tiqNum;
+  return relicEls;
+}
+
+function relicTiqNode(): HTMLElement | null {
+  return relicEls?.tiq.querySelector<HTMLElement>('.rd-tiq-n') ?? null;
+}
+
+function paintRelicCopy(): void {
+  if (!relicEls || !relicCurrent) return;
+  const c = relicCurrent;
+  const def = badgeById(c.relicId);
+  const dir = langDef(lang).dir;
+  relicEls.host.dir = dir;
+  relicEls.card.classList.toggle('is-rtl', dir === 'rtl');
+  relicEls.title.textContent = t('relicDuelTitle');
+  relicEls.kicker.textContent = t('relicDuelKicker');
+  relicEls.challengerLabel.textContent = t('relicDuelChallenger');
+  relicEls.stakeLabel.textContent = t('relicDuelStake');
+  relicEls.acceptLabel.textContent = t('relicDuelAccept');
+  relicEls.declineLabel.textContent = t('relicDuelDecline');
+  relicEls.accept.setAttribute('aria-label', t('relicDuelAccept'));
+  relicEls.decline.setAttribute('aria-label', t('relicDuelDecline'));
+  relicEls.host.setAttribute('aria-label', t('relicDuelAria'));
+  relicEls.name.textContent = c.challengerName || 'Player';
+  relicEls.monogram.textContent = (c.challengerName || '?').trim().charAt(0).toUpperCase() || '?';
+  const tiqNum = relicTiqNode();
+  if (tiqNum) tiqNum.textContent = c.challengerTiq.toLocaleString('en-US');
+  relicEls.relicName.textContent = def?.name ?? c.relicId;
+  relicEls.relicSerial.textContent = relicSerialCode(c.relicSerial);
+  if (def) {
+    relicEls.relicCrest.dataset.accent = def.accent;
+    relicEls.relicCrest.innerHTML = badgeCrestHtml(def, 'badge-crest rd-crest');
+  } else {
+    relicEls.relicCrest.replaceChildren(relicIcon('i-medal', 'rd-crest-ico'));
+  }
+  const src = c.challengerAvatar;
+  relicEls.avatarImg.hidden = true;
+  relicEls.avatarImg.removeAttribute('src');
+  if (/^https:\/\/[^\s"'<>\\]+$/i.test(src)) {
+    relicEls.avatarImg.onload = () => {
+      if (relicEls && relicEls.avatarImg.src === src) {
+        relicEls.avatarImg.hidden = relicEls.avatarImg.naturalWidth <= 2 || relicEls.avatarImg.naturalHeight <= 2;
+      }
+    };
+    relicEls.avatarImg.onerror = () => { if (relicEls) relicEls.avatarImg.hidden = true; };
+    relicEls.avatarImg.src = src;
+  }
+}
+
+function paintRelicClock(): void {
+  if (!relicEls || !relicCurrent) return;
+  const left = Math.max(0, relicCurrent.expiresAt - Date.now());
+  const total = Math.max(1, 25_000);
+  const ratio = Math.max(0, Math.min(1, left / total));
+  relicEls.fill.style.transform = `scaleX(${ratio.toFixed(4)})`;
+  const seconds = Math.ceil(left / 1000);
+  relicEls.seconds.textContent = t('relicDuelSeconds').replace('{s}', String(seconds));
+  if (left <= 0) {
+    stopRelicClock();
+    dismissRelicChallenge();
+  }
+}
+
+function stopRelicClock(): void {
+  if (!relicTimer) return;
+  window.clearInterval(relicTimer);
+  relicTimer = 0;
+}
+
+function respondRelic(accept: boolean): void {
+  const current = relicCurrent;
+  if (!current || !relicEls) return;
+  const id = current.challengeId;
+  relicEls.accept.disabled = true;
+  relicEls.decline.disabled = true;
+  const sent = accept ? acceptRelicChallenge(id) : declineRelicChallenge(id);
+  if (!sent) {
+    notify('error');
+    showToast(t('relicDuelOffline'), 'error');
+    /* A decline is final either way: the server's own clock will expire the offer. An accept
+       is not, so its key stays live for another try while the channel is down. */
+    if (accept) {
+      relicEls.accept.disabled = false;
+      relicEls.decline.disabled = false;
+    } else {
+      dismissRelicChallenge(id);
+    }
+    return;
+  }
+  impact(accept ? 'heavy' : 'light');
+  notify(accept ? 'success' : 'warning');
+  dismissRelicChallenge(id);
+}
+
+/** Remove the challenge card (smoothly) and hand the stage to the next queued offer. */
+export function dismissRelicChallenge(challengeId?: string): void {
+  if (challengeId) relicQueue = relicQueue.filter((c) => c.challengeId !== challengeId);
+  if (!relicCurrent) return;
+  if (challengeId && relicCurrent.challengeId !== challengeId) return;
+  stopRelicClock();
+  window.clearTimeout(relicCloseTimer);
+  const host = relicEls?.host ?? null;
+  relicCurrent = null;
+  if (host) {
+    host.classList.remove('is-in');
+    relicCloseTimer = window.setTimeout(() => {
+      host.remove();
+      if (relicEls?.host === host) relicEls = null;
+      const back = relicOpener;
+      relicOpener = null;
+      if (back && document.contains(back)) {
+        try { back.focus({ preventScroll: true }); } catch { /* gone already */ }
+      }
+      nextRelicChallenge();
+    }, motionReduced() ? 0 : 200);
+  } else {
+    nextRelicChallenge();
+  }
+}
+
+function nextRelicChallenge(): void {
+  if (relicCurrent || !relicQueue.length) return;
+  const next = relicQueue.shift();
+  if (next) openRelicChallenge(next);
+}
+
+/** Drop the open offer and everything queued — a duel is starting, so no offer may follow it in. */
+export function clearRelicChallenges(): void {
+  /* Queued offers are real people waiting: tell the room they were not taken. */
+  for (const waiting of relicQueue) declineRelicChallenge(waiting.challengeId);
+  relicQueue = [];
+  const open = relicCurrent;
+  if (open) declineRelicChallenge(open.challengeId);
+  if (!relicCurrent) return;
+  stopRelicClock();
+  window.clearTimeout(relicCloseTimer);
+  const host = relicEls?.host ?? null;
+  relicCurrent = null;
+  if (host) {
+    host.classList.remove('is-in');
+    relicCloseTimer = window.setTimeout(() => {
+      host.remove();
+      if (relicEls?.host === host) relicEls = null;
+    }, motionReduced() ? 0 : 200);
+  }
+}
+
+function openRelicChallenge(challenge: RelicChallenge): void {
+  const els = buildRelicModal();
+  if (!els) return;
+  window.clearTimeout(relicCloseTimer);
+  relicCloseTimer = 0;
+  relicCurrent = challenge;
+  relicOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  paintRelicCopy();
+  els.accept.disabled = false;
+  els.decline.disabled = false;
+  els.avatarImg.hidden = true;
+  els.host.classList.remove('is-in');
+  if (!document.contains(els.host)) document.body.appendChild(els.host);
+  void els.host.offsetWidth;
+  requestAnimationFrame(() => els.host.classList.add('is-in'));
+  paintRelicClock();
+  stopRelicClock();
+  relicTimer = window.setInterval(paintRelicClock, 100);
+  els.accept.focus({ preventScroll: true });
+  impact('heavy');
+  notify('warning');
+
+  if (!relicLangBound) {
+    relicLangBound = true;
+    onLang(() => { if (relicCurrent) paintRelicCopy(); });
+  }
+}
+
+/**
+ * Present one relic challenge. A second offer that arrives while the first is still up waits its
+ * turn instead of replacing the countdown the player is reading.
+ */
+export function showRelicChallenge(challenge: RelicChallenge): void {
+  if (!challenge || !challenge.challengeId) return;
+  if (relicCurrent) {
+    if (relicCurrent.challengeId === challenge.challengeId) return;
+    if (!relicQueue.some((c) => c.challengeId === challenge.challengeId)) relicQueue.push(challenge);
+    return;
+  }
+  openRelicChallenge(challenge);
+}
+
+/** File a missed challenge into the in-game inbox (the holder was away or the clock ran out). */
+export function noteRelicMissed(item: RelicMailboxItem): void {
+  const def = badgeById(item.relicId);
+  const relic = def
+    ? `${def.name} ${relicSerialCode(item.relicSerial)}`
+    : `${item.relicId} ${relicSerialCode(item.relicSerial)}`;
+  addNotification({
+    id: `relic-challenge-${item.challengeId}`,
+    kind: 'announcement',
+    title: t('relicDuelMissedTitle'),
+    body: t('relicDuelMissedBody')
+      .replace('{name}', item.challengerName || 'Player')
+      .replace('{relic}', relic),
+    createdAt: item.createdAt || Date.now(),
+  });
+}
+
+/* Escape answers the offer with a decline: the modal is never dismissed by a stray backdrop tap. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !relicCurrent) return;
+  e.preventDefault();
+  e.stopPropagation();
+  respondRelic(false);
+}, true);

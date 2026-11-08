@@ -262,10 +262,12 @@ export interface OnlineSession extends OnlineMatch {
 }
 
 /** One frame the room can send (`worker/matchmaker.ts` is its only producer). */
-type RaceFrame =
+export type RaceFrame =
   | { type: 'MATCH_FOUND'; matchId: string; seed: number; side: 0 | 1; sizes: [number, number];
       mode: 'pvp' | 'arena';
-      opponent: { name: string; tiq: number; tier: string; flag: string; vip?: boolean } }
+      opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string; vip?: boolean };
+      /** True when the frame arrived as `DUEL_START`: a relic challenge accepted in-game. */
+      duel?: true }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
@@ -383,6 +385,21 @@ export function roomSocketUrl(code: string, host: boolean): string {
   return `${base}?${params.toString()}`;
 }
 
+/**
+ * The ambient relic-duel channel: the same socket origin and identity, with `session=1` telling
+ * the matchmaker this seat is listening rather than searching. It never enters the queue; an
+ * accepted challenge turns it into the live race.
+ */
+export function sessionSocketUrl(): string {
+  const base = socketUrl();
+  if (!base) return '';
+  const params = new URLSearchParams(socketParams(false));
+  params.set('session', '1');
+  params.delete('wide');
+  params.delete('mode');
+  return `${base}?${params.toString()}`;
+}
+
 /** The board the room said both seats are playing, or the one this client asked for. */
 function readBoard(raw: unknown): [number, number] {
   if (Array.isArray(raw) && raw.length === 2) {
@@ -436,13 +453,17 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
     const msg = JSON.parse(raw) as Record<string, unknown>;
     if (!msg || typeof msg !== 'object') return null;
     const side: 0 | 1 = msg.side === 1 ? 1 : 0;
-    if (msg.type === 'MATCH_FOUND') {
-      const o = msg.opponent as { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown; vip?: unknown } | null;
-      if (typeof msg.matchId !== 'string' || typeof msg.seed !== 'number') return null;
+    if (msg.type === 'MATCH_FOUND' || msg.type === 'DUEL_START') {
+      const o = msg.opponent as
+        { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown; avatar?: unknown; vip?: unknown } | null;
+      const matchId = msg.type === 'DUEL_START'
+        ? (typeof msg.roomId === 'string' ? msg.roomId : msg.matchId)
+        : msg.matchId;
+      if (typeof matchId !== 'string' || typeof msg.seed !== 'number') return null;
       if (!o || typeof o.name !== 'string' || typeof o.tiq !== 'number') return null;
       return {
         type: 'MATCH_FOUND',
-        matchId: msg.matchId,
+        matchId,
         seed: msg.seed,
         side,
         sizes: readBoard(msg.sizes),
@@ -452,8 +473,10 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
           tiq: o.tiq,
           tier: typeof o.tier === 'string' ? o.tier : '',
           flag: typeof o.flag === 'string' ? o.flag : '',
+          avatar: typeof o.avatar === 'string' ? o.avatar : '',
           vip: o.vip === true,
         },
+        ...(msg.type === 'DUEL_START' ? { duel: true as const } : {}),
       };
     }
     if (msg.type === 'MOVE') {
@@ -497,6 +520,8 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
 
 /** The one waiting-room socket per page: a widened search widens this one instead of rejoining. */
 let ws: WebSocket | null = null;
+/** The ambient relic-duel socket, once an accepted duel made it the live race. Never auto-closed. */
+let durableSocket: WebSocket | null = null;
 let wsWide = false;
 let wsMatched = false;
 let wsRuns = 0;
@@ -535,6 +560,7 @@ function post(sock: WebSocket, payload: string): void {
 }
 
 function forget(sock: WebSocket): void {
+  if (sock === durableSocket) durableSocket = null;
   if (race?.socket === sock) {
     race = null;
     raceMove = null;
@@ -675,15 +701,16 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
 /** The matchmaker's payload, in the shape the stage paints. */
 function onlineOpponent(msg: {
   matchId: string;
-  opponent: { name: string; tiq: number; tier: string; flag: string; vip?: boolean };
+  opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string; vip?: boolean };
 }): OpponentData {
   const name = msg.opponent.name.trim() || 'Rival';
+  const avatar = /^https:\/\/[^\s"'<>\\]+$/i.test(msg.opponent.avatar ?? '') ? msg.opponent.avatar! : null;
   return {
     id: `online-${msg.matchId}`,
     name,
     tiq: msg.opponent.tiq,
     tier: asTier(msg.opponent.tier, msg.opponent.tiq),
-    avatarUrl: null,
+    avatarUrl: avatar,
     initial: name.charAt(0).toUpperCase(),
     flag: msg.opponent.flag,
     vip: msg.opponent.vip === true,
@@ -692,6 +719,7 @@ function onlineOpponent(msg: {
 
 /** The socket went away: mid-race that is a loss, mid-search it is the local search's turn. */
 function socketGone(sock: WebSocket): void {
+  if (sock === durableSocket) durableSocket = null;
   if (race?.socket === sock) { endRace(sock, false, 'drop'); return; }
   if (sock !== ws) return;             // a socket this search already let go of
   ws = null;
@@ -728,60 +756,104 @@ function refuseSearch(sock: WebSocket, reason: string): void {
 function wire(sock: WebSocket): void {
   sock.addEventListener('open', () => post(sock, JSON.stringify({ type: 'QUEUE', wide: wsWide })));
   sock.addEventListener('message', (ev) => {
-    const frame = parseFrame(String(ev.data), race?.sizes);
-    if (!frame) return;
-
-    /* a tournament state broadcast: update the mirror even mid-race, without touching the board */
-    if (frame.type === 'ARENA') {
-      adoptArena(frame.arena);
-      if (frame.award) claimArenaAward(frame.award);
-      return;
-    }
-
-    if (frame.type === 'ERROR') {
-      if (race?.socket === sock) endRace(sock, false, 'aborted');
-      else refuseSearch(sock, frame.reason);
-      return;
-    }
-
-    if (frame.type === 'MATCH_FOUND') {
-      if (race?.socket === sock) return;      // one match per socket: a repeat is not a new race
-      wsMatched = true;
-      racePostGone = false;
-      const session = makeSession(sock, frame);
-      race = session;
-      const answered = seat;
-      seat = null;
-      answered?.resolve(session.opponent);
-      return;
-    }
-
-    if (race?.socket !== sock) return;        // race traffic on a socket that is not racing
-    if (frame.type === 'MOVE') {
-      if (raceMove) raceMove(frame.action, frame.side);
-      else raceQueue.push({ action: frame.action, side: frame.side });
-    } else if (frame.type === 'EMOTE') {
-      if (raceEmote) raceEmote(frame.emote, frame.side);
-      else raceEmoteQueue.push({ emote: frame.emote, side: frame.side });
-    } else if (frame.type === 'PHRASE') {
-      if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
-      else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
-    } else if (frame.type === 'POST_MATCH_CHAT') {
-      const line: PostChatLine = frame.preset
-        ? { preset: frame.preset }
-        : { text: frame.text ?? '' };
-      if (racePostChat) racePostChat(line, frame.side, frame.vip);
-      else racePostChatQueue.push({ line, side: frame.side, vip: frame.vip });
-    } else if (frame.type === 'REJECT') {
-      raceReject?.(frame.reason);
-    } else if (frame.type === 'ABORTED') {
-      endRace(sock, false, 'aborted');        // an operator pulled the room out from under both seats
-    } else {
-      endRace(sock, true, frame.type === 'RESIGN' ? 'resign' : 'left');
-    }
+    const frame = readRaceFrame(String(ev.data));
+    if (frame) applyRaceFrame(sock, frame);
   });
   sock.addEventListener('close', () => socketGone(sock));
   sock.addEventListener('error', () => socketGone(sock));
+}
+
+/** A socket the ambient duel channel owns has closed: settle whatever race it was carrying. */
+export function noteDuelSocketClosed(sock: WebSocket): void {
+  socketGone(sock);
+}
+
+/** The frame a socket just carried, bounded by the board this page is playing on. */
+export function readRaceFrame(raw: string): RaceFrame | null {
+  return parseFrame(raw, race?.sizes);
+}
+
+/**
+ * One decoded frame, owned by the module because the race it speaks about is module state. The
+ * ambient relic-duel socket uses the same door, with `onMatch` replacing the queue's resolver.
+ */
+export function applyRaceFrame(
+  sock: WebSocket,
+  frame: RaceFrame,
+  onMatch?: (session: OnlineSession) => void,
+): void {
+  /* a tournament state broadcast: update the mirror even mid-race, without touching the board */
+  if (frame.type === 'ARENA') {
+    adoptArena(frame.arena);
+    if (frame.award) claimArenaAward(frame.award);
+    return;
+  }
+
+  if (frame.type === 'ERROR') {
+    if (race?.socket === sock) endRace(sock, false, 'aborted');
+    else if (!onMatch) refuseSearch(sock, frame.reason);
+    return;
+  }
+
+  if (frame.type === 'MATCH_FOUND') {
+    if (race?.socket === sock) return;      // one match per socket: a repeat is not a new race
+    wsMatched = true;
+    racePostGone = false;
+    const session = makeSession(sock, frame);
+    race = session;
+    if (onMatch) {
+      onMatch(session);
+      return;
+    }
+    const answered = seat;
+    seat = null;
+    answered?.resolve(session.opponent);
+    return;
+  }
+
+  if (race?.socket !== sock) return;        // race traffic on a socket that is not racing
+  if (frame.type === 'MOVE') {
+    if (raceMove) raceMove(frame.action, frame.side);
+    else raceQueue.push({ action: frame.action, side: frame.side });
+  } else if (frame.type === 'EMOTE') {
+    if (raceEmote) raceEmote(frame.emote, frame.side);
+    else raceEmoteQueue.push({ emote: frame.emote, side: frame.side });
+  } else if (frame.type === 'PHRASE') {
+    if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
+    else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
+  } else if (frame.type === 'POST_MATCH_CHAT') {
+    const line: PostChatLine = frame.preset
+      ? { preset: frame.preset }
+      : { text: frame.text ?? '' };
+    if (racePostChat) racePostChat(line, frame.side, frame.vip);
+    else racePostChatQueue.push({ line, side: frame.side, vip: frame.vip });
+  } else if (frame.type === 'REJECT') {
+    raceReject?.(frame.reason);
+  } else if (frame.type === 'ABORTED') {
+    endRace(sock, false, 'aborted');        // an operator pulled the room out from under both seats
+  } else {
+    endRace(sock, true, frame.type === 'RESIGN' ? 'resign' : 'left');
+  }
+}
+
+/**
+ * Adopt the socket an accepted relic challenge was played on as the live race. The socket is also
+ * the ambient challenge channel, so it is marked durable: a later queue search must not close it.
+ */
+export function adoptDuelRace(
+  sock: WebSocket,
+  found: Extract<RaceFrame, { type: 'MATCH_FOUND' }>,
+): OnlineSession {
+  durableSocket = sock;
+  if (race && race.socket !== sock) forget(race.socket);
+  /* a queue search in flight is abandoned: the duel owns the screen now */
+  if (ws && ws !== sock) closeSocket(true);
+  seat = null;
+  wsMatched = true;
+  racePostGone = false;
+  const session = makeSession(sock, found);
+  race = session;
+  return session;
 }
 
 /** A CANCEL, then the close. A socket that already carried a match belongs to the race: it stays. */
@@ -823,8 +895,9 @@ export function onlineSearch(): MatchSource {
     const attempt: Seat = { run: ++wsRuns, signal, opts, resolve, reject };
     window.clearTimeout(teardownId);
     teardownId = 0;
-    /* A new search ends whatever race was carried before it: one page, one live seat. */
-    if (race) forget(race.socket);
+    /* A new search ends whatever race was carried before it: one page, one live seat. The
+       ambient duel socket is the exception — it is the page's challenge channel, not a queue. */
+    if (race && race.socket !== durableSocket) forget(race.socket);
     if (signal.aborted) { reject(aborted()); return; }
     signal.addEventListener('abort', () => onAbort(attempt), { once: true });
 
@@ -910,6 +983,8 @@ export interface Matchmaking {
   open(): void;
   /** Player-initiated abort: light haptic, then back to mode selection. */
   cancel(): void;
+  /** A duel started elsewhere: tear the search down without handing the drawer back. */
+  abandon(): void;
   /** How a real socket hands its match over. Ignores the call unless searching. */
   resolveMatch(opponent: OpponentData): void;
   setSource(source: MatchSource): void;
@@ -1350,6 +1425,16 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     init.onCancel?.();
   }
 
+  /** A relic duel was accepted: clear the stage and release the queue without any drawer callback. */
+  function abandon(): void {
+    if (state === 'idle') return;
+    teardown('Duel started');
+    window.clearTimeout(hideId);
+    root?.classList.remove('open');
+    if (root) root.hidden = true;
+    closeSocket(true);
+  }
+
   function teardown(message: string): void {
     stopTimers();
     window.clearTimeout(foundId);
@@ -1369,6 +1454,7 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   const api: Matchmaking = {
     open,
     cancel,
+    abandon,
     resolveMatch(o) {
       if (state === 'searching') found(o);
     },

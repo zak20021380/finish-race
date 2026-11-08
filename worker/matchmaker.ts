@@ -80,6 +80,7 @@ import {
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
 import { NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
+import { relicShelter } from '../shared/relic';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
@@ -133,7 +134,83 @@ type ClientMessage =
   /* A live friend-room seat asks the room to re-send its authoritative board. Sent after a
      reconnect, after a relayed move arrived on the wrong turn, and after any refusal that could
      have left the two replicas apart. */
-  | { type: 'SYNC_REQ' };
+  | { type: 'SYNC_REQ' }
+  /* ---- relic duels: the in-game challenge lane (no Telegram share, no lobby) ---- */
+  | { type: 'RELIC_CHALLENGE_SEND'; targetUserId: string; relicId: string; relicSerial: number }
+  | { type: 'RELIC_CHALLENGE_ACCEPT'; challengeId: string }
+  | { type: 'RELIC_CHALLENGE_DECLINE'; challengeId: string };
+
+/* ---------- relic duels ---------- */
+
+/** The honors a relic duel may be thrown over, with the same caps the ledger mints against. */
+const RELIC_CAPS: Readonly<Record<string, number>> = {
+  churchill_bastion: 100,
+  einstein_singularity: 50,
+  heisenberg_formula: 25,
+};
+/** How long the challenged seat has to answer, measured by the same clock the modal paints. */
+const RELIC_CHALLENGE_TTL_MS = 25_000;
+/** How long a spent challenge stays in the mailbox so a later boot can still explain it. */
+const RELIC_CHALLENGE_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const RELIC_CHALLENGE_MAX = 200;
+const RELIC_CHALLENGES_KEY = 'relic_challenges';
+
+type RelicChallengeStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+interface RelicChallenge {
+  id: string;
+  challengerId: string;
+  challengerName: string;
+  challengerAvatar: string;
+  challengerTiq: number;
+  targetUserId: string;
+  relicId: string;
+  relicSerial: number;
+  expiresAt: number;
+  roomId: string;
+  status: RelicChallengeStatus;
+  createdAt: number;
+}
+
+/** One seat id, bounded to the alphabet the registry mints (`tg-…`, `guest-…`, `you`). */
+const readSeatId = (raw: unknown): string =>
+  typeof raw === 'string' ? raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) : '';
+
+const readRelicId = (raw: unknown): string =>
+  typeof raw === 'string' && Object.prototype.hasOwnProperty.call(RELIC_CAPS, raw) ? raw : '';
+
+/** A stored challenge, folded field by field; a corrupt row is dropped rather than trusted. */
+function readRelicChallenge(raw: unknown): RelicChallenge | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<RelicChallenge>;
+  const id = readSeatId(r.id);
+  const challengerId = readSeatId(r.challengerId);
+  const targetUserId = readSeatId(r.targetUserId);
+  const relicId = readRelicId(r.relicId);
+  const relicSerial = Number(r.relicSerial);
+  const expiresAt = Number(r.expiresAt);
+  const createdAt = Number(r.createdAt);
+  const roomId = readSeatId(r.roomId);
+  const status = r.status;
+  if (!id || !challengerId || !targetUserId || !relicId || !roomId) return null;
+  if (!Number.isInteger(relicSerial) || relicSerial < 1) return null;
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(createdAt)) return null;
+  if (status !== 'pending' && status !== 'accepted' && status !== 'declined' && status !== 'expired') return null;
+  return {
+    id,
+    challengerId,
+    challengerName: typeof r.challengerName === 'string' ? r.challengerName.slice(0, 40) : 'Player',
+    challengerAvatar: typeof r.challengerAvatar === 'string' ? r.challengerAvatar.slice(0, 512) : '',
+    challengerTiq: Number.isFinite(Number(r.challengerTiq)) ? Math.max(0, Math.floor(Number(r.challengerTiq))) : 0,
+    targetUserId,
+    relicId,
+    relicSerial,
+    expiresAt,
+    roomId,
+    status,
+    createdAt,
+  };
+}
 
 interface Waiter {
   ws: WebSocket;
@@ -142,6 +219,8 @@ interface Waiter {
   tiq: number;
   tier: MindTier;
   flag: string;
+  /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to a relic challenger. */
+  avatar: string;
   /** The player asked for a wider net after a quiet queue. */
   wide: boolean;
   /** When they entered the queue: the order, and who takes side 0. */
@@ -1603,7 +1682,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
-      preset?: unknown;
+      preset?: unknown; targetUserId?: unknown; relicId?: unknown; relicSerial?: unknown; challengeId?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1646,6 +1725,19 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       const text = readPostChatText(msg.text) ?? undefined;
       return preset || text ? { type: 'POST_MATCH_CHAT', preset, text } : null;
     }
+    if (msg.type === 'RELIC_CHALLENGE_SEND') {
+      const targetUserId = readSeatId(msg.targetUserId);
+      const relicId = readRelicId(msg.relicId);
+      const relicSerial = Number(msg.relicSerial);
+      if (!targetUserId || !relicId) return null;
+      if (!Number.isInteger(relicSerial) || relicSerial < 1 || relicSerial > 999) return null;
+      return { type: 'RELIC_CHALLENGE_SEND', targetUserId, relicId, relicSerial };
+    }
+    if (msg.type === 'RELIC_CHALLENGE_ACCEPT' || msg.type === 'RELIC_CHALLENGE_DECLINE') {
+      const challengeId = readSeatId(msg.challengeId);
+      if (!challengeId) return null;
+      return { type: msg.type, challengeId };
+    }
   } catch {
     /* not ours: a malformed frame is dropped, never fatal */
   }
@@ -1672,6 +1764,33 @@ function foundMessage(
       tiq: opponent.tiq,
       tier: opponent.tier,
       flag: opponent.flag,
+      avatar: opponent.avatar,
+      vip: opponent.premium,
+      vipUntil: opponent.vipUntil,
+    },
+  });
+}
+
+/** `DUEL_START` carries the same seat payload a queued pair receives, plus the room id. */
+function duelStartMessage(
+  roomId: string, seed: number, side: 0 | 1, me: Waiter, opponent: Waiter, sizes: [number, number],
+): string {
+  return JSON.stringify({
+    type: 'DUEL_START',
+    roomId,
+    matchId: roomId,
+    seed,
+    side,
+    sizes,
+    mode: 'pvp',
+    isVip: me.premium,
+    vipUntil: me.vipUntil,
+    opponent: {
+      name: opponent.name,
+      tiq: opponent.tiq,
+      tier: opponent.tier,
+      flag: opponent.flag,
+      avatar: opponent.avatar,
       vip: opponent.premium,
       vipUntil: opponent.vipUntil,
     },
@@ -1870,6 +1989,17 @@ function adminIdOf(raw: unknown): string {
 
 export class MatchmakerDO {
   private queue: Waiter[] = [];
+  /**
+   * The ambient relic-duel sockets, one per player: they never enter the pairing queue, but they
+   * are the address a rival's challenge is pushed to and the socket a direct duel is played on.
+   */
+  private sessions = new Map<string, Waiter>();
+  /** The live socket behind each pending challenge, so an accept can reach its challenger. */
+  private challengeSeats = new Map<string, Waiter>();
+  /** Every live and recently spent relic challenge, keyed by its id. */
+  private relicChallenges = new Map<string, RelicChallenge>();
+  /** A mailbox write is already scheduled: many challenge changes, one flush. */
+  private relicDirty = false;
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
   /** Every race still being played, by match id. */
@@ -2006,6 +2136,16 @@ export class MatchmakerDO {
           /* The friends lobbies are durable: an eviction between "host creates a room" and "guest
              taps the link" must not turn a valid code into "no room with this code". */
           this.restoreLobbies(await storage.get<unknown>(ROOM_STATE_KEY));
+          const storedChallenges = await storage.get<unknown>(RELIC_CHALLENGES_KEY);
+          if (Array.isArray(storedChallenges)) {
+            const now = Date.now();
+            for (const raw of storedChallenges) {
+              const row = readRelicChallenge(raw);
+              if (!row) continue;
+              if (row.status === 'pending' && row.expiresAt <= now) row.status = 'expired';
+              if (now - row.createdAt <= RELIC_CHALLENGE_KEEP_MS) this.relicChallenges.set(row.id, row);
+            }
+          }
           this.seedRoles();
           this.rearm();
         } catch {
@@ -2140,6 +2280,12 @@ export class MatchmakerDO {
         return json({ error: 'room_error', hint: reasonOf(err) }, 500);
       }
     }
+    /* The relic-duel mailbox: a challenge filed while its target was away is read here on the
+       next boot. Identity is proven from the signed initData, exactly like a socket handshake. */
+    if (url.pathname === '/api/client/relic/challenges') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return this.relicMailbox(request);
+    }
     /* The upgrade header is a token list in principle (`keep-alive, Upgrade`), so compare the
        tokens, never the raw header. Cloudflare only hands us a WebSocket when it is present. */
     const upgrade = (request.headers.get('Upgrade') ?? '').toLowerCase();
@@ -2203,6 +2349,12 @@ export class MatchmakerDO {
           readBotTier(queryValue(url, 'bottier')));
       } else if (roomSize) {
         this.joinRoom(server, identity, roomSize, readBotTier(queryValue(url, 'bottier')));
+      } else if (queryValue(url, 'session') === '1') {
+        /* The ambient duel channel: a seated identity with no queue entry. It receives pushed
+           challenges, and an accepted one turns this same socket into the live race. */
+        const waiter = this.enter(server, identity, false, readSizes(queryValue(url, 'sizes')), 'pvp', false);
+        this.attach(waiter, true);
+        this.registerSession(waiter);
       } else {
         const waiter = this.enter(server, identity, queryValue(url, 'wide') === '1',
           readSizes(queryValue(url, 'sizes')), queryValue(url, 'mode') === 'arena' ? 'arena' : 'pvp');
@@ -2225,6 +2377,7 @@ export class MatchmakerDO {
   /** The wait timer. A room that has run out of patience fills its seats and starts. */
   async alarm(): Promise<void> {
     const now = Date.now();
+    this.expireRelicChallenges(now);
     for (const live of [...this.openRooms]) {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
     }
@@ -5133,6 +5286,7 @@ export class MatchmakerDO {
 
   private enter(
     ws: WebSocket, identity: Identity, wide: boolean, sizes: [number, number], mode: 'pvp' | 'arena',
+    queued = true,
   ): Waiter {
     const waiter: Waiter = {
       ws,
@@ -5141,6 +5295,7 @@ export class MatchmakerDO {
       tiq: identity.tiq,
       tier: identity.tier,
       flag: identity.flag,
+      avatar: identity.player.avatar,
       wide,
       joinedAt: Date.now(),
       sizes,
@@ -5150,11 +5305,11 @@ export class MatchmakerDO {
       race: null,
       side: 0,
     };
-    this.queue.push(waiter);
+    if (queued) this.queue.push(waiter);
     return waiter;
   }
 
-  private attach(waiter: Waiter): void {
+  private attach(waiter: Waiter, session = false): void {
     waiter.ws.addEventListener('message', (ev: MessageEvent) => {
       const board = boardOf(waiter);
       const msg = readMessage(ev.data, waiter.side, board.cols, board.rows);
@@ -5167,6 +5322,10 @@ export class MatchmakerDO {
         }
         return;
       }
+      /* the relic-duel lane exists on every seat, queue or ambient */
+      if (msg.type === 'RELIC_CHALLENGE_SEND') { this.sendRelicChallenge(waiter, msg); return; }
+      if (msg.type === 'RELIC_CHALLENGE_ACCEPT') { this.acceptRelicChallenge(waiter, msg.challengeId); return; }
+      if (msg.type === 'RELIC_CHALLENGE_DECLINE') { this.declineRelicChallenge(waiter, msg.challengeId); return; }
       /* a paired socket is a race, not a queue: the same connection changes what it means */
       if (msg.type === 'POST_MATCH_CHAT') { this.relayPostChat(waiter.ws, msg); return; }
       if (waiter.race) this.relay(waiter, msg);
@@ -5174,8 +5333,20 @@ export class MatchmakerDO {
       else if (msg.type === 'WIDEN') this.widen(waiter);
       else if (msg.type === 'CANCEL') this.leave(waiter, true);
     });
-    waiter.ws.addEventListener('close', () => this.leave(waiter, false));
-    waiter.ws.addEventListener('error', () => this.leave(waiter, false));
+    waiter.ws.addEventListener('close', () => {
+      if (session && this.sessions.get(waiter.id) === waiter) {
+        this.sessions.delete(waiter.id);
+        this.dropChallengesFor(waiter.id);
+      }
+      this.leave(waiter, false);
+    });
+    waiter.ws.addEventListener('error', () => {
+      if (session && this.sessions.get(waiter.id) === waiter) {
+        this.sessions.delete(waiter.id);
+        this.dropChallengesFor(waiter.id);
+      }
+      this.leave(waiter, false);
+    });
   }
 
   /** QUEUE enters the player, or updates the filter of one already waiting, then looks for a race. */
@@ -5247,6 +5418,346 @@ export class MatchmakerDO {
     } catch {
       /* the socket is already gone */
     }
+  }
+
+  /* ---------- relic duels: send, accept, decline, expire ---------- */
+
+  /** Bind an ambient socket to its player and hand it any challenge filed while they were away. */
+  private registerSession(waiter: Waiter): void {
+    this.sessions.set(waiter.id, waiter);
+    const now = Date.now();
+    let changed = false;
+    for (const challenge of this.relicChallenges.values()) {
+      if (challenge.targetUserId !== waiter.id || challenge.status !== 'pending') continue;
+      if (challenge.expiresAt <= now) {
+        challenge.status = 'expired';
+        changed = true;
+        this.postToPlayer(challenge.challengerId, JSON.stringify({
+          type: 'CHALLENGE_EXPIRED', challengeId: challenge.id,
+        }));
+        continue;
+      }
+      this.postRelic(waiter, this.relicIncomingPayload(challenge));
+    }
+    if (changed) this.persistRelics();
+    this.rearm();
+  }
+
+  private relicIncomingPayload(challenge: RelicChallenge): string {
+    return JSON.stringify({
+      type: 'RELIC_CHALLENGE_INCOMING',
+      challengeId: challenge.id,
+      challengerId: challenge.challengerId,
+      challengerName: challenge.challengerName,
+      challengerAvatar: challenge.challengerAvatar,
+      challengerTiq: challenge.challengerTiq,
+      relicId: challenge.relicId,
+      relicSerial: challenge.relicSerial,
+      expiresAt: challenge.expiresAt,
+      roomId: challenge.roomId,
+    });
+  }
+
+  private postRelic(waiter: Waiter, payload: string): boolean {
+    try {
+      waiter.ws.send(payload);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private socketAlive(ws: WebSocket): boolean {
+    try {
+      return ws.readyState === 1;
+    } catch {
+      return false;
+    }
+  }
+
+  private refuseRelic(waiter: Waiter, reason: string): void {
+    this.postRelic(waiter, JSON.stringify({ type: 'RELIC_CHALLENGE_REFUSED', reason }));
+  }
+
+  /**
+   * A challenge is filed, then pushed if the holder has a live session. An offline holder keeps
+   * the row in the durable mailbox, which their next boot reads — the same 25s window, no link.
+   */
+  private sendRelicChallenge(
+    waiter: Waiter,
+    msg: Extract<ClientMessage, { type: 'RELIC_CHALLENGE_SEND' }>,
+  ): void {
+    if (this.maintenance) { this.refuseRelic(waiter, 'MAINTENANCE'); return; }
+    if (this.restricted(waiter.id)) { this.refuseRelic(waiter, 'BANNED'); return; }
+    if (msg.targetUserId === waiter.id || msg.targetUserId === 'you') {
+      this.refuseRelic(waiter, 'SELF');
+      return;
+    }
+    const cap = RELIC_CAPS[msg.relicId];
+    if (!cap || msg.relicSerial > cap) { this.refuseRelic(waiter, 'UNKNOWN_RELIC'); return; }
+    /* the shield is the server's own verdict, read off the shared clock — never the client's */
+    if (relicShelter(msg.relicId, msg.relicSerial).sheltered) {
+      this.refuseRelic(waiter, 'SHIELDED');
+      return;
+    }
+    /* A live board — a queue race or a friends room — owns the seat, whatever socket it is on. */
+    if (waiter.race || this.players.get(waiter.id)?.inMatch || this.inRoom(waiter.id)) {
+      this.refuseRelic(waiter, 'BUSY');
+      return;
+    }
+
+    const now = Date.now();
+    const duplicate = [...this.relicChallenges.values()].find((c) =>
+      c.status === 'pending' && c.challengerId === waiter.id && c.targetUserId === msg.targetUserId
+      && c.expiresAt > now);
+    if (duplicate) {
+      this.postRelic(waiter, JSON.stringify({
+        type: 'RELIC_CHALLENGE_SENT',
+        challengeId: duplicate.id,
+        expiresAt: duplicate.expiresAt,
+        online: !!this.sessions.get(duplicate.targetUserId),
+      }));
+      return;
+    }
+
+    const target = this.sessions.get(msg.targetUserId) ?? null;
+    if (target?.race || this.players.get(msg.targetUserId)?.inMatch || this.inRoom(msg.targetUserId)) {
+      this.refuseRelic(waiter, 'TARGET_BUSY');
+      return;
+    }
+
+    const challengeId = `rc${hash(
+      `${waiter.id}|${msg.targetUserId}|${msg.relicId}|${msg.relicSerial}|${now}|${++this.paired}`,
+    ).toString(36)}`;
+    const roomId = `d${hash(`relic-duel|${challengeId}|${now}`).toString(36)}`;
+    const challenge: RelicChallenge = {
+      id: challengeId,
+      challengerId: waiter.id,
+      challengerName: waiter.name,
+      challengerAvatar: waiter.avatar,
+      challengerTiq: waiter.tiq,
+      targetUserId: msg.targetUserId,
+      relicId: msg.relicId,
+      relicSerial: msg.relicSerial,
+      expiresAt: now + RELIC_CHALLENGE_TTL_MS,
+      roomId,
+      status: 'pending',
+      createdAt: now,
+    };
+    this.relicChallenges.set(challengeId, challenge);
+    this.challengeSeats.set(challengeId, waiter);
+    this.trimRelics(now);
+    this.persistRelics();
+    this.rearm();
+
+    const online = !!target && this.postRelic(target, this.relicIncomingPayload(challenge));
+    this.postRelic(waiter, JSON.stringify({
+      type: 'RELIC_CHALLENGE_SENT',
+      challengeId,
+      expiresAt: challenge.expiresAt,
+      online,
+    }));
+  }
+
+  private acceptRelicChallenge(waiter: Waiter, challengeId: string): void {
+    const challenge = this.relicChallenges.get(challengeId);
+    if (!challenge || challenge.targetUserId !== waiter.id) {
+      this.refuseRelic(waiter, 'NOT_YOURS');
+      return;
+    }
+    if (challenge.status !== 'pending') return;
+    const now = Date.now();
+    if (challenge.expiresAt <= now) {
+      this.expireChallenge(challenge);
+      this.refuseRelic(waiter, 'EXPIRED');
+      return;
+    }
+    if (waiter.race || this.players.get(waiter.id)?.inMatch || this.inRoom(waiter.id)) {
+      this.refuseRelic(waiter, 'BUSY');
+      return;
+    }
+    if (relicShelter(challenge.relicId, challenge.relicSerial, now).sheltered) {
+      this.refuseRelic(waiter, 'SHIELDED');
+      return;
+    }
+
+    const seat = this.challengeSeats.get(challengeId) ?? null;
+    const session = this.sessions.get(challenge.challengerId) ?? null;
+    const challenger = seat && this.socketAlive(seat.ws) ? seat : session;
+    if (
+      !challenger || !this.socketAlive(challenger.ws) || challenger.race
+      || this.players.get(challenger.id)?.inMatch || this.inRoom(challenger.id)
+    ) {
+      challenge.status = 'expired';
+      this.challengeSeats.delete(challengeId);
+      this.persistRelics();
+      this.postRelic(waiter, JSON.stringify({
+        type: 'RELIC_CHALLENGE_CLOSED', challengeId, reason: 'CHALLENGER_LEFT',
+      }));
+      this.rearm();
+      return;
+    }
+
+    challenge.status = 'accepted';
+    this.challengeSeats.delete(challengeId);
+    /* Both players leave the ordinary market before the duel board exists, whatever socket each
+       of them happened to be waiting on. */
+    this.queue = this.queue.filter((seat) => seat.id !== challenger.id && seat.id !== waiter.id);
+    this.persistRelics();
+    this.postRelic(challenger, JSON.stringify({ type: 'RELIC_CHALLENGE_ACCEPTED', challengeId }));
+    this.startRelicDuel(challenge, challenger, waiter);
+  }
+
+  private declineRelicChallenge(waiter: Waiter, challengeId: string): void {
+    const challenge = this.relicChallenges.get(challengeId);
+    if (!challenge || challenge.targetUserId !== waiter.id) return;
+    if (challenge.status !== 'pending') return;
+    challenge.status = 'declined';
+    this.challengeSeats.delete(challengeId);
+    this.persistRelics();
+    this.postToPlayer(challenge.challengerId, JSON.stringify({
+      type: 'RELIC_CHALLENGE_DECLINED', challengeId,
+    }));
+    this.rearm();
+  }
+
+  /**
+   * The accepted challenge becomes a real 1v1 on the two live sockets. No lobby, no room code:
+   * both clients are told `DUEL_START` with their side, and each one routes straight to the board.
+   */
+  private startRelicDuel(challenge: RelicChallenge, challenger: Waiter, target: Waiter): void {
+    const roomId = challenge.roomId;
+    const seed = hash(roomId);
+    const sizes: [number, number] = [1, 1];
+    challenger.side = 0;
+    target.side = 1;
+    challenger.sizes = sizes;
+    target.sizes = sizes;
+    const race: Race = {
+      matchId: roomId,
+      seed,
+      sizes,
+      mode: 'pvp',
+      seats: [challenger, target],
+      state: newGame(sizes),
+      startedAt: Date.now(),
+      over: false,
+    };
+    challenger.race = race;
+    target.race = race;
+    this.races.set(roomId, race);
+    this.setInMatch(challenger.id, true);
+    this.setInMatch(target.id, true);
+
+    this.postRelic(challenger, duelStartMessage(roomId, seed, 0, challenger, target, sizes));
+    this.postRelic(target, duelStartMessage(roomId, seed, 1, target, challenger, sizes));
+  }
+
+  /** Mark one pending challenge expired and tell both ends, so neither keeps waiting on it. */
+  private expireChallenge(challenge: RelicChallenge): void {
+    if (challenge.status !== 'pending') return;
+    challenge.status = 'expired';
+    this.challengeSeats.delete(challenge.id);
+    this.persistRelics();
+    this.postToPlayer(challenge.challengerId, JSON.stringify({
+      type: 'CHALLENGE_EXPIRED', challengeId: challenge.id,
+    }));
+    this.postToPlayer(challenge.targetUserId, JSON.stringify({
+      type: 'RELIC_CHALLENGE_CLOSED', challengeId: challenge.id, reason: 'EXPIRED',
+    }));
+    this.rearm();
+  }
+
+  private expireRelicChallenges(now: number): void {
+    for (const challenge of [...this.relicChallenges.values()]) {
+      if (challenge.status === 'pending' && challenge.expiresAt <= now) this.expireChallenge(challenge);
+    }
+    this.trimRelics(now);
+  }
+
+  /** A session socket went away: any challenge it threw can no longer be accepted. */
+  private dropChallengesFor(playerId: string): void {
+    let changed = false;
+    for (const challenge of this.relicChallenges.values()) {
+      if (challenge.challengerId !== playerId || challenge.status !== 'pending') continue;
+      challenge.status = 'expired';
+      this.challengeSeats.delete(challenge.id);
+      changed = true;
+      this.postToPlayer(challenge.targetUserId, JSON.stringify({
+        type: 'RELIC_CHALLENGE_CLOSED', challengeId: challenge.id, reason: 'CHALLENGER_LEFT',
+      }));
+    }
+    if (changed) {
+      this.persistRelics();
+      this.rearm();
+    }
+  }
+
+  private postToPlayer(playerId: string, payload: string): boolean {
+    const waiter = this.sessions.get(playerId);
+    return waiter ? this.postRelic(waiter, payload) : false;
+  }
+
+  /** A seat held in a friends lobby is not free for a duel, even before its board launches. */
+  private inRoom(playerId: string): boolean {
+    for (const ref of this.refs.values()) {
+      const member = ref.live.members[ref.seat];
+      if (member?.id === playerId) return true;
+    }
+    return false;
+  }
+
+  /** Bound the mailbox: an old challenge is history, not a leak. */
+  private trimRelics(now: number): void {
+    for (const [id, challenge] of [...this.relicChallenges]) {
+      if (now - challenge.createdAt > RELIC_CHALLENGE_KEEP_MS) this.relicChallenges.delete(id);
+    }
+    if (this.relicChallenges.size <= RELIC_CHALLENGE_MAX) return;
+    const oldest = [...this.relicChallenges.values()].sort((a, b) => a.createdAt - b.createdAt);
+    for (const challenge of oldest.slice(0, this.relicChallenges.size - RELIC_CHALLENGE_MAX)) {
+      this.relicChallenges.delete(challenge.id);
+    }
+  }
+
+  private persistRelics(): void {
+    if (this.relicDirty || !this.state?.storage) return;
+    this.relicDirty = true;
+    void Promise.resolve().then(() => {
+      this.relicDirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        void storage.put(RELIC_CHALLENGES_KEY, [...this.relicChallenges.values()]);
+      } catch {
+        /* a store that refuses the write: the mailbox stays live for this object's lifetime */
+      }
+    });
+  }
+
+  /** `GET /api/client/relic/challenges` — the next-boot half of an offline challenge. */
+  private async relicMailbox(request: Request): Promise<Response> {
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ error: 'unauthorized', hint: 'signed initData required' }, 401);
+    const now = Date.now();
+    this.expireRelicChallenges(now);
+    const rows = [...this.relicChallenges.values()]
+      .filter((challenge) => challenge.targetUserId === who.playerId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 12)
+      .map((challenge) => ({
+        challengeId: challenge.id,
+        challengerId: challenge.challengerId,
+        challengerName: challenge.challengerName,
+        challengerAvatar: challenge.challengerAvatar,
+        challengerTiq: challenge.challengerTiq,
+        relicId: challenge.relicId,
+        relicSerial: challenge.relicSerial,
+        expiresAt: challenge.expiresAt,
+        roomId: challenge.roomId,
+        status: challenge.status,
+        createdAt: challenge.createdAt,
+      }));
+    return json({ challenges: rows }, 200, { 'cache-control': 'no-store' });
   }
 
   /* ---------- pairing ---------- */
@@ -6154,6 +6665,11 @@ export class MatchmakerDO {
       }
     }
     if (this.arena.status === 'active') soonest = Math.min(soonest, this.arena.endsAt);
+    /* A pending relic challenge is a clock too: the alarm is what turns 25 seconds of silence
+       into CHALLENGE_EXPIRED, and it must survive eviction like every other wait. */
+    for (const challenge of this.relicChallenges.values()) {
+      if (challenge.status === 'pending') soonest = Math.min(soonest, challenge.expiresAt);
+    }
     /* A launched room has two clocks of its own: the active seat's turn deadline (plus the
        network grace) and every dropped seat's reconnect window. Both must survive eviction, so
        both live on the alarm rather than on a `setTimeout`. */

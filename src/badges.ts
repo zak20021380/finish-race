@@ -401,8 +401,10 @@ export type EditionSyncState = 'idle' | 'syncing' | 'live' | 'offline';
 
 export interface EditionHolder {
   serial: number;
-  /** Verified Telegram display name from the ledger; never a player id. */
+  /** Verified Telegram display name from the ledger. */
   name: string;
+  /** The holder's matchmaker session id, when the ledger knows it — the challenge's address. */
+  playerId?: string;
 }
 
 export interface BadgeEdition {
@@ -467,12 +469,15 @@ function readHolders(raw: unknown, cap: number): EditionHolder[] | null {
   const rows: EditionHolder[] = [];
   for (const value of raw) {
     if (!value || typeof value !== 'object') continue;
-    const row = value as { serial?: unknown; name?: unknown };
+    const row = value as { serial?: unknown; name?: unknown; playerId?: unknown };
     if (typeof row.serial !== 'number' || !Number.isInteger(row.serial) || row.serial < 1 || row.serial > cap) continue;
     if (seen.has(row.serial)) continue;
     seen.add(row.serial);
     const name = typeof row.name === 'string' ? row.name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) : '';
-    rows.push({ serial: row.serial, name: name || 'Unlisted' });
+    const playerId = typeof row.playerId === 'string'
+      ? row.playerId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64)
+      : '';
+    rows.push({ serial: row.serial, name: name || 'Unlisted', ...(playerId ? { playerId } : {}) });
   }
   return rows.sort((a, b) => a.serial - b.serial);
 }
