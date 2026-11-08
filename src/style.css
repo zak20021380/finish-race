@@ -5688,6 +5688,11 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   border-top-color: rgba(125, 211, 252, .35);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
 }
+/* a founding baseline row is a floor under the live board, not a scored flag: it reads one
+   step quieter. Opacity only — every track keeps its width, so nothing reflows and the row
+   still lands in the same columns on all five lines. */
+.mini-rank.nations-rank li.nations-row.is-seeded .nm,
+.mini-rank.nations-rank li.nations-row.is-seeded .nation-score-wrap { opacity: .84; }
 .mini-rank.nations-rank li.is-error { grid-template-columns: 1fr; text-align: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 /* rank: gold / silver / bronze for 1-3, plain number otherwise */
 .mini-rank.nations-rank .rk {

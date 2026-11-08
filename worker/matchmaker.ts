@@ -79,6 +79,7 @@ import {
   type RegisteredSquad, type SquadAnnouncementRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
+import { NATION_BASELINE, NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
@@ -678,17 +679,12 @@ const zeroGameMetrics = (): GameMetrics => ({
 /** The default ladder award for a win: 120 for the win plus the 20 the race itself banks. */
 const NATION_WIN_TIQ = 140;
 /**
- * The national rating is a representative average, not a pile: the top ten qualified warriors
- * carry the flag. A nation with 300 rookies cannot bury its elite, and one inflated account can
- * only ever own a tenth of the average.
+ * A settled match count is the proof a seat races. Below it a seat is enrolled but not yet
+ * proven — its current TIQ still carries the flag, it is simply not preferred over a proven
+ * sample. There is no hard drop and no penalty multiplier: a country is never deleted for
+ * being young, and a lone warrior is never halved for being alone.
  */
-const NATION_TOP_SAMPLE = 10;
-/** A settled match count is the proof a seat races; a fresh 0-match account is not a warrior. */
 const NATION_MIN_MATCHES = 3;
-/** Below this many qualified warriors a flag is provisional, not a proven national squad. */
-const NATION_MIN_WARRIORS = 2;
-/** A lone warrior's rating is halved rather than allowed to sit on the throne unproven. */
-const NATION_SOLO_FACTOR = 0.5;
 /** A rolling 30-day competitive window — one full arena season plus the rollover's grace. */
 const NATION_ACTIVE_MS = 30 * 86400_000;
 
@@ -3858,11 +3854,13 @@ export class MatchmakerDO {
   }
 
   /**
-   * The Nations Cup: every flag with qualified active warriors, ranked by a top-ten representative
-   * average TIQ. Qualification is strict — at least three settled races, a human-vs-human clock
-   * inside the rolling season window, and a live registry seat — so fresh accounts and dormant
-   * ghosts cannot drag a nation down. The season's banked win points ride along as a separate
-   * award, and the caller's own row quotes both their personal TIQ and the nation's average back.
+   * The Nations Cup: every enrolled flag, ranked by a top-ten representative average TIQ. A flag
+   * is never dropped for being young or quiet — its rated seats carry it, and a country the
+   * registry has not produced yet is filled from the founding baseline. Proven warriors (three
+   * settled races, a human-vs-human clock inside the rolling season window) form the preferred
+   * sample; everyone else still carries the flag with their current TIQ. The season's banked win
+   * points ride along as a separate award, and the caller's own row quotes both their personal
+   * TIQ and the nation's average back.
    */
   private async nationsBoard(request: Request, url: URL): Promise<{
     ok: true;
@@ -3878,6 +3876,8 @@ export class MatchmakerDO {
       warriorCount: number;
       totalTiq: number;
       averageTiq: number;
+      /** True for a founding baseline row: a floor under the live board, never a live warrior. */
+      seeded: boolean;
     }>;
     you: { code: string; rank: number; points: number; tiq: number; averageTiq: number; total: number } | null;
   }> {
@@ -3903,6 +3903,7 @@ export class MatchmakerDO {
       points: row.points,
       totalTiq: row.totalTiq,
       averageTiq: row.averageTiq,
+      seeded: row.seeded,
     }));
 
     const myCode = normalizeCountry(mine?.country);
@@ -3966,29 +3967,40 @@ export class MatchmakerDO {
   }
 
   /**
-   * The enrolled flags, folded from the registry. Only qualified warriors enter the rating:
-   * three settled races, a human-vs-human clock inside the rolling window, and a live seat.
-   * Each flag's score is the rounded average of its best ten warriors — the representative
-   * top tier, not the whole roster — so a deep bench of rookies can neither dilute a nation
-   * nor inflate a quiet one. A flag with a single qualified warrior is provisional and its
-   * rating is scaled by `NATION_SOLO_FACTOR`, so one account cannot hold the throne unproven.
-   * Total TIQ breaks an equal average (a deeper qualified pool ranks higher), then head-count,
-   * then the flag whose earliest player registered first. Banked season points are an award,
-   * not the ranking metric. The code is the final, deterministic tie-break.
+   * Every enrolled flag, folded from the registry, ranked by its representative average TIQ.
+   *
+   * The board is a census first and a contest second: a seat that has picked a flag is on the
+   * ladder before its first settled race, so a country cannot vanish because its players are
+   * new, quiet, or playing alone. The average is cut from the flag's best ten rated warriors —
+   * the proven sample (three settled races, a human-vs-human clock inside the season window)
+   * when there is one, and every rated seat as the honest fallback when there is not. The
+   * divisor is the size of that sample, so a nation carried by one warrior is quoted at that
+   * warrior's own TIQ; it is never halved for being small.
+   *
+   * The founding baseline is painted underneath the live board for any flag the registry has
+   * not produced yet, so the cup always opens on a full field. A baseline row ranks below every
+   * scored row, so a seeded flag can never take the throne.
+   *
+   * Total TIQ breaks an equal average (a deeper rated pool ranks higher), then the sample size,
+   * then head-count, then the flag whose earliest player registered first. Banked season points
+   * are an award, not the ranking metric. The code is the final, deterministic tie-break.
    */
   private nationStandings(
     ledger: NationLedger,
     now = Date.now(),
   ): Array<{
     code: string; name: string; points: number; players: number; warriorCount: number;
-    totalTiq: number; averageTiq: number; since: number;
+    totalTiq: number; averageTiq: number; since: number; seeded: boolean;
   }> {
     const activeSince = now - NATION_ACTIVE_MS;
     const enrolled = new Map<string, {
       players: number;
       totalTiq: number;
       since: number;
+      /** Every rated seat under the flag: the fallback sample. */
       scores: number[];
+      /** Seats with a proven record: the preferred sample. */
+      proven: number[];
     }>();
     for (const p of this.players.values()) {
       const cc = normalizeCountry(p.country);
@@ -3996,48 +4008,73 @@ export class MatchmakerDO {
       const since = p.firstSeen > 0 ? p.firstSeen : Number.MAX_SAFE_INTEGER;
       let row = enrolled.get(cc);
       if (!row) {
-        row = { players: 0, totalTiq: 0, since, scores: [] };
+        row = { players: 0, totalTiq: 0, since, scores: [], proven: [] };
         enrolled.set(cc, row);
       }
       row.players += 1;
       if (since < row.since) row.since = since;
 
-      /* The competitive filter: a proven race record, a recent seat, and at least one human
-         race in the registry's own mode clocks. Anything else is a spectator or a ghost. */
-      const humanRace = p.modeSeen.pvp > 0 || p.modeSeen.arena > 0;
-      if (!humanRace || p.matches < NATION_MIN_MATCHES || p.lastSeen < activeSince) continue;
+      /* A zero-TIQ seat is a spectator wearing a flag: it counts in the census, never in the
+         average, so a fresh signup cannot drag its country's rating down. */
       const tiq = Math.max(0, whole(p.tiq));
+      if (tiq <= 0) continue;
       row.totalTiq += tiq;
       row.scores.push(tiq);
+
+      /* Proven is a preference, not a gate: a seat still warming up its record keeps its
+         current TIQ in the fallback sample instead of being dropped from the nation. */
+      const humanRace = p.modeSeen.pvp > 0 || p.modeSeen.arena > 0;
+      if (humanRace && p.matches >= NATION_MIN_MATCHES && p.lastSeen >= activeSince) {
+        row.proven.push(tiq);
+      }
     }
 
-    return [...enrolled.entries()]
-      .filter(([, row]) => row.scores.length > 0)
-      .map(([code, row]) => {
-        const top = row.scores.sort((a, b) => b - a).slice(0, NATION_TOP_SAMPLE);
-        const representative = Math.round(top.reduce((sum, tiq) => sum + tiq, 0) / top.length);
-        const averageTiq = row.scores.length < NATION_MIN_WARRIORS
-          ? Math.round(representative * NATION_SOLO_FACTOR)
-          : representative;
-        return {
-          code,
-          name: countryName(code),
-          players: row.players,
-          warriorCount: row.scores.length,
-          totalTiq: row.totalTiq,
-          averageTiq,
-          points: Math.max(0, whole(ledger.points[code])),
-          since: row.since,
-        };
-      })
-      .sort((a, b) => (
-        b.averageTiq - a.averageTiq
-        || b.totalTiq - a.totalTiq
-        || b.warriorCount - a.warriorCount
-        || b.players - a.players
-        || a.since - b.since
-        || a.code.localeCompare(b.code)
-      ));
+    const live = [...enrolled.entries()].map(([code, row]) => {
+      const sample = row.proven.length > 0 ? row.proven : row.scores;
+      return {
+        code,
+        name: countryName(code),
+        players: row.players,
+        warriorCount: Math.min(sample.length, NATION_TOP_SAMPLE),
+        totalTiq: row.totalTiq,
+        averageTiq: representativeAverage(sample),
+        points: Math.max(0, whole(ledger.points[code])),
+        since: row.since,
+        seeded: false,
+      };
+    });
+
+    /* The baseline: a founding flag with no registry presence is a floor under the live
+       board, never a claim on it. */
+    const present = new Set(live.map((row) => row.code));
+    const seeded = NATION_BASELINE
+      .filter((seed) => !present.has(seed.code))
+      .map((seed) => ({
+        code: seed.code,
+        name: countryName(seed.code),
+        players: 0,
+        warriorCount: 0,
+        totalTiq: 0,
+        averageTiq: seed.base,
+        points: Math.max(0, whole(ledger.points[seed.code])),
+        since: Number.MAX_SAFE_INTEGER,
+        seeded: true,
+      }));
+
+    /* Three tiers: scored flags, then the baseline, then flags that are enrolled but carry no
+       rated warrior yet. A country with no score is listed, never crowned. */
+    const tier = (row: { seeded: boolean; averageTiq: number }): number =>
+      (row.seeded ? 1 : row.averageTiq > 0 ? 0 : 2);
+
+    return [...live, ...seeded].sort((a, b) => (
+      tier(a) - tier(b)
+      || b.averageTiq - a.averageTiq
+      || b.totalTiq - a.totalTiq
+      || b.warriorCount - a.warriorCount
+      || b.players - a.players
+      || a.since - b.since
+      || a.code.localeCompare(b.code)
+    ));
   }
 
   /**

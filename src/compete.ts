@@ -2286,7 +2286,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rank: c.rank,
       code: c.code,
       name: c.name || nameOf(c.code),
-      sub: `${c.players.toLocaleString('en-US')} players`,
+      /* A baseline flag has no roster yet: stating "0 players" would read as an empty nation
+         rather than the floor it is. */
+      sub: c.seeded ? 'National baseline' : `${c.players.toLocaleString('en-US')} players`,
       subClass: 'nd-count',
       points: c.avg.toLocaleString('en-US'),
       me: (profile.country ?? '').trim().toUpperCase() === c.code,

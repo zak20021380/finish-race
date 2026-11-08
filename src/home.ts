@@ -235,8 +235,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /* ---------- Nations Cup: 30px rows + user row / pick-country CTA ----------
      Top 5 fill the card to the dots with no dead void (the 40px→30px row is
      layout only — the row recipe is identical for ranks 1-5). Data is the live
-     Worker ledger (`fetchNationBoard`): only enrolled nations with real banked
-     points, never a seed. Flags come from the shared CDN resolver in a 28px circle. */
+     Worker ledger (`fetchNationBoard`): every enrolled nation, with the founding
+     baseline painted underneath so the cup is never one solitary country. A
+     baseline row is labelled as such and can never outrank a scored one. Flags
+     come from the shared CDN resolver in a 28px circle. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
   /** The last live board read — kept so a language switch or an offline poll can repaint the
@@ -288,15 +290,23 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add('nations-row');
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
+    if (c.seeded) li.classList.add('is-seeded');
     const label = c.name || nameOf(c.code);
     /* The board's figures are Latin integers in both languages: `en-US` grouping keeps the
        thousands separators, and the rounded value is the Worker's own representative average. */
     const avg = Math.round(c.avg);
     const pts = avg.toLocaleString('en-US');
+    /* A baseline row has no warriors behind it: quoting a sample size for one would invent
+       people. It is stated as the floor it is. */
+    const sample = Math.min(10, Math.max(1, c.warriors));
+    const sampleText = c.seeded
+      ? 'national baseline'
+      : `top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} average TIQ, ${c.warriors.toLocaleString('en-US')} qualified warriors, ${trendLabel}`);
+    const rosterText = c.seeded ? 'national baseline' : `${c.warriors.toLocaleString('en-US')} rated warriors`;
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} average TIQ, ${rosterText}, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -316,8 +326,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     nm.title = label;
     const pt = nationScore(pts);
     pt.dir = 'ltr';
-    const sample = Math.min(10, Math.max(1, c.warriors));
-    pt.title = `${pts} average TIQ · top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
+    pt.title = `${pts} average TIQ · ${sampleText}`;
     const tr = document.createElement('span');
     tr.className = `tr ${c.trend}`;
     tr.dir = 'ltr';
@@ -366,9 +375,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pts = document.getElementById('home-nation-pts');
     /* The badge quotes the same representative average the rows and the drawer read. It is
        deliberately not the seat's own TIQ: two metrics on one card is exactly the desync this
-       bar used to show. A flag with no qualified warrior yet has no average to quote. */
+       bar used to show. A flag whose rated warriors all sit at zero has no average to quote —
+       the dash says so instead of printing a "+0" that reads like a broken counter. */
     const avg = mine ? Math.round(mine.avg) : 0;
-    const avgText = mine ? `+${avg.toLocaleString('en-US')}` : '—';
+    const avgText = mine && avg > 0 ? `+${avg.toLocaleString('en-US')}` : '—';
     if (pts) pts.textContent = avgText;
     const unit = bar.querySelector<HTMLElement>('.hm-u');
     if (unit) unit.textContent = 'AVG TIQ';

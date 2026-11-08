@@ -3,14 +3,21 @@
  *
  * Home and the Ranks board read this one function, so the card and the cup table can never
  * disagree about a nation's standing. The Worker owns the ledger: a flag's score is the
- * top-ten representative TIQ of its qualified warriors — proven racers active inside the
- * current season window — so fresh accounts and dormant ghosts cannot drag a nation down.
+ * top-ten representative TIQ of its rated warriors — every enrolled seat that carries a score,
+ * with proven racers preferred — so fresh accounts and dormant ghosts cannot drag a nation
+ * down. A nation is never deleted for being young or quiet, and its average is divided by the
+ * sample it actually has, so a flag carried by one warrior is quoted at full strength.
+ *
+ * The founding baseline is folded in here as well as in the Worker: a flag the registry has
+ * not produced yet is painted as a floor under the live board, never above it. That is the
+ * only seeded row on this board, and it can never take the throne.
+ *
  * The season's banked win points ride along as a separate award. A read carries the caller's
  * profile flag, so a country picked before the first race is folded into that registry, and
  * their own TIQ, so their seat is quoted back. This module validates the wire and remembers
- * each nation's previous rank, so a rise or fall is real movement between reads rather than a
- * seeded decoration.
+ * each nation's previous rank, so a rise or fall is real movement between reads.
  */
+import { NATION_BASELINE } from '../shared/nations';
 import { workerUrl } from './adminApi';
 import { profile, readJson, writeJson } from './storage';
 import { tgInitData } from './telegram';
@@ -25,14 +32,16 @@ export interface NationRow {
   name: string;
   /** Season TIQ the Worker banked for this nation's wins; an honest zero is still a row. */
   points: number;
-  /** Every enrolled seat under this flag, qualified or not. */
+  /** Every enrolled seat under this flag, rated or not. */
   players: number;
-  /** Qualified warriors in the average sample: proven, recently active human racers. */
+  /** The seats inside the average sample — the divisor the Worker used, never a fixed floor. */
   warriors: number;
-  /** The TIQ every qualified warrior carries, added up. */
+  /** The TIQ every rated warrior carries, added up. */
   totalTiq: number;
   /** The Worker's top-ten representative average; the number the board is ranked by. */
   avg: number;
+  /** True for a founding baseline row: a floor under the live board, never a live warrior. */
+  seeded: boolean;
   trend: NationTrend;
   /** Positive = climbed, negative = slipped, 0 without a previous reading. */
   delta: number;
@@ -99,6 +108,7 @@ interface WireNation {
   rank?: unknown;
   totalTiq?: unknown;
   averageTiq?: unknown;
+  seeded?: unknown;
 }
 
 interface WireYou {
@@ -187,10 +197,12 @@ function adopt(data: WireFeed): NationFeed | null {
     /* An older Worker carries no warrior count; the full roster is the only honest stand-in. */
     const warriors = raw.warriorCount !== undefined ? whole(raw.warriorCount) : players;
     /* The Worker owns the average. A reply from before it carried one is still never painted at
-       zero while its players hold TIQ, so the legacy per-head formula is applied to the wire. */
+       zero while its players hold TIQ, so the legacy fallback divides the wire's total by the
+       sample it actually describes — the rated warriors. Never by a fixed minimum: a nation
+       carried by one warrior keeps its full score instead of being halved for being small. */
     const avg = raw.averageTiq !== undefined
       ? whole(raw.averageTiq)
-      : Math.round(totalTiq / Math.max(1, players));
+      : Math.round(totalTiq / Math.max(1, warriors));
     rows.push({
       rank: whole(raw.rank),
       code,
@@ -200,20 +212,48 @@ function adopt(data: WireFeed): NationFeed | null {
       warriors,
       totalTiq,
       avg,
+      seeded: raw.seeded === true,
       trend: 'same',
       delta: 0,
     });
     if (rows.length >= MAX_ROWS) break;
   }
+
+  /* The baseline: a founding flag the Worker has not produced yet — a thin registry, a stale
+     deployment, a season that just rolled over — is filled in here so the cup can never
+     collapse to one solitary country. A baseline row always ranks below every scored row. */
+  const present = new Set(rows.map((row) => row.code));
+  for (const seed of NATION_BASELINE) {
+    if (rows.length >= MAX_ROWS) break;
+    if (present.has(seed.code)) continue;
+    present.add(seed.code);
+    rows.push({
+      rank: 0,
+      code: seed.code,
+      name: '',
+      points: 0,
+      players: 0,
+      warriors: 0,
+      totalTiq: 0,
+      avg: seed.base,
+      seeded: true,
+      trend: 'same',
+      delta: 0,
+    });
+  }
   if (!rows.length) return { rows: [], total: 0, standing: null, seasonNo, live: true };
 
-  /* The Worker ranks ties by head-count, which the wire alone cannot reconstruct; its ranks are
-     authoritative when they form one continuous 1..N sequence, otherwise rank the field here. */
+  /* Three tiers: scored flags, then the baseline, then flags that are enrolled but carry no
+     rated warrior yet. A country with no score is listed, never crowned. The Worker ranks ties
+     by registration age, which the wire alone cannot reconstruct; its ranks are authoritative
+     when they form one continuous 1..N sequence, otherwise the field is ranked here. */
+  const tier = (row: NationRow): number => (row.seeded ? 1 : row.avg > 0 ? 0 : 2);
   const ranked = rows.every((row) => row.rank >= 1)
     && new Set(rows.map((row) => row.rank)).size === rows.length;
   if (ranked) rows.sort((a, b) => a.rank - b.rank);
   else rows.sort((a, b) => (
-    b.avg - a.avg
+    tier(a) - tier(b)
+    || b.avg - a.avg
     || b.totalTiq - a.totalTiq
     || b.warriors - a.warriors
     || b.players - a.players
@@ -278,10 +318,11 @@ async function readBoard(url: string): Promise<NationFeed | null> {
 }
 
 /**
- * The nations ladder, ranked by the top-ten representative average TIQ each flag's qualified
- * warriors carry, plus the caller's standing. The read carries the caller's flag so a chosen
- * nation is enrolled, and their own TIQ so their seat is quoted back — never so a query string
- * can move a national score. Never throws.
+ * The nations ladder, ranked by the top-ten representative average TIQ each flag's rated
+ * warriors carry, plus the caller's standing. Every enrolled flag is on the board, and the
+ * founding baseline fills whatever the registry has not produced yet. The read carries the
+ * caller's flag so a chosen nation is enrolled, and their own TIQ so their seat is quoted
+ * back — never so a query string can move a national score. Never throws.
  */
 export async function fetchNationBoard(tiq: number): Promise<NationFeed> {
   const country = iso2(profile.country ?? '');
