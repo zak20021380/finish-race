@@ -49,7 +49,7 @@ import {
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
-import { isSeizable, openSeize, relicShelter, seizeTargetOf } from './seize';
+import { isSeizable, openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
 import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
@@ -2752,21 +2752,31 @@ export function createMenu(api: MenuApi): Menu {
 
   /** The shelter this serial is standing under. An exposed one offers the duel; a guarded one
    *  says why it does not, in the same clock the dossier reads. */
-  function shelterAction(def: BadgeDef, holder: EditionHolder): HTMLElement {
-    const shelter = relicShelter(def.id, holder.serial);
+  function shelterAction(def: BadgeDef, holder: EditionHolder, shelter: RelicShelter): HTMLElement {
     if (shelter.sheltered) {
       const guard = document.createElement('span');
       guard.className = 'bo-shelter is-guarded';
-      guard.dir = 'ltr';
-      guard.textContent = `🛡️ ${shelter.hoursLeft}h`;
       guard.title = t('seizeShieldAria');
+      guard.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-clock" /></svg>';
+      /* the clock is a code, not prose: it keeps its Latin figures and its own LTR run */
+      const clock = document.createElement('span');
+      clock.className = 'bo-shelter-t';
+      clock.dir = 'ltr';
+      clock.textContent = `${shelter.hoursLeft}h`;
+      guard.append(clock);
       return guard;
     }
+    /* An exposed rival gets a named door, not a bare red square: the swords are the same pair the
+       dossier key wears, and the word is the one every language already uses for a relic duel. */
     const key = document.createElement('button');
     key.type = 'button';
-    key.className = 'btn-seize-relic';
+    key.className = 'bo-duel';
     key.setAttribute('aria-label', t('seizeAria'));
     key.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>';
+    const label = document.createElement('span');
+    label.className = 'bo-duel-t';
+    label.textContent = t('seizeChallenge');
+    key.append(label);
     key.addEventListener('click', () => {
       impact('medium');
       openSeize(seizeTargetOf(def, holder.serial, holder.name));
@@ -2787,6 +2797,8 @@ export function createMenu(api: MenuApi): Menu {
   function holderRow(def: BadgeDef, holder: EditionHolder, mine: boolean): HTMLElement {
     const when = mine ? mintStamp(claimMintedAt(def.id)) : '';
     const genesis = holder.serial === 1;
+    const shelter = relicShelter(def.id, holder.serial);
+    const duelable = !mine && !shelter.sheltered;
     const serial = t('badgeSerialLabel').replace('#{num}', editionSerialLabel(holder.serial));
 
     const av = document.createElement('span');
@@ -2888,11 +2900,11 @@ export function createMenu(api: MenuApi): Menu {
       yours.textContent = t('badgeOwnersYours');
       plate.append(yours);
     } else {
-      plate.append(shelterAction(def, holder));
+      plate.append(shelterAction(def, holder, shelter));
     }
 
     const li = document.createElement('li');
-    li.className = `bo-row${mine ? ' is-you' : ''}${genesis ? ' is-genesis' : ''}`;
+    li.className = `bo-row${mine ? ' is-you' : ''}${genesis ? ' is-genesis' : ''}${duelable ? ' is-duelable' : ''}`;
     li.setAttribute('aria-label', `${holder.name} — ${serial}${when ? ` · ${when}` : ''}`);
     li.append(av, who, plate);
     return li;
@@ -2934,28 +2946,29 @@ export function createMenu(api: MenuApi): Menu {
       owners.empty.hidden = false;
     }
 
-    /* The vault meter reads the same supply the plates are minted from: struck on one side,
+    /* The vault meter reads the same supply the plates are minted from: claimed on one side,
        still locked away on the other. An unread ledger hides the meter rather than invent one. */
     if (owners.vault) {
       const live = holders !== null;
       owners.vault.hidden = !live;
       if (live) {
         const cap = def.cap;
-        const struck = Math.max(0, Math.min(cap, edition.minted ?? rows.length));
-        const left = cap - struck;
-        const readout = faDigits(t('badgeOwnersStruck')
-          .replace('{n}', String(struck))
-          .replace('{cap}', String(cap)));
-        if (owners.fill) owners.fill.style.width = `${cap > 0 ? (struck / cap) * 100 : 0}%`;
+        const claimed = Math.max(0, Math.min(cap, edition.minted ?? rows.length));
+        const vaulted = cap - claimed;
+        /* Both halves are prose, so both take Persian figures; the padlock beside the vault half
+           is an icon in the markup, never a glyph inside the string. */
+        const claimedText = faDigits(t('badgeOwnersStruck').replace('{n}', String(claimed)));
+        const vaultText = faDigits(t('badgeOwnersVault').replace('{n}', String(vaulted)));
+        if (owners.fill) owners.fill.style.width = `${cap > 0 ? (claimed / cap) * 100 : 0}%`;
         if (owners.track) {
           owners.track.setAttribute('aria-valuemax', String(cap));
-          owners.track.setAttribute('aria-valuenow', String(struck));
+          owners.track.setAttribute('aria-valuenow', String(claimed));
           owners.track.setAttribute('aria-label', t('badgeOwnersVaultAria'));
-          owners.track.setAttribute('aria-valuetext', readout);
+          owners.track.setAttribute('aria-valuetext', `${claimedText} • ${vaultText}`);
         }
-        if (owners.struck) owners.struck.textContent = readout;
-        if (owners.held) owners.held.textContent = faDigits(t('badgeOwnersVault').replace('{n}', String(left)));
-        owners.vault.dataset.state = left === 0 ? 'full' : struck === 0 ? 'empty' : 'open';
+        if (owners.struck) owners.struck.textContent = claimedText;
+        if (owners.held) owners.held.textContent = vaultText;
+        owners.vault.dataset.state = vaulted === 0 ? 'full' : claimed === 0 ? 'empty' : 'open';
       }
     }
   }

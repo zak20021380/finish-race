@@ -285,6 +285,13 @@
           <path d="M9.2 12.1l1.9 1.9 3.7-3.9" />
         </g>
       </symbol>
+      <!-- the shield's countdown: a dial with one hand, read at 9px on the relic hall's row -->
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.6" />
+          <path d="M12 7.4V12l3.1 2" />
+        </g>
+      </symbol>
       <symbol id="i-help" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="8.6" />
@@ -4454,21 +4461,20 @@
         </div>
       </section>
 
-      <!-- Hall of Owners: the ledger's public registry for the honor under inspection.
-           Opened from the claimed chip and handed back to the collector card, so the sheet
-           manager still holds exactly one panel at a time. -->
+      <!-- Hall of Owners: the relic's public hall, opened from the claimed chip and handed back
+           to the collector card, so the sheet manager still holds exactly one panel at a time. -->
       <section class="sheet tall owners-sheet" id="badge-owners-modal" hidden tabindex="-1"
         role="dialog" aria-modal="true" aria-labelledby="bo-title">
         <span class="sheet-grip" aria-hidden="true"></span>
         <header class="bo-head">
-          <button class="bo-back" type="button" id="badge-owners-back" aria-label="Back to badge details">
+          <button class="bo-back" type="button" id="badge-owners-back" aria-label="Back to relic details">
             <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
           </button>
           <span class="bo-head-id">
-            <h2 class="sheet-t bo-title" id="bo-title" data-i18n="badgeOwnersTitle">Hall of Owners</h2>
-            <p class="sheet-p bo-sub" id="bo-sub" data-i18n="badgeOwnersSub">Verified owners registry</p>
+            <h2 class="sheet-t bo-title" id="bo-title" data-i18n="badgeOwnersTitle">HALL OF OWNERS</h2>
+            <p class="sheet-p bo-sub" id="bo-sub" data-i18n="badgeOwnersSub">Keepers of the Relic</p>
           </span>
-          <button class="bo-x" type="button" id="badge-owners-close" data-autofocus aria-label="Close holders list">
+          <button class="bo-x" type="button" id="badge-owners-close" data-autofocus aria-label="Close hall of owners">
             <span aria-hidden="true">&times;</span>
           </button>
         </header>
@@ -4483,18 +4489,21 @@
           <div class="bo-note" id="badge-owners-note" role="status" hidden></div>
           <div class="bo-empty" id="badge-owners-empty" hidden>
             <span class="bo-empty-crest" id="badge-owners-empty-crest" aria-hidden="true"></span>
-            <p class="bo-empty-copy" id="badge-owners-empty-copy">No players have claimed this medallion yet.</p>
-            <p class="bo-empty-first" id="badge-owners-first">Be the first to claim this legacy.</p>
+            <p class="bo-empty-copy" id="badge-owners-empty-copy">No one has claimed this relic yet.</p>
+            <p class="bo-empty-first" id="badge-owners-first">Be the first to claim it.</p>
           </div>
         </div>
 
-        <!-- The vault ledger: how much of this edition is struck and how much still sits
-             unminted. Both halves read from the same supply the serial plates are minted from. -->
+        <!-- The vault meter: how much of this edition is claimed and how much still sits locked
+             away. Both halves read from the same supply the serial plates are minted from. -->
         <footer class="bo-foot">
           <div class="bo-vault" id="badge-owners-vault" hidden>
             <div class="bo-vault-legend">
               <span class="bo-vault-struck" id="badge-owners-struck"></span>
-              <span class="bo-vault-held" id="badge-owners-held"></span>
+              <span class="bo-vault-held">
+                <svg class="ico bo-vault-lock" aria-hidden="true"><use href="#i-lock" /></svg>
+                <span id="badge-owners-held"></span>
+              </span>
             </div>
             <div class="bo-vault-track" role="progressbar" aria-valuemin="0">
               <span class="bo-vault-fill" id="badge-owners-fill"></span>
