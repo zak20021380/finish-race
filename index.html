@@ -1660,7 +1660,7 @@
             <div class="p-card wide pf-hero pf-hero-v2">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
 
-              <!-- tier 1 · identity: avatar + level plate + equipped crest pin · name · arena bracket -->
+              <!-- tier 1 · identity: avatar + level plate · name · arena bracket + honor tag -->
               <div class="pf-hero-top">
                 <div class="pf-avatar-slot">
                   <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
@@ -1670,20 +1670,11 @@
                       <span id="pf-avatar-t">P</span>
                     </span>
                   </button>
-                  <!-- the level plate: struck into the avatar's lower-left lip, physically pinned so
-                       no avatar frame, flag or mirrored row can ever move it. Latin figures only. -->
+                  <!-- the one avatar badge: a metallic level plate pinned to the lower-right lip.
+                       Latin figures only, so no locale can mirror or re-order the number. -->
                   <span class="pf-lvl" id="pf-lvl" aria-label="Level 1">
-                    <span class="pf-lvl-k" data-i18n="pfLevelShort">Lv.</span><b id="pf-lvl-n">1</b>
+                    <span class="pf-lvl-k" data-i18n="pfLevelShort">LV.</span><b id="pf-lvl-n">1</b>
                   </span>
-                  <!-- the equipped honor rides the avatar's bottom-right corner as a prestige pin.
-                       It is its own control: tapping opens the honor's certificate. -->
-                  <button class="pf-equipped-badge" type="button" id="pf-equipped-badge" hidden
-                    aria-label="Equipped badge"></button>
-                  <!-- the pin's server-confirmed edition number; hidden until the ledger answers.
-                       It is a second door to the same certificate, so the serial is never
-                       a dead label sitting on a live pin. -->
-                  <button class="pf-equipped-serial" type="button" id="pf-equipped-serial"
-                    aria-label="View medallion certificate" hidden></button>
                 </div>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row" id="pf-name-row">
@@ -1694,12 +1685,21 @@
                       <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
                     </button>
                   </div>
-                  <!-- the arena bracket this seat currently holds, read off the live division
-                       ladder: the realm the player actually unlocked, never a static label -->
-                  <span class="pf-arena-plaque" id="pf-arena-plaque" data-tier="bronze">
-                    <span class="pf-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-chess-king" /></svg></span>
-                    <span class="pf-arena-t" id="pf-arena-t">Arena 1: Bronze</span>
-                  </span>
+                  <div class="pf-meta-row">
+                    <!-- the arena bracket this seat currently holds, read off the live division
+                         ladder: the realm the player actually unlocked, never a static label -->
+                    <span class="pf-arena-plaque" id="pf-arena-plaque" data-tier="bronze">
+                      <span class="pf-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-chess-king" /></svg></span>
+                      <span class="pf-arena-t" id="pf-arena-t">Arena 1: Bronze</span>
+                    </span>
+                    <!-- the worn honor as a metal tag: crest + server-confirmed edition serial.
+                         One control, one destination — the medallion certificate. -->
+                    <button class="pf-honor-tag pf-equipped-badge" type="button" id="pf-equipped-badge" hidden
+                      aria-label="Equipped badge">
+                      <span class="pf-honor-crest" id="pf-honor-crest" aria-hidden="true"></span>
+                      <span class="pf-honor-serial" id="pf-equipped-serial" hidden></span>
+                    </button>
+                  </div>
                   <!-- inline rename: one Dark-Clay field, a live counter and Save / Cancel -->
                   <form class="pf-name-form" id="pf-name-form" novalidate hidden>
                     <label class="pf-name-field">
@@ -1723,15 +1723,6 @@
               <!-- tier 2 · the Tactical Intelligence slab: one obsidian card, a specular gold
                    hairline, the percentile meter and the flagship figure. -->
               <div class="pf-tiq-card" id="pf-tiq-card">
-                <span class="pf-tiq-meter">
-                  <svg class="pf-tiq-arc" viewBox="0 0 44 44" aria-hidden="true">
-                    <circle class="pf-tiq-track" cx="22" cy="22" r="19" fill="none" />
-                    <circle class="pf-tiq-fill" id="pf-tiq-fill" cx="22" cy="22" r="19" fill="none"
-                      pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="100" />
-                  </svg>
-                  <b class="pf-tiq-pct" id="pf-tiq-pct">0%</b>
-                  <span class="pf-tiq-cap" data-i18n="percentile">Percentile</span>
-                </span>
                 <span class="pf-tiq-body">
                   <span class="pf-tiq-kicker">
                     <i class="pf-tiq-dot" aria-hidden="true"></i>
@@ -1742,7 +1733,16 @@
                     <b id="pf-tiq">0</b>
                     <span class="pf-tiq-k">TIQ</span>
                   </span>
-                  <span class="pf-tiq-rank" id="pf-tiq-rank">#1 · 0%</span>
+                  <span class="pf-tiq-rank" id="pf-tiq-rank">#1 • 0%</span>
+                </span>
+                <span class="pf-tiq-meter">
+                  <svg class="pf-tiq-arc" viewBox="0 0 44 44" aria-hidden="true">
+                    <circle class="pf-tiq-track" cx="22" cy="22" r="19" fill="none" />
+                    <circle class="pf-tiq-fill" id="pf-tiq-fill" cx="22" cy="22" r="19" fill="none"
+                      pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="100" />
+                  </svg>
+                  <b class="pf-tiq-pct" id="pf-tiq-pct">0%</b>
+                  <span class="pf-tiq-cap" data-i18n="percentile">Percentile</span>
                 </span>
               </div>
 
@@ -1761,7 +1761,7 @@
 
               <!-- tier 4 · the two identity doors: the nation and the squad -->
               <div class="pf-hero-chip-row">
-                <button class="pf-chip pf-chip-nation" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
+                <button class="pf-chip pf-chip-nation nation-card" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
                   <!-- a pre-rendered radial wash: national ambient light with no blur pass -->
                   <span class="pf-chip-aura" id="pf-country-aura" aria-hidden="true"></span>
                   <span class="pf-chip-ico pf-chip-ico-country" id="pf-country-ico" aria-hidden="true">
@@ -1770,16 +1770,16 @@
                   </span>
                   <span class="pf-chip-txt">
                     <span class="pf-chip-k" data-i18n="nation">Nation</span>
-                    <span class="pf-chip-v"><span id="pf-country-v">Add country</span></span>
+                    <span class="pf-chip-v"><span id="pf-country-v" dir="auto">Add country</span></span>
                     <span class="pf-chip-meta" id="pf-country-meta">+100 Coins when set</span>
                   </span>
                   <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>
-                <button class="pf-chip pf-chip-squad" type="button" id="pf-team" aria-haspopup="dialog" aria-label="Join a Squad">
+                <button class="pf-chip pf-chip-squad squad-card" type="button" id="pf-team" aria-haspopup="dialog" aria-label="Join a Squad">
                   <span class="pf-chip-ico pf-chip-ico-squad" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
                   <span class="pf-chip-txt">
                     <span class="pf-chip-k" data-i18n="squadWord">Squad</span>
-                    <span class="pf-chip-v"><span id="pf-team-v">Join a Squad</span></span>
+                    <span class="pf-chip-v"><span id="pf-team-v" dir="auto">Join a Squad</span></span>
                     <span class="pf-chip-meta" id="pf-team-meta">Community squads</span>
                   </span>
                   <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>

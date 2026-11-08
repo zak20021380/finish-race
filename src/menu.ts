@@ -95,6 +95,12 @@ export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
 
+/** A Telegram channel title can arrive as two scripts around a pipe ("علم کامپیوتر | Computer
+    Science"). The pipe is a data delimiter, not prose: display the leading segment alone so a
+    mixed-direction name never leaves a dangling divider in the card. */
+const squadDisplayName = (raw: string): string =>
+  raw.split(/[|｜]/).map((part) => part.replace(/\s+/g, ' ').trim()).find(Boolean) ?? '';
+
 /** Installed by the menu while it can answer a back step; main.ts unwinds through it. */
 let ownersBackStep: (() => boolean) | null = null;
 
@@ -1198,7 +1204,7 @@ export function createMenu(api: MenuApi): Menu {
     if (!me) { showSquadSearch(); return; }
     squadView = buildSquadRoster(me);
     $<HTMLElement>('squad-view-avatar').textContent = squadMark(me);
-    $<HTMLElement>('squad-view-name').textContent = me.name;
+    $<HTMLElement>('squad-view-name').textContent = squadDisplayName(me.name) || me.name;
     $<HTMLElement>('squad-view-handle').textContent = me.handle;
     squadCrestBadge.textContent = `#${en(me.rank)}`;
     squadCrestBadge.dataset.rank = me.rank === 1 ? 'gold' : me.rank === 2 ? 'silver' : me.rank === 3 ? 'bronze' : 'num';
@@ -1429,7 +1435,7 @@ export function createMenu(api: MenuApi): Menu {
     if (!squadPreviewSheet) return;
     const s = previewSquad;
     const handle = s?.handle ?? previewHandle;
-    const name = s?.name ?? displayNameOf(handle);
+    const name = (s ? squadDisplayName(s.name) : '') || displayNameOf(handle);
     const tiq = s ? squadPreviewAvg(s) : myTiq();
     const members = s ? s.members : 1;
     const rank = s?.rank ?? 0;
@@ -1545,7 +1551,7 @@ export function createMenu(api: MenuApi): Menu {
     impact('medium');
     notify('success');
     const joined = result.squad ?? previewSquad;
-    showToast(`${joined.name} joined · ${joined.handle}`, 'success');
+    showToast(`${squadDisplayName(joined.name) || joined.name} joined · ${joined.handle}`, 'success');
     paintSquadPill();
     /* The preview swaps straight to the hub: one sheet at a time, and the player lands on the
        roster they just joined rather than back on the search field. */
@@ -1574,16 +1580,17 @@ export function createMenu(api: MenuApi): Menu {
     }
     for (const s of rows) {
       const joined = me?.id === s.id;
+      const label = squadDisplayName(s.name) || s.handle.replace(/^@/, '');
       squadList.append(buildSquadCard({
         rank: s.rank,
         mark: squadMark(s),
-        name: s.name,
+        name: label,
         handle: s.handle,
         members: s.members,
         tiq: squadPreviewAvg(s),
         aria: joined
-          ? `${s.name}, ${s.handle} — your squad. Inspect squad details.`
-          : `Inspect ${s.name}, ${s.handle}, rank ${s.rank}`,
+          ? `${label}, ${s.handle} — your squad. Inspect squad details.`
+          : `Inspect ${label}, ${s.handle}, rank ${s.rank}`,
         squadId: s.id,
         joined,
       }));
@@ -2114,7 +2121,7 @@ export function createMenu(api: MenuApi): Menu {
     const lvlN = document.getElementById('pf-lvl-n');
     if (lvlN) lvlN.textContent = String(lv.n);
     const lvlPlate = document.getElementById('pf-lvl');
-    if (lvlPlate) lvlPlate.setAttribute('aria-label', `${t('pfLevelShort')} ${lv.n}`);
+    if (lvlPlate) lvlPlate.setAttribute('aria-label', `Level ${lv.n}`);
     /* TIQ is the flagship stat: the number, the unit and the meter it fills. */
     const tiq = myTiq();
     const tiqValue = document.getElementById('pf-tiq');
@@ -2140,7 +2147,7 @@ export function createMenu(api: MenuApi): Menu {
     }
     const rankEl = document.getElementById('pf-tiq-rank');
     if (rankEl) {
-      rankEl.textContent = `#${bracket.n} · ${bracket.pct}%`;
+      rankEl.textContent = `#${bracket.n} • ${bracket.pct}%`;
       rankEl.setAttribute('aria-label', t('pfArenaPercentile')
         .replace('{n}', String(bracket.n))
         .replace('{total}', String(bracket.total)));
@@ -2170,9 +2177,11 @@ export function createMenu(api: MenuApi): Menu {
       wrap.setAttribute('aria-label', label);
       wrap.setAttribute('title', label);
     }
-    /* the equipped honor, pinned to the avatar: its metal names it, its tap spots it */
+    /* the equipped honor in the identity stack: crest + serial in one metal tag, one tap to
+       its certificate. The avatar itself carries only the level plate. */
     const eq = equippedBadge();
     const eqWrap = document.getElementById('pf-equipped-badge') as HTMLButtonElement | null;
+    const eqCrest = document.getElementById('pf-honor-crest');
     const serialTag = document.getElementById('pf-equipped-serial');
     if (eqWrap) {
       if (!eq) {
@@ -2180,13 +2189,15 @@ export function createMenu(api: MenuApi): Menu {
         eqWrap.removeAttribute('data-accent');
         eqWrap.removeAttribute('aria-label');
         eqWrap.removeAttribute('title');
+        delete eqWrap.dataset.badge;
+        if (eqCrest) eqCrest.innerHTML = '';
         if (serialTag) { serialTag.hidden = true; serialTag.textContent = ''; }
       } else {
         eqWrap.hidden = false;
         eqWrap.setAttribute('data-accent', eq.accent);
-        /* the pin carries the honor's own metal: rendered art when it ships, else the crest */
-        if (eqWrap.dataset.badge !== eq.id) {
-          eqWrap.innerHTML = badgeCrestHtml(eq, 'badge-crest pf-equipped-crest');
+        /* the tag carries the honor's own metal: rendered art when it ships, else the crest */
+        if (eqCrest && eqWrap.dataset.badge !== eq.id) {
+          eqCrest.innerHTML = badgeCrestHtml(eq, 'badge-crest pf-equipped-crest');
           eqWrap.dataset.badge = eq.id;
         }
         const ed = badgeEdition(eq.id);
@@ -2195,11 +2206,12 @@ export function createMenu(api: MenuApi): Menu {
           `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. View its certificate.`,
         );
         eqWrap.title = `${eq.name} · ${badgeStatus(eq.id, true).text} · ${eq.archetype}`;
-        /* the pin's serial tag is the server-confirmed number, not a local best guess */
+        /* the serial is the server-confirmed number, not a local best guess; the medal mark
+           keeps it readable as a serial in both scripts */
         if (serialTag) {
           if (ed.serial !== null) {
             serialTag.hidden = false;
-            serialTag.textContent = editionSerialLabel(ed.serial);
+            serialTag.textContent = editionSerialLabel(ed.serial).replace(/^#/, '№ ');
             serialTag.setAttribute('data-accent', eq.accent);
           } else {
             serialTag.hidden = true;
@@ -3184,8 +3196,16 @@ export function createMenu(api: MenuApi): Menu {
     countryCard?.classList.toggle('is-set', !!c);
     const countryMeta = document.getElementById('pf-country-meta');
     if (countryMeta) {
-      if (c) countryMeta.textContent = `${c} · ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}`;
-      else countryMeta.innerHTML = `<bdi dir="ltr">+${IDENTITY_REWARD}</bdi> ${t('coinsWhenSet')}`;
+      countryMeta.textContent = '';
+      if (c) {
+        /* one isolated LTR run: the code, the bullet and the division keep their order in RTL */
+        const line = document.createElement('bdi');
+        line.dir = 'ltr';
+        line.textContent = `${c} • ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}`;
+        countryMeta.append(line);
+      } else {
+        countryMeta.innerHTML = `<bdi dir="ltr">+${IDENTITY_REWARD}</bdi> ${t('coinsWhenSet')}`;
+      }
     }
     const countryLabel = c
       ? `${nameOf(c)}. ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}.`
@@ -3233,16 +3253,25 @@ export function createMenu(api: MenuApi): Menu {
 
     paintSquadPill();
     const squad = getMySquad();
-    $('pf-team-v').textContent = squad ? squad.name : t('joinASquad');
+    const squadName = squad ? (squadDisplayName(squad.name) || squad.name) : '';
+    $('pf-team-v').textContent = squad ? squadName : t('joinASquad');
     const squadMeta = document.getElementById('pf-team-meta');
     if (squadMeta) {
-      squadMeta.textContent = squad
-        ? `#${squad.rank} • ${en(squad.members)} ${t('members')}`
-        : t('communitySquads');
+      squadMeta.textContent = '';
+      if (squad) {
+        /* rank and roster size are one LTR run with Latin figures, so an RTL card cannot
+           re-order "#1 • 2 Members" into a dangling pair */
+        const line = document.createElement('bdi');
+        line.dir = 'ltr';
+        line.textContent = `#${squad.rank} • ${en(squad.members)} ${t('members')}`;
+        squadMeta.append(line);
+      } else {
+        squadMeta.textContent = t('communitySquads');
+      }
     }
     document.getElementById('pf-team')?.classList.toggle('is-set', !!squad);
     $('pf-team').setAttribute('aria-label', squad
-      ? `${squad.name}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
+      ? `${squadName}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
       : t('joinASquad'));
   };
   /* One signature for the whole Profile panel. Coming back to the tab repaints
@@ -3371,15 +3400,14 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
     notify('success');
   });
-  /* the pin and the serial tag hanging under it are two doors to one place: the honor's
-     certificate. The shelf is still reachable — it is the tile that equips, and the
-     certificate's registry button is the short path to the hall. */
+  /* the honor tag (crest + serial) is one door to the honor's certificate. The shelf is still
+     reachable — it is the tile that equips, and the certificate's registry button is the short
+     path to the hall. */
   const openWornCertificate = (): void => {
     if (!equippedBadge()) return;
     openCertificate();
   };
   document.getElementById('pf-equipped-badge')?.addEventListener('click', openWornCertificate);
-  document.getElementById('pf-equipped-serial')?.addEventListener('click', openWornCertificate);
   document.getElementById('badge-equip')?.addEventListener('click', () => {
     if (!badgeDraft) return;
     if (!isBadgeUnlocked(badgeDraft)) {

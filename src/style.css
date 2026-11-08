@@ -36351,11 +36351,10 @@ html[data-lang="ar"] #s-profile :is(.pf-quest-sub, .pf-invite-s, .pf-chip-meta, 
   line-height: 1.4;
 }
 
-/* the card's own reading direction: a Persian seat reads the meter from the right, so the
-   ring leads from that edge and the two doors lead with the crimson key. Figures stay LTR
-   (isolated above), only the layout mirrors. */
-html[data-lang="fa"] #s-profile .pf-tiq-card,
-html[data-lang="ar"] #s-profile .pf-tiq-card,
+/* the card's own reading direction: the two doors lead with the crimson key in a Persian
+   seat. The TIQ slab keeps one left-to-right grid in every language — label and figure from
+   the left, gauge on the right — so the same optical grid holds in both scripts. Figures
+   stay LTR (isolated above), only the doors mirror. */
 html[data-lang="fa"] #s-profile .pf-actions,
 html[data-lang="ar"] #s-profile .pf-actions { direction: rtl; }
 
@@ -36637,4 +36636,538 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
     flex: 0 1 40px;
     min-height: 0;
   }
+}
+
+/* ==========================================================================
+   PROFILE DRAWER FINAL PASS — one badge per surface.
+   The avatar carries a single metal level plate; the worn honor becomes a
+   crest + serial tag in the identity stack beside the Arena plaque. The TIQ
+   slab keeps one left-to-right optical grid in every script, the XP rail is a
+   single 4px cyan filament, and Nation / Squad are symmetrical media cards
+   with no stretched dead space.
+   ========================================================================== */
+
+/* ---- tier 1 · the identity row ------------------------------------------- */
+#s-profile .pf-hero-top { gap: 14px; }
+#s-profile .pf-avatar-slot { position: relative; flex: none; }
+
+/* the only badge on the avatar: a machined level plate on the lower-right lip */
+#s-profile .pf-lvl {
+  position: absolute;
+  left: auto;
+  right: -7px;
+  bottom: -6px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  height: 21px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, #232C3D 0%, #0A0F19 100%) padding-box,
+    linear-gradient(155deg, #FFF7DA 0%, #B45309 40%, #FCD34D 72%, #FFF7DA 100%) border-box;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, .85),
+    0 0 14px -4px rgba(245, 158, 11, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .2);
+  font-family: var(--font-numeric);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 21px;
+  letter-spacing: .08em;
+  color: #E7B95C;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  pointer-events: none;
+}
+#s-profile .pf-lvl b {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #FFF7DA;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .85);
+}
+
+#s-profile .pf-id-v2 { gap: 7px; }
+#s-profile .pf-name-row { min-height: 24px; }
+#s-profile .pf-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+#s-profile .pf-meta-row > .pf-arena-plaque { flex: 0 1 auto; }
+
+/* the honor tag: crest + edition serial in one brushed-metal capsule, seated beside
+   the Arena plaque instead of hanging off the avatar's corner */
+#s-profile .pf-meta-row .pf-equipped-badge {
+  position: static;
+  inset: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  height: 22px;
+  padding: 0 8px 0 4px;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  pointer-events: auto;
+  background:
+    linear-gradient(180deg, #232C3D 0%, #0A0F19 100%) padding-box,
+    conic-gradient(
+      from 210deg,
+      #FFFFFF 0%, #94A3B8 12%, #E2E8F0 26%, #64748B 44%,
+      #F8FAFC 58%, #94A3B8 74%, #FFFFFF 88%, #FFFFFF 100%
+    ) border-box;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 10px -4px rgba(var(--eq-aura), .8);
+  line-height: 1;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+#s-profile .pf-meta-row .pf-equipped-badge::before,
+#s-profile .pf-meta-row .pf-equipped-badge::after { content: none; }
+#s-profile .pf-meta-row .pf-equipped-badge:hover:not(:active) {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+#s-profile .pf-meta-row .pf-equipped-badge:active { transform: translateY(1px); }
+#s-profile .pf-meta-row .pf-equipped-badge:focus-visible {
+  outline: 2px solid var(--brand-2);
+  outline-offset: 2px;
+}
+#s-profile .pf-meta-row .pf-equipped-badge[hidden] { display: none; }
+#s-profile .pf-honor-crest {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  line-height: 0;
+}
+#s-profile .pf-honor-crest .pf-equipped-crest,
+#s-profile .pf-honor-crest .pf-equipped-crest.badge-crest-art {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+#s-profile .pf-honor-serial {
+  position: static;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font-numeric);
+  font-size: 8.5px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--eq-ink, #FDE68A);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+}
+#s-profile .pf-honor-serial[hidden] { display: none; }
+
+/* ---- tier 2 · one TIQ grid: label, figure, qualifier left; gauge right ---- */
+#s-profile .pf-tiq-card {
+  direction: ltr;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  text-align: left;
+}
+#s-profile .pf-tiq-body {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  justify-items: start;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+}
+#s-profile .pf-tiq-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 9px;
+  line-height: 1.15;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #93A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#s-profile .pf-tiq-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--pf-gold);
+  box-shadow: 0 0 6px rgba(245, 158, 11, .9);
+}
+#s-profile .pf-tiq-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  direction: ltr;
+  min-width: 0;
+  max-width: 100%;
+}
+#s-profile .pf-tiq-brain {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  color: #FCD34D;
+  filter:
+    drop-shadow(0 0 5px rgba(245, 158, 11, .85))
+    drop-shadow(0 0 1px rgba(252, 211, 77, .9));
+}
+#s-profile .pf-tiq-val b {
+  font-family: var(--font-stat);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: .95;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  background: linear-gradient(180deg, var(--pf-gold-hi) 0%, #FDE68A 24%, var(--pf-gold) 58%, var(--pf-gold-lo) 80%, #FCD34D 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .8));
+}
+#s-profile .pf-tiq-val .pf-tiq-k {
+  flex: none;
+  padding: 3px 5px 2px;
+  border-radius: 4px;
+  background: rgba(8, 12, 20, .7);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .7),
+    inset 0 0 0 1px rgba(252, 211, 77, .16);
+  font-family: var(--font-numeric);
+  font-size: 7.5px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #E7B95C;
+}
+#s-profile .pf-tiq-rank {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  border: 1px solid rgba(252, 211, 77, .14);
+  border-radius: 5px;
+  background: rgba(8, 12, 20, .62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  font-family: var(--font-numeric);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .04em;
+  color: #E7B95C;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+}
+/* the gauge: one ring, the figure and its caption centred in the same optical column */
+#s-profile .pf-tiq-meter {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(70% 70% at 50% 32%, rgba(245, 158, 11, .12) 0%, rgba(8, 12, 20, 0) 72%);
+}
+#s-profile .pf-tiq-pct {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-numeric);
+  font-size: 13.5px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0;
+  color: #FDE68A;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .8);
+}
+#s-profile .pf-tiq-cap {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  max-width: 50px;
+  text-align: center;
+  font-size: 6px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: #8FA0B8;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- tier 3 · the XP rail and purse on one balanced line ------------------ */
+#s-profile .pf-xp-block { gap: 7px; }
+#s-profile .pf-xp-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+}
+#s-profile .pf-xp-lvl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #8FA0B8;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#s-profile .pf-xp-lvl b {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  color: #E2E8F0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+#s-profile .pf-xp-meta {
+  margin-left: 0;
+  align-self: baseline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #67E8F9;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(34, 211, 238, .4);
+}
+#s-profile .pf-wallet {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 9px 0 5px;
+  border: 1px solid rgba(252, 211, 77, .16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 60%),
+    rgba(8, 12, 20, .7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 12px -6px rgba(245, 158, 11, .8);
+  font-family: var(--font-numeric);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #F1F5F9;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+}
+#s-profile .pf-wallet-token {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+}
+#s-profile .pf-wallet .coin {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .6));
+}
+#s-profile .pf-xp-bar.bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: #070C15;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .8);
+  overflow: hidden;
+}
+#s-profile .pf-xp-bar.bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0891B2 0%, #22D3EE 55%, #A5F3FC 100%);
+  box-shadow:
+    0 0 8px rgba(34, 211, 238, .9),
+    0 0 16px rgba(34, 211, 238, .45);
+  transition: width .4s ease;
+}
+
+/* ---- tier 4 · Nation / Squad: equal media cards, no dead centre ---------- */
+#s-profile .pf-hero-chip-row {
+  gap: 8px;
+  align-items: stretch;
+}
+#s-profile :is(.nation-card, .squad-card) {
+  height: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "ico action"
+    "txt txt";
+  align-content: start;
+  align-items: center;
+  gap: 10px 8px;
+  padding: 12px 14px;
+  text-align: start;
+}
+#s-profile .pf-chip-ico,
+#s-profile .pf-chip-ico-squad {
+  grid-area: ico;
+  justify-self: start;
+  align-self: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+#s-profile .pf-chip-action {
+  grid-area: action;
+  justify-self: end;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+#s-profile .pf-chip-txt {
+  grid-area: txt;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+#s-profile .pf-chip .pf-chip-v {
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -.012em;
+  color: #F1F5F9;
+  /* physical alignment: a mixed-direction name still sits on the card's own edge */
+  text-align: left;
+}
+#s-profile .pf-chip .pf-chip-v > span {
+  display: block;
+  text-align: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#s-profile .pf-chip-meta {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+/* national ambient light stays inside the card's own paint box */
+#s-profile .pf-chip-aura {
+  inset: 0;
+  transform: none;
+  opacity: .65;
+  background: radial-gradient(90% 120% at 14% 0%,
+    rgba(125, 211, 252, .2) 0%,
+    rgba(56, 189, 248, .08) 46%,
+    rgba(56, 189, 248, 0) 72%);
+}
+/* one-line titles keep the twin cards at exactly the same height */
+@media (max-width: 380px) {
+  #s-profile :is(.nation-card, .squad-card) { padding: 12px 14px; min-height: 0; gap: 10px 8px; }
+  #s-profile .pf-chip .pf-chip-v { font-size: 13px; }
+}
+@media (max-width: 359px) {
+  #s-profile :is(.nation-card, .squad-card) { padding: 12px 14px; min-height: 0; }
+  #s-profile .pf-chip .pf-chip-v { font-size: 12.5px; }
+  #s-profile .pf-tiq-card { gap: 10px; padding: 10px 11px; }
+  #s-profile .pf-tiq-meter { width: 54px; height: 54px; }
+  #s-profile .pf-tiq-pct { font-size: 12.5px; }
+  #s-profile .pf-tiq-val b { font-size: 26px; }
+  #s-profile .pf-tiq-brain { width: 17px; height: 17px; }
+  #s-profile .pf-tiq-cap { max-width: 40px; font-size: 6px; }
+}
+@media (max-width: 330px) {
+  #s-profile .pf-tiq-meter { width: 50px; height: 50px; }
+  #s-profile .pf-tiq-pct { font-size: 12px; }
+  #s-profile .pf-tiq-val b { font-size: 24px; }
+  #s-profile .pf-tiq-kicker { font-size: 8.5px; }
+  /* the caption is part of the gauge reading, not a casualty of the narrow floor */
+  #s-profile .pf-tiq-cap { display: block; max-width: 34px; font-size: 5px; }
+}
+
+/* joined-script corrections for the new shelf */
+html[data-lang="fa"] #s-profile .pf-meta-row,
+html[data-lang="ar"] #s-profile .pf-meta-row { direction: rtl; }
+html[data-lang="fa"] #s-profile .pf-chip .pf-chip-v,
+html[data-lang="ar"] #s-profile .pf-chip .pf-chip-v { text-align: right; }
+html[data-lang="fa"] #s-profile .pf-honor-serial,
+html[data-lang="ar"] #s-profile .pf-honor-serial {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  letter-spacing: .02em;
+}
+html[data-lang="fa"] #s-profile .pf-tiq-kicker,
+html[data-lang="ar"] #s-profile .pf-tiq-kicker {
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  font-size: 10px;
+}
+html[data-lang="fa"] #s-profile .pf-tiq-cap,
+html[data-lang="ar"] #s-profile .pf-tiq-cap {
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-size: 7.5px;
 }

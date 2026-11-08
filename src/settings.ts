@@ -220,7 +220,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     profilePermanentEntry: 'Permanent entry',
     profileBornOn: 'Born {date}',
     /* ---- the competitive profile card (src/menu.ts): level, arena bracket, PvP career ---- */
-    pfLevelShort: 'Lv.',
+    pfLevelShort: 'LV.',
     pfArenaPlaque: 'Arena {n}: {name}',
     pfTacticalIq: 'Tactical Intelligence',
     pfArenaPercentile: 'Arena percentile — bracket {n} of {total}',
@@ -944,7 +944,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     profilePermanentEntry: 'ثبت دائمی',
     profileBornOn: 'متولد {date}',
     /* ---- کارت رقابتی پروفایل (src/menu.ts): لول، آرنا، کارنامه واقعی ---- */
-    pfLevelShort: 'لول',
+    pfLevelShort: 'LV.',
     pfArenaPlaque: 'آرنا {n}: {name}',
     pfTacticalIq: 'هوش تاکتیکی',
     pfArenaPercentile: 'صدک آرنا — سطح {n} از {total}',
