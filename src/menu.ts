@@ -9,7 +9,7 @@
 import { DIFFICULTIES, type Difficulty } from './bot';
 import {
   LANGS, lang, langDef, motionReduced, onLang, setLang, t,
-  menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
+  menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type LangDef, type Settings,
 } from './settings';
 import {
   ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
@@ -77,13 +77,15 @@ export interface Menu {
   /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
   /**
-   * The pre-lesson language gate a first-time invitee sees. The callback runs ONCE, after the
-   * choice has been applied and the gate has closed; main.ts starts the untouched lesson there.
+   * The first-boot language gate every new player sees before any tutorial or invite door. The
+   * callback runs ONCE, after the choice has been applied, locked and the gate closed; main.ts
+   * resumes the boot (lesson, or the invited duel/room) there. `context` picks the waiting-friend
+   * copy for an invite launch, the welcome copy otherwise.
    */
-  openLanguagePicker(onPick: (code: LangCode) => void): void;
-  /** Lift the gate without a choice (a late hydrate can prove this is not a first launch). */
+  openLanguagePicker(onPick: (code: LangCode) => void, context?: 'invite' | 'welcome'): void;
+  /** Lift the gate without a choice. */
   closeLanguagePicker(): void;
-  /** Is the gate still on screen? A late hydrate only hands over an invite it actually covers. */
+  /** Is the gate still on screen? */
   isLanguagePickerOpen(): boolean;
 }
 
@@ -3661,42 +3663,93 @@ export function createMenu(api: MenuApi): Menu {
   });
   $('profile-tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
 
-  /* ---- the pre-lesson language gate ---------------------------------------------------------
-     A first-time invitee gets one decision before the board: which language to learn in. It is
-     deliberately NOT a sheet — there is nothing behind it to browse yet — so it is a full
-     viewport obsidian card over the boot shell, and it cannot be dismissed without a choice.
-     Every width is capped, every text node wraps and the grid collapses at 340px, so a 320px
-     Persian or Arabic viewport can never gain a horizontal scrollbar. */
+  /* ---- the first-boot language gate ----------------------------------------------------------
+     The first screen EVERY new player meets — invited or not — before any tutorial, duel veil or
+     room door mounts. An obsidian & imperial-gold decision card: a bilingual headline, two
+     prominent primary locales (فارسی / English) and three compact secondary ones, each with a
+     crisp inline-SVG flag (emoji flags degrade to letters on Windows), native script and a gold
+     specular rim on hover/active. It is deliberately NOT a sheet — there is nothing behind it to
+     browse yet — and it cannot be dismissed without a choice. Every width is capped with
+     minmax(0, …), every label wraps and the grids tighten inside 340px, so a 320px RTL viewport
+     can never gain a horizontal scrollbar. No backdrop-filter: an opaque obsidian wash instead. */
+
+  /** A crisp 3:2 flag drawn in SVG, so it renders identically on every OS (emoji flags do not). */
+  const flagSvg = (code: LangCode): string => {
+    const open = '<svg viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">';
+    switch (code) {
+      case 'fa': // Iran — green/white/red with a stylised red emblem
+        return open
+          + '<rect width="30" height="6.7" fill="#239F40"/>'
+          + '<rect y="6.7" width="30" height="6.6" fill="#fff"/>'
+          + '<rect y="13.3" width="30" height="6.7" fill="#DA0000"/>'
+          + '<path d="M15 6.5c1 1.1 1.5 2.3 1.5 3.5 0 1.5-.7 2.8-1.5 3.6-.8-.8-1.5-2.1-1.5-3.6 0-1.2.5-2.4 1.5-3.5z" fill="#DA0000"/>'
+          + '<rect x="14.6" y="7.4" width=".8" height="5" rx=".4" fill="#fff" opacity=".85"/>'
+          + '</svg>';
+      case 'en': // United Kingdom — the Union Jack
+        return open
+          + '<rect width="30" height="20" fill="#012169"/>'
+          + '<path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4"/>'
+          + '<path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="1.6"/>'
+          + '<path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6.6"/>'
+          + '<path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.6"/>'
+          + '</svg>';
+      case 'ru': // Russia — white/blue/red
+        return open
+          + '<rect width="30" height="6.7" fill="#fff"/>'
+          + '<rect y="6.7" width="30" height="6.6" fill="#0039A6"/>'
+          + '<rect y="13.3" width="30" height="6.7" fill="#D52B1E"/>'
+          + '</svg>';
+      case 'ar': // United Arab Emirates — red hoist band, green/white/black
+        return open
+          + '<rect width="30" height="6.7" fill="#00732F"/>'
+          + '<rect y="6.7" width="30" height="6.6" fill="#fff"/>'
+          + '<rect y="13.3" width="30" height="6.7" fill="#000"/>'
+          + '<rect width="7.5" height="20" fill="#FF0000"/>'
+          + '</svg>';
+      case 'es': // Spain — red/gold/red
+        return open
+          + '<rect width="30" height="5" fill="#AA151B"/>'
+          + '<rect y="5" width="30" height="10" fill="#F1BF00"/>'
+          + '<rect y="15" width="30" height="5" fill="#AA151B"/>'
+          + '</svg>';
+    }
+  };
+
   const langGate = document.createElement('div');
   langGate.className = 'lang-picker-modal';
   langGate.id = 'lang-picker-modal';
   langGate.hidden = true;
   langGate.innerHTML = [
     '<div class="lang-picker-card" data-scroll role="dialog" aria-modal="true" aria-labelledby="lang-picker-title" aria-describedby="lang-picker-sub">',
-    '  <span class="lang-picker-crest" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>',
-    '  <p class="lang-picker-kicker" id="lang-picker-kicker"></p>',
-    '  <h2 class="lang-picker-title" id="lang-picker-title"></h2>',
-    '  <p class="lang-picker-sub" id="lang-picker-sub"></p>',
-    '  <div class="lang-picker-grid" id="lang-picker-grid" role="group"></div>',
+    '  <span class="lp-crest" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>',
+    '  <p class="lp-kicker" aria-hidden="true">TACTIX</p>',
+    '  <h2 class="lp-title" id="lang-picker-title">',
+    '    <span class="lp-title-en" dir="ltr">Select Your Language</span>',
+    '    <span class="lp-title-fa" dir="rtl" lang="fa">زبان خود را انتخاب کنید</span>',
+    '  </h2>',
+    '  <p class="lp-sub" id="lang-picker-sub"></p>',
+    '  <div class="lp-primary" id="lang-picker-primary" role="group" aria-label="Primary languages"></div>',
+    '  <p class="lp-more-label" id="lang-picker-more-label"></p>',
+    '  <div class="lp-more" id="lang-picker-more" role="group" aria-label="More languages"></div>',
     '</div>',
   ].join('');
   document.body.appendChild(langGate);
 
   const langGateCard = langGate.querySelector<HTMLElement>('.lang-picker-card');
-  const langGateKicker = langGate.querySelector<HTMLElement>('#lang-picker-kicker');
-  const langGateTitle = langGate.querySelector<HTMLElement>('#lang-picker-title');
   const langGateSub = langGate.querySelector<HTMLElement>('#lang-picker-sub');
-  const langGateGrid = langGate.querySelector<HTMLElement>('#lang-picker-grid');
+  const langGateMoreLabel = langGate.querySelector<HTMLElement>('#lang-picker-more-label');
+  const langGatePrimary = langGate.querySelector<HTMLElement>('#lang-picker-primary');
+  const langGateMore = langGate.querySelector<HTMLElement>('#lang-picker-more');
   const langGateButtons: HTMLButtonElement[] = [];
   let langGatePick: ((code: LangCode) => void) | null = null;
+  let langGateContext: 'invite' | 'welcome' = 'welcome';
 
   const paintLanguageGate = (): void => {
     const dir = langDef(lang).dir;
     langGate.setAttribute('dir', dir);
     langGateCard?.setAttribute('dir', dir);
-    if (langGateKicker) langGateKicker.textContent = t('language');
-    if (langGateTitle) langGateTitle.textContent = t('langPickerTitle');
-    if (langGateSub) langGateSub.textContent = t('langPickerSub');
+    if (langGateSub) langGateSub.textContent = t(langGateContext === 'invite' ? 'langPickerSub' : 'langPickerSubWelcome');
+    if (langGateMoreLabel) langGateMoreLabel.textContent = t('langPickerMore');
     for (const b of langGateButtons) {
       const on = b.dataset.lang === lang;
       b.classList.toggle('is-current', on);
@@ -3714,40 +3767,74 @@ export function createMenu(api: MenuApi): Menu {
   function pickLanguageGate(code: LangCode): void {
     if (langGate.hidden) return;
     impact('light');
-    /* Apply the locale BEFORE the gate lifts: every surface behind it — and the lesson that is
-       about to start — paints in the chosen language from its very first frame. */
+    /* Apply + lock the locale BEFORE the gate lifts: setLang stamps langChosen and the language key,
+       flips data-lang/dir and fires every watcher, so the whole app — and the lesson or duel about to
+       mount — paints in the chosen language from its very first frame. */
     setLang(code);
-    paintLanguageGate();
     const done = langGatePick;
     closeLanguageGate();
     done?.(code);
   }
 
-  if (langGateGrid) {
-    for (const l of LANGS) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'lang-pick';
-      btn.dataset.lang = l.code;
-      btn.setAttribute('aria-pressed', 'false');
-      const flag = document.createElement('span');
-      flag.className = 'lang-pick-flag';
-      flag.textContent = l.flag;
-      flag.setAttribute('aria-hidden', 'true');
-      const native = document.createElement('span');
-      native.className = 'lang-pick-native';
-      native.textContent = l.native;
-      native.lang = l.code;
-      native.dir = l.dir;
+  /** One card per locale. Primary locales get the large two-column card; the rest the compact row. */
+  const buildLangCard = (l: LangDef, mini: boolean): HTMLButtonElement => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = mini ? 'lp-card lp-mini' : 'lp-card';
+    btn.dataset.lang = l.code;
+    btn.setAttribute('aria-pressed', 'false');
+    const flag = document.createElement('span');
+    flag.className = 'lp-flag';
+    flag.setAttribute('aria-hidden', 'true');
+    flag.innerHTML = flagSvg(l.code);
+    const native = document.createElement('span');
+    native.className = 'lp-native';
+    native.textContent = l.native;
+    native.lang = l.code;
+    native.dir = l.dir;
+    if (mini) {
       btn.append(flag, native);
-      btn.addEventListener('click', () => pickLanguageGate(l.code));
-      langGateButtons.push(btn);
-      langGateGrid.append(btn);
+    } else {
+      const text = document.createElement('span');
+      text.className = 'lp-text';
+      text.append(native);
+      /* the English endonym caption is redundant on the English card itself */
+      if (l.label !== l.native) {
+        const label = document.createElement('span');
+        label.className = 'lp-label';
+        label.textContent = l.label;
+        label.dir = 'ltr';
+        text.append(label);
+      }
+      const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      check.setAttribute('class', 'lp-check');
+      check.setAttribute('aria-hidden', 'true');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '#i-check');
+      check.appendChild(use);
+      btn.append(flag, text, check);
+    }
+    btn.addEventListener('click', () => pickLanguageGate(l.code));
+    langGateButtons.push(btn);
+    return btn;
+  };
+
+  if (langGatePrimary && langGateMore) {
+    /* فارسی first, then English — the two prominent doors; the rest follow as compact cards. */
+    const primary = ['fa', 'en']
+      .map((c) => LANGS.find((l) => l.code === c))
+      .filter((l): l is LangDef => !!l);
+    for (const l of primary) langGatePrimary.append(buildLangCard(l, false));
+    for (const l of LANGS) {
+      if (l.code === 'fa' || l.code === 'en') continue;
+      langGateMore.append(buildLangCard(l, true));
     }
   }
 
-  function openLanguageGate(onPick: (code: LangCode) => void): void {
+  function openLanguageGate(onPick: (code: LangCode) => void, context: 'invite' | 'welcome' = 'welcome'): void {
     langGatePick = onPick;
+    langGateContext = context;
+    langGate.classList.toggle('is-quiet', motionReduced());
     paintLanguageGate();
     langGate.hidden = false;
     requestAnimationFrame(() => langGate.classList.add('is-in'));
@@ -3972,7 +4059,7 @@ export function createMenu(api: MenuApi): Menu {
         paintCustom();
       }
     },
-    openLanguagePicker(onPick) { openLanguageGate(onPick); },
+    openLanguagePicker(onPick, context) { openLanguageGate(onPick, context); },
     closeLanguagePicker() { closeLanguageGate(); },
     isLanguagePickerOpen() { return !langGate.hidden; },
     afterStart() {

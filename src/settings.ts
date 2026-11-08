@@ -3,7 +3,7 @@
  * every access there is wrapped, so a webview that refuses localStorage still gets a working app.
  */
 import type { Difficulty } from './bot';
-import { readJson, writeJson } from './storage';
+import { markLanguageChosen, readJson, writeJson } from './storage';
 
 export type Mode = 'bot' | 'online';
 /** Which tier of the launcher is showing: a solo race, or two sides. */
@@ -128,6 +128,9 @@ export function setLang(code: LangCode) {
   /* persist even when the pick matches the current language: that is the manual choice
      that must win over Telegram's language on the next launch */
   try { window.localStorage.setItem(L_KEY, code); } catch { /* stay in memory */ }
+  /* An explicit tap locks the locale for good — in the scoped save as well as the language key —
+     even when it matches the auto-detected one, so no later hydrate or re-read can reopen the gate. */
+  markLanguageChosen();
   if (!changed) return;
   paintLangAttrs();
   for (const w of [...langWatchers]) { try { w(lang); } catch { /* watcher threw */ } }
@@ -263,7 +266,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     chooseLanguage: 'Choose language',
     chooseLanguageSub: 'Applies instantly to the whole app.',
     langPickerTitle: 'Choose Your Language',
-    langPickerSub: 'Your friend is waiting in the duel. Pick a language to begin your lesson.',
+    langPickerSub: 'Your friend is waiting in the duel. Choose your language to jump straight into the match.',
+    langPickerSubWelcome: 'One choice sets the whole arena — board, lesson and menus — in your language.',
+    langPickerMore: 'More languages',
     cancel: 'Cancel',
     supportTitle: 'Contact Support',
     supportCatFeedback: 'Feedback',
@@ -983,7 +988,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     chooseLanguage: 'انتخاب زبان',
     chooseLanguageSub: 'بلافاصله در کل برنامه اعمال می‌شود.',
     langPickerTitle: 'زبان خود را انتخاب کنید',
-    langPickerSub: 'دوستت در اتاق دوئل منتظر است. زبانت را انتخاب کن تا آموزش شروع شود.',
+    langPickerSub: 'دوستت در دوئل منتظرته. زبانت رو انتخاب کن و مستقیم وارد مسابقه شو.',
+    langPickerSubWelcome: 'با یک انتخاب، کل بازی — زمین، آموزش و منوها — به زبان تو درمی‌آید.',
+    langPickerMore: 'زبان‌های بیشتر',
     cancel: 'انصراف',
     supportTitle: 'ارتباط با پشتیبانی',
     supportCatFeedback: 'بازخورد',
@@ -1670,7 +1677,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     chooseLanguage: 'Выберите язык',
     chooseLanguageSub: 'Применяется ко всему приложению сразу.',
     langPickerTitle: 'Выберите язык',
-    langPickerSub: 'Друг ждёт вас в дуэли. Выберите язык, чтобы начать обучение.',
+    langPickerSub: 'Друг ждёт вас в дуэли. Выберите язык, чтобы сразу войти в матч.',
     cancel: 'Отмена',
     supportTitle: 'Связь с поддержкой',
     supportCatFeedback: 'Отзыв',
@@ -1848,7 +1855,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     chooseLanguage: 'اختر اللغة',
     chooseLanguageSub: 'تُطبق فورًا على التطبيق كله.',
     langPickerTitle: 'اختر لغتك',
-    langPickerSub: 'صديقك ينتظرك في المباراة. اختر لغتك لتبدأ الدرس.',
+    langPickerSub: 'صديقك ينتظرك في المباراة. اختر لغتك لتدخل المباراة مباشرة.',
     cancel: 'إلغاء',
     supportTitle: 'تواصل مع الدعم',
     supportCatFeedback: 'ملاحظات',

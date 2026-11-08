@@ -43,8 +43,8 @@ import {
   closeVipSheet, initVipStore, isPremiumUser, onVipChange,
 } from './premium';
 import {
-  accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasClaimedFirstDuelBonus,
-  hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
+  accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasChosenLanguage,
+  hasClaimedFirstDuelBonus, hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
   peekPendingDuelRoom, reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom,
   resetTutorialState, takePendingDuelRoom, theme,
 } from './storage';
@@ -121,13 +121,19 @@ const INVITE_DUEL_LAUNCH = detectInviteDuelLaunch();
 /* ---------- first-time invite onboarding ----------
    A brand-new player who taps a friend's duel link has not met the board yet. The invite is a
    promise, not a shortcut past onboarding: the room code is parked in session memory here, the
-   language gate takes the first screen, and the room is joined again the moment the standalone
-   lesson is finished or skipped. Read exactly once at boot, before any router or sheet exists,
-   and only for a profile that has never completed (or skipped) the lesson. */
+   luxury language gate takes the first screen, and the room is joined the instant the gate
+   resolves — straight to the friend's seat, never the standalone lesson and never a Home screen
+   the player has to navigate out of. Read exactly once at boot, before any router or sheet exists. */
 reconcileTutorialFromHistory();
-const INVITE_FTUE_ROOM = detectInviteRoomCode();
-const INVITE_FTUE = !!INVITE_FTUE_ROOM && !hasCompletedTutorial();
-if (INVITE_FTUE) rememberPendingDuelRoom(INVITE_FTUE_ROOM);
+/* The room this launch was invited into (room_ / duel_ / bare code), captured on frame 1. */
+const INVITE_ROOM_CODE = detectInviteRoomCode();
+/* The locale lock: a player who has never explicitly chosen a language meets the luxury picker
+   first — invited or not. Once chosen it is permanent (storage.ts), so returning players skip it. */
+const LANG_GATE_NEEDED = !hasChosenLanguage();
+/* A first-boot invitee: the language gate holds the friend's room, then hands the player straight
+   to it. The in-match micro-coach teaches the board in their chosen language. */
+const INVITE_FTUE = !!INVITE_ROOM_CODE && LANG_GATE_NEEDED;
+if (INVITE_FTUE) rememberPendingDuelRoom(INVITE_ROOM_CODE);
 /** The mandatory channel check is HELD for the invited duel and re-armed on the first Home return. */
 let inviteGateDeferred = INVITE_DUEL_LAUNCH || INVITE_FTUE;
 
@@ -3781,17 +3787,6 @@ function joinPendingDuelRoom(): void {
 }
 
 /**
- * The first screen a brand-new invitee sees: one decision, then the untouched standalone
- * lesson. The friend's room is already in session memory, so the lesson's own end hands the
- * player straight to it. Nothing in src/tutorial.ts is changed; `startTutorial()` is the one
- * existing door used here.
- */
-function bootInviteOnboarding(): void {
-  if (!INVITE_FTUE || !peekPendingDuelRoom()) return;
-  menu.openLanguagePicker(() => { startTutorial(); });
-}
-
-/**
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
@@ -4011,8 +4006,9 @@ tutorial = createTutorial({
         return;
       }
       quitToMenu();
-      /* The invite waited through the language gate and the whole lesson: hand the player to
-         the friend's room now, so the duel begins immediately rather than on a Home screen. */
+      /* Safety net: hand over any invite still parked in session memory so a lesson that ends can
+         never strand a waiting friend. First-boot invitees normally join straight from the gate,
+         so this is a no-op for them; it stays for any edge that runs a lesson with a code pending. */
       joinPendingDuelRoom();
       return;
     }
@@ -4541,24 +4537,43 @@ router.start('home');
 setBackButton(false);
 menu.afterStart();
 /* Home is the ROOT of the screen stack, so `quitToMenu()` can always pop back to #s-home after
-   the first playable experience. A true first-timer is routed onto #s-game in the same tick; every
-   returning user stays right here. An invited first-timer's language gate opens on the first frame
-   instead of behind a boot veil, so the friend's room never waits on a loading screen. */
-if (INVITE_FTUE) requestAnimationFrame(bootInviteOnboarding);
-else bootFirstRunTutorial();
+   the first playable experience. The boot then settles the locale before anything else mounts. */
+
+/**
+ * Resume the boot once the locale is settled — either because the player already chose it on a
+ * previous launch (returning) or because the first-boot gate just resolved. An invite owns the
+ * first screen: a first-boot invitee is handed straight to the friend's room (the in-match
+ * micro-coach teaches the board in their language); everyone else falls through to the action-first
+ * lesson / Home exactly as before. The duel veil and room door below answer returning invitees.
+ */
+function resumeBootAfterLanguage(): void {
+  if (INVITE_FTUE) {
+    /* The gate parked the code in session memory; consume it and open the lobby over Home. The
+       friend's countdown fires the moment both seats are human, so the player lands on the match
+       board — never dumped on #s-home wondering where the duel went. */
+    joinPendingDuelRoom();
+    return;
+  }
+  bootFirstRunTutorial();
+}
+
+if (LANG_GATE_NEEDED) {
+  /* FIRST BOOT: the luxury obsidian-and-gold language picker is the very first screen — before any
+     tutorial, duel veil or room door mounts. The invite (if any) is already parked, so the gate can
+     never swallow it. The chosen locale is applied + locked synchronously inside the pick, then the
+     boot resumes in that exact language. */
+  requestAnimationFrame(() => {
+    menu.openLanguagePicker(() => resumeBootAfterLanguage(), INVITE_ROOM_CODE ? 'invite' : 'welcome');
+  });
+} else {
+  resumeBootAfterLanguage();
+}
 /* A CloudStorage hydrate can resolve AFTER boot and reveal that this is really a returning player
-   (match history, no lesson flag). `hydrate()` stamps the flag; this watcher ends the first-open
-   lesson at once and puts them on Home instead of holding them in onboarding. */
+   (match history, no lesson flag). `hydrate()` stamps the flag; this watcher ends a first-open
+   lesson already in flight and puts them on Home. It NEVER dismisses the language gate: choosing a
+   locale is a separate, permanent decision every new player makes once, returning or not. */
 onChange(() => {
   if (!hasCompletedTutorial()) return;
-  /* A late profile hydrate can prove "returning" while the gate is still up: lift it and hand
-     the held invite over exactly as the lesson's own end would. Both calls are no-ops when the
-     gate is closed or nothing is pending. */
-  const gateWasOpen = menu.isLanguagePickerOpen();
-  menu.closeLanguagePicker();
-  /* Only a gate that was actually covering the invite hands over here. A completion that lands
-     during the lesson is the lesson's own `end()` to route, never a drawer over the tutorial. */
-  if (gateWasOpen) joinPendingDuelRoom();
   if (!firstRunBoot) return;
   firstRunBoot = false;
   tutorialStandalone = false;
@@ -4627,7 +4642,8 @@ themeToggle.addEventListener('click', () => {
  *
  * Opened on the first frame so the veil lands over a laid-out shell with no boot screen in front of
  * it. The payload grammar (`duel_`) never collides with the room door's (`room_`), so a plain room
- * invite still goes straight in with no tap at all.
+ * invite still goes straight in with no tap at all. A FIRST-BOOT invitee (`INVITE_FTUE`) skips the
+ * veil entirely: the language gate joins them straight to the room the moment they pick a locale.
  */
 requestAnimationFrame(() => { if (!INVITE_FTUE) openDuelDoor(); });
 
@@ -4648,8 +4664,8 @@ requestAnimationFrame(() => { if (!INVITE_FTUE) openDuelDoor(); });
  * `openInviteRoom` with the player left at home.
  */
 const invitedRoom = inviteRoomCode();
-/* A first-time invitee is held at the language gate: the room is joined by the lesson's end,
-   never behind the gate. */
+/* A first-boot invitee is held at the language gate: the room is joined the instant the gate
+   resolves (`resumeBootAfterLanguage` → `joinPendingDuelRoom`), never behind the gate. */
 if (invitedRoom && !INVITE_FTUE) {
   let inviteDoorDone = false;
   const openInvite = (attempt = 0): void => {

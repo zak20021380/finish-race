@@ -327,6 +327,12 @@ export interface Save {
    */
   tutorialCompleted: boolean;
   /**
+   * The player has explicitly chosen their language through the first-boot picker (or Settings).
+   * False until a tap stamps it; once true it is permanent — no cloud hydrate, match exit or
+   * Telegram `language_code` re-read may reopen the gate or overwrite the chosen locale.
+   */
+  langChosen: boolean;
+  /**
    * The one-time "First Duel Welcome Bonus" (+200 coins) has been paid. A debut loss is the
    * likeliest churn moment, so the cushion is credited once on the first settled race, win or
    * lose, and never again — a late cloud hydrate must not make it payable twice.
@@ -381,6 +387,7 @@ function fresh(): Save {
     referral: { joins: 0, unclaimed: 0, earned: 0, code: null, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
     tutorialCompleted: false,
+    langChosen: false,
     firstDuelBonusClaimed: false,
     pieceColor: 'red',
   };
@@ -546,6 +553,10 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
   if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
+  if (raw.langChosen === true) s.langChosen = true;
+  /* A save that already raced or finished the lesson predates the language gate: its player is
+     returning, not first-boot, so the gate must never nag them on their next launch. */
+  else if (s.tutorialCompleted || s.stats.games > 0 || s.stats.pvpGames > 0) s.langChosen = true;
   if (raw.firstDuelBonusClaimed === true) s.firstDuelBonusClaimed = true;
   if (raw.pieceColor === 'blue' || raw.pieceColor === 'red') s.pieceColor = raw.pieceColor;
   const ref = raw.referral as Partial<ReferralState> | undefined;
@@ -682,6 +693,7 @@ export function hydrate(raw: string | null) {
   const sameOwner = saveOwner(profile) === activeTgId;
   const wasCompleted = sameOwner && profile.tutorialCompleted === true;
   const wasBonusClaimed = sameOwner && profile.firstDuelBonusClaimed === true;
+  const wasLangChosen = sameOwner && profile.langChosen === true;
   const next = migrate(parsed);
   Object.assign(profile, next);
   profile.ownerTgId = activeTgId;
@@ -689,6 +701,9 @@ export function hydrate(raw: string | null) {
   /* An older cloud blob has no idea the welcome bonus was paid. Keep it paid, or the next
      settled race would mint a second +200 from a save that predates the field. */
   if (wasBonusClaimed) profile.firstDuelBonusClaimed = true;
+  /* The locale lock is monotonic too: a cloud blob predating the gate must never reopen it for a
+     player who already chose their language on this device. */
+  if (wasLangChosen) profile.langChosen = true;
   /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
      player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
      must never leave a returning profile eligible for first-open onboarding. */
@@ -876,6 +891,23 @@ export function setPieceColor(color: PieceColor): boolean {
 export function completeTutorial(): void {
   if (profile.tutorialCompleted) return;
   profile.tutorialCompleted = true;
+  flush();
+}
+
+/**
+ * The locale lock. STRICT, like the lesson flag: only the literal `true` counts as "chosen", so a
+ * fresh install, an older save or a refused storage backend all open the first-boot picker.
+ */
+export const hasChosenLanguage = (): boolean => profile.langChosen === true;
+
+/**
+ * Stamp the explicit choice in the one scoped save (`detour.save.v2_u_<id>`). Called the instant a
+ * language is picked — from the first-boot gate or from Settings — so the lock survives match exits,
+ * cloud hydrates and reloads. Idempotent: a second pick of the same locale never re-flushes.
+ */
+export function markLanguageChosen(): void {
+  if (profile.langChosen) return;
+  profile.langChosen = true;
   flush();
 }
 
