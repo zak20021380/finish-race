@@ -1678,7 +1678,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
   /**
    * Two fixed keys: a mind's relic challenge mounts only for an external holder with an exposed
-   * relic, and a squad's join/invite key stays live. The personal dossier mounts neither.
+   * relic, parked in its standby lock, and a squad's join/invite key stays live. The personal
+   * dossier mounts neither.
    */
   function msActions(kind: 'mind' | 'guild', label: string, hint: string, seize?: SeizeOffer | null, visible = true): void {
     const acts = document.querySelector<HTMLElement>('#sheet-mind .ms-acts');
@@ -1688,12 +1689,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (ch) {
       const span = ch.querySelector<HTMLElement>('span');
       const offered = kind === 'mind' && visible && !!seize;
+      /* The relic challenge is on temporary standby everywhere: an exposed rival keeps the
+         key's seat so the dossier never shifts, but it stays a locked plate that dispatches
+         nothing. Only the guild door on the same button still answers. */
+      const parked = kind === 'mind';
       ch.hidden = kind === 'mind' && !offered;
-      if (span) span.textContent = label;
-      ch.setAttribute('aria-label', hint);
-      ch.disabled = kind === 'mind' && !offered;
-      /* the parked key and the live one are the same plate: only the aura and the lock change */
-      ch.classList.toggle('is-seize', offered);
+      if (span) span.textContent = parked ? t('badgeChallengeSoon') : label;
+      ch.setAttribute('aria-label', parked ? `${t('msChallengeMind')} · ${t('msChallengeSoon')}` : hint);
+      ch.disabled = parked;
+      ch.classList.remove('is-seize');
       if (ch.disabled) ch.setAttribute('aria-disabled', 'true');
       else ch.removeAttribute('aria-disabled');
     }
@@ -2154,7 +2158,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
   msEls.challenge?.addEventListener('click', () => {
     const p = msPending;
-    if (!p) return;
+    if (!p || msEls.challenge?.disabled) return;
     if (p.kind === 'mind') {
       /* a mind's key only answers when a medallion is actually standing exposed */
       if (!p.seize || !p.id) return;

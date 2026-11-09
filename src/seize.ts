@@ -94,12 +94,12 @@ function startTicker(): void {
   ticker = window.setInterval(() => {
     if (!els.sheet || els.sheet.hidden) { stopTicker(); return; }
     if (!current) return;
-    /* the verdict can turn while the player is reading: an expiring shield unlocks the key */
+    /* the verdict can turn while the player is reading: an expiring shield unlocks the clock,
+       never the key — the challenge stays parked until the feature reopens */
     const next = relicShelter(current.def.id, current.serial);
     if (next.sheltered !== current.shelter.sheltered || next.hoursLeft !== current.shelter.hoursLeft) {
       current = { ...current, shelter: next };
       paintShelter();
-      if (els.cta) els.cta.disabled = next.sheltered || !current.targetUserId;
     }
   }, 30_000);
 }
@@ -124,7 +124,9 @@ function paint(target: SeizeTarget): void {
   paintShelter();
   if (els.cta) {
     els.cta.style.display = '';
-    els.cta.disabled = target.shelter.sheltered || !target.targetUserId;
+    /* Temporary standby: the card may still be read, but its key never sends a challenge. */
+    els.cta.disabled = true;
+    els.cta.setAttribute('aria-disabled', 'true');
   }
 }
 
@@ -133,6 +135,9 @@ function paint(target: SeizeTarget): void {
  * socket (or files it in their mailbox when they are away). No Telegram share, no copied link.
  */
 function confirmSeize(): void {
+  /* Temporary standby: the key is locked at the source, so a disabled CTA can never reach
+     the wire even if a future surface hands this function the tap directly. */
+  if (!els.cta || els.cta.disabled) return;
   const target = current;
   if (!target || target.shelter.sheltered) return;
   if (!target.targetUserId || isSelfPlayerId(target.targetUserId)) {
@@ -182,6 +187,10 @@ export function initSeize(api: SeizeApi): void {
   els.bounty = $<HTMLElement>('sz-bounty');
   els.cta = $<HTMLButtonElement>('sz-cta');
   els.cta?.addEventListener('click', confirmSeize);
+  if (els.cta) {
+    els.cta.disabled = true;
+    els.cta.setAttribute('aria-disabled', 'true');
+  }
 }
 
 /** Open the confrontation card. No-op when the sheet was never installed, or when the holder is you. */

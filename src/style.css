@@ -11754,9 +11754,8 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
     inset 0 0 0 2px rgba(245, 158, 11, .1),
     0 0 20px rgba(16, 185, 129, .08);
 }
-/* An exposed rival is a live target: the hairline warms to crimson only while it is being aimed at,
-   so the hall keeps its gold until the player actually reaches for a duel. */
-.bo-row.is-duelable:hover { border-color: rgba(255, 215, 0, .16); }
+/* The hall offers no live door while the challenge is parked: every plate keeps the same
+   calm gold hairline, and no hover paints a target the player cannot press. */
 .bo-row.is-genesis::after {
   content: "";
   position: absolute;
@@ -12005,7 +12004,7 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
 .bo-vault-lock { flex: none; width: 9px; height: 9px; color: #526079; }
 /* the label sits in its own box, so a clipped count ellipsizes instead of losing its padlock */
 .bo-vault-held > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* One bead per serial, claimed or waiting, at any cap and any width: the fill carries the count. */
+/* One continuous meter, not a segmented battery: the fill carries the claimed share. */
 .bo-vault-track {
   position: relative;
   height: 6px;
@@ -12082,7 +12081,6 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   .bo-yours { font-size: 8px; padding: 2px 6px 3px; }
   .bo-vault-legend { gap: 6px; font-size: 9px; letter-spacing: 0; }
   .bo-vault-struck { font-size: 10px; }
-  .bo-vault-track { height: 8px; }
 }
 
 /* ---- the deed's two doors: a challenge on standby, or the shield that refuses one ----
@@ -16340,6 +16338,7 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
 .ms-challenge[aria-disabled="true"] {
   opacity: .55;
   cursor: not-allowed;
+  pointer-events: none;
   color: #8C9BB0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, .01) 100%),
@@ -16691,12 +16690,15 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
 .sz-cta:disabled {
   opacity: .5;
   cursor: not-allowed;
+  pointer-events: none;
   color: #93A4BA;
   text-shadow: none;
   background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01)), #151D2C;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 4px 0 #090E17;
   transform: none;
 }
+/* the parked challenge key keeps its lock, not the combat red: no glow survives the standby */
+.sz-cta:disabled .ico { color: #8C9BB0; filter: none; }
 
 /* ---- Persian: the card reads right-to-left, the numbers stay upright ---- */
 .seize-sheet:lang(fa) :is(.sz-title, .sz-sub, .sz-honor, .sz-holder, .sz-shelter, .sz-bounty, .sz-note, .sz-stake-l, .sz-unit, .sz-cta) {

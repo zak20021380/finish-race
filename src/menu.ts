@@ -3090,8 +3090,8 @@ export function createMenu(api: MenuApi): Menu {
     } catch { return ''; }
   }
 
-  /** The shelter this serial is standing under. An exposed one offers the duel; a guarded one
-   *  says why it does not, in the same clock the dossier reads. */
+  /** The shelter this serial is standing under. An exposed one keeps the challenge's seat,
+   *  parked until the feature reopens; a guarded one says why it does not offer a duel. */
   function shelterAction(holder: EditionHolder, shelter: RelicShelter): HTMLElement {
     if (shelter.sheltered) {
       const guard = document.createElement('span');
@@ -3109,9 +3109,9 @@ export function createMenu(api: MenuApi): Menu {
       guard.append(clock, shield);
       return guard;
     }
-    /* An exposed rival gets a named door, not a bare red square: the swords are the same pair the
-       dossier key wears, and the word is the one every language already uses for a relic duel. A
-       ledger row with no session id behind it cannot be called out, so it gets no key at all. */
+    /* An exposed rival still gets a plate, never a bare red square: the key keeps the seat it
+       would wear as a live duel, but the lock holds until the challenge reopens. A ledger row
+       with no session id behind it cannot be called out, so it gets no key at all. */
     if (!holder.playerId) {
       const unlisted = document.createElement('span');
       unlisted.className = 'bo-shelter is-guarded';
@@ -3149,7 +3149,6 @@ export function createMenu(api: MenuApi): Menu {
     const when = mine ? mintStamp(claimMintedAt(def.id)) : '';
     const genesis = holder.serial === 1;
     const shelter = relicShelter(def.id, holder.serial);
-    const duelable = !mine && !shelter.sheltered;
     const serial = t('badgeSerialLabel').replace('#{num}', editionSerialLabel(holder.serial));
 
     const av = document.createElement('span');
@@ -3255,7 +3254,7 @@ export function createMenu(api: MenuApi): Menu {
     }
 
     const li = document.createElement('li');
-    li.className = `bo-row${mine ? ' is-you' : ''}${genesis ? ' is-genesis' : ''}${duelable ? ' is-duelable' : ''}`;
+    li.className = `bo-row${mine ? ' is-you' : ''}${genesis ? ' is-genesis' : ''}`;
     li.setAttribute('aria-label', `${holder.name} — ${serial}${when ? ` · ${when}` : ''}`);
     li.append(av, who, plate);
     return li;
