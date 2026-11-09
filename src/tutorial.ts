@@ -317,14 +317,12 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     stage: 'mine-place', group: 4, icon: '#i-mine-tactical', tone: 'mine',
     copy: {
       en: {
-        step: 'STEP 4 OF 4', title: 'PLANT THE MINE',
-        body: 'Tap the glowing tile ahead of your rival, then ✓ to bury the mine '
-          + '(✕ cancels). Step on it and they blast back!',
+        step: 'STEP 4 OF 4', title: 'Plant a Mine!',
+        body: 'Tap a tile and press ✓ to plant your mine.',
       },
       fa: {
         step: 'قدم ۴ از ۴', title: 'کاشتن مین!',
-        body: 'رو خونه جلوی حریف بزن، بعد ✓ رو بزن تا مین کار گذاشته بشه (✕ لغوش می‌کنه)! '
-          + 'بره روش حسابی عقب می‌افته!',
+        body: 'خونه رو انتخاب کن و ✓ رو بزن تا مین کاشته بشه.',
       },
       ru: {
         step: 'ШАГ 4 ИЗ 4', title: 'УСТАНОВИ МИНУ',
