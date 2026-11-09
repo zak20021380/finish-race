@@ -10823,6 +10823,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   line-height: 1.2;
   letter-spacing: .09em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   direction: ltr;
   unicode-bidi: isolate;
   color: #F8E7BE;
@@ -10943,6 +10944,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   line-height: 1;
   letter-spacing: .02em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   direction: ltr;
   color: #E6EDF7;
   background-image: linear-gradient(180deg, #FFFFFF 0%, #D7E1EE 42%, #7C8DA6 100%);
@@ -11450,7 +11452,13 @@ html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
   letter-spacing: 0;
   text-transform: none;
 }
-.badge-sheet:lang(fa) .bd-state[data-state="minted"] { direction: ltr; }
+/* the Persian plaque reads right-to-left as one phrase: «شماره 002 از 50 · نشان کمیاب» */
+.badge-sheet:lang(fa) .bd-state[data-state="minted"] { direction: rtl; }
+.badge-sheet:lang(fa) .bd-plaque-no {
+  direction: rtl;
+  unicode-bidi: isolate;
+  letter-spacing: 0;
+}
 .badge-sheet:lang(fa) .bd-plaque-tag { direction: rtl; unicode-bidi: isolate; }
 .badge-sheet:lang(fa) .bd-privileges { direction: rtl; }
 .badge-sheet:lang(fa) .bd-privileges::before { inset-inline-start: auto; inset-inline-end: 0; }

@@ -2776,7 +2776,9 @@ export function createMenu(api: MenuApi): Menu {
         const no = document.createElement('bdi');
         no.className = 'bd-plaque-no';
         no.dir = 'ltr';
-        no.textContent = `№ ${String(edition.serial).padStart(3, '0')} / ${String(edition.cap)}`;
+        no.textContent = t('badgeEditionNo')
+          .replace('{serial}', String(edition.serial).padStart(3, '0'))
+          .replace('{total}', String(edition.cap));
         const sep = document.createElement('span');
         sep.className = 'bd-plaque-sep';
         sep.setAttribute('aria-hidden', 'true');

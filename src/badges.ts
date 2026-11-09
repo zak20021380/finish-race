@@ -138,8 +138,8 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     pillar: 'Pure Intellect',
     description: 'Spatial foresight and zero-error calculation. Sees the whole board before the first move.',
     criteria: {
-      en: 'Reach 1,500 Tactical IQ. Pure calculation, zero panic—let the proof carry you.',
-      fa: 'به 1,500 امتیاز هوش تاکتیکی (TIQ) برس. محاسبهٔ خالص، بدون استرس؛ بذار اثباتت کار خودش رو بکنه.',
+      en: 'Reach 1,500 TIQ in ranked matches.',
+      fa: 'رسیدن به امتیاز ۱۵۰۰ با برد در مسابقات رتبه‌بندی.',
     },
     perks: [
       {
@@ -161,15 +161,15 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       {
         icon: 'i-crown',
         text: {
-          en: 'Amber avatar aura on the global leaderboard.',
-          fa: 'هالهٔ کهربایی آواتار در جدول رده‌بندی جهانی.',
+          en: 'Glowing gold avatar frame in rankings',
+          fa: 'حاشیه طلایی درخشان دور آواتار در جدول رنکینگ',
         },
       },
       {
         icon: 'i-medal',
         text: {
-          en: 'Numbered profile serial badge ({serial}).',
-          fa: 'نشان سریال روی پروفایل ({serial}).',
+          en: 'Official {serial} badge on your profile',
+          fa: 'پلاک رسمی نشان ({serial}) روی پروفایل شما',
         },
       },
     ],
