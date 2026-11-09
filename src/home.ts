@@ -252,19 +252,36 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return (parts[0].slice(0, 1) + parts[1].slice(0, 1)).toUpperCase();
   };
 
-  const trendTextOf = (c: NationRow): string => {
-    if (c.trend === 'up') return `▲ ${Math.abs(c.delta)}`;
-    if (c.trend === 'down') return `▼ ${Math.abs(c.delta)}`;
-    return '•';
+  /** Fit a one-line label inside its own box by scaling the type down a little.
+   *  The country board must never render a mid-word ellipsis; this keeps the
+   *  longest nation name on a single line without letting it paint over the score. */
+  const fitOneLine = (el: HTMLElement, minPx = 9): void => {
+    el.style.removeProperty('font-size');
+    el.classList.remove('is-wrapped');
+    el.style.whiteSpace = 'nowrap';
+    const max = parseFloat(getComputedStyle(el).fontSize);
+    if (!Number.isFinite(max) || el.clientWidth <= 0) return;
+    let size = max;
+    while (size > minPx && el.scrollWidth > el.clientWidth + 0.5) {
+      size = Math.max(minPx, size - 0.5);
+      el.style.fontSize = `${size}px`;
+    }
+    /* The floor still overflows: wrap at word boundaries rather than clip a country
+       name. The row's 44px band holds three short lines at this fallback size. */
+    if (el.scrollWidth > el.clientWidth + 0.5) {
+      el.classList.add('is-wrapped');
+      el.style.whiteSpace = 'normal';
+      el.style.fontSize = `${Math.max(7.5, minPx - 0.5)}px`;
+    }
   };
 
-  /** The TIQ brand mark worn by a nation's score: the neon brain sprite. */
+  /** The TIQ brand mark worn by a nation's score: the glowing brain sprite. */
   const brainIcon = (cls: string): SVGSVGElement => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', cls);
     svg.setAttribute('viewBox', '0 0 24 24');
     const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#i-brain-neon');
+    use.setAttribute('href', '#i-brain');
     svg.append(use);
     svg.setAttribute('aria-hidden', 'true');
     return svg;
@@ -320,16 +337,16 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     nm.dir = 'ltr';
     nm.textContent = label;
     nm.title = label;
+    /* Flag + name are one middle zone, so the row is a clean 3-track grid:
+       [ rank badge ] [ flag + country ] [ score lockup ]. The old trend column
+       (a bare "•" on steady rows) is gone — no orphan dot between name and score. */
+    const identity = document.createElement('span');
+    identity.className = 'nation-id';
+    identity.append(fl, nm);
     const pt = nationScore(pts);
     pt.dir = 'ltr';
     pt.title = `${pts} average TIQ · ${sampleText}`;
-    const tr = document.createElement('span');
-    tr.className = `tr ${c.trend}`;
-    tr.dir = 'ltr';
-    tr.textContent = trendTextOf(c);
-    tr.title = trendLabel;
-    tr.setAttribute('aria-hidden', 'true');
-    li.append(rk, fl, nm, tr, pt);
+    li.append(rk, identity, pt);
     return li;
   };
 
@@ -341,13 +358,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return li;
   };
 
-  /** The player's own national standing, painted into the 3-zone HUD bar.
-   *  LEFT = flag + nation · CENTER = the reigning-champion pill, a live mirror of
-   *  `nations[0]` ("LEADING NATION" / "کشور صدرنشین") · RIGHT = the flag's representative
-   *  average TIQ, the exact figure the rows above are ranked by, ending in the same brain
-   *  token they wear. Every zone is a separate node, so a long country name ellipsizes instead
-   *  of shoving the pill or the score out of the bar. No nation is ever authored here: the
-   *  pill's label, code and accessible text all come from row #1 of the live board. */
+  /** The player's own national standing, painted into the two-sided HUD bar.
+   *  LEFT = flag + full country name, with the rank chip and the reigning-champion chip
+   *  on a quiet second line. RIGHT = the flag's representative average TIQ, the exact
+   *  figure the rows above are ranked by, ending in the same brain token they wear.
+   *  The name owns its own line, so a long country can never be crushed into an ellipsis
+   *  by the chips. No nation is ever authored here: the champion label, code and
+   *  accessible text all come from row #1 of the live board. */
   let nationMineKey = '';
   const paintNationMine = (feed: NationFeed | null): void => {
     const code = (profile.country ?? '').trim().toUpperCase();
@@ -373,6 +390,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (!bar) return;
     const flag = document.getElementById('home-nation-flag');
     const name = document.getElementById('home-nation-name');
+    const rank = document.getElementById('home-nation-rank');
     const pill = document.getElementById('home-nation-pill');
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
@@ -387,9 +405,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const unit = bar.querySelector<HTMLElement>('.hm-u');
     if (unit) unit.textContent = 'AVG TIQ';
 
+    /* The rank chip is the seat's own board position, never the champion's. It lives on
+       the quiet second line beside the champion chip, so it can never squeeze the name. */
+    if (rank) {
+      rank.hidden = !mine;
+      rank.textContent = mine ? t('countryRankTag').replace('{rank}', String(mine.rank)) : '';
+      rank.title = mine ? `${t('countryRankTag').replace('{rank}', String(mine.rank))}` : '';
+    }
+
     /* The bottom champion pill mirrors nations[0]. Its code is a Latin token, isolated so a
        Persian label cannot reorder it; the full name and score ride on the title/aria text. */
-    if (pillK) pillK.textContent = champion ? t('countryTopNation') : t('hudYourNation');
+    if (pillK) pillK.textContent = champion ? t('countryLeading') : t('hudYourNation');
     if (pct) {
       pct.hidden = !champion;
       pct.textContent = champion?.code ?? '';
@@ -413,7 +439,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       : '';
     if (!code) {
       if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
-      if (name) { name.textContent = t('hudPickNation'); name.removeAttribute('title'); }
+      if (name) {
+        name.textContent = t('hudPickNation');
+        name.removeAttribute('title');
+        name.dir = 'auto';
+        fitOneLine(name, 9);
+      }
       bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${avgText} AVG TIQ${championFact}`);
       bar.removeAttribute('title');
       return;
@@ -424,7 +455,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       flag.classList.remove('is-off');
       flag.append(flagPhoto(code, 'hm-flag-plate'));
     }
-    if (name) { name.textContent = label; name.title = label; }
+    if (name) {
+      name.textContent = label;
+      name.title = label;
+      name.dir = 'ltr';
+      fitOneLine(name, 9);
+    }
     bar.setAttribute('aria-label', mine
       ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${avgText} AVG TIQ${championFact}`
       : `${label} · ${avgText} AVG TIQ${championFact}`);
@@ -460,7 +496,20 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     /* A registry with one or two real countries paints one or two rows. Never pad to three. */
     const myCode = (profile.country ?? '').trim().toUpperCase();
     for (const c of preview) list.append(rowEl(c, myCode === c.code));
+    /* The row is created after layout has settled, so measure once the browser has
+       assigned the middle track its real width. Long names scale down instead of clipping. */
+    requestAnimationFrame(() => {
+      list.querySelectorAll<HTMLElement>('.nm').forEach((el) => fitOneLine(el, 9));
+    });
   };
+
+  /* Rotation or a split-screen resize changes the middle track; re-fit both the
+     three preview names and the pinned country name without repainting the board. */
+  window.addEventListener('resize', () => {
+    document.querySelectorAll<HTMLElement>('#home-countries .nm').forEach((el) => fitOneLine(el, 9));
+    const name = document.getElementById('home-nation-name');
+    if (name) fitOneLine(name, 9);
+  });
 
   /** Freshness gate for returning to the tab: a switch inside this window shows
    *  the mounted board as-is. Race results and saves already reload it via onChange. */

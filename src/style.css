@@ -40009,3 +40009,583 @@ html[data-lang="ar"] .fd-input::placeholder {
   .career-preview-tile, .cpt-action, .fd-code-check { transition: none; }
 }
 html.reduced-motion .fd-wait-dot { animation: none; }
+
+/* ============================================================================================
+   COUNTRY RANKINGS — FINAL LUXURY PASS
+   ============================================================================================
+   One last, ID-scoped layer for the Nations Cup slide. It owns:
+     · the header's safe 14/16/8 padding and a gold-dim 9px subtitle that never clips;
+     · the 3-zone rank rows (32px metal badge · flag + name · tabular score + brain);
+     · the two-sided pinned standing bar, where the country name owns its own line;
+     · the obsidian-gold CTA and a clean 10px pager gutter.
+   The dark obsidian palette, Latin tabular numerals and RTL mirroring stay intact.
+   ============================================================================================ */
+
+/* 1 — HEADER: no negative margins, no gradient-clip trap, no ellipsis. */
+#s-home .car-card.nations-cup {
+  padding: 0 0 38px;
+}
+#s-home .car-card.nations-cup > .slide-inner {
+  padding: 0;
+  gap: 0;
+}
+#s-home .car-card.nations-cup .nations-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 3px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 14px 16px 8px;
+  overflow: visible;
+  contain: none;
+  border-radius: 0;
+}
+#s-home .car-card.nations-cup .nations-head .nations-kicker {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+#s-home .car-card.nations-cup .nations-head .cup-live {
+  grid-area: 1 / 2;
+  justify-self: end;
+}
+#s-home .car-card.nations-cup .nations-cup-subtitle {
+  grid-area: 2 / 1 / 3 / 3;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  color: #C9A45C;
+  background: none;
+  background-image: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  filter: none;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .35);
+}
+#s-home .car-card.nations-cup .cup-live.pill.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 0;
+  padding: 2px 8px;
+  border: 1px solid rgba(239, 68, 68, .35);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, .16);
+  box-shadow: 0 0 10px rgba(239, 68, 68, .12), inset 0 1px 0 rgba(255, 255, 255, .06);
+  color: #FCA5A5;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: none;
+}
+#s-home .car-card.nations-cup .cup-live .live-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #EF4444;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, .55);
+  animation: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.reduced-motion) #s-home .car-card.nations-cup .cup-live .live-dot {
+    animation: country-live-pulse 1.7s ease-out infinite !important;
+  }
+}
+@keyframes country-live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .5); opacity: 1; }
+  55% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); opacity: .72; }
+}
+html.reduced-motion #s-home .car-card.nations-cup .cup-live .live-dot {
+  animation: none !important;
+}
+
+/* 2 — TOP-3 ROWS: one high-precision 3-zone grid, metallic rank badge, no trend dot. */
+#s-home .car-card.nations-cup .mini-rank.nations-rank {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px;
+  background: transparent;
+  box-shadow: none;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 4px 10px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  overflow: hidden;
+  contain: paint;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .rk {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.02em;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .rk.gold {
+  background: linear-gradient(145deg, #FDE68A 0%, #F59E0B 46%, #B45309 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -2px 3px rgba(120, 53, 15, .45),
+    0 2px 6px rgba(0, 0, 0, .28);
+  color: #10141D;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .rk.silver {
+  background: linear-gradient(145deg, #F8FAFC 0%, #94A3B8 50%, #64748B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .75),
+    inset 0 -2px 3px rgba(51, 65, 85, .4),
+    0 2px 6px rgba(0, 0, 0, .26);
+  color: #10141D;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .rk.bronze {
+  background: linear-gradient(145deg, #FED7AA 0%, #B45309 52%, #7C2D12 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(67, 20, 7, .45),
+    0 2px 6px rgba(0, 0, 0, .28);
+  color: #10141D;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nation-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .fl {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: block;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: clamp(11.5px, 3.55vw, 14px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank li.nations-row.me .nm {
+  color: #E0F2FE;
+}
+/* Last-resort fit: a name that cannot hold one line even at the floor wraps at
+   word boundaries instead of being clipped. Three 8.5px lines fit the 44px band. */
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nm.is-wrapped,
+#s-home .car-card.nations-cup .nations-mine .hm-name.is-wrapped {
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .nation-score-wrap {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  direction: ltr;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-val {
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  color: var(--honey-ink);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .5),
+    0 0 10px rgba(252, 211, 77, .18);
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-tiq {
+  flex: none;
+  align-self: center;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  color: #22D3EE;
+  text-shadow: 0 0 8px rgba(34, 211, 238, .5);
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: #22D3EE;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, .6));
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank li.nations-row.me {
+  background: rgba(14, 116, 144, .12);
+  border: 1px solid rgba(56, 189, 248, .3);
+  box-shadow: 0 0 12px rgba(56, 189, 248, .08);
+  border-radius: 12px;
+}
+
+/* 3 — PINNED MY-COUNTRY BAR: name owns its line; chips live on a quiet second line. */
+#s-home .car-card.nations-cup .hud-mine.nations-mine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 180% at 0% 50%, rgba(56, 189, 248, .13), rgba(56, 189, 248, 0) 56%),
+    linear-gradient(90deg, rgba(14, 116, 144, .14) 0%, rgba(15, 23, 42, .94) 56%, rgba(120, 53, 15, .16) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 4px 12px rgba(0, 0, 0, .3);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  overflow: hidden;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-l {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-flag {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-flag .fp { --fp-d: 26px; }
+#s-home .car-card.nations-cup .nations-mine .hm-flag .fp-chip {
+  border-radius: 50%;
+  font-size: 7px;
+  letter-spacing: 0;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-id {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-name {
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(10.5px, 3.2vw, 12.5px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #E8F1FF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid rgba(245, 158, 11, .22);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  color: #E8C77E;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-rank[hidden] { display: none !important; }
+#s-home .car-card.nations-cup .nations-mine .hm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid rgba(34, 211, 238, .18);
+  border-radius: 999px;
+  background: rgba(34, 211, 238, .08);
+  box-shadow: none;
+  color: #9FE4F5;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-pill-k {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-pill b {
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #EAFDFF;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-r {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  flex: none;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid rgba(245, 158, 11, .18);
+  border-radius: 9px;
+  background: rgba(245, 158, 11, .08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  direction: ltr;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-v {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--honey-ink);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .5),
+    0 0 10px rgba(252, 211, 77, .16);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-u {
+  font-size: 7.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .06em;
+  color: #22D3EE;
+  text-shadow: 0 0 8px rgba(34, 211, 238, .45);
+}
+#s-home .car-card.nations-cup .nations-mine .mind-brain {
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  color: #FFF3CF;
+  background: linear-gradient(180deg, rgba(255, 214, 102, .34) 0%, rgba(180, 120, 10, .24) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 214, 102, .38),
+    0 0 8px rgba(245, 180, 40, .3);
+}
+#s-home .car-card.nations-cup .nations-mine .mind-brain-ico { width: 10px; height: 10px; }
+
+/* 4 — CTA + PAGER: obsidian glass key with a gold chevron, then a clean pager gutter. */
+#s-home .car-card.nations-cup .slide-foot {
+  padding: 0 16px 8px;
+  gap: 7px;
+}
+#s-home .car-card.nations-cup .slide-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, .8) 0%, rgba(15, 23, 42, .9) 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .1), 0 4px 12px rgba(0, 0, 0, .3);
+  color: #F8FAFC;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: none;
+  transition: transform .12s ease, border-color .16s ease, box-shadow .16s ease;
+}
+#s-home .car-card.nations-cup .slide-cta::before { content: none; display: none; }
+#s-home .car-card.nations-cup .slide-cta-t {
+  position: relative;
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+}
+#s-home .car-card.nations-cup .slide-cta-go {
+  position: relative;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(245, 158, 11, .2) 0%, rgba(245, 158, 11, .05) 68%, rgba(245, 158, 11, 0) 100%);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .24);
+  color: #FCD34D;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45));
+}
+#s-home .car-card.nations-cup .slide-cta-ico { display: block; width: 10px; height: 10px; }
+#s-home .car-card.nations-cup .slide-cta:hover:not(:active) {
+  border-color: rgba(245, 158, 11, .28);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .12),
+    0 6px 16px rgba(0, 0, 0, .34),
+    0 0 12px rgba(245, 158, 11, .08);
+}
+#s-home .car-card.nations-cup .slide-cta:hover:not(:active) .slide-cta-go { transform: translateX(2px); }
+#s-home .car-card.nations-cup .slide-cta:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .24);
+}
+#s-home .car-card.nations-cup .slide-cta:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(245, 158, 11, .55),
+    0 0 0 3px rgba(245, 158, 11, .18),
+    inset 0 1px 1px rgba(255, 255, 255, .12);
+}
+html.reduced-motion #s-home .car-card.nations-cup .slide-cta,
+html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: none; }
+#home-dots { margin-top: 10px; }
+
+/* 5 — SHORT COLUMNS: chrome gives way first; rows and the CTA stay whole. */
+@media (max-height: 700px) {
+  #s-home .car-card.nations-cup { padding-bottom: 38px; }
+  #s-home .car-card.nations-cup .nations-head { padding: 10px 14px 6px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank { gap: 6px; padding: 0 14px; }
+  #s-home .car-card.nations-cup .slide-foot { padding: 0 14px 6px; gap: 5px; }
+  #s-home .car-card.nations-cup .hud-mine.nations-mine { min-height: 38px; padding: 5px 8px; }
+  #s-home .car-card.nations-cup .slide-cta {
+    height: 38px;
+    min-height: 38px;
+    max-height: 38px;
+  }
+}
+@media (max-height: 600px) {
+  #s-home .car-card.nations-cup .nations-cup-subtitle { display: none; }
+  #s-home .car-card.nations-cup .nations-head { padding: 8px 12px 4px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    flex-basis: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+  }
+}
+
+/* 6 — NARROW PHONES: give the tracks back to the name and the score. */
+@media (max-width: 360px) {
+  #s-home .car-card.nations-cup .nations-head { padding: 12px 12px 6px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank { padding: 0 12px; gap: 6px; }
+  #s-home .car-card.nations-cup .slide-foot { padding: 0 12px 6px; gap: 6px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding: 4px 8px;
+  }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .rk { width: 30px; height: 30px; font-size: 13px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .fl { flex-basis: 28px; width: 28px; height: 28px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .nation-id { gap: 8px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 14px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-tiq { font-size: 8px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { width: 15px; height: 15px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-flag { flex-basis: 24px; width: 24px; height: 24px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-flag .fp { --fp-d: 24px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-v { font-size: 12.5px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-u { font-size: 7px; letter-spacing: .04em; }
+  #s-home .car-card.nations-cup .nations-mine .mind-brain { width: 14px; height: 14px; }
+  #s-home .car-card.nations-cup .slide-cta { padding: 0 10px; font-size: 10.5px; gap: 6px; }
+  #s-home .car-card.nations-cup .slide-cta-go { width: 18px; height: 18px; }
+}

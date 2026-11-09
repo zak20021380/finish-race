@@ -60,6 +60,9 @@
       <symbol id="i-next" viewBox="0 0 24 24">
         <path d="M9.2 5.4 15.8 12l-6.6 6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24">
+        <path d="M9.2 5.4 15.8 12l-6.6 6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
       <symbol id="i-chevron-down" viewBox="0 0 24 24">
         <path d="M5.4 9.2 12 15.8l6.6-6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
@@ -1248,20 +1251,23 @@
                     <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                   </ol>
                   <div class="slide-foot">
-                    <!-- the personal standing bar: one structured 3-zone HUD row, a plain
-                         flow item of the foot — [ flag + nation ] [ reigning-champion pill ]
-                         [ score ]. The centre pill is the "LEADING NATION / کشور صدرنشین"
-                         badge and mirrors nations[0] from the live board, never a fixed
-                         country. It sits under row #3, never over it. -->
+                    <!-- the personal standing bar: a two-sided obsidian HUD row, a plain
+                         flow item of the foot. LEFT: flag + full country name, with the
+                         rank and reigning-champion chips on a quiet second line. RIGHT:
+                         the average-TIQ badge. The name owns its own line, so a long
+                         country can never be crushed into an ellipsis by the chips. -->
                     <div class="hud-mine nations-mine" id="home-nation-mine" role="group" aria-label="Your national standing">
                       <span class="hm-l">
                         <span class="hm-flag" id="home-nation-flag" aria-hidden="true"></span>
-                        <span class="hm-name" id="home-nation-name">Your nation</span>
-                      </span>
-                      <span class="hm-c">
-                        <span class="hm-pill" id="home-nation-pill">
-                          <span class="hm-pill-k" id="home-nation-pill-k">Top</span>
-                          <b id="home-nation-pct">—</b>
+                        <span class="hm-id">
+                          <span class="hm-name" id="home-nation-name" dir="auto">Your nation</span>
+                          <span class="hm-meta">
+                            <span class="hm-rank" id="home-nation-rank" dir="auto" hidden>Rank #—</span>
+                            <span class="hm-pill" id="home-nation-pill">
+                              <span class="hm-pill-k" id="home-nation-pill-k">Top</span>
+                              <b id="home-nation-pct">—</b>
+                            </span>
+                          </span>
                         </span>
                       </span>
                       <span class="hm-r">
@@ -1270,7 +1276,7 @@
                         <span class="mind-brain" aria-hidden="true"><svg class="mind-brain-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-brain" /></svg></span>
                       </span>
                     </div>
-                    <button class="btn card-cta slide-cta" type="button" id="home-cup-table"><span class="slide-cta-t">VIEW COUNTRY STANDINGS</span><span class="slide-cta-go" aria-hidden="true"><svg class="slide-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-next" /></svg></span></button>
+                    <button class="btn card-cta slide-cta" type="button" id="home-cup-table"><span class="slide-cta-t">VIEW COUNTRY STANDINGS</span><span class="slide-cta-go" aria-hidden="true"><svg class="slide-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-chevron-right" /></svg></span></button>
                   </div>
                 </div>
               </article>
