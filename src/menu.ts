@@ -49,7 +49,7 @@ import {
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
-import { openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
+import { relicShelter, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
 import { createModal } from './modal';
 import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
@@ -2976,7 +2976,7 @@ export function createMenu(api: MenuApi): Menu {
 
   /** The shelter this serial is standing under. An exposed one offers the duel; a guarded one
    *  says why it does not, in the same clock the dossier reads. */
-  function shelterAction(def: BadgeDef, holder: EditionHolder, shelter: RelicShelter): HTMLElement {
+  function shelterAction(holder: EditionHolder, shelter: RelicShelter): HTMLElement {
     if (shelter.sheltered) {
       const guard = document.createElement('span');
       guard.className = 'bo-shelter is-guarded';
@@ -2987,7 +2987,10 @@ export function createMenu(api: MenuApi): Menu {
       clock.className = 'bo-shelter-t';
       clock.dir = 'ltr';
       clock.textContent = `${shelter.hoursLeft}h`;
-      guard.append(clock);
+      const shield = document.createElement('span');
+      shield.className = 'bo-shelter-tag';
+      shield.textContent = t('badgeShieldTag');
+      guard.append(clock, shield);
       return guard;
     }
     /* An exposed rival gets a named door, not a bare red square: the swords are the same pair the
@@ -3002,16 +3005,17 @@ export function createMenu(api: MenuApi): Menu {
     const key = document.createElement('button');
     key.type = 'button';
     key.className = 'bo-duel btn-duel-badge';
-    key.setAttribute('aria-label', t('seizeAria'));
-    key.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>';
+    /* Temporarily on standby: the key keeps its place in the row but takes no tap and dispatches
+       no RELIC_CHALLENGE_SEND. There is no handler to guard because none is ever attached. */
+    key.disabled = true;
+    key.setAttribute('aria-disabled', 'true');
+    key.setAttribute('aria-label', t('msChallengeSoon'));
+    key.title = t('msChallengeSoon');
+    key.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>';
     const label = document.createElement('span');
     label.className = 'bo-duel-t';
-    label.textContent = t('seizeChallenge');
+    label.textContent = t('badgeChallengeSoon');
     key.append(label);
-    key.addEventListener('click', () => {
-      impact('medium');
-      openSeize(seizeTargetOf(def, holder.serial, holder.name, holder.playerId));
-    });
     return key;
   }
 
@@ -3131,7 +3135,7 @@ export function createMenu(api: MenuApi): Menu {
       yours.textContent = t('badgeOwnersYours');
       plate.append(yours);
     } else {
-      plate.append(shelterAction(def, holder, shelter));
+      plate.append(shelterAction(holder, shelter));
     }
 
     const li = document.createElement('li');

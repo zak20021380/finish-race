@@ -11725,14 +11725,13 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   min-height: 64px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 0, .12);
+  border: 1px solid rgba(255, 215, 0, .08);
   background:
-    radial-gradient(120% 150% at 0% -24%, rgba(255, 214, 102, .05), rgba(255, 255, 255, 0) 58%),
-    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, 0) 62%),
-    rgba(16, 22, 34, .85);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .05),
-    0 2px 8px rgba(0, 0, 0, .34);
+    radial-gradient(120% 150% at 0% -24%, rgba(255, 214, 102, .04), rgba(255, 255, 255, 0) 58%),
+    rgba(18, 24, 38, .75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 /* The player's own plate is a deed, not a rival: the gold hairline stays outside, an emerald ring
@@ -11743,10 +11742,8 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
     linear-gradient(180deg, rgba(16, 185, 129, .07), rgba(255, 255, 255, 0) 64%),
     rgba(16, 22, 34, .88);
   box-shadow:
-    inset 0 0 0 1.5px rgba(52, 211, 153, .4),
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    0 0 16px rgba(16, 185, 129, .1),
-    0 2px 8px rgba(0, 0, 0, .34);
+    inset 0 0 0 1px rgba(52, 211, 153, .3),
+    0 0 20px rgba(16, 185, 129, .08);
 }
 /* Serial one is the only plate the edition will never strike again: gold hairline, ambient burn. */
 .bo-row.is-genesis {
@@ -11758,15 +11755,13 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
 }
 .bo-row.is-you.is-genesis {
   box-shadow:
-    inset 0 0 0 1.5px rgba(52, 211, 153, .4),
-    inset 0 0 0 3px rgba(245, 158, 11, .12),
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    0 0 16px rgba(16, 185, 129, .12),
-    0 2px 10px rgba(0, 0, 0, .42);
+    inset 0 0 0 1px rgba(52, 211, 153, .3),
+    inset 0 0 0 2px rgba(245, 158, 11, .1),
+    0 0 20px rgba(16, 185, 129, .08);
 }
 /* An exposed rival is a live target: the hairline warms to crimson only while it is being aimed at,
    so the hall keeps its gold until the player actually reaches for a duel. */
-.bo-row.is-duelable:hover { border-color: rgba(224, 38, 79, .32); }
+.bo-row.is-duelable:hover { border-color: rgba(255, 215, 0, .16); }
 .bo-row.is-genesis::after {
   content: "";
   position: absolute;
@@ -11898,63 +11893,53 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
 .serial-plaque {
   position: relative;
   max-width: 100%;
-  padding: 3px 9px 4px;
-  border-radius: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 224, 130, .5);
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-stat);
   font-size: 10.5px;
   font-weight: 900;
-  letter-spacing: .04em;
+  letter-spacing: .05em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #121008;
-  background:
-    repeating-linear-gradient(112deg, rgba(255, 255, 255, .18) 0 1px, rgba(255, 255, 255, 0) 1px 3px),
-    linear-gradient(135deg, #FFE082 0%, #FFB300 60%, #FFA000 100%);
+  color: #1A1300;
+  background: linear-gradient(135deg, #FFE082 0%, #FFB300 50%, #FFA000 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .78),
-    inset 0 -1px 0 rgba(122, 70, 4, .42),
-    inset 0 0 0 1px rgba(255, 236, 179, .34),
-    0 1px 0 rgba(0, 0, 0, .5),
-    0 1px 3px rgba(0, 0, 0, .38);
-  text-shadow: 0 1px 0 rgba(255, 245, 210, .5), 0 -1px 0 rgba(120, 70, 6, .3);
+    inset 0 1px 1px rgba(255, 255, 255, .6),
+    0 2px 8px rgba(255, 160, 0, .25);
+  text-shadow: none;
 }
 .bo-row.is-genesis .serial-plaque {
-  background:
-    repeating-linear-gradient(112deg, rgba(255, 255, 255, .22) 0 1px, rgba(255, 255, 255, 0) 1px 3px),
-    linear-gradient(135deg, #FFF3C4 0%, #F7C13C 58%, #A9690F 100%);
+  background: linear-gradient(135deg, #FFF3C4 0%, #F7C13C 52%, #D08A12 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .85),
-    inset 0 -1px 0 rgba(96, 55, 6, .5),
-    inset 0 0 0 1px rgba(255, 246, 210, .4),
-    0 1px 0 rgba(0, 0, 0, .45),
-    0 0 10px rgba(245, 158, 11, .32);
+    inset 0 1px 1px rgba(255, 255, 255, .7),
+    0 2px 10px rgba(245, 158, 11, .35);
 }
 /* The deed's own stamp: emerald set in gold, uppercase in Latin and plain in Persian. */
 .bo-yours {
   max-width: 100%;
-  padding: 2px 8px 3px;
+  padding: 3px 9px 4px;
   border-radius: 999px;
   font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: .09em;
+  font-weight: 800;
+  letter-spacing: .04em;
   line-height: 1.35;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   unicode-bidi: isolate;
-  color: #A7F3D0;
-  background: linear-gradient(180deg, rgba(16, 185, 129, .24), rgba(16, 185, 129, .07));
-  box-shadow:
-    inset 0 0 0 1px rgba(52, 211, 153, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 0 10px rgba(16, 185, 129, .16);
-  text-shadow: 0 1px 0 rgba(4, 30, 24, .6);
+  color: #6EE7B7;
+  background: rgba(5, 46, 32, .6);
+  border: 1px solid rgba(52, 211, 153, .4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  text-shadow: none;
 }
 
 .bo-note {
@@ -12021,22 +12006,19 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   color: #FFD166;
   text-shadow: 0 0 12px rgba(255, 179, 0, .45);
 }
-.bo-vault-held { display: inline-flex; align-items: center; gap: 4px; color: #64748B; }
+.bo-vault-held { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); }
 .bo-vault-lock { flex: none; width: 9px; height: 9px; color: #526079; }
 /* the label sits in its own box, so a clipped count ellipsizes instead of losing its padlock */
 .bo-vault-held > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* One bead per serial, claimed or waiting, at any cap and any width: the fill carries the count. */
 .bo-vault-track {
   position: relative;
-  height: 9px;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
-  background:
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, .075) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
-    linear-gradient(180deg, #080D16 0%, #141C2B 62%, #0A111D 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .055),
-    inset 0 1px 3px rgba(0, 0, 0, .7);
+  background: rgba(10, 14, 22, .9);
+  border: 1px solid rgba(255, 255, 255, .05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .7);
 }
 .bo-vault-fill {
   position: absolute;
@@ -12044,21 +12026,14 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   inset-inline-start: 0;
   display: block;
   border-radius: 999px;
-  background:
-    repeating-linear-gradient(90deg, rgba(72, 38, 4, .42) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
-    linear-gradient(180deg, #FFEDA8 0%, #FFB300 54%, #A85D00 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .6),
-    inset 0 -1px 0 rgba(90, 50, 0, .45),
-    0 0 12px rgba(255, 179, 0, .45);
+  background: linear-gradient(90deg, #FFB300, #F59E0B);
+  box-shadow: 0 0 10px rgba(245, 158, 11, .4);
   transition: width var(--motion-med);
 }
 /* A drained vault is a closed book: the meter turns emerald, the same green the deed rows wear. */
 .bo-vault[data-state="full"] .bo-vault-fill {
-  background:
-    repeating-linear-gradient(90deg, rgba(4, 47, 36, .4) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
-    linear-gradient(180deg, #A7F3D0 0%, #10B981 55%, #047857 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 10px rgba(16, 185, 129, .45);
+  background: linear-gradient(90deg, #34D399, #10B981);
+  box-shadow: 0 0 10px rgba(16, 185, 129, .4);
 }
 .bo-vault[data-state="full"] .bo-vault-held { color: #4B6A5E; }
 .bo-vault[data-state="full"] .bo-vault-lock { color: #3F5B50; }
@@ -12066,7 +12041,7 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
 /* ---- Persian registry: RTL columns, no tracking, room for descenders ---- */
 .owners-sheet:lang(fa) :is(
   .bo-title, .bo-sub, .bo-honor-name, .bo-meta, .bo-role, .bo-when, .bo-yours, .bo-duel-t,
-  .bo-note, .bo-empty-copy, .bo-empty-first, .bo-vault-struck, .bo-vault-held
+  .bo-shelter-tag, .bo-note, .bo-empty-copy, .bo-empty-first, .bo-vault-struck, .bo-vault-held
 ) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
@@ -12115,12 +12090,11 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   .bo-vault-track { height: 8px; }
 }
 
-/* ---- the deed's two doors: a named challenge, or the shield that refuses one ----
-   An exposed row offers the duel with the same swords the dossier key wears, and now says so in a
-   word: the bare red square made the player guess what it did. A guarded row prints its clock
-   instead, muted and inert, so the hall never dangles a door that would only refuse the tap. Both
-   ride under the serial plate, never beside it: the row's third column is `auto`, so a second
-   fixed width there is what would push a 320px phone into a sideways scroll. */
+/* ---- the deed's two doors: a challenge on standby, or the shield that refuses one ----
+   The challenge key is temporarily locked: it keeps its seat in the row, takes no tap, and never
+   dispatches a RELIC_CHALLENGE_SEND. A guarded row prints its clock and shield instead, muted and
+   inert. Both ride under the serial plate, never beside it: the row's third column is `auto`, so a
+   second fixed width there is what would push a 320px phone into a sideways scroll. */
 .bo-duel {
   flex: none;
   display: inline-flex;
@@ -12129,31 +12103,27 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   gap: 4px;
   min-height: 22px;
   max-width: 100%;
-  padding: 0 8px 1px;
-  border: 0;
-  border-radius: 7px;
-  cursor: pointer;
+  padding: 0 9px 1px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  cursor: not-allowed;
+  pointer-events: none;
   font: inherit;
   font-size: 8.5px;
   font-weight: 900;
   letter-spacing: .07em;
   text-transform: uppercase;
-  color: #FFE7C2;
-  background:
-    radial-gradient(130% 180% at 50% 0%, rgba(224, 38, 79, .5) 0%, rgba(224, 38, 79, 0) 66%),
-    linear-gradient(180deg, #33131F 0%, #170D19 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 183, 77, .42),
-    inset 0 1px 0 rgba(255, 214, 170, .18),
-    0 2px 0 #070C15;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+  color: var(--ink-soft);
+  background: rgba(25, 30, 42, .7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  opacity: .92;
 }
 .bo-duel .ico {
   flex: none;
-  width: 11px;
-  height: 11px;
-  color: #FF8FA3;
-  filter: drop-shadow(0 0 3px rgba(224, 38, 79, .55));
+  width: 10px;
+  height: 10px;
+  color: var(--text-dim);
+  filter: none;
 }
 .bo-duel-t {
   min-width: 0;
@@ -12161,46 +12131,41 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bo-duel:hover:not(:active) {
-  color: #FFF3E0;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 196, 110, .6),
-    inset 0 1px 0 rgba(255, 214, 170, .22),
-    0 2px 0 #070C15;
-}
-.bo-duel:active {
-  transform: translateY(2px);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 196, 110, .5),
-    inset 0 2px 6px rgba(0, 0, 0, .7),
-    0 0 0 #070C15;
-}
-.bo-duel:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
-/* A shielded serial states its clock instead of offering a door: translucent obsidian, no lift. */
+/* A shielded serial states its clock instead of offering a door: a dark obsidian pill with a
+   hairline rim, the hour on LTR tabular figures, and the word SHIELD beside it. */
 .bo-shelter {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  padding: 2px 7px 3px;
+  min-height: 22px;
+  padding: 2px 8px 3px;
   border-radius: 999px;
-  font-size: 9px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  font-size: 8.5px;
   font-weight: 800;
   line-height: 1.25;
+  letter-spacing: .05em;
   white-space: nowrap;
   unicode-bidi: isolate;
-  color: #93A6C2;
-  background: rgba(9, 14, 24, .55);
-  box-shadow:
-    inset 0 0 0 1px rgba(148, 163, 184, .18),
-    inset 0 1px 0 rgba(255, 255, 255, .05);
+  color: var(--ink-soft);
+  background: rgba(12, 17, 26, .8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
 .bo-shelter .ico { flex: none; width: 9px; height: 9px; color: #7C8FA8; }
 .bo-shelter-t {
   font-family: var(--font-stat);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   unicode-bidi: isolate;
+}
+.bo-shelter-tag {
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #64748B;
 }
 @media (max-width: 360px) {
   .bo-duel { padding: 0 6px 1px; gap: 3px; }
