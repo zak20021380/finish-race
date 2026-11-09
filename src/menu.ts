@@ -2507,6 +2507,18 @@ export function createMenu(api: MenuApi): Menu {
     const tiqValue = document.getElementById('pf-tiq');
     if (tiqValue) tiqValue.textContent = en(tiq);
     const bracket = arenaBracket(tiq);
+    /* the collapsed summary repeats the two figures a glance needs: the rating and its
+       standing tag. Both stay Latin and isolated; the full gauge lives in the drawer. */
+    const miniTiq = document.getElementById('pf-tiq-mini');
+    if (miniTiq) {
+      miniTiq.textContent = en(tiq);
+      miniTiq.setAttribute('aria-label', `${en(tiq)} ${t('pfTacticalIq')}`);
+    }
+    const miniPct = document.getElementById('pf-tiq-mini-pct');
+    if (miniPct) {
+      miniPct.textContent = `${en(bracket.pct)}%`;
+      miniPct.title = t('beatsRivalsToast').replace('{pct}', en(bracket.pct));
+    }
     const tiqPill = document.getElementById('pf-tiq-pill');
     if (tiqPill) {
       const label = `${en(tiq)} ${t('pfTacticalIq')}`;
@@ -3559,6 +3571,7 @@ export function createMenu(api: MenuApi): Menu {
     const lv = levelInfo();
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
+    setBalance($('pf-coins-drawer'), profile.coins);
     /* The dual currency dock: the rating rides the same repaint as the wallet, so a
        settlement that pays coins and TIQ can never leave the capsule half-updated. TIQ is a
        derived figure (wins · games · bonus), so it is diffed and stamped with one short pulse
@@ -3619,6 +3632,14 @@ export function createMenu(api: MenuApi): Menu {
       pfFlag.dataset.cc = c ?? '';
     }
     document.getElementById('pf-country-ico')?.classList.toggle('has-flag', !!c);
+    /* the summary strip's flag is a second, much smaller face of the same country */
+    const quickFlag = document.getElementById('pf-quick-flag');
+    if (quickFlag && quickFlag.dataset.cc !== (c ?? '')) {
+      quickFlag.textContent = '';
+      if (c) quickFlag.append(flagPhoto(c, 'fp-mini'));
+      quickFlag.dataset.cc = c ?? '';
+    }
+    document.getElementById('pf-quick-nation')?.classList.toggle('has-flag', !!c);
     const countryCard = document.getElementById('pf-country');
     if (countryCard) {
       countryCard.classList.toggle('is-set', !!c);
@@ -3708,6 +3729,8 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-team').setAttribute('aria-label', squad
       ? `${squadName}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
       : t('joinASquad'));
+    const quickSquad = document.getElementById('pf-quick-squad');
+    if (quickSquad) quickSquad.textContent = squad ? squadName : t('pfNoSquad');
   };
   /* One signature for the whole Profile panel. Coming back to the tab repaints
      only when something it shows actually moved; an unchanged tab keeps every
@@ -3803,6 +3826,40 @@ export function createMenu(api: MenuApi): Menu {
   /* the arena ladder is the server's: a season edit can move the bracket under a parked
      profile, so the card re-reads it — the signature keeps an unchanged ladder free. */
   onArena(() => { if (!pfScreen.hidden) paintProfile(); });
+
+  /* ---- the hero drawer: an inline accordion, never a sheet ----
+     The identity row, the quick stats and the key stay on screen; the heavy readings fold
+     beneath them with a grid-row transition. The summary is the tap target, but every real
+     control inside it owns its own click — a rename, a frame cycle or an honor key must
+     never fold the drawer as a side effect. */
+  const heroCard = document.getElementById('pf-hero-card');
+  const heroDrawer = document.getElementById('pf-hero-drawer');
+  const heroToggle = document.getElementById('pf-hero-toggle') as HTMLButtonElement | null;
+
+  const setHeroExpanded = (open: boolean, silent = false): void => {
+    if (!heroCard || !heroDrawer || !heroToggle) return;
+    const changed = heroCard.classList.contains('is-expanded') !== open;
+    heroCard.classList.toggle('is-expanded', open);
+    heroDrawer.toggleAttribute('inert', !open);
+    heroDrawer.setAttribute('aria-hidden', String(!open));
+    heroToggle.setAttribute('aria-expanded', String(open));
+    /* folding a drawer that holds the focus would strand it inside an inert subtree */
+    if (!open && heroDrawer.contains(document.activeElement)) heroToggle.focus({ preventScroll: true });
+    if (changed && !silent) impact('light');
+  };
+
+  heroToggle?.addEventListener('click', () => {
+    setHeroExpanded(!heroCard?.classList.contains('is-expanded'));
+  });
+
+  document.getElementById('pf-hero-summary')?.addEventListener('click', (e) => {
+    const target = e.target as Element | null;
+    if (target?.closest('button, a, input, textarea, select, label, form, [role="button"], [data-no-toggle]')) return;
+    setHeroExpanded(!heroCard?.classList.contains('is-expanded'));
+  });
+
+  /* a fresh visit always starts on the compact summary */
+  setHeroExpanded(false, true);
 
   /* ---- the profile rail ----
      The personal Profile is not a rival dossier: it carries no relic-duel key, because a challenge
@@ -4511,6 +4568,7 @@ export function createMenu(api: MenuApi): Menu {
     refresh(id) {
       if (id === 'profile') {
         clearRivalContext();                      // the personal card never inherits a rival action
+        setHeroExpanded(false, true);             // every entry lands on the compact summary
         paintProfile();                           // the equipped row is only laid out once it is showing
         paintBadges();                            // the shelf mounts on first entry, not at boot
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them

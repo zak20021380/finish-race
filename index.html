@@ -60,6 +60,9 @@
       <symbol id="i-next" viewBox="0 0 24 24">
         <path d="M9.2 5.4 15.8 12l-6.6 6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24">
+        <path d="M5.4 9.2 12 15.8l6.6-6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
       <symbol id="i-menu" viewBox="0 0 24 24">
         <path d="M4.6 7.4h14.8M4.6 12h14.8M4.6 16.6h14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
       </symbol>
@@ -1692,8 +1695,12 @@
             </button>
           </div>
           <div class="pane pf-pane" data-scroll>
-            <div class="p-card wide pf-hero pf-hero-v2">
+            <div class="p-card wide pf-hero pf-hero-v2" id="pf-hero-card">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
+
+              <!-- the always-visible summary: identity, the three vital stats and the drawer key.
+                   The heavy readings below it fold into the inline drawer; this block never leaves. -->
+              <div class="pf-hero-summary" id="pf-hero-summary">
 
               <!-- tier 1 · identity: avatar + level plate · name · arena bracket + honor tag -->
               <div class="pf-hero-top">
@@ -1755,6 +1762,56 @@
                 </div>
               </div>
 
+              <!-- quick-stats strip: the three readings a glance actually needs -->
+              <div class="pf-quick-strip" role="group" aria-label="At a glance" data-i18n-aria="pfQuickStats">
+                <span class="pf-quick-pill pf-quick-tiq">
+                  <span class="pf-quick-ico pf-quick-ico-tiq" aria-hidden="true">
+                    <svg class="ico"><use href="#i-brain" /></svg>
+                  </span>
+                  <b id="pf-tiq-mini" dir="ltr">0</b>
+                  <span class="pf-quick-k" aria-hidden="true">TIQ</span>
+                  <span class="pf-quick-pct" id="pf-tiq-mini-pct" dir="ltr">0%</span>
+                </span>
+                <span class="pf-quick-pill pf-quick-coins">
+                  <span class="pf-quick-coin" aria-hidden="true"><span class="coin" data-coin></span></span>
+                  <b id="pf-coins" dir="ltr">0</b>
+                  <span class="sr-only" data-i18n="coins">Coins</span>
+                </span>
+                <span class="pf-quick-pill pf-quick-aff" id="pf-quick-aff">
+                  <span class="pf-quick-ico pf-quick-ico-flag" id="pf-quick-nation" aria-hidden="true">
+                    <svg class="ico pf-quick-globe"><use href="#i-globe" /></svg>
+                    <span class="pf-quick-flag" id="pf-quick-flag"></span>
+                  </span>
+                  <span class="pf-quick-ico pf-quick-ico-shield" aria-hidden="true">
+                    <svg class="ico"><use href="#i-shield" /></svg>
+                  </span>
+                  <span class="sr-only" data-i18n="squadWord">Squad</span>
+                  <span class="pf-quick-squad" id="pf-quick-squad" dir="auto">—</span>
+                </span>
+              </div>
+
+              <!-- the drawer key: full-width tactile strip, chevron turns as the drawer opens -->
+              <button class="pf-hero-toggle" type="button" id="pf-hero-toggle"
+                aria-expanded="false" aria-controls="pf-hero-drawer">
+                <span class="pf-hero-toggle-copy">
+                  <span class="pf-hero-toggle-label">
+                    <span class="pf-toggle-more" data-i18n="pfShowDetails">More Details</span>
+                    <span class="pf-toggle-hide" data-i18n="pfHideDetails">Hide Details</span>
+                  </span>
+                  <span class="pf-hero-toggle-sub" data-i18n="pfShowDetailsSub">XP, Nation &amp; Squad</span>
+                </span>
+                <span class="pf-hero-toggle-chev" aria-hidden="true">
+                  <svg class="ico"><use href="#i-chevron-down" /></svg>
+                </span>
+              </button>
+              </div>
+
+              <!-- the inline drawer: the heavy readings, revealed in place. A collapsed drawer is
+                   inert, so its keys can never be tabbed to behind an invisible edge. -->
+              <div class="profile-hero-drawer" id="pf-hero-drawer" role="region"
+                aria-labelledby="pf-hero-toggle" inert aria-hidden="true">
+                <div class="profile-hero-drawer-inner">
+
               <!-- tier 2 · the Tactical Intelligence slab: one obsidian card, a specular gold
                    hairline, the standing meter and the flagship figure. -->
               <div class="pf-tiq-card" id="pf-tiq-card">
@@ -1789,7 +1846,7 @@
                   <span class="pf-xp-meta" id="pf-xp">0 / 10 XP</span>
                   <span class="pf-wallet" id="pf-wallet" aria-label="Coin balance">
                     <span class="pf-wallet-token" aria-hidden="true"><span class="coin" data-coin></span></span>
-                    <b id="pf-coins">0</b>
+                    <b id="pf-coins-drawer" dir="ltr">0</b>
                   </span>
                 </div>
                 <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
@@ -1820,6 +1877,8 @@
                   </span>
                   <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>
+              </div>
+                </div>
               </div>
             </div>
             <div class="pf-sec pf-quest-sec">

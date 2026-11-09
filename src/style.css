@@ -39182,3 +39182,341 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
   #modal-stars-vault .sv-payout { height: 30px; }
   #modal-stars-vault .vm-foot-btn { height: 34px; }
 }
+
+/* ==========================================================================
+   PROFILE HERO — THE INLINE ACCORDION
+   The hero card now carries a compact, always-visible summary: the identity
+   row, three vital stats and one tactile drawer key. The heavy readings (the
+   TIQ slab, the XP rail, Nation/Squad) fold into a grid-row drawer that opens
+   in place — never a sheet. Surfaces stay opaque: no backdrop-filter under the
+   Profile scroll. Gold remains reserved for TIQ and the purse.
+   ========================================================================== */
+#s-profile .pf-hero.pf-hero-v2 { gap: 0; }
+#s-profile .pf-hero-summary {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ---- quick stats: one smoked strip holding the three vital pills ---- */
+#s-profile .pf-quick-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px;
+  border-radius: 15px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 58%),
+    #0A101B;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    inset 0 -1px 0 rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .045);
+}
+#s-profile .pf-quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  min-width: 0;
+  padding: 0 9px;
+  border-radius: 11px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 62%),
+    #131A28;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-profile .pf-quick-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+}
+#s-profile .pf-quick-ico .ico { width: 13px; height: 13px; }
+
+/* the rating: gold figure, one struck key plate and a quiet percentile tag */
+#s-profile .pf-quick-tiq { direction: ltr; flex: none; }
+#s-profile .pf-quick-ico-tiq { color: #FCD34D; filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45)); }
+#s-profile .pf-quick-ico-tiq .ico { width: 15px; height: 15px; }
+#s-profile .pf-quick-tiq b {
+  font-family: var(--font-numeric);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .01em;
+  color: #FCD34D;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+}
+#s-profile .pf-quick-k {
+  padding: 3px 4px 2px;
+  border-radius: 4px;
+  background: rgba(8, 12, 20, .7);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(252, 211, 77, .14);
+  font-family: var(--font-numeric);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .14em;
+  color: #E7B95C;
+}
+#s-profile .pf-quick-pct {
+  padding: 3px 5px 2px;
+  border-radius: 999px;
+  background: rgba(8, 12, 20, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  font-family: var(--font-numeric);
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .02em;
+  color: #B4C2D4;
+}
+
+/* the purse: the same coin as the wallet row, at a glance scale */
+#s-profile .pf-quick-coins { direction: ltr; flex: none; }
+#s-profile .pf-quick-coin { flex: none; display: grid; place-items: center; width: 16px; height: 16px; }
+#s-profile .pf-quick-coin .coin {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45));
+}
+#s-profile .pf-quick-coins b {
+  font-family: var(--font-numeric);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #F1F5F9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
+}
+
+/* the affiliation: the flag (or its globe) and the squad shield share one pill */
+#s-profile .pf-quick-aff {
+  flex: 1 1 auto;
+  gap: 5px;
+  padding: 0 8px;
+  overflow: hidden;
+}
+#s-profile .pf-quick-ico-flag {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+#s-profile .pf-quick-ico-flag .pf-quick-globe { width: 13px; height: 13px; color: #7C8CA6; }
+#s-profile .pf-quick-flag { display: block; width: 16px; height: 16px; line-height: 0; }
+#s-profile .pf-quick-ico-flag:not(.has-flag) .pf-quick-flag { display: none; }
+#s-profile .pf-quick-ico-flag.has-flag .pf-quick-globe { display: none; }
+#s-profile .pf-quick-ico-shield { color: #38BDF8; }
+#s-profile .pf-quick-ico-shield .ico { filter: drop-shadow(0 0 4px rgba(56, 189, 248, .3)); }
+#s-profile .pf-quick-squad {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
+  color: #E2E8F0;
+}
+
+/* ---- the drawer key: one full-width tactile strip, chevron on the end ---- */
+#s-profile .pf-hero-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 60%),
+    rgba(8, 12, 20, .5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    inset 0 0 0 1px rgba(255, 255, 255, .045),
+    0 2px 0 rgba(0, 0, 0, .35);
+  color: #CBD5E1;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+#s-profile .pf-hero-toggle:hover:not(:active) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 2px 0 rgba(0, 0, 0, .35);
+}
+#s-profile .pf-hero-toggle:active { transform: translateY(1px); }
+#s-profile .pf-hero-toggle:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+#s-profile .pf-hero-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+#s-profile .pf-hero-toggle-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: .015em;
+  color: #E2E8F0;
+  white-space: nowrap;
+}
+#s-profile .pf-hero-toggle-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #8FA0B8;
+}
+/* one label at a time: the wide summary key collapses into a single Hide Details line */
+#s-profile .pf-toggle-hide { display: none; }
+#s-profile .pf-hero.is-expanded .pf-toggle-more { display: none; }
+#s-profile .pf-hero.is-expanded .pf-toggle-hide { display: inline; }
+#s-profile .pf-hero.is-expanded .pf-hero-toggle-sub { display: none; }
+#s-profile .pf-hero-toggle-chev {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: #94A3B8;
+}
+#s-profile .pf-hero-toggle-chev .ico {
+  width: 12px;
+  height: 12px;
+  transition: transform 280ms cubic-bezier(.22, 1, .36, 1);
+}
+#s-profile .pf-hero.is-expanded .pf-hero-toggle-chev { color: #E2E8F0; }
+#s-profile .pf-hero.is-expanded .pf-hero-toggle-chev .ico { transform: rotate(180deg); }
+
+/* ---- the inline drawer: grid-row animation, no popup, no backdrop ---- */
+#s-profile .profile-hero-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 280ms cubic-bezier(.22, 1, .36, 1),
+    opacity 220ms ease,
+    margin-top 280ms cubic-bezier(.22, 1, .36, 1),
+    visibility 0s linear 280ms;
+}
+#s-profile .pf-hero.is-expanded .profile-hero-drawer {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  margin-top: 12px;
+  transition:
+    grid-template-rows 280ms cubic-bezier(.22, 1, .36, 1),
+    opacity 220ms ease,
+    margin-top 280ms cubic-bezier(.22, 1, .36, 1),
+    visibility 0s;
+}
+#s-profile .profile-hero-drawer-inner {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* the big slab repeats the rating already printed in the strip: one figure, one screen */
+#s-profile .pf-hero.is-expanded .pf-quick-tiq { display: none; }
+
+/* the summary's tiny flag: the same three-tier resolver, at pill scale */
+.fp-mini { --fp-d: 16px; }
+.fp-mini .fp-chip { border-radius: 50%; font-size: 6px; }
+
+/* ---- RTL: the strip reads from the right, its figures stay LTR ---- */
+html[data-lang="fa"] #s-profile .pf-quick-strip,
+html[data-lang="ar"] #s-profile .pf-quick-strip { direction: rtl; }
+html[data-lang="fa"] #s-profile .pf-quick-tiq,
+html[data-lang="ar"] #s-profile .pf-quick-tiq,
+html[data-lang="fa"] #s-profile .pf-quick-coins,
+html[data-lang="ar"] #s-profile .pf-quick-coins { direction: ltr; }
+html[data-lang="fa"] #s-profile .pf-quick-squad,
+html[data-lang="ar"] #s-profile .pf-quick-squad {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  text-align: start;
+}
+html[data-lang="fa"] #s-profile .pf-hero-toggle,
+html[data-lang="ar"] #s-profile .pf-hero-toggle { direction: rtl; }
+html[data-lang="fa"] #s-profile .pf-quick-tiq b,
+html[data-lang="ar"] #s-profile .pf-quick-tiq b,
+html[data-lang="fa"] #s-profile #pf-coins,
+html[data-lang="ar"] #s-profile #pf-coins,
+html[data-lang="fa"] #s-profile .pf-quick-k,
+html[data-lang="ar"] #s-profile .pf-quick-k,
+html[data-lang="fa"] #s-profile .pf-quick-pct,
+html[data-lang="ar"] #s-profile .pf-quick-pct { direction: ltr; unicode-bidi: isolate; }
+
+/* ---- narrow phones: the strip sheds pixels, never a reading ---- */
+@media (max-width: 380px) {
+  #s-profile .pf-quick-strip { gap: 5px; padding: 4px; }
+  #s-profile .pf-quick-pill { height: 30px; padding: 0 7px; gap: 4px; }
+  #s-profile .pf-quick-tiq b { font-size: 12.5px; }
+  #s-profile .pf-quick-coins b { font-size: 12.5px; }
+  #s-profile .pf-quick-squad { font-size: 10.5px; }
+  #s-profile .pf-quick-pct { padding: 2px 4px; font-size: 8px; }
+}
+@media (max-width: 359px) {
+  #s-profile .pf-quick-strip { gap: 4px; padding: 3px; }
+  #s-profile .pf-quick-pill { height: 28px; padding: 0 6px; gap: 4px; border-radius: 9px; }
+  #s-profile .pf-quick-ico { width: 15px; height: 15px; }
+  #s-profile .pf-quick-ico-tiq .ico { width: 14px; height: 14px; }
+  #s-profile .pf-quick-tiq b,
+  #s-profile .pf-quick-coins b { font-size: 12px; }
+  #s-profile .pf-quick-k { padding: 2px 3px; font-size: 6.5px; letter-spacing: .1em; }
+  #s-profile .pf-quick-pct { padding: 2px 3px; font-size: 7.5px; }
+  #s-profile .pf-quick-aff { padding: 0 6px; gap: 4px; }
+  #s-profile .pf-quick-squad { font-size: 10px; }
+  #s-profile .pf-hero-toggle { min-height: 38px; padding: 6px 9px; }
+  #s-profile .pf-hero-toggle-label { font-size: 11px; }
+  #s-profile .pf-hero-toggle-sub { font-size: 9px; }
+}
+/* the narrowest phones give the affiliation its own row instead of squeezing a name */
+@media (max-width: 340px) {
+  #s-profile .pf-quick-strip { flex-wrap: wrap; }
+  #s-profile .pf-quick-aff { flex: 1 1 100%; }
+}
+
+/* reduced motion: the drawer still lands, it just does not travel */
+@media (prefers-reduced-motion: reduce) {
+  #s-profile .profile-hero-drawer,
+  #s-profile .pf-hero.is-expanded .profile-hero-drawer,
+  #s-profile .pf-hero-toggle-chev .ico { transition: none; }
+}
+html.reduced-motion #s-profile .profile-hero-drawer,
+html.reduced-motion #s-profile .pf-hero.is-expanded .profile-hero-drawer,
+html.reduced-motion #s-profile .pf-hero-toggle-chev .ico { transition: none; }
