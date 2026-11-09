@@ -8108,35 +8108,79 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
 }
 .sv-friend-total .ico { flex: none; width: 11px; height: 11px; }
 .sv-friend-total[data-complete="true"] { color: var(--honey-ink); }
-.sv-friend-pills { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
-.sv-fpill {
+/* ---- the two stage tracks inside each friend card ----
+   Stage 1 is gated by BOTH matches and distinct days, so its fill is half of each ratio; the
+   room's own `stage1`/`stage2` verdict is the only thing that turns a track emerald / gold. */
+.sv-stages { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.sv-stage {
+  --tone: 16, 185, 129;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.sv-stage[data-tone="gold"] { --tone: 245, 158, 11; }
+.sv-stage-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.sv-stage-l {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.sv-stage-done {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  min-width: 0;
-  max-width: 100%;
-  padding: 3px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  color: var(--ink-soft);
-  font-size: 9.5px;
-  font-weight: 800;
-  line-height: 1.4;
-  direction: ltr;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  color: rgb(var(--tone));
+}
+.sv-stage-done .sv-check { width: 11px; height: 11px; }
+.sv-track {
+  position: relative;
+  box-sizing: border-box;
+  height: 5px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
-  text-overflow: ellipsis;
+  /* a fill is a share of the whole, not a directional object: never mirror with the sheet */
+  direction: ltr;
+  background: linear-gradient(180deg, #080C14 0%, #0E1526 100%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.sv-track-f {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, rgba(var(--tone), .4), rgba(var(--tone), .8));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28);
+  transition: width var(--motion-fast, 180ms) ease;
+}
+.sv-stage[data-state="done"][data-tone="mint"] .sv-track-f {
+  background: linear-gradient(90deg, #059669 0%, #10B981 60%, #6EE7B7 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 0 8px -2px rgba(16, 185, 129, .7);
+}
+.sv-stage[data-state="done"][data-tone="gold"] .sv-track-f {
+  background: linear-gradient(90deg, #92400E 0%, #FBBF24 58%, #FDE68A 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 8px -2px rgba(245, 158, 11, .75);
+}
+.sv-stage[data-state="done"] .sv-stage-l { color: rgb(var(--tone)); }
+.sv-friend-total {
+  padding: 2px 6px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .04);
   box-shadow: inset 0 0 0 1px var(--hair-off);
 }
-.sv-fpill .ico { flex: none; width: 10px; height: 10px; }
-.sv-fpill[data-state="done"] {
-  background: var(--mint-soft);
-  color: var(--mint-ink);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4);
-}
-.sv-fpill[data-state="gold"] {
+.sv-friend-total[data-complete="true"] {
   background: var(--honey-soft);
-  color: var(--honey-ink);
   box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
 }
 .sv-friend-held {
@@ -38737,23 +38781,34 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
 .vg-done:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* the feed: the list the vault used to carry inline, with its avatars ringed in gold */
-.vf-count {
+/* the summary pill rides under the title: headcount + Stars generated, Latin figures, Star sprite */
+.vf-summary {
   flex: none;
-  min-width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  padding: 0 7px;
+  align-self: flex-start;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 0 8px;
   border-radius: 8px;
-  background: var(--honey-soft);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .18) 0%, rgba(245, 158, 11, .05) 100%);
   color: var(--honey-ink);
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 900;
-  line-height: 1;
-  direction: ltr;
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
+  line-height: 1.25;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.vf-summary-star { flex: none; width: 13px; height: 13px; filter: drop-shadow(0 0 4px rgba(245, 158, 11, .55)); }
+.vf-summary-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html:lang(fa) .vf-summary, html:lang(ar) .vf-summary {
+  direction: rtl;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
 }
 .vf-scroll .sv-friend-av {
   box-shadow:
@@ -38835,4 +38890,149 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   .vm-foot-btn > .ico { width: 13px; height: 13px; }
   .vg-card { gap: 8px; padding: 8px 9px; }
   .vg-ico { width: 27px; height: 27px; }
+}
+
+/* ==========================================================================================
+   STARS VAULT — COMPACT ZERO-SCROLL FINISH
+   Appended last and ID-scoped so it is the last word on this sheet. The main modal is a single
+   flex column inside 92dvh with overflow:hidden; only the two child sheets may scroll. Steps are
+   three ultra-sleek ROWS (7px 10px / gap 8px), the footer is a clean 2-column pill row (gap 8px),
+   and short phones give up air — never content.
+   ========================================================================================== */
+#modal-stars-vault .vm-foot { gap: 8px; }
+
+#modal-stars-vault .sv-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#modal-stars-vault .sv-step {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 0;
+  padding: 7px 10px;
+  border-radius: 11px;
+  text-align: start;
+}
+#modal-stars-vault .sv-step-i { width: 22px; height: 22px; border-radius: 7px; }
+#modal-stars-vault .sv-step-i .ico { width: 12px; height: 12px; }
+#modal-stars-vault .sv-step-n { top: -4px; inset-inline-end: -5px; width: 12px; height: 12px; font-size: 7.5px; }
+#modal-stars-vault .sv-step-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.2;
+  text-align: start;
+}
+#modal-stars-vault .sv-step-hint,
+#modal-stars-vault .sv-step-bonus { flex: none; }
+#modal-stars-vault .sv-acts .sv-cta,
+#modal-stars-vault .sv-acts .sv-copy,
+#modal-stars-vault .sv-payout { height: 42px; }
+#modal-stars-vault .sv-pills .sv-pill { height: 36px; }
+#modal-stars-vault .sv-vault .sv-meter { padding: 10px 12px; margin-bottom: 0; }
+
+/* ---- the tracker's empty state: obsidian icon well + promise + one direct share key ---- */
+#modal-vault-friends .sv-empty {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 0;
+  padding: 18px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(10, 15, 25, .92) 0%, rgba(14, 21, 36, .74) 100%);
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+  text-align: center;
+}
+/* an author display beats the UA [hidden] rule — this surface must really disappear */
+#modal-vault-friends .sv-empty[hidden] { display: none !important; }
+.sv-empty-well {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .65),
+    inset 0 0 0 1px rgba(245, 158, 11, .24),
+    0 0 22px -14px rgba(245, 158, 11, .7);
+}
+.sv-empty-well .ico { width: 22px; height: 22px; }
+.sv-empty-t {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.sv-empty-share {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 11px;
+  background: var(--gold-face);
+  color: #10141D;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  box-shadow: 0 var(--d) 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.sv-empty-share .ico { flex: none; width: 14px; height: 14px; color: #78350F; }
+.sv-empty-share:hover:not(:active):not(:disabled) { filter: brightness(1.05); }
+.sv-empty-share:active:not(:disabled) { transform: translateY(var(--press-y)); --d: 1px; }
+.sv-empty-share:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sv-empty-share:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* Persian is joined script: tracking is a rendering fault, and every text box keeps its own dir */
+html:lang(fa) :is(.sv-step-t, .sv-step-hint, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t),
+html:lang(ar) :is(.sv-step-t, .sv-step-hint, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
+
+/* short phones (560px floor): the rows give up padding and the header gives up a few pixels.
+   Every tier still lands inside 92dvh with overflow:hidden and no vertical scrollbar. */
+@media (max-height: 640px) {
+  #modal-stars-vault .sv-steps { gap: 5px; }
+  #modal-stars-vault .sv-step { padding: 4px 8px; gap: 7px; }
+  #modal-stars-vault .sv-step-i { width: 20px; height: 20px; }
+  #modal-stars-vault .sv-step-i .ico { width: 11px; height: 11px; }
+  #modal-stars-vault .sv-step-t { font-size: 10px; }
+  #modal-stars-vault .sv-vault .sv-meter { padding: 8px 11px; }
+  #modal-stars-vault .vm-foot { gap: 7px; }
+}
+/* only below the campaign's 560px floor: the brief's 36px pills / 42px keys stay intact there */
+@media (max-height: 540px) {
+  #modal-stars-vault .vault-modal-body { gap: 4px; }
+  #modal-stars-vault .sv-vault { gap: 4px; }
+  #modal-stars-vault .sv-steps { gap: 4px; }
+  #modal-stars-vault .sv-step { padding: 3px 8px; }
+  #modal-stars-vault .sv-pills .sv-pill { height: 32px; }
+  #modal-stars-vault .sv-acts .sv-cta,
+  #modal-stars-vault .sv-acts .sv-copy,
+  #modal-stars-vault .sv-payout { height: 38px; }
+  #modal-stars-vault .vm-foot-btn { height: 34px; }
 }

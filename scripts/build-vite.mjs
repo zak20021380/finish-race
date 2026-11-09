@@ -32,7 +32,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+/**
+ * Windows drive-letter casing is NOT cosmetic here. Rollup canonicalises entry ids with
+ * `fs.realpathSync.native` (uppercase `C:`), while a Git Bash cwd / `file://` URL can be
+ * lowercase (`c:`). Vite's inline-HTML proxy compares those two strings verbatim, so a mismatch
+ * aborts the bundle with "No matching HTML proxy module found" before any app code is read.
+ * Canonicalise once and hand the SAME root to the CLI's cwd and to the in-process build.
+ */
+const rawRoot = path.resolve(here, '..');
+let root = rawRoot;
+try { root = fs.realpathSync.native(rawRoot); } catch { /* stay with the resolved path */ }
 const require = createRequire(import.meta.url);
 
 /** Can the shipped esbuild actually start? `--version` prints and exits 0 when it can. */

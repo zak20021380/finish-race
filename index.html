@@ -299,6 +299,15 @@
         </g>
         <circle cx="12" cy="16.9" r="1.05" fill="currentColor" />
       </symbol>
+      <!-- the vault's "How it Works" key: a plain information roundel, struck as a vector so the
+           guide trigger never falls back to a typed glyph or a unicode emoji -->
+      <symbol id="i-info" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.6" />
+          <path d="M12 11v5.4" />
+        </g>
+        <circle cx="12" cy="7.9" r="1.1" fill="currentColor" />
+      </symbol>
        <symbol id="i-send" viewBox="0 0 24 24">
          <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" transform="translate(-2.4, 0)">
            <path d="M21 3.6 10.4 14.2" />
@@ -2629,7 +2638,7 @@
               <button class="vm-foot-btn" type="button" id="sv-guide-open" data-tone="gold"
                       aria-haspopup="dialog" aria-controls="modal-vault-guide"
                       data-i18n-aria="vaultHowAria" aria-label="Open the Stars Vault guide">
-                <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg>
+                <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
                 <span class="vm-foot-l" data-i18n="vaultHow">How it Works?</span>
                 <svg class="ico vm-foot-chev" aria-hidden="true"><use href="#i-next" /></svg>
               </button>
@@ -2657,13 +2666,27 @@
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vf-title" data-i18n="vaultFriends">Invited Friends</h2>
                 <p class="vm-sub" id="vf-sub" data-i18n="vaultFriendsSub">Everyone filling your vault, and their next step</p>
+                <!-- the summary pill: the headcount and the Stars those friends have actually
+                     generated, both Latin figures, beside the official Star sprite -->
+                <b class="vf-summary" id="vf-summary">
+                  <svg class="ico ico-star-3d vf-summary-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  <span class="vf-summary-t" id="vf-summary-t" dir="auto">0 Friends · +0 Stars Earned</span>
+                </b>
               </span>
-              <b class="vf-count" id="vf-count" dir="ltr">0</b>
             </header>
 
             <div class="vf-scroll" id="vf-scroll" data-scroll tabindex="0">
               <ul class="sv-friends" id="sv-friends"></ul>
-              <p class="sv-empty" id="sv-empty" data-i18n="vaultEmpty">No friends yet — share your link and start filling the vault.</p>
+              <!-- the empty state: an obsidian icon well, the exact bilingual promise, and one
+                   direct key that opens the same Telegram share the vault's own CTA uses -->
+              <div class="sv-empty" id="sv-empty">
+                <span class="sv-empty-well" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                <p class="sv-empty-t" id="sv-empty-t">No friends invited yet. Share your link and earn 5 Stars for every active friend!</p>
+                <button class="sv-empty-share" type="button" id="vf-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
+                  <svg class="ico" aria-hidden="true"><use href="#i-share" /></svg>
+                  <span data-i18n="vaultShareLink">Share Invite Link</span>
+                </button>
+              </div>
             </div>
 
             <button class="vf-back" type="button" id="vf-back" data-modal-close>
@@ -2690,7 +2713,7 @@
 
           <div class="vault-modal-body vg-body">
             <header class="vm-head">
-              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-help" /></svg></span>
+              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-info" /></svg></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vg-title" data-i18n="vaultGuideTitle">How Stars Vault Works</h2>
                 <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">Four steps from a free gift to a real payout</p>
@@ -2706,7 +2729,7 @@
                       <b class="vg-t" id="vg-1-t">Starter Gift</b>
                       <b class="vg-n" dir="ltr"><span id="vg-1-n">5</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                     </span>
-                    <span class="vg-b" id="vg-1-b">5 free Stars are already waiting in your vault as a starter gift.</span>
+                    <span class="vg-b" id="vg-1-b">You start with 5 free Stars in your vault. Collect 45 more to unlock payout.</span>
                   </span>
                 </li>
                 <li class="vg-card" data-tone="plays">
@@ -2716,17 +2739,17 @@
                       <b class="vg-t" id="vg-2-t">Stage 1 · Friend Plays</b>
                       <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                     </span>
-                    <span class="vg-b" id="vg-2-b">When your invited friend finishes 10 matches across 3 days, you earn +2 Stars.</span>
+                    <span class="vg-b" id="vg-2-b">When your friend plays 10 matches across 3 different days, you immediately get +2 Stars.</span>
                   </span>
                 </li>
                 <li class="vg-card" data-tone="rivals">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
                   <span class="vg-txt">
                     <span class="vg-head">
-                      <b class="vg-t" id="vg-3-t">Stage 2 · Beats Rivals</b>
+                      <b class="vg-t" id="vg-3-t">Stage 2 · Friend Wins</b>
                       <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                     </span>
-                    <span class="vg-b" id="vg-3-b">When your friend wins 5 online PvP duels, you unlock +3 more Stars.</span>
+                    <span class="vg-b" id="vg-3-b">When your friend wins 5 online PvP matches against real rivals, you get +3 more Stars (5 Stars total).</span>
                   </span>
                 </li>
                 <li class="vg-card" data-tone="cash">
@@ -2736,7 +2759,7 @@
                       <b class="vg-t" id="vg-4-t">Cash Out at 50 Stars</b>
                       <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                     </span>
-                    <span class="vg-b" id="vg-4-b">Once your vault balance reaches 50 Stars, hit Request Payout to receive your reward.</span>
+                    <span class="vg-b" id="vg-4-b">Once your vault reaches 50 Stars, tap Request Payout and receive your Stars reward.</span>
                   </span>
                 </li>
               </ol>

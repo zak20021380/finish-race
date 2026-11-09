@@ -2036,14 +2036,58 @@ export function createMenu(api: MenuApi): Menu {
     return svg;
   };
 
-  /** A finished stage wears a check, its Stars award, and the official Star asset. */
-  function svStagePill(pill: HTMLElement, done: boolean, reward: number, progress: string): void {
-    if (!done) { pill.textContent = progress; return; }
-    pill.append(
-      svIcon('#i-check', 'sv-check'),
-      document.createTextNode(svFill('vaultStageDone', { n: en(reward) })),
-      svIcon('#i-star-3d', 'ico-star-3d sv-star'),
-    );
+  /**
+   * One stage track inside a friend card: the exact rule with the server's own thresholds, a
+   * mini progress bar, and — once the room has credited the stage — a check sprite and the
+   * localised "earned" line. Stage 1 turns emerald, Stage 2 metallic gold. The fill is driven by
+   * `data-state`, never by a physical left/right, so the same track mirrors cleanly under RTL.
+   */
+  function svStageTrack(o: {
+    tone: 'mint' | 'gold';
+    done: boolean;
+    label: string;
+    pct: number;
+    reward: number;
+    doneKey: string;
+  }): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'sv-stage';
+    row.dataset.tone = o.tone;
+    row.dataset.state = o.done ? 'done' : 'open';
+
+    const head = document.createElement('div');
+    head.className = 'sv-stage-h';
+    const lbl = document.createElement('span');
+    lbl.className = 'sv-stage-l';
+    lbl.dir = 'auto';
+    lbl.textContent = o.label;
+    head.append(lbl);
+    if (o.done) {
+      const done = document.createElement('span');
+      done.className = 'sv-stage-done';
+      done.dir = 'auto';
+      done.append(
+        svIcon('#i-check', 'sv-check'),
+        document.createTextNode(svFill(o.doneKey, { n: en(o.reward) })),
+      );
+      head.append(done);
+    }
+
+    const pct = Math.max(0, Math.min(100, o.done ? 100 : o.pct));
+    const track = document.createElement('div');
+    track.className = 'sv-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    track.setAttribute('aria-valuenow', String(Math.round(pct)));
+    track.setAttribute('aria-label', o.label);
+    const fill = document.createElement('span');
+    fill.className = 'sv-track-f';
+    fill.style.width = `${pct.toFixed(1)}%`;
+    track.append(fill);
+
+    row.append(head, track);
+    return row;
   }
 
   /** The letter a nameless friend wears: never their id, which is not a name. */
@@ -2080,13 +2124,16 @@ export function createMenu(api: MenuApi): Menu {
     nm.dir = 'auto';
     nm.textContent = f.name || t('vaultFriendAnon');
 
+    /* "+2 / 5", "+5 / 5" plus a check — a zero-credit friend reads plain "0 / 5". The plus and
+       every figure are Latin, and the check is the #i-check sprite, never a typed glyph. */
     const total = document.createElement('span');
     total.className = 'sv-friend-total';
     total.dir = 'ltr';
     const complete = f.credited >= C.TOTAL_PER_FRIEND_STARS;
     total.append(
       document.createTextNode(svFill('vaultFriendTotal', {
-        n: en(f.credited), total: en(C.TOTAL_PER_FRIEND_STARS),
+        n: `${f.credited > 0 ? '+' : ''}${en(f.credited)}`,
+        total: en(C.TOTAL_PER_FRIEND_STARS),
       })),
       svIcon('#i-star-3d', 'ico-star-3d sv-star'),
     );
@@ -2095,49 +2142,48 @@ export function createMenu(api: MenuApi): Menu {
 
     head.append(av, nm, total);
 
-    const pills = document.createElement('div');
-    pills.className = 'sv-friend-pills';
+    const stages = document.createElement('div');
+    stages.className = 'sv-stages';
 
-    const pill1 = document.createElement('span');
-    pill1.className = 'sv-fpill';
-    pill1.dir = 'ltr';
-    pill1.dataset.state = f.stage1 ? 'done' : 'open';
-    svStagePill(
-      pill1,
-      f.stage1,
-      C.STAGE1_REWARD_STARS,
-      svFill('vaultStage1Progress', {
-        m: en(Math.min(f.matches, C.STAGE1_MIN_MATCHES)),
-        max: en(C.STAGE1_MIN_MATCHES),
-        d: en(Math.min(f.days, C.STAGE1_MIN_DAYS)),
-        days: en(C.STAGE1_MIN_DAYS),
+    const matches = Math.min(f.matches, C.STAGE1_MIN_MATCHES);
+    const days = Math.min(f.days, C.STAGE1_MIN_DAYS);
+    /* Both halves of Stage 1 gate the award, so each owns half of the fill: the track only
+       reaches 100% when the friend has enough matches on enough different UTC days. */
+    const pct1 = (matches / C.STAGE1_MIN_MATCHES + days / C.STAGE1_MIN_DAYS) * 50;
+    stages.append(svStageTrack({
+      tone: 'mint',
+      done: f.stage1,
+      reward: C.STAGE1_REWARD_STARS,
+      doneKey: 'vaultStage1Done',
+      pct: pct1,
+      label: svFill('vaultStage1Label', {
+        s: en(C.STAGE1_REWARD_STARS),
+        m: en(matches), max: en(C.STAGE1_MIN_MATCHES),
+        d: en(days), days: en(C.STAGE1_MIN_DAYS),
       }),
-    );
+    }));
 
-    const pill2 = document.createElement('span');
-    pill2.className = 'sv-fpill';
-    pill2.dir = 'ltr';
-    pill2.dataset.state = f.stage2 ? 'gold' : 'open';
-    svStagePill(
-      pill2,
-      f.stage2,
-      C.STAGE2_REWARD_STARS,
-      svFill('vaultStage2Progress', {
-        w: en(Math.min(f.pvpWins, C.STAGE2_MIN_RANKED_PVP_WINS)),
-        max: en(C.STAGE2_MIN_RANKED_PVP_WINS),
+    const wins = Math.min(f.pvpWins, C.STAGE2_MIN_RANKED_PVP_WINS);
+    stages.append(svStageTrack({
+      tone: 'gold',
+      done: f.stage2,
+      reward: C.STAGE2_REWARD_STARS,
+      doneKey: 'vaultStage2Done',
+      pct: (wins / C.STAGE2_MIN_RANKED_PVP_WINS) * 100,
+      label: svFill('vaultStage2Label', {
+        s: en(C.STAGE2_REWARD_STARS),
+        w: en(wins), max: en(C.STAGE2_MIN_RANKED_PVP_WINS),
       }),
-    );
-
-    pills.append(pill1, pill2);
+    }));
 
     if (f.flagged) {
       const held = document.createElement('span');
       held.className = 'sv-friend-held';
       held.textContent = t('vaultFlagged');
-      pills.append(held);
+      stages.append(held);
     }
 
-    li.append(head, pills);
+    li.append(head, stages);
     return li;
   }
 
@@ -2226,7 +2272,11 @@ export function createMenu(api: MenuApi): Menu {
 
     const friendsTotal = en(vault.pendingFriendsCount + vault.qualifiedFriendsCount);
     svText('sv-friends-n', friendsTotal);
-    svText('vf-count', friendsTotal);
+    /* The tracker's summary pill: how many friends are on the ledger and how many Stars those
+       friends have actually generated. Both figures are the room's, both printed in Latin. */
+    svText('vf-summary-t', svFill('vaultFriendsSummary', {
+      count: friendsTotal, earned: en(vault.earnedStars),
+    }));
     const sig = `${lang}|${vault.friends.map((f) => [
       f.id, f.name, f.avatar, f.matches, f.days, f.pvpWins,
       f.stage1, f.stage2, f.flagged, f.credited,
@@ -2240,17 +2290,26 @@ export function createMenu(api: MenuApi): Menu {
     }
     const empty = document.getElementById('sv-empty');
     if (empty) empty.hidden = vault.friends.length > 0;
+    /* Painted here and not by data-i18n: the promise carries a token the campaign owns. */
+    svText('sv-empty-t', svFill('vaultEmpty', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
+    const vfShareBtn = document.getElementById('vf-share') as HTMLButtonElement | null;
+    if (vfShareBtn) {
+      vfShareBtn.disabled = !link;
+      vfShareBtn.setAttribute('aria-label', link ? t('vaultShareAria') : t('vaultLinkPending'));
+    }
 
     svText('sv-note', svFill('vaultNote', { max: en(C.MAX_QUALIFIED_PER_INVITER_MONTH) }));
 
     /* The guide states the same four promises the meter does, in the player's own language and
        with every figure taken from the campaign rather than written into the copy. */
     const gift = en(vault.starterBonus);
+    const more = en(Math.max(0, target - vault.starterBonus));
+    const perFriend = en(C.TOTAL_PER_FRIEND_STARS);
     const s1 = en(C.STAGE1_REWARD_STARS);
     const s2 = en(C.STAGE2_REWARD_STARS);
     svText('vg-1-t', t('vaultGuide1Title'));
     svText('vg-1-n', gift);
-    svText('vg-1-b', svFill('vaultGuide1Body', { gift }));
+    svText('vg-1-b', svFill('vaultGuide1Body', { gift, more }));
     svText('vg-2-t', t('vaultGuide2Title'));
     svText('vg-2-n', `+${s1}`);
     svText('vg-2-b', svFill('vaultGuide2Body', {
@@ -2258,7 +2317,9 @@ export function createMenu(api: MenuApi): Menu {
     }));
     svText('vg-3-t', t('vaultGuide3Title'));
     svText('vg-3-n', `+${s2}`);
-    svText('vg-3-b', svFill('vaultGuide3Body', { w: en(C.STAGE2_MIN_RANKED_PVP_WINS), s2 }));
+    svText('vg-3-b', svFill('vaultGuide3Body', {
+      w: en(C.STAGE2_MIN_RANKED_PVP_WINS), s2, total: perFriend,
+    }));
     svText('vg-4-t', svFill('vaultGuide4Title', { target: en(target) }));
     svText('vg-4-n', en(target));
     svText('vg-4-b', svFill('vaultGuide4Body', { target: en(target) }));
@@ -2312,12 +2373,16 @@ export function createMenu(api: MenuApi): Menu {
     guideModal?.open(svGuideOpenEl);
   });
 
-  svShareBtn?.addEventListener('click', () => {
+  /* The vault's own CTA and the empty tracker's share key take the same door: one Telegram
+     share, gated on the link the room has already issued. */
+  const shareVaultLink = (): void => {
     impact('medium');
     const share = referralShareUrl();
     if (!share) { showPfToast(t('vaultLinkPending')); return; }
     openTelegramShare(share);
-  });
+  };
+  svShareBtn?.addEventListener('click', shareVaultLink);
+  document.getElementById('vf-share')?.addEventListener('click', shareVaultLink);
 
   svCopyBtn?.addEventListener('click', () => {
     const link = referralLink();
