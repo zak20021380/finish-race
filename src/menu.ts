@@ -3620,8 +3620,7 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---- the profile rail ----
      The personal Profile is not a rival dossier: it carries no relic-duel key, because a challenge
-     needs an external holder in front of it. The squad key is the sheet the Nation/Squad tile opens. */
-  document.getElementById('pf-squad')?.addEventListener('click', () => { openSquad(); });
+     needs an external holder in front of it. */
 
   /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
   document.getElementById('pf-avatar-wrap')?.addEventListener('click', () => {
@@ -3663,13 +3662,6 @@ export function createMenu(api: MenuApi): Menu {
     paintBadgeList();
     api.sheets.open(sheet);
     impact('light');
-  });
-
-  /* first-match CTA: plays the saved bot race, the same one Home's Play button runs. */
-  document.getElementById('pf-play')?.addEventListener('click', () => {
-    impact('light');
-    saveMenu({ mode: 'bot' });
-    api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
   /* ---- difficulty: menuState.difficulty is the single source; every control paints it, every start reads it ---- */
@@ -4291,16 +4283,17 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   /**
-   * The personal Profile owns no rival CTA. Anything a previous inspection mounted under this
-   * screen is removed here — on boot, on every profile refresh, and on every route into the tab.
+   * The personal Profile owns no rival CTA and no footer action rail. Anything a previous
+   * inspection mounted under this screen is removed here — on boot, on every profile refresh,
+   * and on every route into the tab.
    */
   function clearRivalContext(): void {
     document
+      .querySelectorAll<HTMLElement>('#s-profile .pf-actions, #s-profile .profile-actions, #s-profile .drawer-actions')
+      .forEach((node) => node.remove());
+    document
       .querySelectorAll<HTMLElement>('#s-profile .btn-duel-badge, #s-profile .pf-act-duel')
       .forEach((node) => node.remove());
-    /* the rail keeps its one surviving door (squad); an inspection never disables it */
-    const rail = document.querySelector<HTMLElement>('#s-profile .pf-actions');
-    if (rail) rail.hidden = false;
   }
 
   return {

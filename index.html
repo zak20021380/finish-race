@@ -1815,12 +1815,13 @@
                     <svg class="ico"><use href="#i-swords" /></svg>
                   </span>
                   <div class="pf-quest-copy">
-                    <p class="pf-quest-title">No ranked duels yet</p>
-                    <p class="pf-quest-sub">Face a real rival — every duel you settle is written to this card. Practice races never are.</p>
+                    <p class="pf-quest-title" data-i18n="pfCareerEmptyTitle">No Ranked Duels Yet</p>
+                    <p class="pf-quest-sub" data-i18n="pfCareerEmptySub">Only live PvP matchmaking duels are recorded here. Practice runs are excluded.</p>
                   </div>
-                  <button class="pf-play-cta" type="button" id="pf-play">
-                    <span class="pf-play-face"><svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play Now</span></span>
-                  </button>
+                  <span class="pf-quest-pill">
+                    <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+                    <span data-i18n="pfCareerEmptyPill">0 Ranked Matches</span>
+                  </span>
                 </div>
                 <div class="pf-quest-stats" id="pf-quest-stats" hidden>
                   <!-- three human-vs-human readings. No bot board may ever move one of them,
@@ -2039,16 +2040,6 @@
             <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden>
               <span class="coin" data-coin aria-hidden="true"></span><span id="pf-toast-t">+100 Coins</span>
             </div>
-          </div>
-          <!-- the card's one door, pinned under the scroll: the squad the seat rides for. A relic
-               challenge belongs to a rival's dossier, never to this personal profile. -->
-          <div class="pf-actions">
-            <button class="pf-act pf-act-squad" type="button" id="pf-squad" data-i18n-aria="pfViewSquadAria">
-              <span class="pf-act-face">
-                <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
-                <span class="pf-act-t" data-i18n="pfViewSquad">View Squad</span>
-              </span>
-            </button>
           </div>
         </section>
 

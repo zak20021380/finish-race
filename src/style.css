@@ -15587,45 +15587,37 @@ html.reduced-motion .lb-hud-b { transition: none; }
   color: #67E8F9;
   text-shadow: 0 0 10px rgba(34, 211, 238, .5);
 }
-.pf-quest-title { margin: 2px 0 0; font-size: var(--t-1); font-weight: 900; letter-spacing: -.01em; color: var(--ink); }
-.pf-quest-sub { margin: 4px 0 0; font-size: var(--t-micro); font-weight: 600; line-height: 1.4; color: var(--ink-soft); max-width: 34ch; }
+.pf-quest-title { margin: 2px 0 0; font-size: var(--t-1); font-weight: 900; letter-spacing: -.01em; color: var(--ink); text-wrap: balance; }
+.pf-quest-sub { margin: 4px 0 0; font-size: var(--t-micro); font-weight: 600; line-height: 1.4; color: var(--ink-soft); max-width: 34ch; text-wrap: pretty; }
 .pf-quest-copy { display: flex; flex-direction: column; align-items: center; }
 
-/* 3D claymorphic Play Now: coral face, deep lip, inner shadows and a hot glow */
-.pf-play-cta {
-  --d: 6px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  cursor: pointer;
-  margin-top: var(--s1);
-  width: 100%;
-  max-width: 260px;
-  display: flex;
+/* the empty record's quiet status badge: one smoked pill, a honey hairline, no glow */
+.pf-quest-pill {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 54px;
-  padding: 0 var(--s4);
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FF8355 0%, #FF522B 55%, #E23D18 100%);
-  color: #fff;
-  font-size: var(--t-1);
-  font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  box-shadow:
-    0 var(--d) 0 var(--cta-lip),
-    0 calc(var(--d) + 10px) 24px -8px rgba(255, 82, 43, .75),
-    inset 0 2px 3px rgba(255, 255, 255, .55),
-    inset 0 -4px 6px rgba(120, 25, 5, .45),
-    0 0 30px -6px rgba(255, 82, 43, .7);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 211, 77, .2);
+  background: linear-gradient(180deg, rgba(28, 38, 56, .72) 0%, rgba(10, 15, 25, .86) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: .02em;
+  text-align: center;
 }
-.pf-play-cta:hover:not(:active) { transform: translateY(-1px); filter: brightness(1.04); }
-.pf-play-cta:active { transform: translateY(var(--press-y)); --d: 2px; box-shadow: 0 2px 0 var(--cta-lip), 0 6px 14px -8px rgba(255,82,43,.7), inset 0 2px 3px rgba(255,255,255,.4), inset 0 -2px 4px rgba(120,25,5,.4); }
-.pf-play-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-.pf-play-face { display: inline-flex; align-items: center; gap: var(--s2); }
-.pf-play-face .ico { width: 20px; height: 20px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .3)); }
+.pf-quest-pill .ico {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: #FCD34D;
+  opacity: .82;
+}
 
 /* ---- badges: hexagonal medal slots, lit when unlocked, holographic when locked ---- */
 .badge-rack {
@@ -36698,100 +36690,9 @@ html.reduced-motion .cm-splash.is-on .cm-in { opacity: 1; transform: none; anima
   }
 }
 
-/* ---- the profile's one door: obsidian squad ----
-   The personal card carries no duel key; a relic challenge lives on a rival's dossier. The rail
-   keeps a single full-width action so the profile always ends on a real, unambiguous door. */
-#s-profile .pf-actions {
-  flex: none;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  padding-top: 2px;
-}
-/* defense in depth: even a stale/hand-edited node cannot mount a duel CTA on the personal card */
+/* defense in depth: even a stale/hand-edited node cannot mount a rival CTA on the personal card */
 #s-profile .pf-act-duel,
 #s-profile .btn-duel-badge { display: none !important; }
-#s-profile .pf-act {
-  position: relative;
-  appearance: none;
-  display: block;
-  width: 100%;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 14px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: transform .12s ease, box-shadow .12s ease;
-}
-#s-profile .pf-act-face {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 100%;
-  min-width: 0;
-  padding: 0 10px;
-}
-#s-profile .pf-act .ico {
-  flex: none;
-  width: 15px;
-  height: 15px;
-}
-#s-profile .pf-act-t {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: .01em;
-}
-#s-profile .pf-act-duel {
-  color: #FFF5F6;
-  background:
-    radial-gradient(120% 160% at 12% 0%, rgba(255, 214, 219, .3) 0%, rgba(255, 214, 219, 0) 54%),
-    linear-gradient(180deg, #E8405A 0%, #B3122F 54%, #8A0A22 100%);
-  box-shadow:
-    0 3px 0 #52040F,
-    0 12px 22px -14px rgba(227, 58, 82, .95),
-    inset 0 1px 0 rgba(255, 255, 255, .32),
-    inset 0 0 0 1px rgba(253, 230, 138, .38);
-  text-shadow: 0 1px 0 rgba(70, 4, 12, .7);
-}
-#s-profile .pf-act-duel .ico { color: #FFE8B0; }
-#s-profile .pf-act-duel:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 #52040F,
-    0 4px 10px -8px rgba(227, 58, 82, .8),
-    inset 0 2px 7px rgba(0, 0, 0, .5),
-    inset 0 0 0 1px rgba(253, 230, 138, .3);
-}
-#s-profile .pf-act-squad {
-  color: #FDE68A;
-  background:
-    radial-gradient(120% 160% at 14% 0%, rgba(245, 158, 11, .16) 0%, rgba(245, 158, 11, 0) 58%),
-    linear-gradient(180deg, #1C2534 0%, #0A0F19 100%);
-  box-shadow:
-    0 3px 0 #05080E,
-    0 12px 22px -16px rgba(0, 0, 0, .9),
-    inset 0 1px 0 rgba(255, 255, 255, .13),
-    inset 0 0 0 1px rgba(252, 211, 77, .3);
-}
-#s-profile .pf-act-squad .ico { color: #FCD34D; }
-#s-profile .pf-act-squad:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 #05080E,
-    inset 0 2px 7px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(252, 211, 77, .26);
-}
-#s-profile .pf-act:focus-visible {
-  outline: 2px solid #FCD34D;
-  outline-offset: 2px;
-}
 
 /* ---- numerals: every metric is Latin, tabular and lining, in every language ----
    `lnum` forces lining figures over a font's default old-style set; `tnum` keeps the columns
@@ -36838,14 +36739,8 @@ html[data-lang="ar"] #s-profile .pf-career .stat .stat-lbl {
   direction: rtl;
   unicode-bidi: isolate;
 }
-html[data-lang="fa"] #s-profile :is(.pf-act-t, .pf-tiq-val, .pf-tiq-rank),
-html[data-lang="ar"] #s-profile :is(.pf-act-t, .pf-tiq-val, .pf-tiq-rank) { letter-spacing: 0; }
-html[data-lang="fa"] #s-profile .pf-act-t,
-html[data-lang="ar"] #s-profile .pf-act-t {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-weight: 600;
-  line-height: 1.4;
-}
+html[data-lang="fa"] #s-profile :is(.pf-tiq-val, .pf-tiq-rank),
+html[data-lang="ar"] #s-profile :is(.pf-tiq-val, .pf-tiq-rank) { letter-spacing: 0; }
 /* the metric rows keep their Latin figures: isolated, so an RTL sheet cannot re-order them */
 html[data-lang="fa"] #s-profile :is(#pf-tiq-pct, #pf-tiq-rank, #pf-duels, #pf-rate, #pf-best, #pf-lvl-n),
 html[data-lang="ar"] #s-profile :is(#pf-tiq-pct, #pf-tiq-rank, #pf-duels, #pf-rate, #pf-best, #pf-lvl-n) {
@@ -36862,9 +36757,6 @@ html[data-lang="ar"] #s-profile :is(#pf-tiq-pct, #pf-tiq-rank, #pf-duels, #pf-ra
   #s-profile .pf-tiq-brain { width: 15px; height: 15px; }
   #s-profile .pf-career .stat dd { font-size: 20px; }
   #s-profile .pf-career .stat dt { font-size: 8px; }
-  #s-profile .pf-act { height: 42px; border-radius: 12px; }
-  #s-profile .pf-act-t { font-size: 11px; }
-  #s-profile .pf-actions { gap: 6px; }
 }
 @media (max-width: 330px) {
   #s-profile .pf-tiq-meter { width: 48px; height: 48px; }
@@ -36872,16 +36764,13 @@ html[data-lang="ar"] #s-profile :is(#pf-tiq-pct, #pf-tiq-rank, #pf-duels, #pf-ra
   #s-profile .pf-tiq-pct { margin-top: 0; font-size: 12px; }
   #s-profile .pf-arena-plaque { font-size: 9.5px; }
   #s-profile .pf-career .stat dt { font-size: 7.5px; }
-  #s-profile .pf-act .ico { display: none; }
 }
 
 /* reduced motion: the arc still lands, it just does not travel */
 @media (prefers-reduced-motion: reduce) {
   #s-profile .pf-tiq-fill { transition: none; }
-  #s-profile .pf-act { transition: none; }
 }
 html.reduced-motion #s-profile .pf-tiq-fill { transition: none; }
-html.reduced-motion #s-profile .pf-act { transition: none; }
 
 /* a filled record is not a quest: the colourful card is the empty state's costume. Once there
    are duels to print, the slab sits straight on the page under its section heading. */
@@ -36963,12 +36852,19 @@ html[data-lang="ar"] #s-profile :is(.pf-quest-sub, .pf-chip-meta, .row-s) {
   line-height: 1.4;
 }
 
-/* the card's own reading direction: the two doors lead with the crimson key in a Persian
-   seat. The TIQ slab keeps one left-to-right grid in every language — label and figure from
-   the left, gauge on the right — so the same optical grid holds in both scripts. Figures
-   stay LTR (isolated above), only the doors mirror. */
-html[data-lang="fa"] #s-profile .pf-actions,
-html[data-lang="ar"] #s-profile .pf-actions { direction: rtl; }
+/* the empty record is a centred composition: its copy keeps a real RTL base in a Persian
+   seat and stays visually centred, never right-hugging its own column. */
+html[data-lang="fa"] #s-profile .pf-quest-empty,
+html[data-lang="ar"] #s-profile .pf-quest-empty { direction: rtl; }
+html[data-lang="fa"] #s-profile .pf-quest-empty :is(.pf-quest-title, .pf-quest-sub),
+html[data-lang="ar"] #s-profile .pf-quest-empty :is(.pf-quest-title, .pf-quest-sub) { text-align: center; }
+html[data-lang="fa"] #s-profile .pf-quest-pill,
+html[data-lang="ar"] #s-profile .pf-quest-pill {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.5;
+}
 
 /* ============================================================================================
    NATIONS HERO BANNER — ABSOLUTE INTERNAL CONTAINMENT + BULLETPROOF TOP-3 LAYOUT
