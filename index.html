@@ -1833,15 +1833,88 @@
                 </div>
               </div>
             </div>
-            <div class="pf-sec pf-invite-sec">
-              <button class="pf-invite" type="button" id="pf-invite" aria-haspopup="dialog" aria-label="Invite friends and earn coins">
-                <span class="pf-invite-well" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-                <span class="pf-invite-txt">
-                  <span class="pf-invite-t">Invite Friends</span>
-                  <span class="pf-invite-s" id="pf-invite-s">Earn +500 Coins per invite</span>
-                </span>
-                <span class="pf-invite-pill" id="pf-invite-pill" aria-hidden="true">Invite</span>
-              </button>
+            <div class="pf-sec sv-sec">
+              <!-- Stars Vault: the two-stage invite programme. Every figure is the room's own. -->
+              <section class="sv" id="pf-vault" aria-labelledby="sv-title">
+                <header class="sv-h">
+                  <span class="sv-h-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span>
+                  <span class="sv-h-t">
+                    <h2 class="sv-t" id="sv-title" data-i18n="vaultTitle">Stars Vault</h2>
+                    <span class="sv-s" data-i18n="vaultSub">Invite friends · fill the vault · cash out</span>
+                  </span>
+                  <span class="sv-live" id="sv-live" data-live="false" aria-hidden="true"></span>
+                </header>
+
+                <div class="sv-meter">
+                  <p class="sv-bal" dir="ltr">
+                    <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span><span class="sv-bal-star" aria-hidden="true">⭐</span>
+                  </p>
+                  <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="sv-title"
+                    aria-valuemin="0" aria-valuemax="50" aria-valuenow="20" aria-valuetext="20 / 50">
+                    <span class="sv-bar-fill" id="sv-bar-fill" style="width:40%"></span>
+                  </div>
+                  <p class="sv-gift" id="sv-gift">🎁 Includes 20 ⭐ Starter Gift! Collect 30 more ⭐ to cash out 50 Stars</p>
+                </div>
+
+                <div class="sv-pills">
+                  <span class="sv-pill">
+                    <span class="sv-pill-k" data-i18n="vaultPending">Pending</span>
+                    <b class="sv-pill-v" id="sv-pending" dir="ltr">0</b>
+                  </span>
+                  <span class="sv-pill" data-tone="gold">
+                    <span class="sv-pill-k" data-i18n="vaultEarned">Earned</span>
+                    <b class="sv-pill-v" id="sv-earned" dir="ltr">+0 ⭐</b>
+                  </span>
+                  <span class="sv-pill" data-tone="mint">
+                    <span class="sv-pill-k" data-i18n="vaultPaid">Paid Out</span>
+                    <b class="sv-pill-v" id="sv-paid" dir="ltr">0 ⭐</b>
+                  </span>
+                </div>
+
+                <ol class="sv-steps">
+                  <li class="sv-step">
+                    <span class="sv-step-n" aria-hidden="true">1</span>
+                    <span class="sv-step-i" aria-hidden="true">🔗</span>
+                    <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
+                  </li>
+                  <li class="sv-step">
+                    <span class="sv-step-n" aria-hidden="true">2</span>
+                    <span class="sv-step-i" aria-hidden="true">🎮</span>
+                    <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
+                    <span class="sv-step-r" id="sv-step2-r" dir="ltr">+2 ⭐ · 10 matches in 3 days</span>
+                  </li>
+                  <li class="sv-step">
+                    <span class="sv-step-n" aria-hidden="true">3</span>
+                    <span class="sv-step-i" aria-hidden="true">⚔️</span>
+                    <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
+                    <span class="sv-step-r" id="sv-step3-r" dir="ltr">+3 ⭐ · 5 online wins</span>
+                  </li>
+                </ol>
+
+                <div class="sv-acts">
+                  <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
+                    <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+                    <span id="sv-share-t">Invite Friends &amp; Get 5 ⭐ Each</span>
+                  </button>
+                  <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
+                    <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
+                    <span class="sv-copy-t" data-i18n="vaultCopy">Copy</span>
+                  </button>
+                </div>
+                <button class="sv-payout" type="button" id="sv-payout" disabled>
+                  <span id="sv-payout-t">🔒 Unlocks at 50 ⭐</span>
+                </button>
+                <p class="sv-notice" id="sv-notice" hidden></p>
+
+                <div class="sv-friends-h">
+                  <h3 class="sv-friends-t" data-i18n="vaultFriends">Invited Friends</h3>
+                  <span class="sv-friends-n" id="sv-friends-n" dir="ltr">0</span>
+                </div>
+                <ul class="sv-friends" id="sv-friends"></ul>
+                <p class="sv-empty" id="sv-empty" data-i18n="vaultEmpty">No friends yet — share your link and start filling the vault.</p>
+
+                <p class="sv-note" id="sv-note"></p>
+              </section>
             </div>
             <div class="pf-sec pf-badges-sec">
               <h2 class="eq-h pf-sec-h">
@@ -3391,6 +3464,70 @@
               </div>
             </section>
 
+            <!-- ---------- Stars Vault: the invite programme's manual payout queue ---------- -->
+            <section class="adm-block adm-vault" data-accent="gold" aria-labelledby="vaultadm-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="vaultadm-title">Stars Vault &amp; Payouts</h3>
+                <span class="adm-block-s" id="vaultadm-month">—</span>
+              </div>
+              <div class="adm-grid adm-grid-vault" role="list" aria-label="Stars Vault summary">
+                <div class="adm-card" role="listitem">
+                  <span class="adm-card-top"><span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-star-3d" /></svg></span></span>
+                  <b class="adm-card-v" id="vault-kpi-earned">—</b>
+                  <span class="adm-card-l">Total Earned</span>
+                  <span class="adm-card-s" id="vault-kpi-earned-sub">—</span>
+                </div>
+                <div class="adm-card" role="listitem">
+                  <span class="adm-card-top"><span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span></span>
+                  <b class="adm-card-v" id="vault-kpi-paid">—</b>
+                  <span class="adm-card-l">Total Paid Out</span>
+                  <span class="adm-card-s" id="vault-kpi-paid-sub">—</span>
+                </div>
+                <div class="adm-card" role="listitem">
+                  <span class="adm-card-top"><span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-clock" /></svg></span></span>
+                  <b class="adm-card-v" id="vault-kpi-waiting">—</b>
+                  <span class="adm-card-l">Waiting Requests</span>
+                  <span class="adm-card-s" id="vault-kpi-waiting-sub">—</span>
+                </div>
+                <div class="adm-card" role="listitem">
+                  <span class="adm-card-top"><span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span></span>
+                  <b class="adm-card-v" id="vault-kpi-budget">—</b>
+                  <span class="adm-card-l">Monthly Budget Left</span>
+                  <span class="adm-card-s" id="vault-kpi-budget-sub">—</span>
+                </div>
+              </div>
+
+              <div class="adm-inbox-filters" role="group" aria-label="Filter payout requests">
+                <button class="adm-chip" type="button" data-vfilter="waiting" aria-pressed="true">Waiting</button>
+                <button class="adm-chip" type="button" data-vfilter="paid" aria-pressed="false">Paid</button>
+                <button class="adm-chip" type="button" data-vfilter="rejected" aria-pressed="false">Rejected</button>
+                <button class="adm-chip" type="button" data-vfilter="all" aria-pressed="false">All</button>
+              </div>
+
+              <div class="adm-users-meta">
+                <span id="vault-total" aria-live="polite">—</span>
+                <span class="adm-users-meta-r">
+                  <span class="adm-users-src" id="vault-source" data-live="false">NO LEDGER</span>
+                  <button class="adm-users-refresh" type="button" id="vault-refresh" aria-label="Refresh payout queue">
+                    <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
+                  </button>
+                </span>
+              </div>
+              <ul class="adm-vault-list" id="adm-vault-list" aria-label="Payout requests"></ul>
+              <p class="adm-inbox-empty" id="adm-vault-empty" hidden>No payout requests in this view.</p>
+
+              <div class="adm-slab adm-vault-review">
+                <div class="vipadm-audit-h">
+                  <span class="vipadm-audit-t">Flagged accounts</span>
+                  <span class="vipadm-audit-s" id="vault-flag-meta">—</span>
+                </div>
+                <ul class="adm-vault-flags" id="adm-vault-flags" aria-label="Accounts held for collusion review"></ul>
+                <p class="vipadm-empty" id="vault-flag-empty" hidden>No accounts held for review.</p>
+              </div>
+              <p class="adm-note">Promotional Stars, never transferred automatically. Mark a request
+                paid only once you have settled it yourself; clearing a flag releases its held stages.</p>
+            </section>
+
             <!-- ---------- Access control: the role registry the Worker enforces ---------- -->
             <p class="adm-sec-h">Access control<span class="adm-sec-chip" id="acl-count" data-on="false">—</span></p>
             <ul class="adm-acl-list" id="adm-acl-list" aria-label="Administrators"></ul>
@@ -4686,50 +4823,6 @@
           <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
           <span data-i18n="supportOk">Message sent to admins!</span>
         </p>
-      </section>
-
-      <!-- referral hub: the personal invite link, Telegram share, and the claimable coin reward -->
-      <section class="sheet referral-sheet" id="sheet-referral" hidden role="dialog" aria-modal="true" aria-labelledby="ref-title">
-        <span class="sheet-grip" aria-hidden="true"></span>
-        <header class="referral-head">
-          <h2 class="sheet-t left referral-title" id="ref-title">Invite Friends &amp; Earn</h2>
-          <button class="referral-x" type="button" data-sheet-close aria-label="Close referral hub">✕</button>
-        </header>
-        <div class="referral-banner">
-          <span class="referral-banner-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-          <p id="ref-banner">Get <b>500 Coins</b> for you &amp; your friend upon joining!</p>
-        </div>
-        <p class="referral-preview" aria-label="Your personal referral code">
-          <b id="ref-handle"></b>
-          <span class="referral-preview-dot" aria-hidden="true">·</span>
-          <code id="ref-code">ref_…</code>
-        </p>
-        <div class="referral-link-row">
-          <input class="referral-input" id="ref-link" type="text" readonly value="" spellcheck="false"
-            aria-label="Your personal referral link" />
-          <button class="referral-copy" id="ref-copy" type="button" aria-live="polite">
-            <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
-            <span class="ref-copy-t">Copy</span>
-          </button>
-        </div>
-        <button class="btn referral-share" type="button" id="ref-share">
-          <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-          <span>Share Link via Telegram</span>
-        </button>
-        <div class="referral-stats">
-          <div class="referral-stat">
-            <span class="referral-stat-n" id="ref-joins">0</span>
-            <span class="referral-stat-k">Friends Joined</span>
-          </div>
-          <div class="referral-stat">
-            <span class="referral-stat-n"><b id="ref-unclaimed">0</b><span class="referral-stat-u"> Coins</span></span>
-            <span class="referral-stat-k">Unclaimed Rewards</span>
-          </div>
-        </div>
-        <button class="btn referral-claim" type="button" id="ref-claim" disabled>
-          <svg class="ico" aria-hidden="true"><use href="#i-gift" /></svg>
-          <span>Claim Rewards</span>
-        </button>
       </section>
 
       <!-- choose mode: 4 presets with live renderer previews + custom + online -->

@@ -12,10 +12,10 @@ import {
   menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type LangDef, type Settings,
 } from './settings';
 import {
-  ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
+  ageLocked, claimIdentityReward, cleanDisplayName, createTeam, daysInMonth,
   DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue,
   IDENTITY_REWARD, joinTeam, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile, pvpCareer,
-  REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
+  setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
   BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeHolders, badgeProgress, badgeProgressText,
@@ -52,14 +52,18 @@ import { myTiq } from './matchmaking';
 import { openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
 import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
-import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
+import {
+  fetchStarsVault, refreshReferral, referralLink, referralShareUrl, requestStarsPayout, starterVault,
+  type StarsVault, type VaultFriend,
+} from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type PieceColor } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import { BOT_HANDLE, impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
+import { impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
 import { CHANNEL_URL, telegramShareLink } from '../shared/config';
+import { REFERRAL_CONFIG } from '../shared/referralConfig';
 
 export interface MenuApi {
   router: Router;
@@ -1975,129 +1979,274 @@ export function createMenu(api: MenuApi): Menu {
     api.router.go('settings');
   });
 
-  /* ---- referral hub: the Invite & Earn card, the link sheet, the claim ----
-     The save owns the counters (`profile.referral`); this block owns the sheet's face and the
-     taps — open, copy, share, claim. The reward chime and the medium haptic fire on a claim that
-     actually paid. The campaign figures come from the storage constants, never hardcoded twice. */
-  const refSheet = api.sheet('sheet-referral');
-  const refLinkEl = document.getElementById('ref-link') as HTMLInputElement | null;
-  let refCopyTimer = 0;
-  let refPoll = 0;
+  /* ---- Stars Vault: the two-stage invite card in Profile ----
+     The room owns every figure on this card — the balance, both stage pills, the friend rows and
+     the payout gate. This block reads that verdict, paints it, and owns three taps: share, copy,
+     request payout. Nothing is computed here except the layout, so a hand-edited save can never
+     move a Star. */
+  const svFriendsEl = document.getElementById('sv-friends');
+  const svPayoutBtn = document.getElementById('sv-payout') as HTMLButtonElement | null;
+  const svShareBtn = document.getElementById('sv-share') as HTMLButtonElement | null;
+  const svCopyBtn = document.getElementById('sv-copy') as HTMLButtonElement | null;
+  let vault: StarsVault = starterVault();
+  let vaultBusy = false;
+  let vaultPoll = 0;
+  let svCopyTimer = 0;
 
-  function paintReferral() {
-    const r = profile.referral;
-    const sub = document.getElementById('pf-invite-s');
-    if (sub) sub.textContent = t('inviteEarn').replace('{n}', en(REFERRAL_REWARD));
-    const banner = document.getElementById('ref-banner');
-    if (banner) banner.innerHTML = `Get <b>${en(REFERRAL_REWARD)} Coins</b> for you &amp; your friend upon joining!`;
-    const pill = document.getElementById('pf-invite-pill');
-    if (pill) pill.textContent = r.joins > 0 ? `${en(r.joins)} Invited` : t('invite');
-    const card = document.getElementById('pf-invite');
-    if (card) {
-      card.setAttribute('aria-label', r.joins > 0
-        ? `Invite friends and earn coins. ${en(r.joins)} friend${r.joins === 1 ? '' : 's'} joined so far`
-        : `Invite friends and earn ${en(REFERRAL_REWARD)} coins per invite`);
-    }
-    const joins = document.getElementById('ref-joins');
-    if (joins) joins.textContent = en(r.joins);
-    const unclaimed = document.getElementById('ref-unclaimed');
-    if (unclaimed) unclaimed.textContent = en(r.unclaimed);
-    const claim = document.getElementById('ref-claim') as HTMLButtonElement | null;
-    if (claim) {
-      claim.disabled = r.unclaimed <= 0;
-      claim.setAttribute('aria-label', r.unclaimed > 0
-        ? `Claim ${en(r.unclaimed)} referral coins`
-        : 'No referral rewards to claim yet');
-    }
-    /* The modal previews the real handle and the server-issued code, never a guessed id. */
-    const code = referralCode();
-    const handle = document.getElementById('ref-handle');
-    if (handle) handle.textContent = `@${BOT_HANDLE}`;
-    const codeEl = document.getElementById('ref-code');
-    if (codeEl) codeEl.textContent = code ? `ref_${code}` : 'ref_…';
-    const link = referralLink();
-    if (refLinkEl) {
-      refLinkEl.value = link;
-      refLinkEl.placeholder = link ? '' : 'Preparing your invite link…';
-    }
-    const copy = document.getElementById('ref-copy') as HTMLButtonElement | null;
-    if (copy) copy.disabled = !link;
-    const share = document.getElementById('ref-share') as HTMLButtonElement | null;
-    if (share) share.disabled = !link;
-  }
+  /** `t()` with the campaign's own figures filled in. Every number arrives already Latin. */
+  const svFill = (key: string, vars: Record<string, string>): string => {
+    let out = t(key);
+    for (const [token, value] of Object.entries(vars)) out = out.split(`{${token}}`).join(value);
+    return out;
+  };
 
-  function stopRefPoll() {
-    if (!refPoll) return;
-    window.clearInterval(refPoll);
-    refPoll = 0;
-  }
+  const svText = (id: string, value: string): void => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
 
-  function startRefPoll() {
-    stopRefPoll();
-    refPoll = window.setInterval(() => {
-      if (!refSheet?.classList.contains('open')) { stopRefPoll(); return; }
-      void refreshReferral().then(() => {
-        if (refSheet?.classList.contains('open')) paintReferral();
+  /** The letter a nameless friend wears: never their id, which is not a name. */
+  const svInitial = (name: string): string => (name.trim().slice(0, 1) || '★').toUpperCase();
+
+  function svFriendRow(f: VaultFriend): HTMLElement {
+    const C = REFERRAL_CONFIG;
+    const li = document.createElement('li');
+    li.className = 'sv-friend';
+    li.dataset.flagged = String(f.flagged);
+    li.dataset.done = String(f.stage1 && f.stage2);
+
+    const head = document.createElement('div');
+    head.className = 'sv-friend-h';
+
+    const av = document.createElement('span');
+    av.className = 'sv-friend-av';
+    av.setAttribute('aria-hidden', 'true');
+    /* Only a real https photo is ever loaded; anything else wears the initial instead. */
+    if (/^https:\/\//i.test(f.avatar)) {
+      const img = document.createElement('img');
+      img.src = f.avatar;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.addEventListener('error', () => { img.remove(); av.textContent = svInitial(f.name); });
+      av.append(img);
+    } else {
+      av.textContent = svInitial(f.name);
+    }
+
+    const nm = document.createElement('b');
+    nm.className = 'sv-friend-n';
+    nm.dir = 'auto';
+    nm.textContent = f.name || t('vaultFriendAnon');
+
+    const total = document.createElement('span');
+    total.className = 'sv-friend-total';
+    total.dir = 'ltr';
+    const complete = f.credited >= C.TOTAL_PER_FRIEND_STARS;
+    total.textContent = svFill('vaultFriendTotal', {
+      n: en(f.credited), total: en(C.TOTAL_PER_FRIEND_STARS),
+    }) + (complete ? ' ✓' : '');
+    total.dataset.complete = String(complete);
+
+    head.append(av, nm, total);
+
+    const pills = document.createElement('div');
+    pills.className = 'sv-friend-pills';
+
+    const pill1 = document.createElement('span');
+    pill1.className = 'sv-fpill';
+    pill1.dir = 'ltr';
+    pill1.dataset.state = f.stage1 ? 'done' : 'open';
+    pill1.textContent = f.stage1
+      ? svFill('vaultStageDone', { n: en(C.STAGE1_REWARD_STARS) })
+      : svFill('vaultStage1Progress', {
+        m: en(Math.min(f.matches, C.STAGE1_MIN_MATCHES)),
+        max: en(C.STAGE1_MIN_MATCHES),
+        d: en(Math.min(f.days, C.STAGE1_MIN_DAYS)),
+        days: en(C.STAGE1_MIN_DAYS),
       });
-    }, 3000);
+
+    const pill2 = document.createElement('span');
+    pill2.className = 'sv-fpill';
+    pill2.dir = 'ltr';
+    pill2.dataset.state = f.stage2 ? 'gold' : 'open';
+    pill2.textContent = f.stage2
+      ? svFill('vaultStageDone', { n: en(C.STAGE2_REWARD_STARS) })
+      : svFill('vaultStage2Progress', {
+        w: en(Math.min(f.pvpWins, C.STAGE2_MIN_RANKED_PVP_WINS)),
+        max: en(C.STAGE2_MIN_RANKED_PVP_WINS),
+      });
+
+    pills.append(pill1, pill2);
+
+    if (f.flagged) {
+      const held = document.createElement('span');
+      held.className = 'sv-friend-held';
+      held.textContent = t('vaultFlagged');
+      pills.append(held);
+    }
+
+    li.append(head, pills);
+    return li;
   }
 
-  function openReferral() {
-    if (!refSheet) return;
-    paintReferral();
-    api.sheets.open(refSheet);
-    impact('light');
-    /* the Worker's live ledger; the local save paints instantly and the delta folds in after */
-    void refreshReferral().then(() => { if (refSheet.classList.contains('open')) paintReferral(); });
-    startRefPoll();
+  function paintVault(): void {
+    const C = REFERRAL_CONFIG;
+    const balance = vault.vaultBalance;
+    const target = vault.threshold;
+    const pct = target > 0 ? Math.max(0, Math.min(100, (balance / target) * 100)) : 0;
+
+    svText('sv-bal', en(balance));
+    svText('sv-target', en(target));
+    const bar = document.getElementById('sv-bar');
+    const fill = document.getElementById('sv-bar-fill');
+    if (fill) fill.style.width = `${pct.toFixed(1)}%`;
+    if (bar) {
+      bar.setAttribute('aria-valuemax', String(target));
+      bar.setAttribute('aria-valuenow', String(Math.min(balance, target)));
+      bar.setAttribute('aria-valuetext', `${en(balance)} / ${en(target)}`);
+    }
+    svText('sv-gift', balance >= target
+      ? svFill('vaultGiftDone', { gift: en(vault.starterBonus) })
+      : svFill('vaultGift', {
+        gift: en(vault.starterBonus),
+        more: en(Math.max(0, target - balance)),
+        target: en(target),
+      }));
+
+    svText('sv-pending', en(vault.pendingFriendsCount));
+    svText('sv-earned', `+${en(vault.earnedStars)} ⭐`);
+    svText('sv-paid', `${en(vault.paidOutStars)} ⭐`);
+
+    svText('sv-step2-r', svFill('vaultStep2Rule', {
+      n: en(C.STAGE1_REWARD_STARS), m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
+    }));
+    svText('sv-step3-r', svFill('vaultStep3Rule', {
+      n: en(C.STAGE2_REWARD_STARS), w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
+    }));
+
+    const link = referralLink();
+    svText('sv-share-t', svFill('vaultShare', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
+    if (svShareBtn) {
+      svShareBtn.disabled = !link;
+      svShareBtn.setAttribute('aria-label', link ? t('vaultShareAria') : t('vaultLinkPending'));
+    }
+    if (svCopyBtn) svCopyBtn.disabled = !link;
+
+    if (svPayoutBtn) {
+      const label = vault.waiting
+        ? t('vaultPayoutWaiting')
+        : vault.canPayout
+          ? svFill('vaultPayoutReady', { n: en(balance) })
+          : svFill('vaultPayoutLocked', { n: en(target) });
+      svText('sv-payout-t', label);
+      svPayoutBtn.disabled = vaultBusy || !vault.canPayout;
+      svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
+      svPayoutBtn.setAttribute('aria-label', label);
+    }
+
+    const notice = document.getElementById('sv-notice');
+    if (notice) {
+      const queued = vault.queuedStars > 0;
+      const offline = !vault.live;
+      notice.hidden = !queued && !offline;
+      notice.dataset.tone = queued ? 'gold' : 'dim';
+      notice.textContent = queued
+        ? svFill('vaultQueued', { n: en(vault.queuedStars) })
+        : offline ? t('vaultOffline') : '';
+    }
+
+    const live = document.getElementById('sv-live');
+    if (live) live.dataset.live = String(vault.live);
+
+    svText('sv-friends-n', en(vault.pendingFriendsCount + vault.qualifiedFriendsCount));
+    if (svFriendsEl) {
+      svFriendsEl.textContent = '';
+      const frag = document.createDocumentFragment();
+      for (const f of vault.friends) frag.append(svFriendRow(f));
+      svFriendsEl.append(frag);
+    }
+    const empty = document.getElementById('sv-empty');
+    if (empty) empty.hidden = vault.friends.length > 0;
+
+    svText('sv-note', svFill('vaultNote', { max: en(C.MAX_QUALIFIED_PER_INVITER_MONTH) }));
   }
 
-  document.getElementById('pf-invite')?.addEventListener('click', openReferral);
-  refLinkEl?.addEventListener('focus', () => refLinkEl.select());
-  refLinkEl?.addEventListener('click', () => refLinkEl.select());
+  function stopVaultPoll(): void {
+    if (!vaultPoll) return;
+    window.clearInterval(vaultPoll);
+    vaultPoll = 0;
+  }
 
-  document.getElementById('ref-copy')?.addEventListener('click', () => {
-    const btn = document.getElementById('ref-copy');
+  /** Read the room's verdict and paint it. A refusal keeps the last good reading on the card. */
+  async function refreshVault(): Promise<boolean> {
+    const reading = await fetchStarsVault();
+    if (!reading) return false;
+    vault = reading;
+    paintVault();
+    return true;
+  }
+
+  /* The card is inline now, so the poll runs while Profile is the screen in front of the player
+     and stops itself the moment they leave — a friend's stage can land without a reopen. */
+  function startVaultPoll(): void {
+    stopVaultPoll();
+    vaultPoll = window.setInterval(() => {
+      const screen = document.getElementById('s-profile');
+      if (!screen || screen.hidden) { stopVaultPoll(); return; }
+      void refreshVault();
+    }, 5000);
+  }
+
+  svShareBtn?.addEventListener('click', () => {
+    impact('medium');
+    const share = referralShareUrl();
+    if (!share) { showPfToast(t('vaultLinkPending')); return; }
+    openTelegramShare(share);
+  });
+
+  svCopyBtn?.addEventListener('click', () => {
     const link = referralLink();
     if (!link) { impact('light'); return; }
     impact('light');
     void copyText(link).then((ok) => {
       notify(ok ? 'success' : 'warning');
-      if (!btn || !ok) return;
-      const label = btn.querySelector<HTMLElement>('.ref-copy-t');
-      if (label) label.textContent = 'Copied! ✔';
-      btn.classList.add('copied');
-      window.clearTimeout(refCopyTimer);
-      refCopyTimer = window.setTimeout(() => {
-        if (label) label.textContent = 'Copy';
-        btn.classList.remove('copied');
+      const label = svCopyBtn.querySelector<HTMLElement>('.sv-copy-t');
+      if (!ok || !label) return;
+      label.textContent = t('vaultCopied');
+      svCopyBtn.classList.add('copied');
+      window.clearTimeout(svCopyTimer);
+      svCopyTimer = window.setTimeout(() => {
+        label.textContent = t('vaultCopy');
+        svCopyBtn.classList.remove('copied');
       }, 1400);
     });
   });
 
-  document.getElementById('ref-share')?.addEventListener('click', () => {
+  svPayoutBtn?.addEventListener('click', () => {
+    if (vaultBusy || !vault.canPayout) { impact('light'); return; }
+    vaultBusy = true;
     impact('medium');
-    const share = referralShareUrl();
-    if (!share) return;
-    try {
-      const w = window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } };
-      if (w.Telegram?.WebApp?.openTelegramLink) { w.Telegram.WebApp.openTelegramLink(share); return; }
-    } catch { /* fall through to window.open */ }
-    try { window.open(share, '_blank', 'noopener'); } catch { /* webview blocked — the link is still copyable */ }
+    paintVault();
+    void requestStarsPayout().then((reading) => {
+      vaultBusy = false;
+      if (!reading) {
+        notify('warning');
+        showPfToast(t('vaultPayoutRefused'));
+        paintVault();
+        return;
+      }
+      vault = reading;
+      playReward();
+      notify('success');
+      showPfToast(t('vaultPayoutFiled'));
+      paintVault();
+    });
   });
 
-  document.getElementById('ref-claim')?.addEventListener('click', () => {
-    const paid = claimReferralRewards();
-    if (paid <= 0) { impact('light'); return; }
-    playReward();                              /* the chime lands on the tap's own frame */
-    impact('medium');
-    notify('success');
-    showPfToast(`+${en(paid)} Coins · Referral rewards`);
-    paintReferral();
-  });
-
-  /* the ledger fold lands on a save flush; repaint the card and the open sheet on that beat */
-  onChange(paintReferral);
+  onLang(paintVault);
+  paintVault();
+  void refreshReferral().then(() => paintVault());
+  void refreshVault();
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
@@ -3227,7 +3376,7 @@ export function createMenu(api: MenuApi): Menu {
       );
     }
     paintHeroExtras(lv);
-    paintReferral();
+    paintVault();
 
     const c = profile.country;
     // Header country pill was decluttered — Profile owns country now. Guard for legacy DOM.
@@ -4131,6 +4280,9 @@ export function createMenu(api: MenuApi): Menu {
         paintProfile();                           // the equipped row is only laid out once it is showing
         paintBadges();                            // the shelf mounts on first entry, not at boot
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
+        paintVault();                             // the Stars Vault reads the room, never the save
+        void refreshVault();
+        startVaultPoll();
       }
       /* Home commits the strength live to menuState, so repaint whenever these screens come forward */
       if (id === 'modes' || id === 'custom') {

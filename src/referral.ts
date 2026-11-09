@@ -22,6 +22,7 @@ import {
   REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH, REFERRAL_CODE_RE, REFERRAL_PREFIX, REFERRAL_REWARD,
   referralAppLink, referralPayload, telegramShareLink,
 } from '../shared/config';
+import { REFERRAL_CONFIG } from '../shared/referralConfig';
 
 const DEVICE_KEY = 'detour.device.v1';
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -57,6 +58,15 @@ function deviceCode(): string {
   for (const byte of bytes) code += REFERRAL_CODE_ALPHABET[byte % REFERRAL_CODE_ALPHABET.length];
   writeJson(DEVICE_KEY, { code });
   return code;
+}
+
+/**
+ * The fingerprint the Worker's device lock reads. A Telegram webview shares one localStorage
+ * origin across every account logged into the phone, so this code is stable across exactly the
+ * accounts a "one invited account per device" rule has to catch.
+ */
+export function deviceFingerprint(): string {
+  return deviceCode();
 }
 
 /** A signed Mini App session: the only case in which the Worker can own this player's code. */
@@ -119,6 +129,7 @@ function headers(): Record<string, string> {
     accept: 'application/json',
     'content-type': 'application/json',
     'x-telegram-init-data': tgInitData(),
+    'x-detour-device': deviceFingerprint(),
   };
 }
 
@@ -197,6 +208,161 @@ export async function gateReferral(): Promise<GateResult | null> {
       credited: data.credited === true,
       earned: typeof data.earned === 'number' ? data.earned : 0,
     };
+  } catch {
+    return null;
+  } finally {
+    t.done();
+  }
+}
+
+/* ---------- the Stars Vault ----------
+ *
+ * The two-stage Stars campaign is a different ledger from the coin credit above: the room watches
+ * the boards the invited friend actually plays and decides both stages itself. Nothing here
+ * computes a reward — these calls read a server verdict and hand it to the Profile card.
+ */
+
+export interface VaultFriend {
+  id: string;
+  name: string;
+  avatar: string;
+  matches: number;
+  days: number;
+  pvpMatches: number;
+  opponents: number;
+  pvpWins: number;
+  arena: number;
+  stage1: boolean;
+  stage2: boolean;
+  flagged: boolean;
+  credited: number;
+  queued: number;
+}
+
+export interface StarsVault {
+  /** false until a server read lands: the card paints the opening gift, never a guessed balance. */
+  live: boolean;
+  starterBonus: number;
+  earnedStars: number;
+  paidOutStars: number;
+  vaultBalance: number;
+  pendingFriendsCount: number;
+  qualifiedFriendsCount: number;
+  threshold: number;
+  canPayout: boolean;
+  waiting: boolean;
+  queuedStars: number;
+  budgetLeft: number;
+  friends: VaultFriend[];
+}
+
+const count = (value: unknown, max = 1_000_000): number => (
+  typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(max, Math.floor(value))) : 0
+);
+
+const label = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '');
+
+/**
+ * The opening state, straight from the campaign config: the pre-filled gift, the cash-out target
+ * and no friends. This is what the server answers on a first read too, so the card never flashes
+ * a different number before the live one lands.
+ */
+export function starterVault(): StarsVault {
+  return {
+    live: false,
+    starterBonus: REFERRAL_CONFIG.STARTER_VAULT_GIFT_STARS,
+    earnedStars: 0,
+    paidOutStars: 0,
+    vaultBalance: REFERRAL_CONFIG.STARTER_VAULT_GIFT_STARS,
+    pendingFriendsCount: 0,
+    qualifiedFriendsCount: 0,
+    threshold: REFERRAL_CONFIG.MIN_PAYOUT_THRESHOLD_STARS,
+    canPayout: false,
+    waiting: false,
+    queuedStars: 0,
+    budgetLeft: REFERRAL_CONFIG.GLOBAL_MONTHLY_BUDGET_STARS,
+    friends: [],
+  };
+}
+
+function readVault(raw: unknown): StarsVault | null {
+  const data = raw as Partial<StarsVault> & { ok?: unknown; friends?: unknown } | null;
+  if (!data || data.ok !== true) return null;
+  const friends: VaultFriend[] = [];
+  if (Array.isArray(data.friends)) {
+    for (const entry of data.friends) {
+      const f = entry as Partial<VaultFriend> | null;
+      if (!f || typeof f.id !== 'string' || !f.id) continue;
+      friends.push({
+        id: f.id.slice(0, 64),
+        name: label(f.name, 48),
+        avatar: label(f.avatar, 300),
+        matches: count(f.matches),
+        days: count(f.days, 366),
+        pvpMatches: count(f.pvpMatches),
+        opponents: count(f.opponents),
+        pvpWins: count(f.pvpWins),
+        arena: count(f.arena, 4),
+        stage1: f.stage1 === true,
+        stage2: f.stage2 === true,
+        flagged: f.flagged === true,
+        credited: count(f.credited, REFERRAL_CONFIG.TOTAL_PER_FRIEND_STARS),
+        queued: count(f.queued, REFERRAL_CONFIG.TOTAL_PER_FRIEND_STARS),
+      });
+    }
+  }
+  const starterBonus = count(data.starterBonus, REFERRAL_CONFIG.STARTER_VAULT_GIFT_STARS);
+  return {
+    live: true,
+    starterBonus,
+    earnedStars: count(data.earnedStars),
+    paidOutStars: count(data.paidOutStars),
+    vaultBalance: count(data.vaultBalance),
+    pendingFriendsCount: count(data.pendingFriendsCount),
+    qualifiedFriendsCount: count(data.qualifiedFriendsCount),
+    threshold: count(data.threshold) || REFERRAL_CONFIG.MIN_PAYOUT_THRESHOLD_STARS,
+    canPayout: data.canPayout === true,
+    waiting: data.waiting === true,
+    queuedStars: count(data.queuedStars),
+    budgetLeft: count(data.budgetLeft),
+    friends,
+  };
+}
+
+/**
+ * Read the vault. Unlike the coin ledger this does not insist on a signed Telegram identity: the
+ * room's marked dev door answers a local browser too, and a production call without one simply
+ * refuses, leaving the card on its opening state.
+ */
+export async function fetchStarsVault(): Promise<StarsVault | null> {
+  const url = workerUrl('/api/stars/vault');
+  if (!url) return null;
+  const t = timeout(7000);
+  try {
+    const res = await fetch(url, { signal: t.signal, headers: headers(), cache: 'no-store' });
+    if (!res.ok) return null;
+    return readVault(await res.json());
+  } catch {
+    return null;
+  } finally {
+    t.done();
+  }
+}
+
+/** File the manual payout request. The owner settles it by hand; nothing is transferred here. */
+export async function requestStarsPayout(): Promise<StarsVault | null> {
+  const url = workerUrl('/api/stars/payout');
+  if (!url) return null;
+  const t = timeout(9000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: t.signal,
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) return null;
+    return readVault(await res.json());
   } catch {
     return null;
   } finally {

@@ -1107,6 +1107,165 @@ async function pushSquadAction(id: string, action: SquadAction): Promise<SquadAc
   }
 }
 
+/* ---------- the Stars Vault payout queue, over `/api/admin/vault*` ----------
+ *
+ * The room owns every figure: what the invite programme earned, what the owner has already
+ * settled, which requests are waiting, and which accounts are held for collusion review. This
+ * reads that ledger and posts one decision at a time — it never computes a balance locally.
+ */
+
+type VaultStatus = 'waiting' | 'paid' | 'rejected';
+type VaultFilter = 'all' | VaultStatus;
+type VaultAction = 'PAID' | 'REJECT' | 'CLEAR' | 'FLAG';
+
+interface VaultRequest {
+  requestId: string;
+  playerId: string;
+  playerName: string;
+  amount: number;
+  createdAt: number;
+  status: VaultStatus;
+  decidedAt: number;
+}
+
+interface VaultFlag {
+  id: string;
+  name: string;
+  inviterId: string;
+  inviterName: string;
+  matches: number;
+  clusterMatches: number;
+  ratio: number;
+  pvpWins: number;
+  stage1: boolean;
+  stage2: boolean;
+  heldStars: number;
+}
+
+interface VaultTotals {
+  earned: number;
+  paid: number;
+  waiting: number;
+  waitingStars: number;
+  queued: number;
+  inviters: number;
+  friends: number;
+  flagged: number;
+  budget: number;
+  budgetSpent: number;
+  budgetLeft: number;
+  monthKey: string;
+}
+
+interface VaultPage {
+  totals: VaultTotals;
+  requests: VaultRequest[];
+  flagged: VaultFlag[];
+}
+
+const vaultNum = (v: unknown): number => (
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0
+);
+const vaultStr = (v: unknown, max = 64): string => (typeof v === 'string' ? v.slice(0, max) : '');
+
+function readVaultRequest(raw: unknown): VaultRequest | null {
+  const r = raw as Partial<VaultRequest> | null;
+  if (!r || typeof r.requestId !== 'string' || !r.requestId) return null;
+  const amount = vaultNum(r.amount);
+  if (amount <= 0) return null;
+  return {
+    requestId: r.requestId.slice(0, 40),
+    playerId: vaultStr(r.playerId),
+    playerName: vaultStr(r.playerName, 48),
+    amount,
+    createdAt: vaultNum(r.createdAt),
+    status: r.status === 'paid' ? 'paid' : r.status === 'rejected' ? 'rejected' : 'waiting',
+    decidedAt: vaultNum(r.decidedAt),
+  };
+}
+
+function readVaultFlag(raw: unknown): VaultFlag | null {
+  const r = raw as Partial<VaultFlag> | null;
+  if (!r || typeof r.id !== 'string' || !r.id) return null;
+  return {
+    id: r.id.slice(0, 64),
+    name: vaultStr(r.name, 48),
+    inviterId: vaultStr(r.inviterId),
+    inviterName: vaultStr(r.inviterName, 48),
+    matches: vaultNum(r.matches),
+    clusterMatches: vaultNum(r.clusterMatches),
+    ratio: Math.min(100, vaultNum(r.ratio)),
+    pvpWins: vaultNum(r.pvpWins),
+    stage1: r.stage1 === true,
+    stage2: r.stage2 === true,
+    heldStars: vaultNum(r.heldStars),
+  };
+}
+
+function readVaultTotals(raw: unknown): VaultTotals {
+  const r = (raw ?? {}) as Partial<VaultTotals>;
+  return {
+    earned: vaultNum(r.earned),
+    paid: vaultNum(r.paid),
+    waiting: vaultNum(r.waiting),
+    waitingStars: vaultNum(r.waitingStars),
+    queued: vaultNum(r.queued),
+    inviters: vaultNum(r.inviters),
+    friends: vaultNum(r.friends),
+    flagged: vaultNum(r.flagged),
+    budget: vaultNum(r.budget),
+    budgetSpent: vaultNum(r.budgetSpent),
+    budgetLeft: vaultNum(r.budgetLeft),
+    monthKey: vaultStr(r.monthKey, 7),
+  };
+}
+
+function readVaultPage(data: { totals?: unknown; requests?: unknown; flagged?: unknown }): VaultPage {
+  const requests: VaultRequest[] = [];
+  const flagged: VaultFlag[] = [];
+  if (Array.isArray(data.requests)) {
+    for (const raw of data.requests) {
+      const row = readVaultRequest(raw);
+      if (row) requests.push(row);
+    }
+  }
+  if (Array.isArray(data.flagged)) {
+    for (const raw of data.flagged) {
+      const row = readVaultFlag(raw);
+      if (row) flagged.push(row);
+    }
+  }
+  return { totals: readVaultTotals(data.totals), requests, flagged };
+}
+
+async function fetchVault(): Promise<VaultPage | null> {
+  const data = await parseJson<{ ok?: boolean; totals?: unknown; requests?: unknown; flagged?: unknown }>(
+    await adminFetch('/api/admin/vault', { cache: 'no-store' }),
+  );
+  if (!data || data.ok !== true || !Array.isArray(data.requests)) return null;
+  return readVaultPage(data);
+}
+
+/** One decision's answer: the whole re-read ledger, a refusal code, or no answer at all. */
+type VaultActionResult =
+  | { state: 'ok'; page: VaultPage }
+  | { state: 'denied' }
+  | { state: 'refused'; error: string }
+  | { state: 'error' };
+
+async function pushVaultAction(id: string, action: VaultAction): Promise<VaultActionResult> {
+  const res = await postJson('/api/admin/vault/action', { id, action });
+  if (!res) return { state: 'error' };
+  if (res.status === 401 || res.status === 403) return { state: 'denied' };
+  try {
+    const data = (await res.json()) as { ok?: boolean; error?: string; view?: { ok?: boolean; totals?: unknown; requests?: unknown; flagged?: unknown } };
+    if (data?.ok === true && data.view?.ok === true) return { state: 'ok', page: readVaultPage(data.view) };
+    return { state: 'refused', error: typeof data?.error === 'string' ? data.error : '' };
+  } catch {
+    return { state: 'refused', error: '' };
+  }
+}
+
 /* ---------- the VIP storefront & revenue, over `/api/admin/vip/*` ---------- */
 
 const vipCount = (v: unknown): number =>
@@ -1767,6 +1926,25 @@ export function createAdmin(api: AdminApi): Admin {
   const squadKpiVerifiedSub = $<HTMLElement>('squad-kpi-verified-sub');
   const squadKpiMembers = $<HTMLElement>('squad-kpi-members');
   const squadKpiMembersSub = $<HTMLElement>('squad-kpi-members-sub');
+  /* The Stars Vault payout queue: four KPIs, the request list, and the collusion review slab */
+  const vaultList = $<HTMLElement>('adm-vault-list');
+  const vaultEmpty = $<HTMLElement>('adm-vault-empty');
+  const vaultFlags = $<HTMLElement>('adm-vault-flags');
+  const vaultFlagEmpty = $<HTMLElement>('vault-flag-empty');
+  const vaultFlagMeta = $<HTMLElement>('vault-flag-meta');
+  const vaultTotalEl = $<HTMLElement>('vault-total');
+  const vaultSourceEl = $<HTMLElement>('vault-source');
+  const vaultRefresh = $<HTMLButtonElement>('vault-refresh');
+  const vaultMonthEl = $<HTMLElement>('vaultadm-month');
+  const vaultChips = [...document.querySelectorAll<HTMLButtonElement>('[data-vfilter]')];
+  const vaultKpiEarned = $<HTMLElement>('vault-kpi-earned');
+  const vaultKpiEarnedSub = $<HTMLElement>('vault-kpi-earned-sub');
+  const vaultKpiPaid = $<HTMLElement>('vault-kpi-paid');
+  const vaultKpiPaidSub = $<HTMLElement>('vault-kpi-paid-sub');
+  const vaultKpiWaiting = $<HTMLElement>('vault-kpi-waiting');
+  const vaultKpiWaitingSub = $<HTMLElement>('vault-kpi-waiting-sub');
+  const vaultKpiBudget = $<HTMLElement>('vault-kpi-budget');
+  const vaultKpiBudgetSub = $<HTMLElement>('vault-kpi-budget-sub');
   /* Access control: the list, the add key, and the appointment drawer */
   const aclList = $<HTMLElement>('adm-acl-list');
   const aclEmpty = $<HTMLElement>('adm-acl-empty');
@@ -1872,6 +2050,13 @@ export function createAdmin(api: AdminApi): Admin {
   let squadsOn = false;
   let squadsReady = false;
   let squadsBusy = false;
+
+  /** The Stars Vault: the last ledger a read answered, the status filter, and whether work is out. */
+  let vaultPage: VaultPage | null = null;
+  let vaultFilter: VaultFilter = 'waiting';
+  let vaultOn = false;
+  let vaultReady = false;
+  let vaultBusy = false;
 
   /** The VIP storefront: the last sheet and ledger a read answered, and whether work is out. */
   let vipConfig: VipPlanConfig = readVipPlanConfig(null);
@@ -2057,6 +2242,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintActivity();
     paintUsers();
     paintSquads();
+    paintVault();
     paintVipAdmin();
     paintAcl();
   }
@@ -4261,6 +4447,312 @@ export function createAdmin(api: AdminApi): Admin {
     paintSquads();
   }
 
+  /* ---------- Stars Vault & Payouts (worker/matchmaker.ts) ---------- */
+
+  const VAULT_STATUS_TEXT: Record<VaultStatus, string> = {
+    waiting: 'Waiting',
+    paid: 'Paid',
+    rejected: 'Rejected',
+  };
+
+  const VAULT_ACTION_ERROR: Record<string, string> = {
+    bad_id: 'That request id is not one the ledger holds.',
+    bad_action: 'The Worker does not know that command.',
+    already_decided: 'That request was already settled — the queue has moved on.',
+    not_found: 'No request or flagged account with that id.',
+  };
+
+  /** `Nov 9, 14:05` — when a request was filed or settled, in this device's timezone. */
+  const vaultWhen = (ms: number): string => (ms > 0
+    ? new Date(ms).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    : '—');
+
+  function vaultCell(value: string, label: string): HTMLElement {
+    const cell = document.createElement('span');
+    cell.className = 'adm-vault-cell';
+    const b = document.createElement('b');
+    b.dir = 'ltr';
+    b.textContent = value;
+    const k = document.createElement('span');
+    k.textContent = label;
+    cell.append(b, k);
+    return cell;
+  }
+
+  function vaultRequestCard(row: VaultRequest): HTMLElement {
+    const li = document.createElement('li');
+    li.className = 'adm-vault-req';
+    li.dataset.vault = row.requestId;
+    li.dataset.status = row.status;
+
+    const head = document.createElement('div');
+    head.className = 'adm-vault-h';
+    const who = document.createElement('span');
+    who.className = 'adm-vault-who';
+    const name = document.createElement('b');
+    name.className = 'adm-vault-name';
+    name.dir = 'auto';
+    name.textContent = row.playerName || row.playerId;
+    const id = document.createElement('span');
+    id.className = 'adm-vault-id';
+    id.dir = 'ltr';
+    id.textContent = row.playerId;
+    who.append(name, id);
+    const status = document.createElement('span');
+    status.className = 'adm-vault-st';
+    status.dataset.status = row.status;
+    status.textContent = VAULT_STATUS_TEXT[row.status];
+    head.append(who, status);
+
+    const cells = document.createElement('div');
+    cells.className = 'adm-vault-cells';
+    cells.append(
+      vaultCell(`${figure(row.amount)} ⭐`, 'Amount'),
+      vaultCell(vaultWhen(row.createdAt), 'Requested'),
+    );
+    if (row.status !== 'waiting') cells.append(vaultCell(vaultWhen(row.decidedAt), 'Settled'));
+
+    li.append(head, cells);
+
+    if (row.status === 'waiting') {
+      const actions = document.createElement('div');
+      actions.className = 'adm-vault-actions';
+      const pay = document.createElement('button');
+      pay.type = 'button';
+      pay.className = 'adm-btn adm-btn-gold';
+      pay.dataset.vaultAction = 'PAID';
+      pay.textContent = 'Mark Paid';
+      pay.disabled = vaultBusy;
+      pay.title = 'Record that you have settled this request yourself. Nothing is transferred here.';
+      const reject = document.createElement('button');
+      reject.type = 'button';
+      reject.className = 'adm-btn adm-btn-danger';
+      reject.dataset.vaultAction = 'REJECT';
+      reject.textContent = 'Reject';
+      reject.disabled = vaultBusy;
+      reject.title = 'Refuse the request and return its Stars to the player’s vault balance.';
+      actions.append(pay, reject);
+      li.append(actions);
+    }
+    return li;
+  }
+
+  function vaultFlagCard(row: VaultFlag): HTMLElement {
+    const li = document.createElement('li');
+    li.className = 'adm-vault-flag';
+    li.dataset.vault = row.id;
+
+    const head = document.createElement('div');
+    head.className = 'adm-vault-h';
+    const who = document.createElement('span');
+    who.className = 'adm-vault-who';
+    const name = document.createElement('b');
+    name.className = 'adm-vault-name';
+    name.dir = 'auto';
+    name.textContent = row.name || row.id;
+    const by = document.createElement('span');
+    by.className = 'adm-vault-id';
+    by.dir = 'auto';
+    by.textContent = row.inviterName ? `invited by ${row.inviterName}` : row.inviterId;
+    who.append(name, by);
+    const ratio = document.createElement('span');
+    ratio.className = 'adm-vault-st';
+    ratio.dataset.status = 'revoked';
+    ratio.dir = 'ltr';
+    ratio.textContent = `${figure(row.ratio)}% inside`;
+    ratio.title = 'Share of this account’s valid matches played against its own inviter or fellow invitees.';
+    head.append(who, ratio);
+
+    const cells = document.createElement('div');
+    cells.className = 'adm-vault-cells';
+    cells.append(
+      vaultCell(figure(row.matches), 'Matches'),
+      vaultCell(figure(row.clusterMatches), 'In cluster'),
+      vaultCell(`${figure(row.heldStars)} ⭐`, 'Held'),
+    );
+
+    const actions = document.createElement('div');
+    actions.className = 'adm-vault-actions';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'adm-btn';
+    clear.dataset.vaultAction = 'CLEAR';
+    clear.textContent = 'Clear Flag';
+    clear.disabled = vaultBusy;
+    clear.title = 'Accept the review: release the held stages and stop the ratio re-flagging this account.';
+    actions.append(clear);
+
+    li.append(head, cells, actions);
+    return li;
+  }
+
+  function paintVault(): void {
+    const totals = vaultPage?.totals ?? null;
+    const pending = vaultBusy && !vaultReady;
+    const figureOr = (v: number | undefined): string => (v == null ? (pending ? '…' : '—') : figure(v));
+
+    if (vaultKpiEarned) vaultKpiEarned.textContent = figureOr(totals?.earned);
+    if (vaultKpiEarnedSub) {
+      vaultKpiEarnedSub.textContent = totals
+        ? `${figure(totals.inviters)} vaults · ${figure(totals.queued)} ⭐ queued`
+        : '—';
+    }
+    if (vaultKpiPaid) vaultKpiPaid.textContent = figureOr(totals?.paid);
+    if (vaultKpiPaidSub) vaultKpiPaidSub.textContent = totals ? 'settled by hand' : '—';
+    if (vaultKpiWaiting) vaultKpiWaiting.textContent = figureOr(totals?.waiting);
+    if (vaultKpiWaitingSub) {
+      vaultKpiWaitingSub.textContent = totals ? `${figure(totals.waitingStars)} ⭐ to settle` : '—';
+    }
+    if (vaultKpiBudget) vaultKpiBudget.textContent = figureOr(totals?.budgetLeft);
+    if (vaultKpiBudgetSub) {
+      vaultKpiBudgetSub.textContent = totals
+        ? `${figure(totals.budgetSpent)} / ${figure(totals.budget)} spent`
+        : '—';
+    }
+    if (vaultMonthEl) vaultMonthEl.textContent = totals?.monthKey || '—';
+
+    for (const chip of vaultChips) {
+      chip.setAttribute('aria-pressed', String((chip.dataset.vfilter ?? 'waiting') === vaultFilter));
+    }
+    if (vaultSourceEl) {
+      vaultSourceEl.textContent = pending ? 'READING…' : vaultOn ? 'LIVE LEDGER' : 'NO LEDGER';
+      vaultSourceEl.dataset.live = String(vaultOn);
+    }
+    if (vaultRefresh) {
+      vaultRefresh.dataset.busy = String(vaultBusy);
+      vaultRefresh.disabled = vaultBusy;
+    }
+
+    const rows = vaultPage?.requests ?? [];
+    const visible = vaultFilter === 'all' ? rows : rows.filter((r) => r.status === vaultFilter);
+    if (vaultTotalEl) {
+      vaultTotalEl.textContent = pending
+        ? 'Reading the payout queue…'
+        : `${figure(visible.length)} of ${figure(rows.length)} requests`;
+    }
+    if (vaultList) {
+      vaultList.textContent = '';
+      const frag = document.createDocumentFragment();
+      for (const row of visible) frag.append(vaultRequestCard(row));
+      vaultList.append(frag);
+    }
+    if (vaultEmpty) {
+      vaultEmpty.hidden = visible.length > 0;
+      vaultEmpty.textContent = pending
+        ? 'Reading the payout queue…'
+        : vaultOn
+          ? 'No payout requests in this view.'
+          : 'The Stars Vault ledger is not answering — no local or demo rows are substituted.';
+    }
+
+    const flags = vaultPage?.flagged ?? [];
+    if (vaultFlagMeta) {
+      vaultFlagMeta.textContent = totals ? `${figure(flags.length)} held` : '—';
+    }
+    if (vaultFlags) {
+      vaultFlags.textContent = '';
+      const frag = document.createDocumentFragment();
+      for (const row of flags) frag.append(vaultFlagCard(row));
+      vaultFlags.append(frag);
+    }
+    if (vaultFlagEmpty) vaultFlagEmpty.hidden = flags.length > 0;
+  }
+
+  async function refreshVault(announce = false): Promise<boolean> {
+    if (vaultBusy) return false;
+    vaultBusy = true;
+    paintVault();
+    try {
+      const page = await fetchVault();
+      vaultOn = !!page;
+      if (page) {
+        vaultPage = page;
+        vaultReady = true;
+      }
+      if (!page && announce) {
+        notify('error');
+        api.note('The Stars Vault ledger is not answering — no local or demo rows are substituted.', true, 3000);
+      }
+      return !!page;
+    } finally {
+      vaultBusy = false;
+      paintVault();
+    }
+  }
+
+  async function runVaultAction(id: string, action: VaultAction): Promise<void> {
+    if (vaultBusy) return;
+    vaultBusy = true;
+    impact('medium');
+    paintVault();
+    try {
+      const result = await pushVaultAction(id, action);
+      if (result.state === 'ok') {
+        vaultPage = result.page;
+        vaultOn = true;
+        vaultReady = true;
+        if (action === 'PAID') {
+          notify('success');
+          api.note('Marked paid — record the transfer yourself; the app moved no Stars.', false, 3000);
+        } else if (action === 'REJECT') {
+          notify('warning');
+          api.note('Request rejected — its Stars are back in the player’s vault balance.', false, 3000);
+        } else {
+          notify('success');
+          api.note('Flag cleared — the held stages are released and the ratio will not re-raise it.', false, 3000);
+        }
+      } else {
+        notify('error');
+        if (result.state === 'denied') {
+          api.note('SuperAdmin access required — this session can read the payout queue only.', true, 3200);
+        } else if (result.state === 'refused') {
+          api.note(VAULT_ACTION_ERROR[result.error] ?? 'The Worker refused that command.', true, 3000);
+        } else {
+          api.note('The Worker is not answering — no change was made.', true, 3000);
+        }
+      }
+    } finally {
+      vaultBusy = false;
+      paintVault();
+    }
+  }
+
+  /** Both settling keys ask first: one records a payment, the other gives Stars back. */
+  function requestVaultAction(id: string, action: VaultAction): void {
+    const row = vaultPage?.requests.find((r) => r.requestId === id);
+    if (action === 'PAID' && row) {
+      openConfirm(
+        'Mark this payout settled?',
+        `${row.playerName || row.playerId} asked for ${figure(row.amount)} ⭐. Confirm only once you have paid them yourself — the app transfers nothing.`,
+        'Mark Paid',
+        () => void runVaultAction(id, action),
+      );
+      return;
+    }
+    if (action === 'REJECT' && row) {
+      openConfirm(
+        'Reject this payout?',
+        `${figure(row.amount)} ⭐ returns to ${row.playerName || row.playerId}’s vault balance and they may ask again.`,
+        'Reject Request',
+        () => void runVaultAction(id, action),
+      );
+      return;
+    }
+    if (action === 'CLEAR') {
+      const flag = vaultPage?.flagged.find((f) => f.id === id);
+      openConfirm(
+        'Clear this collusion flag?',
+        `${flag?.name || id} played ${figure(flag?.ratio ?? 0)}% of valid matches inside their own invite cluster. Clearing releases up to ${figure(flag?.heldStars ?? 0)} ⭐ and stops the ratio re-flagging them.`,
+        'Clear Flag',
+        () => void runVaultAction(id, action),
+      );
+      return;
+    }
+    void runVaultAction(id, action);
+  }
+
   /* ---------- VIP Storefront & Revenue (worker/matchmaker.ts) ---------- */
 
   const VIP_PLAN_LABEL: Record<VipPlanId, string> = {
@@ -5491,7 +5983,7 @@ export function createAdmin(api: AdminApi): Admin {
        snapshot that predates the latest enlistment. */
     const lastTab = tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab;
     if (lastTab === 'squads') void refreshSquads();
-    if (lastTab === 'controls') void refreshVipAdmin();
+    if (lastTab === 'controls') { void refreshVipAdmin(); void refreshVault(); }
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -5654,6 +6146,7 @@ export function createAdmin(api: AdminApi): Admin {
         }
         void refreshVipAdmin();
         void refreshForceJoin();
+        void refreshVault();
       }
     });
   }
@@ -5943,6 +6436,33 @@ export function createAdmin(api: AdminApi): Admin {
     const action = btn.dataset.squadAction;
     if (!card || (action !== 'VERIFY' && action !== 'REVOKE' && action !== 'BAN' && action !== 'UNBAN')) return;
     requestSquadAction(card.dataset.squad ?? '', action);
+  });
+
+  /* The payout queue and the review slab: both lists are rebuilt on every paint, so one delegated
+     listener each is all that ever holds — no handler outlives its card. */
+  const vaultActionFrom = (e: Event): void => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-vault-action]');
+    if (!btn) return;
+    const card = btn.closest<HTMLElement>('[data-vault]');
+    const action = btn.dataset.vaultAction;
+    if (!card || (action !== 'PAID' && action !== 'REJECT' && action !== 'CLEAR' && action !== 'FLAG')) return;
+    requestVaultAction(card.dataset.vault ?? '', action);
+  };
+  vaultList?.addEventListener('click', vaultActionFrom);
+  vaultFlags?.addEventListener('click', vaultActionFrom);
+  for (const chip of vaultChips) {
+    chip.addEventListener('click', () => {
+      const next = chip.dataset.vfilter;
+      if (next !== 'all' && next !== 'waiting' && next !== 'paid' && next !== 'rejected') return;
+      vaultFilter = next;
+      impact('light');
+      paintVault();
+    });
+  }
+  vaultRefresh?.addEventListener('click', () => {
+    if (vaultBusy) return;
+    impact('light');
+    void refreshVault(true);
   });
 
   /* the telemetry key: one reading at a time, with the spinner riding the same flag */

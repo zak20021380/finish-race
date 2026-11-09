@@ -7619,91 +7619,508 @@ html.reduced-motion .hex-photo { transition: none; }
 }
 .pf-toast.plain .coin { display: none; }
 
-/* ---- invite & earn: the compact referral trigger in the Profile rhythm ----
-   One 60px clay slab: engraved ceramic well (warm-gold gift), title + subtext,
-   and the amber clay key on the right. The whole card is the button, so the tap
-   target is the card and the key is its visible affordance. */
-.pf-invite-sec { gap: var(--pf-rhythm-tight, 0); }
-.pf-invite {
+/* ---- Stars Vault: the two-stage invite card in the Profile rhythm ----
+   One obsidian clay slab, read top to bottom: the balance against its target, the gift that
+   pre-fills it, three counters, the three-step guide, one primary action, the payout gate, and
+   the friends who are filling it. Gold is spent only where it means something — the meter fill,
+   the share key, and a payout that has actually unlocked. Everything else stays quiet clay, so
+   the card reads as one surface rather than a stack of competing glows.
+
+   Direction is surgical, per the app's rule: the card mirrors for fa/ar, but the meter and every
+   numeral stay LTR so a progress fill and a Latin figure never reverse. */
+.sv-sec { gap: var(--pf-rhythm-tight, 0); }
+.sv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 12px 13px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, .07) 0%, rgba(245, 158, 11, .015) 42%),
+    var(--clay-face);
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(245, 158, 11, .16),
+    var(--clay-ring);
+}
+.sv :is(button, input) { font: inherit; }
+
+/* head: the seal, the name, and a quiet ember that only lights on a live server read */
+.sv-h { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.sv-h-i {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--honey-ink);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.sv-h-i .ico { width: 19px; height: 19px; }
+.sv-h-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sv-t {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.sv-s {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+.sv-live {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.sv-live[data-live="true"] { background: var(--mint); box-shadow: 0 0 7px rgba(16, 185, 129, .55); }
+
+/* the meter: one number against one target, then the gold fill and the gift that seeded it */
+.sv-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px 11px 11px;
+  border-radius: 15px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.sv-bal {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  direction: ltr;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sv-bal b {
+  font-size: 27px;
+  font-weight: 900;
+  color: var(--honey-ink);
+  letter-spacing: -.01em;
+}
+.sv-bal-of { font-size: 17px; font-weight: 800; color: var(--text-dim); }
+.sv-bal span:not(.sv-bal-of):not(.sv-bal-star) { font-size: 17px; font-weight: 800; color: var(--ink-soft); }
+.sv-bal-star { font-size: 16px; }
+.sv-bar {
+  position: relative;
+  direction: ltr;
+  height: 11px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: linear-gradient(180deg, #080C14 0%, #0E1526 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.sv-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--gold-face);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -2px 3px rgba(120, 53, 15, .35);
+  transition: width var(--motion-fast, 180ms) ease;
+}
+.sv-gift {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--honey-ink);
+  overflow-wrap: anywhere;
+}
+
+/* three counters: label over figure, so a long Persian label never pushes the row wide */
+.sv-pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+.sv-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 4px 7px;
+  border-radius: 12px;
+  background: var(--clay-face);
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.sv-pill-k {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.sv-pill-v {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: var(--ink);
+  direction: ltr;
+  white-space: nowrap;
+}
+.sv-pill[data-tone="gold"] .sv-pill-v { color: var(--honey-ink); }
+.sv-pill[data-tone="mint"] .sv-pill-v { color: var(--mint-ink); }
+
+/* the guide: three numbered rows, icon then plain words then the exact rule */
+.sv-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.sv-step {
+  display: grid;
+  grid-template-columns: 19px 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.sv-step-n {
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--honey-ink);
+  font-family: var(--font-numeric);
+  font-size: 10px;
+  font-weight: 900;
+  direction: ltr;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3);
+}
+.sv-step-i { font-size: 14px; line-height: 1; text-align: center; }
+.sv-step-t {
+  grid-column: 3;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.sv-step-r {
+  grid-column: 3;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--honey-ink);
+  line-height: 1.35;
+  direction: ltr;
+  overflow-wrap: anywhere;
+}
+.sv-step:first-child .sv-step-t { grid-row: 1 / span 2; }
+
+/* one primary action beside its copy key; the payout gate is the only other button */
+.sv-acts { display: flex; align-items: stretch; gap: 7px; min-width: 0; }
+.sv-cta {
   --d: 3px;
   appearance: none;
   border: 0;
-  font: inherit;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: 15px;
+  background: var(--gold-face);
+  color: #10141D;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow:
+    0 var(--d) 0 var(--gold-lip),
+    0 10px 20px -12px rgba(245, 158, 11, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.sv-cta .ico { flex: none; width: 16px; height: 16px; color: #78350F; }
+.sv-cta span { min-width: 0; overflow-wrap: anywhere; }
+.sv-cta:hover:not(:active):not(:disabled) { filter: brightness(1.05); }
+.sv-cta:active:not(:disabled) { transform: translateY(var(--press-y)); --d: 1px; }
+.sv-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sv-copy {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  flex: none;
+  width: 62px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 15px;
+  background: var(--clay-face);
+  color: var(--chip-ink);
+  box-shadow: 0 var(--d) 0 #0A0E15, inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.sv-copy .ico { width: 15px; height: 15px; }
+.sv-copy-t {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sv-copy:active:not(:disabled) { transform: translateY(var(--press-y)); --d: 1px; }
+.sv-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sv-copy.copied { color: var(--mint-ink); box-shadow: 0 1px 0 #0A0E15, inset 0 0 0 1px rgba(110, 231, 183, .35); }
+.sv-cta:disabled, .sv-copy:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+.sv-payout {
+  --d: 3px;
+  appearance: none;
+  border: 0;
   cursor: pointer;
   width: 100%;
   min-width: 0;
+  min-height: 46px;
   display: flex;
   align-items: center;
-  gap: var(--s3);
-  padding: 9px var(--s3) 9px 10px;
-  border-radius: 20px;
-  text-align: left;
-  background:
-    linear-gradient(180deg, rgba(245, 158, 11, .09) 0%, rgba(245, 158, 11, .02) 60%),
-    var(--clay-face);
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(245, 158, 11, .16),
-    var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  justify-content: center;
+  padding: 9px 12px;
+  border-radius: 15px;
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
 }
-.pf-invite:hover:not(:active) { transform: translateY(-1px); }
-.pf-invite:active { transform: translateY(var(--press-y)); --d: 1px; }
-.pf-invite:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the ceramic well: a dark recess the gift glows out of */
-.pf-invite-well {
+.sv-payout span { min-width: 0; overflow-wrap: anywhere; }
+.sv-payout:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sv-payout:disabled { cursor: not-allowed; }
+/* the one glow on the card: it only exists once the vault has actually unlocked */
+.sv-payout[data-state="ready"] {
+  cursor: pointer;
+  background: var(--gold-face);
+  color: #10141D;
+  font-weight: 900;
+  box-shadow:
+    0 var(--d) 0 var(--gold-lip),
+    0 0 18px -4px rgba(245, 158, 11, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.sv-payout[data-state="ready"]:active { transform: translateY(var(--press-y)); --d: 1px; }
+.sv-payout[data-state="waiting"] { color: var(--honey-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .sv-payout[data-state="ready"] { animation: sv-ready 2.6s ease-in-out infinite; }
+}
+@keyframes sv-ready {
+  0%, 100% { box-shadow: 0 var(--d) 0 var(--gold-lip), 0 0 14px -6px rgba(245, 158, 11, .55), inset 0 1px 0 rgba(255, 255, 255, .5); }
+  50% { box-shadow: 0 var(--d) 0 var(--gold-lip), 0 0 22px -2px rgba(245, 158, 11, .8), inset 0 1px 0 rgba(255, 255, 255, .5); }
+}
+html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
+
+.sv-notice {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 11px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3);
+}
+.sv-notice[data-tone="dim"] {
+  background: rgba(255, 255, 255, .03);
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.sv-notice[hidden] { display: none; }
+
+/* the friends who are filling it: two pills each, so the next step is never a guess */
+.sv-friends-h { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.sv-friends-t {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.sv-friends-n {
   flex: none;
-  width: 40px;
-  height: 40px;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--honey-ink);
+  direction: ltr;
+}
+.sv-friends { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sv-friends:empty { display: none; }
+.sv-friend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 9px 9px;
+  border-radius: 13px;
+  background: var(--clay-face);
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.sv-friend[data-done="true"] { box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3), inset 0 1px 0 rgba(255, 255, 255, .05); }
+.sv-friend[data-flagged="true"] { box-shadow: inset 0 0 0 1px rgba(244, 63, 94, .34), inset 0 1px 0 rgba(255, 255, 255, .05); }
+.sv-friend-h { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sv-friend-av {
+  flex: none;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--field);
   color: var(--honey-ink);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .6),
-    inset 0 -1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
-    0 0 14px -4px rgba(245, 158, 11, .55);
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
 }
-.pf-invite-well .ico { width: 20px; height: 20px; filter: drop-shadow(0 0 6px rgba(245, 158, 11, .55)); }
-.pf-invite-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.pf-invite-t {
-  font-size: var(--t-2);
+.sv-friend-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sv-friend-n {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
   font-weight: 800;
   color: var(--ink);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.pf-invite-s {
-  font-size: var(--t-micro);
-  font-weight: 700;
-  color: var(--honey-ink);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-/* the amber clay key: the support send key's smaller sibling */
-.pf-invite-pill {
+.sv-friend-total {
   flex: none;
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
-  color: #78350F;
-  font-size: var(--t-micro);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
   font-weight: 900;
-  letter-spacing: .02em;
+  color: var(--ink-soft);
+  direction: ltr;
   white-space: nowrap;
-  box-shadow:
-    0 2px 0 #92400E,
-    inset 0 1px 0 rgba(255, 255, 255, .4),
-    inset 0 -2px 3px rgba(120, 53, 15, .35);
+}
+.sv-friend-total[data-complete="true"] { color: var(--honey-ink); }
+.sv-friend-pills { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.sv-fpill {
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  direction: ltr;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.sv-fpill[data-state="done"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.sv-fpill[data-state="gold"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.sv-friend-held {
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(244, 63, 94, .14);
+  color: var(--red-ink);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, .34);
+}
+.sv-empty {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.sv-empty[hidden] { display: none; }
+.sv-note {
+  margin: 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* Persian and Arabic read the card right to left; the meter and every numeral stay put. */
+html:lang(fa) .sv, html:lang(ar) .sv { direction: rtl; }
+html:lang(fa) .sv :is(.sv-t, .sv-s, .sv-gift, .sv-step-t, .sv-note, .sv-empty, .sv-notice, .sv-friends-t, .sv-pill-k, .sv-friend-held),
+html:lang(ar) .sv :is(.sv-t, .sv-s, .sv-gift, .sv-step-t, .sv-note, .sv-empty, .sv-notice, .sv-friends-t, .sv-pill-k, .sv-friend-held) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html:lang(fa) .sv :is(.sv-t, .sv-friends-t, .sv-pill-k), html:lang(ar) .sv :is(.sv-t, .sv-friends-t, .sv-pill-k) {
+  letter-spacing: 0;
+  text-transform: none;
+}
+html:lang(fa) .sv-step-r, html:lang(ar) .sv-step-r { direction: rtl; }
+html:lang(fa) .sv-friend-n, html:lang(ar) .sv-friend-n { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
+
+/* 320px: the copy key gives up its caption so the primary action keeps a readable label */
+@media (max-width: 344px) {
+  .sv { padding: 11px 10px 12px; }
+  .sv-copy { width: 46px; }
+  .sv-copy-t { display: none; }
+  .sv-bal b { font-size: 24px; }
+  .sv-step { grid-template-columns: 17px 18px minmax(0, 1fr); gap: 6px; padding: 6px 7px; }
+  .sv-step-n { width: 17px; height: 17px; font-size: 9px; }
 }
 
 
@@ -8567,233 +8984,6 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   font-weight: 700;
 }
 .support-ok .ico { width: 14px; height: 14px; color: var(--mint-ink); }
-
-/* ---- referral hub: personal invite link, Telegram share, claimable reward ----
-   The Dark-Clay sibling of the support drawer: engraved ✕, a recessed reward
-   banner, a deep well holding the invite URL beside its Copy key, the wide
-   gold share action, the two live counters, and the mint claim key that only
-   wakes once the unclaimed balance is above zero. All fixed geometry — the
-   counters use tabular numerals, so a claim never shifts the layout. */
-.referral-sheet { gap: var(--s3); }
-.referral-head { display: flex; align-items: center; gap: var(--s2); }
-.referral-title { flex: 1 1 auto; margin: 0; }
-/* the same carved-in ✕ well as the support drawer */
-.referral-x {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
-  color: var(--chip-ink);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .65),
-    inset 0 -1px 0 rgba(255, 255, 255, .07),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
-  transition: box-shadow var(--motion-fast), transform var(--motion-fast), color var(--motion-fast);
-}
-.referral-x:hover { color: var(--ink); }
-.referral-x:active {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 3px 8px rgba(0, 0, 0, .8),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
-}
-.referral-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-/* the reward banner: a recessed slate well with the gift in its own warm halo */
-.referral-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s3);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .6),
-    inset 0 -1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(245, 158, 11, .22);
-}
-.referral-banner-ico {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #2A3550 0%, #161D2C 100%);
-  color: var(--honey-ink);
-  box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px rgba(245, 158, 11, .3);
-}
-.referral-banner-ico .ico { width: 18px; height: 18px; filter: drop-shadow(0 0 6px rgba(245, 158, 11, .5)); }
-.referral-banner p {
-  margin: 0;
-  min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--ink-soft);
-}
-.referral-banner b { font-weight: 900; color: var(--honey-ink); }
-/* the identity preview: the real bot handle and the server-issued code, one quiet line */
-.referral-preview {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 0 2px;
-  min-width: 0;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .02em;
-  color: var(--ink-soft);
-}
-.referral-preview b { color: var(--brand-ink); font-weight: 900; }
-.referral-preview-dot { opacity: .55; }
-.referral-preview code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--chip-ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: inherit;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* link well + copy key: one recessed groove and one clay key beside it */
-.referral-link-row { display: flex; align-items: stretch; gap: var(--s2); min-width: 0; }
-.referral-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 46px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
-  color: var(--chip-ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  box-shadow:
-    inset 0 3px 7px rgba(0, 0, 0, .7),
-    inset 0 -1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
-  -webkit-user-select: text;
-  user-select: text;
-}
-.referral-input:focus {
-  outline: none;
-  box-shadow:
-    inset 0 3px 7px rgba(0, 0, 0, .7),
-    inset 0 -1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(252, 211, 77, .35);
-}
-.referral-copy {
-  --d: 3px;
-  flex: none;
-  min-width: 84px;
-  min-height: 46px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--clay-face);
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--t-3);
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
-}
-.referral-copy .ico { width: 15px; height: 15px; color: var(--chip-ink); }
-.referral-copy:hover:not(:active) { transform: translateY(-1px); }
-.referral-copy:disabled,
-.referral-share:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-.referral-copy:active { transform: translateY(var(--press-y)); --d: 1px; }
-.referral-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.referral-copy.copied { color: var(--mint-ink); box-shadow: 0 1px 0 #080C14, inset 0 0 0 1px rgba(110, 231, 183, .35); }
-.referral-copy.copied .ico { color: var(--mint-ink); }
-/* the wide share action: the support send key's full-width sibling */
-.referral-share {
-  --btn-lip: #92400E;
-  width: 100%;
-  min-height: 50px;
-  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
-  color: #78350F;
-  font-size: var(--t-2);
-  box-shadow:
-    0 var(--d) 0 var(--btn-lip),
-    0 calc(var(--d) + 8px) 18px -8px rgba(245, 158, 11, .5),
-    inset 0 2px 3px rgba(255, 255, 255, .4),
-    inset 0 -3px 5px rgba(120, 53, 15, .42);
-}
-.referral-share .ico { color: #78350F; }
-/* the two counters: equal clay tiles, fixed geometry, tabular digits */
-.referral-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; }
-.referral-stat {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: var(--s2) var(--s1);
-  border-radius: 16px;
-  background: var(--clay-face);
-  box-shadow: var(--clay), var(--clay-ring);
-}
-.referral-stat-n {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: var(--t-1);
-  font-weight: 900;
-  color: var(--honey-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.referral-stat-n b { font-weight: 900; }
-.referral-stat-u { font-size: var(--t-micro); font-weight: 800; color: var(--ink-soft); }
-.referral-stat-k {
-  max-width: 100%;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* the claim key: mint money-on-the-books, woken only by an unclaimed balance */
-.referral-claim {
-  --btn-lip: #047857;
-  width: 100%;
-  min-height: 50px;
-  background: linear-gradient(180deg, #34D399 0%, #10B981 55%, #059669 100%);
-  color: #064E3B;
-  font-size: var(--t-2);
-  box-shadow:
-    0 var(--d) 0 var(--btn-lip),
-    0 calc(var(--d) + 7px) 16px -8px rgba(16, 185, 129, .45),
-    inset 0 2px 3px rgba(255, 255, 255, .35),
-    inset 0 -2px 4px rgba(6, 78, 59, .35);
-}
-.referral-claim .ico { color: #064E3B; }
-.referral-claim[disabled] { --d: 2px; }
-
-
 
 /* Short columns: the elastic dial above does the work, so the only thing left is to keep the
    row subtitle on one line. Below ~500px of app height the column genuinely cannot hold the
@@ -22118,6 +22308,139 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 }
 
 /* ==========================================================================
+   STARS VAULT & PAYOUTS — the invite programme's manual settlement queue.
+   The Squads row card is the template: clay slab, recessed cells, one gold key
+   for the action that records a payment. A waiting request wears honey, a paid
+   one mint, a rejected one crimson — the same three tones the registry uses.
+   ========================================================================== */
+.adm-grid-vault { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.adm-grid-vault .adm-card { min-height: 116px; }
+.adm-grid-vault .adm-card-l { font-size: 9.5px; letter-spacing: .045em; }
+.adm-grid-vault .adm-card-s {
+  font-size: 9.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-vault-list, .adm-vault-flags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.adm-vault-list:empty, .adm-vault-flags:empty { display: none; }
+.adm-vault-req, .adm-vault-flag {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 11px 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-vault-req[data-status="waiting"] {
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1px rgba(252, 211, 77, .28);
+}
+.adm-vault-req[data-status="rejected"], .adm-vault-flag {
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1px rgba(244, 63, 94, .34);
+}
+.adm-vault-h { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-vault-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.adm-vault-name {
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-vault-id {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-vault-st {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-vault-st[data-status="waiting"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-vault-st[data-status="paid"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.adm-vault-st[data-status="rejected"], .adm-vault-st[data-status="revoked"] {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+.adm-vault-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.adm-vault-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-vault-cell b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-vault-cell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-vault-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-vault-actions .adm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 48px;
+  padding: 0 12px;
+  font-size: var(--t-micro);
+}
+.adm-vault-actions .adm-btn[disabled] { opacity: .45; cursor: not-allowed; }
+.adm-vault-review { gap: 8px; padding: 11px 10px 9px; }
+@media (max-width: 359px) {
+  .adm-vault-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ==========================================================================
    ACCESS CONTROL — the role registry and the drawer that rides over the stage
    with a confirm dialog above it.
    Same one palette: opaque clay slabs, no backdrop-filter, 44px+ targets.
@@ -27444,10 +27767,9 @@ html.reduced-motion .toast.toast-royal { transition: none; }
   --pf-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
-/* ---- one internal rhythm: hero, quest, invite, rows and rack all read the tokens ---- */
+/* ---- one internal rhythm: hero, quest, vault, rows and rack all read the tokens ---- */
 #s-profile .pf-hero.pf-hero-v2 { padding: var(--pf-card-pad); gap: var(--pf-card-pad-dense); }
 #s-profile .pf-quest { padding: var(--pf-card-pad); }
-#s-profile .pf-invite { padding: var(--pf-card-pad-dense) var(--pf-card-pad); }
 #s-profile .pf-tile.row { padding: var(--pf-card-pad-dense) var(--pf-card-pad); }
 #s-profile .badge-rack { padding: var(--pf-card-pad-dense); }
 #s-profile .pf-stats.p-stats.quad { padding: var(--pf-card-pad-dense); }
@@ -32340,7 +32662,7 @@ html[data-lang="fa"] :is(
   .lb-mode-sub, .lb-hint, .lb-name, .lb-role, .lb-open-t, .lb-team-t,
   .sq-title, .sq-sub, .sq-create-label, .sq-card-note, .sq-roster-title, .sq-name, .sq-banner-name, .sq-role,
   .sqp-join-t, .sqp-fine, .sqp-kind, .sqp-tile-s, .sqp-lore p,
-  .pf-chip-k, .pf-chip-v, .pf-chip-meta, .pf-coin-k, .pf-invite-t, .pf-invite-s,
+  .pf-chip-k, .pf-chip-v, .pf-chip-meta, .pf-coin-k,
   .pf-quest-kicker, .pf-quest-title, .pf-quest-sub, .id-team-t,
   .help li, .support-title, .cat-pill span, .send-t
 ) {
@@ -32377,7 +32699,7 @@ html[data-lang="fa"] .ms-handle { font-family: var(--font-numeric); direction: l
 html[data-lang="fa"] :is(.ms-challenge span, .ms-guild span) { direction: rtl; }
 
 /* dynamic labels that are written by JS rather than data-i18n */
-html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .sq-roster-empty, .sq-you-tag, .gm-err, .pf-invite-pill) {
+html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .sq-roster-empty, .sq-you-tag, .gm-err) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -32459,7 +32781,7 @@ html[data-lang="fa"] :is(
   .lb-name, .lb-role,
   .sq-title, .sq-sub, .sq-card-note, .sq-roster-title, .sq-name, .sq-banner-name,
   .sqp-id, .sqp-fine, .sqp-kind, .sqp-tile-s, .sqp-lore p,
-  .pf-chip-txt, .pf-chip-k, .pf-chip-v, .pf-chip-meta, .pf-invite-txt,
+  .pf-chip-txt, .pf-chip-k, .pf-chip-v, .pf-chip-meta,
   .pf-quest-kicker, .pf-quest-title, .pf-quest-sub, .id-team-t,
   .row-txt, .row-t, .row-s, .pick-n, .pick-empty, .help li, .support-title
 ) {
@@ -36507,14 +36829,14 @@ html[data-lang="ar"] #s-profile :is(.pf-sec-sub, .pf-chip-k, .pf-xp-lvl, .pf-que
   text-transform: none;
   line-height: 1.4;
 }
-html[data-lang="fa"] #s-profile :is(.p-name, .pf-quest-title, .pf-invite-t, .pf-chip-v, .row-t),
-html[data-lang="ar"] #s-profile :is(.p-name, .pf-quest-title, .pf-invite-t, .pf-chip-v, .row-t) {
+html[data-lang="fa"] #s-profile :is(.p-name, .pf-quest-title, .pf-chip-v, .row-t),
+html[data-lang="ar"] #s-profile :is(.p-name, .pf-quest-title, .pf-chip-v, .row-t) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
   line-height: 1.4;
 }
-html[data-lang="fa"] #s-profile :is(.pf-quest-sub, .pf-invite-s, .pf-chip-meta, .row-s),
-html[data-lang="ar"] #s-profile :is(.pf-quest-sub, .pf-invite-s, .pf-chip-meta, .row-s) {
+html[data-lang="fa"] #s-profile :is(.pf-quest-sub, .pf-chip-meta, .row-s),
+html[data-lang="ar"] #s-profile :is(.pf-quest-sub, .pf-chip-meta, .row-s) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   font-weight: 500;
   letter-spacing: 0;

@@ -53,7 +53,7 @@
  */
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
-import { ReferralLedgerDO, channelMembership, referralContact, referralLookup, referralMe, referralSettle } from './referrals';
+import { ReferralLedgerDO, channelMembership, readDeviceHash, referralContact, referralLookup, referralMe, referralSettle } from './referrals';
 import { readForceJoin } from './forceJoin';
 import {
   identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
@@ -247,7 +247,11 @@ async function referrals(request: Request, env: Env, url: URL): Promise<Response
     const bodyRef = typeof body.ref === 'string' ? body.ref : '';
     const refRaw = bodyRef || url.searchParams.get('ref') || url.searchParams.get('startapp') || '';
 
-    if (refRaw) await referralContact(env, auth.tgId, refRaw);
+    if (refRaw) {
+      /* The device fingerprint rides the contact that binds an invite: one phone may not mint a
+         second invited account behind the same link. */
+      await referralContact(env, auth.tgId, refRaw, readDeviceHash(request.headers.get('x-detour-device')));
+    }
     const state = await referralMe(env, auth.tgId);
     if (!state) return referralJson({ ok: false, error: 'referrals_unavailable' }, 503);
 
@@ -314,6 +318,14 @@ async function route(request: Request, env: Env): Promise<Response> {
      that makes a squad have members. The edge only routes; identity is proven inside the room. */
   if (url.pathname.startsWith('/api/squads/')) {
     if (!env.MATCHMAKER) return json({ error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The Stars Vault: the Profile card's balance and friend progress, and the manual payout
+     request. The room proves the caller's signed initData itself and owns every counter. */
+  if (url.pathname.startsWith('/api/stars/')) {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);
   }

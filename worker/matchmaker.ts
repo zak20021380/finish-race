@@ -79,6 +79,8 @@ import {
   type RegisteredSquad, type SquadAnnouncementRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
+import { REFERRAL_CONFIG, arenaRankOf, utcDayKey, utcMonthKey } from '../shared/referralConfig';
+import { referralBinding } from './referrals';
 import { NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
 import { relicShelter } from '../shared/relic';
 import {
@@ -248,6 +250,11 @@ interface Race {
   sizes: [number, number];
   /** How this pairing is counted: a cup race when either seat entered from the Arena. */
   mode: 'pvp' | 'arena';
+  /**
+   * Where the pairing came from. Only `queue` is random matchmaking; a `relic` duel is a challenge
+   * one player threw at another, so the Stars Vault treats it like the custom lobby it is.
+   */
+  origin: 'queue' | 'relic';
   /** Indexed by side: `seats[0]` opened the race. */
   seats: [Waiter, Waiter];
   /** The real state — every relayed move has been through it. */
@@ -1985,6 +1992,279 @@ function adminIdOf(raw: unknown): string {
   return '';
 }
 
+/* ---------- the Stars Vault: the two-stage invite programme ----------
+ *
+ * The ledger next door (`worker/referrals.ts`) owns the permanent 1-to-1 link and the coin credit
+ * the join gate pays. This owns the *Stars* campaign that link feeds: what an invited friend has
+ * actually played, which of the two stages that unlocks, and the balance their inviter may ask to
+ * be paid out.
+ *
+ * Every number here is written by the room from a board it refereed. The client sends no counters,
+ * no stage flags and no balances — it asks for a view and paints it. A stage, once credited, is
+ * never taken back: a friend who later loses or quits has already earned their inviter's Stars.
+ *
+ * State lives under its own key, never on `PlayerRecord`: the directory is a 2000-row LRU and a
+ * balance must not be evicted with a stale socket.
+ */
+const STARS_VAULT_KEY = 'stars-vault.v1';
+/** Distinct UTC days and distinct opponents a friend row remembers. Stage 1 asks for 3 and 2. */
+const VAULT_RING = 48;
+/** Rows the vault keeps before it sheds the oldest fully-paid friend. */
+const VAULT_FRIENDS_MAX = 4000;
+const VAULT_PAYOUTS_MAX = 600;
+/** Friends the Profile card lists; the rest are still counted, just not painted. */
+const VAULT_FRIENDS_SHOWN = 25;
+
+/** One invited friend, and the server's own reading of what they have played. */
+interface VaultFriend {
+  id: string;
+  inviterId: string;
+  name: string;
+  avatar: string;
+  /** Valid matches: >= 25s, random matchmaking, every seat a person. */
+  matches: number;
+  /** Distinct UTC days those matches landed on, newest last. */
+  days: string[];
+  /** The subset of `matches` that were two-person duels. */
+  pvpMatches: number;
+  /** Distinct human opponents across those duels. */
+  opponents: string[];
+  /** Random-matchmaking duels this friend WON. */
+  pvpWins: number;
+  /** The Arena realm their standing has reached. */
+  arena: number;
+  /** Matches where every opponent was the inviter or a fellow invitee. */
+  clusterMatches: number;
+  stage1: boolean;
+  stage2: boolean;
+  /** Held for an admin: the cluster ratio says these two are playing each other, not the game. */
+  flagged: boolean;
+  /** An admin reviewed the ring and cleared it: the ratio stops re-flagging this friend. */
+  cleared: boolean;
+  /** Stars released into the inviter's vault. */
+  creditedStars: number;
+  /** Stars earned but held for next month's pool. */
+  queuedStars: number;
+  /** The month this friend first counted against the inviter's cap, or ''. */
+  creditMonth: string;
+  updatedAt: number;
+}
+
+/** One inviter's vault. `earnedStars` only ever climbs; `paidOutStars` is what the owner settled. */
+interface VaultAccount {
+  id: string;
+  name: string;
+  starterBonus: number;
+  earnedStars: number;
+  paidOutStars: number;
+  queuedStars: number;
+  monthKey: string;
+  monthQualified: number;
+  updatedAt: number;
+}
+
+/** A manual payout request. The app never transfers anything; the owner marks it paid. */
+interface VaultPayout {
+  requestId: string;
+  playerId: string;
+  playerName: string;
+  amount: number;
+  createdAt: number;
+  status: 'waiting' | 'paid' | 'rejected';
+  decidedAt: number;
+}
+
+interface VaultState {
+  accounts: VaultAccount[];
+  friends: VaultFriend[];
+  payouts: VaultPayout[];
+  budget: { monthKey: string; spent: number };
+}
+
+/** One friend as the Profile card paints them: two pills and a total out of 5. */
+export interface VaultFriendView {
+  id: string;
+  name: string;
+  avatar: string;
+  matches: number;
+  days: number;
+  pvpMatches: number;
+  opponents: number;
+  pvpWins: number;
+  arena: number;
+  stage1: boolean;
+  stage2: boolean;
+  flagged: boolean;
+  credited: number;
+  queued: number;
+}
+
+/** The whole card, server-side. Nothing in here is a client claim. */
+export interface VaultView {
+  ok: true;
+  starterBonus: number;
+  earnedStars: number;
+  paidOutStars: number;
+  vaultBalance: number;
+  pendingFriendsCount: number;
+  qualifiedFriendsCount: number;
+  threshold: number;
+  canPayout: boolean;
+  /** A request is already with the owner: the balance it locked is not spendable twice. */
+  waiting: boolean;
+  queuedStars: number;
+  budgetLeft: number;
+  monthKey: string;
+  friends: VaultFriendView[];
+}
+
+/** A flagged friend as the Command Center's review list paints them. */
+export interface VaultFlagView {
+  id: string;
+  name: string;
+  inviterId: string;
+  inviterName: string;
+  matches: number;
+  clusterMatches: number;
+  ratio: number;
+  pvpWins: number;
+  stage1: boolean;
+  stage2: boolean;
+  heldStars: number;
+}
+
+export interface VaultAdminView {
+  ok: true;
+  totals: {
+    earned: number;
+    paid: number;
+    waiting: number;
+    waitingStars: number;
+    queued: number;
+    inviters: number;
+    friends: number;
+    flagged: number;
+    budget: number;
+    budgetSpent: number;
+    budgetLeft: number;
+    monthKey: string;
+  };
+  requests: VaultPayout[];
+  flagged: VaultFlagView[];
+}
+
+const VAULT_EMPTY: VaultState = { accounts: [], friends: [], payouts: [], budget: { monthKey: '', spent: 0 } };
+
+const vaultText = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
+
+/** The vault is token-authenticated, so a wildcard origin is enough for a split host. */
+const VAULT_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, x-detour-dev-player, x-detour-device',
+  'access-control-max-age': '86400',
+};
+
+/** A ring of distinct keys, newest last, bounded so one row can never grow without limit. */
+function ringPush(ring: string[], key: string): void {
+  if (!key || ring.includes(key)) return;
+  ring.push(key);
+  if (ring.length > VAULT_RING) ring.splice(0, ring.length - VAULT_RING);
+}
+
+function readVaultFriend(raw: unknown): VaultFriend | null {
+  const r = raw as Partial<VaultFriend> | null;
+  if (!r || typeof r.id !== 'string' || !r.id || typeof r.inviterId !== 'string' || !r.inviterId) return null;
+  if (r.id === r.inviterId) return null;
+  const strings = (value: unknown): string[] => (Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && !!v).slice(-VAULT_RING)
+    : []);
+  return {
+    id: r.id.slice(0, 64),
+    inviterId: r.inviterId.slice(0, 64),
+    name: vaultText(r.name, 48),
+    avatar: vaultText(r.avatar, 300),
+    matches: whole(r.matches),
+    days: strings(r.days),
+    pvpMatches: whole(r.pvpMatches),
+    opponents: strings(r.opponents),
+    pvpWins: whole(r.pvpWins),
+    arena: Math.min(4, whole(r.arena)),
+    clusterMatches: whole(r.clusterMatches),
+    stage1: r.stage1 === true,
+    stage2: r.stage2 === true,
+    flagged: r.flagged === true,
+    cleared: r.cleared === true,
+    creditedStars: whole(r.creditedStars),
+    queuedStars: whole(r.queuedStars),
+    creditMonth: typeof r.creditMonth === 'string' ? r.creditMonth.slice(0, 7) : '',
+    updatedAt: whole(r.updatedAt),
+  };
+}
+
+function readVaultAccount(raw: unknown): VaultAccount | null {
+  const r = raw as Partial<VaultAccount> | null;
+  if (!r || typeof r.id !== 'string' || !r.id) return null;
+  return {
+    id: r.id.slice(0, 64),
+    name: vaultText(r.name, 48),
+    starterBonus: whole(r.starterBonus),
+    earnedStars: whole(r.earnedStars),
+    paidOutStars: whole(r.paidOutStars),
+    queuedStars: whole(r.queuedStars),
+    monthKey: typeof r.monthKey === 'string' ? r.monthKey.slice(0, 7) : '',
+    monthQualified: whole(r.monthQualified),
+    updatedAt: whole(r.updatedAt),
+  };
+}
+
+function readVaultPayout(raw: unknown): VaultPayout | null {
+  const r = raw as Partial<VaultPayout> | null;
+  if (!r || typeof r.requestId !== 'string' || !r.requestId) return null;
+  if (typeof r.playerId !== 'string' || !r.playerId) return null;
+  const amount = whole(r.amount);
+  if (amount <= 0) return null;
+  return {
+    requestId: r.requestId.slice(0, 40),
+    playerId: r.playerId.slice(0, 64),
+    playerName: vaultText(r.playerName, 48),
+    amount,
+    createdAt: whole(r.createdAt),
+    status: r.status === 'paid' ? 'paid' : r.status === 'rejected' ? 'rejected' : 'waiting',
+    decidedAt: whole(r.decidedAt),
+  };
+}
+
+function readVaultState(raw: unknown): VaultState {
+  const r = raw as Partial<VaultState> | null;
+  if (!r) return { ...VAULT_EMPTY, budget: { monthKey: '', spent: 0 } };
+  const accounts: VaultAccount[] = [];
+  const friends: VaultFriend[] = [];
+  const payouts: VaultPayout[] = [];
+  if (Array.isArray(r.accounts)) for (const row of r.accounts) {
+    const acc = readVaultAccount(row);
+    if (acc) accounts.push(acc);
+  }
+  if (Array.isArray(r.friends)) for (const row of r.friends) {
+    const friend = readVaultFriend(row);
+    if (friend) friends.push(friend);
+  }
+  if (Array.isArray(r.payouts)) for (const row of r.payouts) {
+    const pay = readVaultPayout(row);
+    if (pay) payouts.push(pay);
+  }
+  const budget = r.budget;
+  return {
+    accounts,
+    friends,
+    payouts,
+    budget: {
+      monthKey: typeof budget?.monthKey === 'string' ? budget.monthKey.slice(0, 7) : '',
+      spent: whole(budget?.spent),
+    },
+  };
+}
+
 /* ---------- the Durable Object ---------- */
 
 export class MatchmakerDO {
@@ -2000,6 +2280,14 @@ export class MatchmakerDO {
   private relicChallenges = new Map<string, RelicChallenge>();
   /** A mailbox write is already scheduled: many challenge changes, one flush. */
   private relicDirty = false;
+  /* ---- the Stars Vault: balances, friend progress and the manual payout queue ---- */
+  private vaultAccounts = new Map<string, VaultAccount>();
+  private vaultFriends = new Map<string, VaultFriend>();
+  private vaultPayouts = new Map<string, VaultPayout>();
+  private vaultBudget = { monthKey: '', spent: 0 };
+  private vaultDirty = false;
+  /** playerId -> the inviter they arrived behind ('' = nobody). Resolved once per isolate. */
+  private vaultInviters = new Map<string, string>();
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
   /** Every race still being played, by match id. */
@@ -2146,6 +2434,15 @@ export class MatchmakerDO {
               if (now - row.createdAt <= RELIC_CHALLENGE_KEEP_MS) this.relicChallenges.set(row.id, row);
             }
           }
+          /* The Stars Vault keeps its own key, and its own try: a corrupt balance must never stop
+             the role registry or the alarm from arming below. */
+          try {
+            const vault = readVaultState(await storage.get<unknown>(STARS_VAULT_KEY));
+            for (const acc of vault.accounts) this.vaultAccounts.set(acc.id, acc);
+            for (const friend of vault.friends) this.vaultFriends.set(friend.id, friend);
+            for (const pay of vault.payouts) this.vaultPayouts.set(pay.requestId, pay);
+            this.vaultBudget = vault.budget;
+          } catch { /* a vault that refuses the read starts empty */ }
           this.seedRoles();
           this.rearm();
         } catch {
@@ -2278,6 +2575,17 @@ export class MatchmakerDO {
         return await this.admin(request, url);
       } catch (err) {
         return json({ error: 'room_error', hint: reasonOf(err) }, 500);
+      }
+    }
+    /* The Stars Vault: the Profile card's server-owned balance, and the manual payout request.
+       Identity is proven from the signed initData inside, exactly like the telemetry door. */
+    if (url.pathname === '/api/stars/vault' || url.pathname === '/api/stars/payout') {
+      try {
+        return url.pathname === '/api/stars/vault'
+          ? await this.starsVault(request)
+          : await this.starsPayout(request);
+      } catch (err) {
+        return json({ ok: false, error: 'vault_failed', hint: reasonOf(err) }, 500, VAULT_CORS);
       }
     }
     /* The relic-duel mailbox: a challenge filed while its target was away is read here on the
@@ -3496,6 +3804,13 @@ export class MatchmakerDO {
       return json(this.squadsView(), 200, { 'cache-control': 'no-store' });
     }
 
+    /* The Stars Vault payout queue: a Moderator may audit what was earned and what is waiting;
+       only a SuperAdmin may mark a request paid or clear a collusion flag. */
+    if (url.pathname === '/api/admin/vault') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json(this.vaultAdminView(), 200, { 'cache-control': 'no-store' });
+    }
+
     /* The VIP storefront: Moderators may audit sales and read the live sheet; only a SuperAdmin
        may reprice a tier or take it off the store. */
     if (url.pathname === '/api/admin/vip/stats') {
@@ -3578,6 +3893,13 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       const body = await readBody(request);
       const result = await this.squadAction(body, me);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    if (url.pathname === '/api/admin/vault/action') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      const result = this.vaultAdminAction(await readBody(request));
       return json(result, result.ok ? 200 : 400);
     }
 
@@ -5638,6 +5960,7 @@ export class MatchmakerDO {
       seed,
       sizes,
       mode: 'pvp',
+      origin: 'relic',
       seats: [challenger, target],
       state: newGame(sizes),
       startedAt: Date.now(),
@@ -5804,6 +6127,7 @@ export class MatchmakerDO {
       seed,
       sizes,
       mode: first.mode === 'arena' || second.mode === 'arena' ? 'arena' : 'pvp',
+      origin: 'queue',
       seats: [first, second],
       state: newGame(sizes),
       startedAt: Date.now(),
@@ -6923,6 +7247,8 @@ export class MatchmakerDO {
     if (humans.length > 1) {
       this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium, id: m.id })));
     }
+    /* A code lobby is an arrangement between friends, not random matchmaking: it earns no Stars. */
+    if (!live.code) this.observeVaultMatch(this.vaultRoomSeats(live, winner), live.startedAt, true);
   }
 
   /**
@@ -6980,6 +7306,11 @@ export class MatchmakerDO {
     if (driver.state.winner !== null) {
       live.turnDeadlineMs = 0;
       this.completeRoom(live);
+      /* The machine finished the board after a resignation: the survivor still played a real
+         match, so the vault hears about it here too, not only through `finishRoom`. */
+      if (!live.code) {
+        this.observeVaultMatch(this.vaultRoomSeats(live, driver.state.winner), live.startedAt, true);
+      }
       this.rooms.delete(live.matchId);
     }
     this.rearm();
@@ -7232,5 +7563,507 @@ export class MatchmakerDO {
       this.markActive(seat.id, race.mode);
       this.verdict(seat.id, winner === null ? null : seat.side === winner);
     }
+    /* Only the pairing queue is random matchmaking. A relic duel is a challenge one player threw
+       at another, so the vault treats it like the custom lobby it is. */
+    if (winner !== null && race.origin === 'queue') {
+      this.observeVaultMatch(race.seats.map((seat) => ({ id: seat.id, won: seat.side === winner })), race.startedAt, true);
+    }
+  }
+
+  /* ---------- the Stars Vault ----------
+   *
+   * Everything below is written by the room from a board it refereed. The client asks for a view
+   * and paints it; it never sends a counter, a stage flag or a balance.
+   */
+
+  /** One atomic write: balances, progress and the payout queue land together, or not at all. */
+  private persistVault(): void {
+    if (this.vaultDirty || !this.state?.storage) return;
+    this.vaultDirty = true;
+    void Promise.resolve().then(() => {
+      this.vaultDirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        this.vaultTrim();
+        const state: VaultState = {
+          accounts: [...this.vaultAccounts.values()],
+          friends: [...this.vaultFriends.values()],
+          payouts: [...this.vaultPayouts.values()],
+          budget: this.vaultBudget,
+        };
+        void storage.put(STARS_VAULT_KEY, state);
+      } catch { /* a store that refuses the write: the vault stays live in this isolate */ }
+    });
+  }
+
+  /** Shed the oldest settled rows past the caps. A waiting request is never shed. */
+  private vaultTrim(): void {
+    if (this.vaultPayouts.size > VAULT_PAYOUTS_MAX) {
+      const settled = [...this.vaultPayouts.values()]
+        .filter((p) => p.status !== 'waiting')
+        .sort((a, b) => a.createdAt - b.createdAt);
+      let over = this.vaultPayouts.size - VAULT_PAYOUTS_MAX;
+      for (const p of settled) {
+        if (over <= 0) break;
+        this.vaultPayouts.delete(p.requestId);
+        over--;
+      }
+    }
+    if (this.vaultFriends.size > VAULT_FRIENDS_MAX) {
+      /* Only a friend whose Stars are already banked may go: the account keeps the credit. */
+      const done = [...this.vaultFriends.values()]
+        .filter((f) => f.stage1 && f.stage2 && f.queuedStars === 0)
+        .sort((a, b) => a.updatedAt - b.updatedAt);
+      let over = this.vaultFriends.size - VAULT_FRIENDS_MAX;
+      for (const f of done) {
+        if (over <= 0) break;
+        this.vaultFriends.delete(f.id);
+        over--;
+      }
+    }
+  }
+
+  /**
+   * A new calendar month resets the pool and every inviter's cap, then releases what last month
+   * queued. Runs before any read or credit, so a month boundary never needs its own alarm.
+   */
+  private vaultRollMonth(now: number): void {
+    const key = utcMonthKey(now);
+    if (this.vaultBudget.monthKey === key) return;
+    this.vaultBudget = { monthKey: key, spent: 0 };
+    for (const acc of this.vaultAccounts.values()) {
+      acc.monthKey = key;
+      acc.monthQualified = 0;
+    }
+    for (const friend of this.vaultFriends.values()) {
+      if (friend.queuedStars <= 0) continue;
+      const acc = this.vaultAccounts.get(friend.inviterId);
+      if (!acc) continue;
+      const held = friend.queuedStars;
+      if (this.vaultTryCredit(acc, friend, held, now)) {
+        friend.queuedStars = 0;
+        acc.queuedStars = Math.max(0, acc.queuedStars - held);
+      }
+    }
+    this.persistVault();
+  }
+
+  /**
+   * Release Stars into the vault, or refuse because a cap is reached. The per-inviter cap counts
+   * *friends* rewarded this month, so a friend already counted may still finish their second stage.
+   */
+  private vaultTryCredit(acc: VaultAccount, friend: VaultFriend, stars: number, now: number): boolean {
+    if (stars <= 0) return false;
+    const key = utcMonthKey(now);
+    const newFriend = friend.creditMonth !== key;
+    if (newFriend && acc.monthQualified >= REFERRAL_CONFIG.MAX_QUALIFIED_PER_INVITER_MONTH) return false;
+    if (this.vaultBudget.spent + stars > REFERRAL_CONFIG.GLOBAL_MONTHLY_BUDGET_STARS) return false;
+    this.vaultBudget.spent += stars;
+    if (newFriend) {
+      friend.creditMonth = key;
+      acc.monthQualified += 1;
+    }
+    friend.creditedStars += stars;
+    acc.earnedStars += stars;
+    acc.updatedAt = now;
+    return true;
+  }
+
+  /** A stage qualified. Credit it now, or hold it for next month's pool — it is never lost. */
+  private vaultAward(acc: VaultAccount, friend: VaultFriend, stars: number, now: number): void {
+    this.vaultRollMonth(now);
+    if (this.vaultTryCredit(acc, friend, stars, now)) {
+      this.persistVault();
+      return;
+    }
+    friend.queuedStars += stars;
+    acc.queuedStars += stars;
+    acc.updatedAt = now;
+    this.persistVault();
+  }
+
+  /** Every vault starts with the same pre-filled gift, so the meter is never empty on first paint. */
+  private vaultAccount(id: string, now: number): VaultAccount {
+    const existing = this.vaultAccounts.get(id);
+    if (existing) {
+      const name = this.players.get(id)?.name;
+      if (name) existing.name = name.slice(0, 48);
+      return existing;
+    }
+    const acc: VaultAccount = {
+      id,
+      name: (this.players.get(id)?.name ?? '').slice(0, 48),
+      starterBonus: REFERRAL_CONFIG.STARTER_VAULT_GIFT_STARS,
+      earnedStars: 0,
+      paidOutStars: 0,
+      queuedStars: 0,
+      monthKey: utcMonthKey(now),
+      monthQualified: 0,
+      updatedAt: now,
+    };
+    this.vaultAccounts.set(id, acc);
+    this.persistVault();
+    return acc;
+  }
+
+  private vaultFriendRow(id: string, inviterId: string, now: number): VaultFriend {
+    const existing = this.vaultFriends.get(id);
+    if (existing) return existing;
+    const friend: VaultFriend = {
+      id,
+      inviterId,
+      name: '',
+      avatar: '',
+      matches: 0,
+      days: [],
+      pvpMatches: 0,
+      opponents: [],
+      pvpWins: 0,
+      arena: 1,
+      clusterMatches: 0,
+      stage1: false,
+      stage2: false,
+      flagged: false,
+      cleared: false,
+      creditedStars: 0,
+      queuedStars: 0,
+      creditMonth: '',
+      updatedAt: now,
+    };
+    this.vaultFriends.set(id, friend);
+    this.vaultAccount(inviterId, now);
+    return friend;
+  }
+
+  /** Keep the painted name, avatar and Arena realm current from the room's own directory. */
+  private vaultRefreshFriend(friend: VaultFriend): void {
+    const p = this.players.get(friend.id);
+    if (!p) return;
+    if (p.name) friend.name = p.name.slice(0, 48);
+    if (p.avatar) friend.avatar = p.avatar.slice(0, 300);
+    friend.arena = Math.max(friend.arena, arenaRankOf(p.tiq));
+  }
+
+  /** The permanent link, asked of the ledger once per isolate. '' means nobody invited them. */
+  private async vaultInviterOf(playerId: string): Promise<string> {
+    const cached = this.vaultInviters.get(playerId);
+    if (cached !== undefined) return cached;
+    const tgId = this.players.get(playerId)?.tgId
+      ?? (playerId.startsWith('tg-') ? playerId.slice(3) : '');
+    if (!TELEGRAM_ID.test(tgId)) {
+      this.vaultInviters.set(playerId, '');
+      return '';
+    }
+    const binding = await referralBinding(this.env, tgId);
+    /* An unreachable ledger is not an answer: leave the slot open so the next match asks again. */
+    if (!binding) return '';
+    const inviter = binding.inviterId && binding.inviterId !== tgId ? `tg-${binding.inviterId}` : '';
+    this.vaultInviters.set(playerId, inviter);
+    return inviter;
+  }
+
+  /**
+   * The gate every observed board passes: random matchmaking, at least two people, and a match
+   * long enough to have been played. An instant quit under 25s counts for nothing.
+   */
+  private observeVaultMatch(seats: Array<{ id: string; won: boolean }>, startedAt: number, random: boolean): void {
+    if (!random || seats.length < 2) return;
+    const now = Date.now();
+    if (now - startedAt < REFERRAL_CONFIG.MIN_VALID_MATCH_DURATION_MS) return;
+    void this.vaultApplyMatch(seats, now).catch(() => undefined);
+  }
+
+  /** The room's eligible seats: a person who stayed, never a bot or a chair the machine finished. */
+  private vaultRoomSeats(live: LiveRoom, winner: number | null): Array<{ id: string; won: boolean }> {
+    const roster = live.driver?.room ?? live.room;
+    const seats: Array<{ id: string; won: boolean }> = [];
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m || !m.connected) continue;
+      const seat = roster.seats[i];
+      if (!seat || seat.kind !== 'human' || seat.takenOver) continue;
+      seats.push({ id: m.id, won: winner !== null && i === winner });
+    }
+    return seats;
+  }
+
+  /**
+   * One refereed board, folded into every invited friend who sat at it. A friend who was never
+   * invited still counts as an opponent, which is what makes the cluster ratio meaningful.
+   */
+  private async vaultApplyMatch(seats: Array<{ id: string; won: boolean }>, now: number): Promise<void> {
+    const duel = seats.length === 2;
+    const day = utcDayKey(now);
+    const inviters = new Map<string, string>();
+    for (const seat of seats) inviters.set(seat.id, await this.vaultInviterOf(seat.id));
+
+    let touched = false;
+    for (const seat of seats) {
+      const inviterId = inviters.get(seat.id) ?? '';
+      if (!inviterId) continue;
+      const friend = this.vaultFriendRow(seat.id, inviterId, now);
+      const acc = this.vaultAccounts.get(inviterId);
+      if (!acc) continue;
+      this.vaultRefreshFriend(friend);
+
+      const rivals = seats.filter((other) => other.id !== seat.id);
+      /* Inside the cluster: every rival is the inviter, or another friend the same inviter brought. */
+      const clustered = rivals.length > 0 && rivals.every((other) => (
+        other.id === inviterId || this.vaultFriends.get(other.id)?.inviterId === inviterId
+      ));
+
+      friend.matches += 1;
+      ringPush(friend.days, day);
+      if (clustered) friend.clusterMatches += 1;
+      if (duel) {
+        friend.pvpMatches += 1;
+        for (const other of rivals) ringPush(friend.opponents, other.id);
+        if (seat.won) friend.pvpWins += 1;
+      }
+      friend.updatedAt = now;
+      touched = true;
+
+      /* A ratio needs a denominator worth reading: one internal duel is not a ring. */
+      const ratio = friend.clusterMatches / friend.matches;
+      if (!friend.cleared && friend.matches >= REFERRAL_CONFIG.STAGE1_MIN_MATCHES
+        && ratio >= REFERRAL_CONFIG.MAX_COLLUSION_RATIO) {
+        friend.flagged = true;
+      }
+      this.vaultEvaluate(friend, acc, now);
+    }
+    if (touched) this.persistVault();
+  }
+
+  /** The two stages, in order. A flag holds both; a credited stage is never revisited. */
+  private vaultEvaluate(friend: VaultFriend, acc: VaultAccount, now: number): void {
+    if (friend.flagged) return;
+    const C = REFERRAL_CONFIG;
+    if (!friend.stage1) {
+      const ready = friend.matches >= C.STAGE1_MIN_MATCHES
+        && friend.days.length >= C.STAGE1_MIN_DAYS
+        && friend.pvpMatches >= C.STAGE1_MIN_PVP_MATCHES
+        && friend.opponents.length >= C.STAGE1_MIN_DISTINCT_OPPONENTS;
+      if (!ready) return;
+      friend.stage1 = true;
+      this.vaultAward(acc, friend, C.STAGE1_REWARD_STARS, now);
+    }
+    if (friend.stage2) return;
+    const beaten = friend.pvpWins >= C.STAGE2_MIN_RANKED_PVP_WINS || friend.arena >= C.STAGE2_ALT_ARENA_UNLOCK;
+    if (!beaten) return;
+    friend.stage2 = true;
+    this.vaultAward(acc, friend, C.STAGE2_REWARD_STARS, now);
+  }
+
+  /** What a waiting request has locked: the same Stars cannot be asked for twice. */
+  private vaultWaitingFor(playerId: string): VaultPayout | null {
+    for (const p of this.vaultPayouts.values()) {
+      if (p.playerId === playerId && p.status === 'waiting') return p;
+    }
+    return null;
+  }
+
+  private vaultBalanceOf(acc: VaultAccount): number {
+    const locked = this.vaultWaitingFor(acc.id)?.amount ?? 0;
+    return Math.max(0, acc.starterBonus + acc.earnedStars - acc.paidOutStars - locked);
+  }
+
+  /** The Profile card's whole face. A read also re-checks the Arena alternative to Stage 2. */
+  private vaultView(playerId: string): VaultView {
+    const now = Date.now();
+    this.vaultRollMonth(now);
+    const acc = this.vaultAccount(playerId, now);
+    const mine: VaultFriend[] = [];
+    for (const friend of this.vaultFriends.values()) {
+      if (friend.inviterId !== playerId) continue;
+      this.vaultRefreshFriend(friend);
+      this.vaultEvaluate(friend, acc, now);
+      mine.push(friend);
+    }
+    /* Still in progress first, then the most recently active: the rows a player can move. */
+    mine.sort((a, b) => {
+      const done = (f: VaultFriend) => (f.stage1 && f.stage2 ? 1 : 0);
+      return done(a) - done(b) || b.updatedAt - a.updatedAt;
+    });
+    const waiting = this.vaultWaitingFor(playerId);
+    const balance = this.vaultBalanceOf(acc);
+    const pending = mine.filter((f) => !(f.stage1 && f.stage2)).length;
+    this.persistVault();
+    return {
+      ok: true,
+      starterBonus: acc.starterBonus,
+      earnedStars: acc.earnedStars,
+      paidOutStars: acc.paidOutStars,
+      vaultBalance: balance,
+      pendingFriendsCount: pending,
+      qualifiedFriendsCount: mine.length - pending,
+      threshold: REFERRAL_CONFIG.MIN_PAYOUT_THRESHOLD_STARS,
+      canPayout: !waiting && balance >= REFERRAL_CONFIG.MIN_PAYOUT_THRESHOLD_STARS,
+      waiting: Boolean(waiting),
+      queuedStars: acc.queuedStars,
+      budgetLeft: Math.max(0, REFERRAL_CONFIG.GLOBAL_MONTHLY_BUDGET_STARS - this.vaultBudget.spent),
+      monthKey: this.vaultBudget.monthKey,
+      friends: mine.slice(0, VAULT_FRIENDS_SHOWN).map((f) => ({
+        id: f.id,
+        name: f.name,
+        avatar: f.avatar,
+        matches: f.matches,
+        days: f.days.length,
+        pvpMatches: f.pvpMatches,
+        opponents: f.opponents.length,
+        pvpWins: f.pvpWins,
+        arena: f.arena,
+        stage1: f.stage1,
+        stage2: f.stage2,
+        flagged: f.flagged,
+        credited: f.creditedStars,
+        queued: f.queuedStars,
+      })),
+    };
+  }
+
+  /** File a manual payout request. The app moves no currency; the owner settles it by hand. */
+  private vaultRequestPayout(playerId: string): { ok: boolean; error?: string; view?: VaultView } {
+    const now = Date.now();
+    this.vaultRollMonth(now);
+    const acc = this.vaultAccount(playerId, now);
+    if (this.vaultWaitingFor(playerId)) return { ok: false, error: 'already_waiting' };
+    const amount = this.vaultBalanceOf(acc);
+    if (amount < REFERRAL_CONFIG.MIN_PAYOUT_THRESHOLD_STARS) return { ok: false, error: 'below_threshold' };
+    let requestId = '';
+    for (let attempt = 0; attempt < 8 && !requestId; attempt++) {
+      const candidate = `vp${hash(`${playerId}|${now}|${attempt}|${this.vaultPayouts.size}`).toString(36)}`;
+      if (!this.vaultPayouts.has(candidate)) requestId = candidate;
+    }
+    if (!requestId) return { ok: false, error: 'request_id_failed' };
+    this.vaultPayouts.set(requestId, {
+      requestId,
+      playerId,
+      playerName: acc.name || (this.players.get(playerId)?.name ?? '').slice(0, 48),
+      amount,
+      createdAt: now,
+      status: 'waiting',
+      decidedAt: 0,
+    });
+    this.persistVault();
+    return { ok: true, view: this.vaultView(playerId) };
+  }
+
+  /** The Command Center's read: what was earned, what was paid, what is waiting, what is held. */
+  private vaultAdminView(): VaultAdminView {
+    const now = Date.now();
+    this.vaultRollMonth(now);
+    let earned = 0;
+    let paid = 0;
+    let queued = 0;
+    for (const acc of this.vaultAccounts.values()) {
+      earned += acc.earnedStars;
+      paid += acc.paidOutStars;
+      queued += acc.queuedStars;
+    }
+    const requests = [...this.vaultPayouts.values()].sort((a, b) => {
+      const rank = (p: VaultPayout) => (p.status === 'waiting' ? 0 : 1);
+      return rank(a) - rank(b) || b.createdAt - a.createdAt;
+    });
+    const waiting = requests.filter((p) => p.status === 'waiting');
+    const flagged: VaultFlagView[] = [];
+    for (const friend of this.vaultFriends.values()) {
+      if (!friend.flagged) continue;
+      flagged.push({
+        id: friend.id,
+        name: friend.name,
+        inviterId: friend.inviterId,
+        inviterName: this.vaultAccounts.get(friend.inviterId)?.name ?? '',
+        matches: friend.matches,
+        clusterMatches: friend.clusterMatches,
+        ratio: friend.matches > 0 ? Math.round((friend.clusterMatches / friend.matches) * 100) : 0,
+        pvpWins: friend.pvpWins,
+        stage1: friend.stage1,
+        stage2: friend.stage2,
+        /* What the inviter would still be owed if this friend were genuine. */
+        heldStars: Math.max(0, REFERRAL_CONFIG.TOTAL_PER_FRIEND_STARS - friend.creditedStars),
+      });
+    }
+    flagged.sort((a, b) => b.ratio - a.ratio || b.matches - a.matches);
+    return {
+      ok: true,
+      totals: {
+        earned,
+        paid,
+        waiting: waiting.length,
+        waitingStars: waiting.reduce((sum, p) => sum + p.amount, 0),
+        queued,
+        inviters: this.vaultAccounts.size,
+        friends: this.vaultFriends.size,
+        flagged: flagged.length,
+        budget: REFERRAL_CONFIG.GLOBAL_MONTHLY_BUDGET_STARS,
+        budgetSpent: this.vaultBudget.spent,
+        budgetLeft: Math.max(0, REFERRAL_CONFIG.GLOBAL_MONTHLY_BUDGET_STARS - this.vaultBudget.spent),
+        monthKey: this.vaultBudget.monthKey,
+      },
+      requests,
+      flagged,
+    };
+  }
+
+  /** Mark a request paid or rejected, or clear / raise a collusion flag. SuperAdmin only. */
+  private vaultAdminAction(body: Record<string, unknown>): { ok: boolean; error?: string; view?: VaultAdminView } {
+    const id = typeof body.id === 'string' ? body.id.slice(0, 64) : '';
+    const action = typeof body.action === 'string' ? body.action.toUpperCase() : '';
+    if (!id) return { ok: false, error: 'bad_id' };
+    const now = Date.now();
+
+    const request = this.vaultPayouts.get(id);
+    if (request) {
+      if (action !== 'PAID' && action !== 'REJECT') return { ok: false, error: 'bad_action' };
+      if (request.status !== 'waiting') return { ok: false, error: 'already_decided' };
+      request.status = action === 'PAID' ? 'paid' : 'rejected';
+      request.decidedAt = now;
+      if (action === 'PAID') {
+        const acc = this.vaultAccount(request.playerId, now);
+        acc.paidOutStars += request.amount;
+        acc.updatedAt = now;
+      }
+      this.persistVault();
+      return { ok: true, view: this.vaultAdminView() };
+    }
+
+    const friend = this.vaultFriends.get(id);
+    if (friend) {
+      if (action !== 'CLEAR' && action !== 'FLAG') return { ok: false, error: 'bad_action' };
+      friend.flagged = action === 'FLAG';
+      /* A cleared ring stays cleared: the admin's review outranks the ratio that raised it. */
+      friend.cleared = action === 'CLEAR';
+      friend.updatedAt = now;
+      if (!friend.flagged) {
+        const acc = this.vaultAccounts.get(friend.inviterId);
+        if (acc) this.vaultEvaluate(friend, acc, now);
+      }
+      this.persistVault();
+      return { ok: true, view: this.vaultAdminView() };
+    }
+    return { ok: false, error: 'not_found' };
+  }
+
+  /** `GET /api/stars/vault` — the Profile card's server-owned balance and friend progress. */
+  private async starsVault(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: VAULT_CORS });
+    if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, VAULT_CORS);
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, VAULT_CORS);
+    if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, VAULT_CORS);
+    return json(this.vaultView(who.playerId), 200, VAULT_CORS);
+  }
+
+  /** `POST /api/stars/payout` — file the manual request. Nothing is transferred here. */
+  private async starsPayout(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: VAULT_CORS });
+    if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, VAULT_CORS);
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, VAULT_CORS);
+    if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, VAULT_CORS);
+    const result = this.vaultRequestPayout(who.playerId);
+    if (!result.ok) return json({ ok: false, error: result.error ?? 'refused' }, 400, VAULT_CORS);
+    return json(result.view ?? this.vaultView(who.playerId), 200, VAULT_CORS);
   }
 }
