@@ -422,7 +422,7 @@ export function buildInviteLink(code?: string | null): string {
 }
 
 /** What the invite carries into Telegram's own share sheet. */
-const SHARE_TEXT = '⚔️ Join my duel in Tactix! Tap the link to enter the room:';
+const SHARE_TEXT = 'Join my duel in Tactix! Tap the link to enter the room:';
 
 /** Telegram's native share page for a room: the recipient picker opens on top of the chat. */
 export function buildShareUrl(code?: string | null): string {

@@ -481,7 +481,7 @@ bonusBadge.className = 'iv-bonus';
 bonusBadge.id = 'iv-bonus';
 bonusBadge.setAttribute('role', 'status');
 bonusBadge.hidden = true;
-bonusBadge.innerHTML = '<span class="iv-bonus-ico" aria-hidden="true">🎁</span>'
+bonusBadge.innerHTML = '<span class="iv-bonus-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>'
   + '<span class="iv-bonus-copy">'
   + '<span class="iv-bonus-k" id="iv-bonus-k"></span>'
   + '<span class="iv-bonus-t" id="iv-bonus-t"></span>'

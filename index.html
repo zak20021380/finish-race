@@ -333,6 +333,15 @@
           <path d="M12 16l4-4M14 14l4.5 4.5M10 14l-4.5 4.5M12 16l-4-4" />
         </g>
       </symbol>
+      <!-- the vault's play step: one controller body, a cross-key left and two action dots right -->
+      <symbol id="i-gamepad" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7.2 7.4h9.6a4.9 4.9 0 0 1 4.7 3.7l.8 3.1a3 3 0 0 1-5.1 2.8l-1.5-1.6a2.9 2.9 0 0 0-2.1-.9h-3.2a2.9 2.9 0 0 0-2.1.9l-1.5 1.6a3 3 0 0 1-5.1-2.8l.8-3.1a4.9 4.9 0 0 1 4.7-3.7Z" />
+          <path d="M8.1 10.3v3.6M6.3 12.1h3.6" />
+          <circle cx="15.9" cy="10.7" r=".95" fill="currentColor" stroke="none" />
+          <circle cx="17.9" cy="12.7" r=".95" fill="currentColor" stroke="none" />
+        </g>
+      </symbol>
       <!-- the duel crest: two tempered blades meeting at a lit diamond, their guards and pommels
            struck in gold-leaf. Drawn as filled steel, so the banner's insignia reads metallic at
            23px rather than as a flat line icon. -->
@@ -1847,13 +1856,17 @@
 
                 <div class="sv-meter">
                   <p class="sv-bal" dir="ltr">
-                    <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span><span class="sv-bal-star" aria-hidden="true">⭐</span>
+                    <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
+                    <svg class="ico ico-star-3d sv-bal-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
                   </p>
                   <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="sv-title"
                     aria-valuemin="0" aria-valuemax="50" aria-valuenow="20" aria-valuetext="20 / 50">
                     <span class="sv-bar-fill" id="sv-bar-fill" style="width:40%"></span>
                   </div>
-                  <p class="sv-gift" id="sv-gift">🎁 Includes 20 ⭐ Starter Gift! Collect 30 more ⭐ to cash out 50 Stars</p>
+                  <p class="sv-gift">
+                    <span class="sv-gift-pod" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
+                    <span class="sv-gift-t" id="sv-gift">Includes 20 Starter Gift! Collect 30 more to cash out 50 Stars</span>
+                  </p>
                 </div>
 
                 <div class="sv-pills">
@@ -1863,46 +1876,53 @@
                   </span>
                   <span class="sv-pill" data-tone="gold">
                     <span class="sv-pill-k" data-i18n="vaultEarned">Earned</span>
-                    <b class="sv-pill-v" id="sv-earned" dir="ltr">+0 ⭐</b>
+                    <b class="sv-pill-v" dir="ltr"><span id="sv-earned">+0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                   </span>
                   <span class="sv-pill" data-tone="mint">
                     <span class="sv-pill-k" data-i18n="vaultPaid">Paid Out</span>
-                    <b class="sv-pill-v" id="sv-paid" dir="ltr">0 ⭐</b>
+                    <b class="sv-pill-v" dir="ltr"><span id="sv-paid">0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
                   </span>
                 </div>
 
                 <ol class="sv-steps">
                   <li class="sv-step">
                     <span class="sv-step-n" aria-hidden="true">1</span>
-                    <span class="sv-step-i" aria-hidden="true">🔗</span>
+                    <span class="sv-step-i" data-tone="link" aria-hidden="true"><svg class="ico"><use href="#i-link" /></svg></span>
                     <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
                   </li>
                   <li class="sv-step">
                     <span class="sv-step-n" aria-hidden="true">2</span>
-                    <span class="sv-step-i" aria-hidden="true">🎮</span>
+                    <span class="sv-step-i" data-tone="plays" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
                     <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
-                    <span class="sv-step-r" id="sv-step2-r" dir="ltr">+2 ⭐ · 10 matches in 3 days</span>
+                    <span class="sv-step-r" dir="ltr">
+                      <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
+                    </span>
                   </li>
                   <li class="sv-step">
                     <span class="sv-step-n" aria-hidden="true">3</span>
-                    <span class="sv-step-i" aria-hidden="true">⚔️</span>
+                    <span class="sv-step-i" data-tone="rivals" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
                     <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
-                    <span class="sv-step-r" id="sv-step3-r" dir="ltr">+3 ⭐ · 5 online wins</span>
+                    <span class="sv-step-r" dir="ltr">
+                      <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
+                    </span>
                   </li>
                 </ol>
 
                 <div class="sv-acts">
                   <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
                     <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-                    <span id="sv-share-t">Invite Friends &amp; Get 5 ⭐ Each</span>
+                    <span id="sv-share-t">Invite Friends &amp; Get 5 Stars Each</span>
                   </button>
                   <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
-                    <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
+                    <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
                     <span class="sv-copy-t" data-i18n="vaultCopy">Copy</span>
                   </button>
                 </div>
                 <button class="sv-payout" type="button" id="sv-payout" disabled>
-                  <span id="sv-payout-t">🔒 Unlocks at 50 ⭐</span>
+                  <span class="sv-payout-i" aria-hidden="true"><svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg></span>
+                  <span id="sv-payout-t">Unlocks at 50</span>
                 </button>
                 <p class="sv-notice" id="sv-notice" hidden></p>
 
@@ -3379,7 +3399,7 @@
                     <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
                       aria-label="Save changes for the 7-day plan">Save Changes</button>
                   </div>
-                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> Stars grossed</p>
                 </article>
 
                 <article class="vipadm-plan" data-vip-plan="30d" data-on="true">
@@ -3408,7 +3428,7 @@
                     <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
                       aria-label="Save changes for the 30-day plan">Save Changes</button>
                   </div>
-                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> Stars grossed</p>
                 </article>
 
                 <article class="vipadm-plan" data-vip-plan="90d" data-on="true">
@@ -3437,7 +3457,7 @@
                     <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
                       aria-label="Save changes for the 90-day plan">Save Changes</button>
                   </div>
-                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> Stars grossed</p>
                 </article>
               </div>
 

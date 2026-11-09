@@ -2005,8 +2005,31 @@ export function createMenu(api: MenuApi): Menu {
     if (el) el.textContent = value;
   };
 
+  /** Sprite instances for the figures the room builds at runtime — never an emoji. */
+  const svIcon = (href: string, cls: string): SVGSVGElement => {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', `ico ${cls}`);
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(NS, 'use');
+    use.setAttribute('href', href);
+    svg.append(use);
+    return svg;
+  };
+
+  /** A finished stage wears a check, its Stars award, and the official Star asset. */
+  function svStagePill(pill: HTMLElement, done: boolean, reward: number, progress: string): void {
+    if (!done) { pill.textContent = progress; return; }
+    pill.append(
+      svIcon('#i-check', 'sv-check'),
+      document.createTextNode(svFill('vaultStageDone', { n: en(reward) })),
+      svIcon('#i-star-3d', 'ico-star-3d sv-star'),
+    );
+  }
+
   /** The letter a nameless friend wears: never their id, which is not a name. */
-  const svInitial = (name: string): string => (name.trim().slice(0, 1) || '★').toUpperCase();
+  const svInitial = (name: string): string =>
+    (name.trim().slice(0, 1) || t('vaultFriendAnon').slice(0, 1)).toUpperCase();
 
   function svFriendRow(f: VaultFriend): HTMLElement {
     const C = REFERRAL_CONFIG;
@@ -2042,9 +2065,13 @@ export function createMenu(api: MenuApi): Menu {
     total.className = 'sv-friend-total';
     total.dir = 'ltr';
     const complete = f.credited >= C.TOTAL_PER_FRIEND_STARS;
-    total.textContent = svFill('vaultFriendTotal', {
-      n: en(f.credited), total: en(C.TOTAL_PER_FRIEND_STARS),
-    }) + (complete ? ' ✓' : '');
+    total.append(
+      document.createTextNode(svFill('vaultFriendTotal', {
+        n: en(f.credited), total: en(C.TOTAL_PER_FRIEND_STARS),
+      })),
+      svIcon('#i-star-3d', 'ico-star-3d sv-star'),
+    );
+    if (complete) total.append(svIcon('#i-check', 'sv-check'));
     total.dataset.complete = String(complete);
 
     head.append(av, nm, total);
@@ -2056,25 +2083,31 @@ export function createMenu(api: MenuApi): Menu {
     pill1.className = 'sv-fpill';
     pill1.dir = 'ltr';
     pill1.dataset.state = f.stage1 ? 'done' : 'open';
-    pill1.textContent = f.stage1
-      ? svFill('vaultStageDone', { n: en(C.STAGE1_REWARD_STARS) })
-      : svFill('vaultStage1Progress', {
+    svStagePill(
+      pill1,
+      f.stage1,
+      C.STAGE1_REWARD_STARS,
+      svFill('vaultStage1Progress', {
         m: en(Math.min(f.matches, C.STAGE1_MIN_MATCHES)),
         max: en(C.STAGE1_MIN_MATCHES),
         d: en(Math.min(f.days, C.STAGE1_MIN_DAYS)),
         days: en(C.STAGE1_MIN_DAYS),
-      });
+      }),
+    );
 
     const pill2 = document.createElement('span');
     pill2.className = 'sv-fpill';
     pill2.dir = 'ltr';
     pill2.dataset.state = f.stage2 ? 'gold' : 'open';
-    pill2.textContent = f.stage2
-      ? svFill('vaultStageDone', { n: en(C.STAGE2_REWARD_STARS) })
-      : svFill('vaultStage2Progress', {
+    svStagePill(
+      pill2,
+      f.stage2,
+      C.STAGE2_REWARD_STARS,
+      svFill('vaultStage2Progress', {
         w: en(Math.min(f.pvpWins, C.STAGE2_MIN_RANKED_PVP_WINS)),
         max: en(C.STAGE2_MIN_RANKED_PVP_WINS),
-      });
+      }),
+    );
 
     pills.append(pill1, pill2);
 
@@ -2114,14 +2147,16 @@ export function createMenu(api: MenuApi): Menu {
       }));
 
     svText('sv-pending', en(vault.pendingFriendsCount));
-    svText('sv-earned', `+${en(vault.earnedStars)} ⭐`);
-    svText('sv-paid', `${en(vault.paidOutStars)} ⭐`);
+    svText('sv-earned', `+${en(vault.earnedStars)}`);
+    svText('sv-paid', en(vault.paidOutStars));
 
+    svText('sv-step2-n', `+${en(C.STAGE1_REWARD_STARS)}`);
+    svText('sv-step3-n', `+${en(C.STAGE2_REWARD_STARS)}`);
     svText('sv-step2-r', svFill('vaultStep2Rule', {
-      n: en(C.STAGE1_REWARD_STARS), m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
+      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
     }));
     svText('sv-step3-r', svFill('vaultStep3Rule', {
-      n: en(C.STAGE2_REWARD_STARS), w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
+      w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
     }));
 
     const link = referralLink();
@@ -2142,6 +2177,10 @@ export function createMenu(api: MenuApi): Menu {
       svPayoutBtn.disabled = vaultBusy || !vault.canPayout;
       svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
       svPayoutBtn.setAttribute('aria-label', label);
+      document.getElementById('sv-payout-ic')?.setAttribute(
+        'href',
+        vault.waiting ? '#i-clock' : vault.canPayout ? '#i-star-3d' : '#i-lock',
+      );
     }
 
     const notice = document.getElementById('sv-notice');
@@ -2211,12 +2250,15 @@ export function createMenu(api: MenuApi): Menu {
     void copyText(link).then((ok) => {
       notify(ok ? 'success' : 'warning');
       const label = svCopyBtn.querySelector<HTMLElement>('.sv-copy-t');
+      const icon = document.getElementById('sv-copy-ic');
       if (!ok || !label) return;
       label.textContent = t('vaultCopied');
+      icon?.setAttribute('href', '#i-check');
       svCopyBtn.classList.add('copied');
       window.clearTimeout(svCopyTimer);
       svCopyTimer = window.setTimeout(() => {
         label.textContent = t('vaultCopy');
+        icon?.setAttribute('href', '#i-copy');
         svCopyBtn.classList.remove('copied');
       }, 1400);
     });
@@ -4824,7 +4866,7 @@ function createTrainingUpsell(): TrainingUpsellModal | null {
   root.innerHTML = [
     '<div class="tu-scrim" data-tu-scrim></div>',
     '<div class="tu-panel" role="dialog" aria-modal="true" aria-labelledby="tu-title" aria-describedby="tu-body">',
-    '  <span class="tu-crest" aria-hidden="true">⚔️</span>',
+    '  <span class="tu-crest" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>',
     '  <p class="tu-kicker" id="tu-kicker"></p>',
     '  <h2 class="tu-title" id="tu-title"></h2>',
     '  <p class="tu-body" id="tu-body"></p>',

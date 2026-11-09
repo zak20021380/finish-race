@@ -4509,7 +4509,7 @@ export function createAdmin(api: AdminApi): Admin {
     const cells = document.createElement('div');
     cells.className = 'adm-vault-cells';
     cells.append(
-      vaultCell(`${figure(row.amount)} ⭐`, 'Amount'),
+      vaultCell(`${figure(row.amount)} Stars`, 'Amount'),
       vaultCell(vaultWhen(row.createdAt), 'Requested'),
     );
     if (row.status !== 'waiting') cells.append(vaultCell(vaultWhen(row.decidedAt), 'Settled'));
@@ -4570,7 +4570,7 @@ export function createAdmin(api: AdminApi): Admin {
     cells.append(
       vaultCell(figure(row.matches), 'Matches'),
       vaultCell(figure(row.clusterMatches), 'In cluster'),
-      vaultCell(`${figure(row.heldStars)} ⭐`, 'Held'),
+      vaultCell(`${figure(row.heldStars)} Stars`, 'Held'),
     );
 
     const actions = document.createElement('div');
@@ -4596,14 +4596,14 @@ export function createAdmin(api: AdminApi): Admin {
     if (vaultKpiEarned) vaultKpiEarned.textContent = figureOr(totals?.earned);
     if (vaultKpiEarnedSub) {
       vaultKpiEarnedSub.textContent = totals
-        ? `${figure(totals.inviters)} vaults · ${figure(totals.queued)} ⭐ queued`
+        ? `${figure(totals.inviters)} vaults · ${figure(totals.queued)} Stars queued`
         : '—';
     }
     if (vaultKpiPaid) vaultKpiPaid.textContent = figureOr(totals?.paid);
     if (vaultKpiPaidSub) vaultKpiPaidSub.textContent = totals ? 'settled by hand' : '—';
     if (vaultKpiWaiting) vaultKpiWaiting.textContent = figureOr(totals?.waiting);
     if (vaultKpiWaitingSub) {
-      vaultKpiWaitingSub.textContent = totals ? `${figure(totals.waitingStars)} ⭐ to settle` : '—';
+      vaultKpiWaitingSub.textContent = totals ? `${figure(totals.waitingStars)} Stars to settle` : '—';
     }
     if (vaultKpiBudget) vaultKpiBudget.textContent = figureOr(totals?.budgetLeft);
     if (vaultKpiBudgetSub) {
@@ -4725,7 +4725,7 @@ export function createAdmin(api: AdminApi): Admin {
     if (action === 'PAID' && row) {
       openConfirm(
         'Mark this payout settled?',
-        `${row.playerName || row.playerId} asked for ${figure(row.amount)} ⭐. Confirm only once you have paid them yourself — the app transfers nothing.`,
+        `${row.playerName || row.playerId} asked for ${figure(row.amount)} Stars. Confirm only once you have paid them yourself — the app transfers nothing.`,
         'Mark Paid',
         () => void runVaultAction(id, action),
       );
@@ -4734,7 +4734,7 @@ export function createAdmin(api: AdminApi): Admin {
     if (action === 'REJECT' && row) {
       openConfirm(
         'Reject this payout?',
-        `${figure(row.amount)} ⭐ returns to ${row.playerName || row.playerId}’s vault balance and they may ask again.`,
+        `${figure(row.amount)} Stars returns to ${row.playerName || row.playerId}’s vault balance and they may ask again.`,
         'Reject Request',
         () => void runVaultAction(id, action),
       );
@@ -4744,7 +4744,7 @@ export function createAdmin(api: AdminApi): Admin {
       const flag = vaultPage?.flagged.find((f) => f.id === id);
       openConfirm(
         'Clear this collusion flag?',
-        `${flag?.name || id} played ${figure(flag?.ratio ?? 0)}% of valid matches inside their own invite cluster. Clearing releases up to ${figure(flag?.heldStars ?? 0)} ⭐ and stops the ratio re-flagging them.`,
+        `${flag?.name || id} played ${figure(flag?.ratio ?? 0)}% of valid matches inside their own invite cluster. Clearing releases up to ${figure(flag?.heldStars ?? 0)} Stars and stops the ratio re-flagging them.`,
         'Clear Flag',
         () => void runVaultAction(id, action),
       );

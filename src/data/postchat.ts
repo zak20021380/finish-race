@@ -41,7 +41,7 @@ export const POST_CHAT_QUICK_CHATS: readonly PostChatQuickChat[] = [
   { id: 'rematch', en: 'One more round? 🔄', fa: 'یک دست دیگه؟ 🔄' },
   { id: 'respect', en: 'Well played! 🤝', fa: 'دمت گرم بازی خوبی بود 🤝' },
   { id: 'banter', en: 'Lucky break! 😉', fa: 'شانس آوردی! 😉' },
-  { id: 'vengeance', en: 'Rematch pending! ⚔️', fa: 'دست بعد جبران می‌کنم! ⚔️' },
+  { id: 'vengeance', en: 'Rematch pending!', fa: 'دست بعد جبران می‌کنم!' },
   { id: 'admire', en: 'Genius move! 🧠', fa: 'حرکتت خیلی تمیز بود! 🧠' },
 ];
 
@@ -85,8 +85,8 @@ const PRESET_IDS = new Set<string>(POST_CHAT_PRESETS.map((p) => p.id));
 const RETIRED_TEXT: ReadonlyArray<{ id: PostChatPresetId; text: string }> = [
   { id: 'gg', text: 'حساب‌شده بود' },
   { id: 'rematch', text: 'دوباره بیا' },
-  { id: 'rematch', text: 'Run it back. ⚔️' },
-  { id: 'rematch', text: 'جرئتشو داری باز بیا! ⚔️' },
+  { id: 'rematch', text: 'Run it back.' },
+  { id: 'rematch', text: 'جرئتشو داری باز بیا!' },
   { id: 'luck', text: 'اشتباه مرگبار' },
   { id: 'wp', text: 'نزدیک بود' },
 ];
