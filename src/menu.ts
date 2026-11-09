@@ -51,6 +51,7 @@ import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
 import { openSeize, relicShelter, seizeTargetOf, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
+import { createModal } from './modal';
 import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
 import {
   fetchStarsVault, refreshReferral, referralLink, referralShareUrl, requestStarsPayout, starterVault,
@@ -1993,6 +1994,14 @@ export function createMenu(api: MenuApi): Menu {
   let vaultPoll = 0;
   let svCopyTimer = 0;
 
+  /* The programme itself lives in one modal sheet, not in the Profile rhythm: the preview tile
+     opens it, and the same reading paints both surfaces. The controller owns the scrim, the
+     close key, Escape, the scroll lock and the focus hand-back, so a closed vault leaves
+     nothing behind. */
+  const vaultModalEl = document.getElementById('modal-stars-vault');
+  const vaultPreviewEl = document.getElementById('vault-preview') as HTMLButtonElement | null;
+  const vaultModal = vaultModalEl ? createModal(vaultModalEl) : null;
+
   /** `t()` with the campaign's own figures filled in. Every number arrives already Latin. */
   const svFill = (key: string, vars: Record<string, string>): string => {
     let out = t(key);
@@ -2128,6 +2137,14 @@ export function createMenu(api: MenuApi): Menu {
     const target = vault.threshold;
     const pct = target > 0 ? Math.max(0, Math.min(100, (balance / target) * 100)) : 0;
 
+    /* the preview tile carries the same two figures as the sheet: a glance reads the meter,
+       a tap opens the whole programme */
+    svText('vp-bal', en(balance));
+    svText('vp-target', en(target));
+    const vpFill = document.getElementById('vp-fill');
+    if (vpFill) vpFill.style.width = `${pct.toFixed(1)}%`;
+    if (vaultPreviewEl) vaultPreviewEl.dataset.ready = String(vault.canPayout);
+
     svText('sv-bal', en(balance));
     svText('sv-target', en(target));
     const bar = document.getElementById('sv-bar');
@@ -2235,6 +2252,14 @@ export function createMenu(api: MenuApi): Menu {
       void refreshVault();
     }, 5000);
   }
+
+  vaultPreviewEl?.addEventListener('click', () => {
+    impact('light');
+    paintVault();                                // never open on a stale figure
+    vaultModal?.open(vaultPreviewEl);
+    void refreshVault();
+    startVaultPoll();
+  });
 
   svShareBtn?.addEventListener('click', () => {
     impact('medium');
@@ -4301,6 +4326,7 @@ export function createMenu(api: MenuApi): Menu {
       /* Only what the tap must show before the next frame: the dock's active key
          and whether the dock belongs on this screen at all. */
       tabbar.hidden = id === 'game';
+      if (id !== 'profile') vaultModal?.close();   // the vault belongs to Profile, not to the next screen
       const raw = id === 'compete' ? 'arena' : id;
       const active = raw === 'home' || raw === 'modes' || raw === 'custom' || raw === 'game' ? 'home' : raw;
       for (const t of tabs) {

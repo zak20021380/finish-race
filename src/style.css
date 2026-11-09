@@ -38122,3 +38122,418 @@ html.reduced-motion .rd-decline { transition: none; }
   .rd-accept,
   .rd-decline { transition: none; }
 }
+
+
+/* ---- Stars Vault: the compact Profile preview and the full vault sheet ----------
+   The profile keeps one 76px tile; the meter, counters, guide, keys, friends and rules
+   live in #modal-stars-vault. Both surfaces read the same server verdict, and every
+   numeral stays Latin and tabular in every locale — the meter never mirrors. */
+
+/* the tile: one recessed star pod, stacked copy, a live balance and its micro line */
+.vault-preview-card {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 160% at 5% 0%, rgba(245, 158, 11, .15) 0%, rgba(245, 158, 11, 0) 58%),
+    var(--clay-face);
+  color: var(--ink);
+  text-align: start;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    0 12px 24px -18px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(245, 158, 11, .18);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.vault-preview-card:hover:not(:active) {
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    0 14px 28px -16px rgba(245, 158, 11, .78),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(245, 158, 11, .34);
+}
+.vault-preview-card:active { transform: translateY(var(--press-y)); --d: 1px; }
+.vault-preview-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.vault-preview-ico {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #0A101B 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .65),
+    inset 0 0 0 1px rgba(245, 158, 11, .18);
+}
+.vault-preview-star {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 2px 7px rgba(245, 158, 11, .55));
+}
+
+.vault-preview-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vault-preview-t {
+  font-size: 13.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vault-preview-s {
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vault-preview-side {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.vault-preview-bal {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  direction: ltr;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.vault-preview-bal b {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--honey-ink);
+  text-shadow: 0 0 10px rgba(245, 158, 11, .35);
+}
+.vault-preview-of { opacity: .55; }
+.vault-preview-glyph {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-inline-start: 2px;
+  filter: drop-shadow(0 1px 3px rgba(245, 158, 11, .5));
+}
+.vault-preview-track {
+  display: block;
+  width: 62px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: linear-gradient(180deg, #070B12 0%, #101828 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.vault-preview-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--gold-face);
+  box-shadow: 0 0 8px rgba(245, 158, 11, .65), inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: width var(--motion-fast) ease;
+}
+
+.vault-preview-chev {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--honey-ink);
+  background: rgba(245, 158, 11, .1);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .26),
+    0 0 10px -4px rgba(245, 158, 11, .7);
+  transition: box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.vault-preview-chev .ico { width: 12px; height: 12px; }
+.vault-preview-card:hover:not(:active) .vault-preview-chev {
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .45),
+    0 0 16px -2px rgba(245, 158, 11, .9);
+}
+.vault-preview-card:active .vault-preview-chev { transform: scale(.94); }
+html:lang(fa) .vault-preview-chev .ico,
+html:lang(ar) .vault-preview-chev .ico { transform: scaleX(-1); }
+html:lang(fa) .vault-preview-card, html:lang(ar) .vault-preview-card { direction: rtl; }
+html:lang(fa) .vault-preview-t, html:lang(fa) .vault-preview-s,
+html:lang(ar) .vault-preview-t, html:lang(ar) .vault-preview-s {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+
+/* ---- the sheet: obsidian glass over a blurred scrim, rising from the bottom ---- */
+.vault-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.vault-modal[hidden] { display: none; }
+.vault-modal-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 20, .82);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
+  backdrop-filter: blur(16px) saturate(1.05);
+  opacity: 0;
+  transition: opacity var(--motion-med);
+}
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .vault-modal-scrim { background: rgba(8, 12, 20, .95); }
+}
+.vault-modal.open .vault-modal-scrim,
+.vault-modal.closing .vault-modal-scrim { opacity: 1; }
+.vault-modal.closing .vault-modal-scrim { opacity: 0; }
+
+.vault-modal-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(100%, var(--app-w));
+  max-height: calc(100vh - env(safe-area-inset-top) - 10px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - 10px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 14px;
+  border-radius: 26px 26px 0 0;
+  background:
+    radial-gradient(120% 62% at 50% 0%, rgba(245, 158, 11, .17) 0%, rgba(245, 158, 11, 0) 62%),
+    linear-gradient(180deg, #18202F 0%, #10151F 56%, #0B0F17 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(245, 158, 11, .22),
+    0 -24px 60px -24px rgba(0, 0, 0, .85);
+  overflow: hidden;
+  transform: translate3d(0, 100%, 0);
+  transition: transform .34s cubic-bezier(.22, .9, .24, 1);
+  will-change: transform;
+}
+.vault-modal.open .vault-modal-sheet { transform: none; }
+.vault-modal-sheet:focus { outline: none; }
+
+.vault-modal-handle {
+  position: absolute;
+  top: 7px;
+  inset-inline-start: 50%;
+  width: 40px;
+  height: 4px;
+  margin-inline-start: -20px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+  cursor: pointer;
+}
+.vault-modal-x {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  transition: color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
+}
+.vault-modal-x .ico { width: 14px; height: 14px; }
+.vault-modal-x:hover:not(:active) { color: var(--ink); background: rgba(255, 255, 255, .09); }
+.vault-modal-x:active { transform: scale(.94); }
+.vault-modal-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.vault-modal-body {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 14px calc(18px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+html.modal-open, html.modal-open body { overscroll-behavior: none; }
+html.reduced-motion .vault-modal-sheet, html.reduced-motion .vault-modal-scrim { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .vault-modal-sheet, .vault-modal-scrim, .vault-preview-fill { transition: none; }
+}
+
+/* the header: the seal, the two lines, and the quiet ember of a live reading */
+.vm-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-inline-end: 34px;
+}
+.vm-head-i {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--honey-ink);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(245, 158, 11, .22);
+}
+.vm-head-i .ico { width: 21px; height: 21px; }
+.vm-head-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.vm-sub {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+html:lang(fa) .vm-title, html:lang(fa) .vm-sub,
+html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+
+/* the card's own body, unrolled into the sheet: the same components, no second slab */
+.sv-vault {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  gap: 11px;
+}
+.sv-vault .sv-meter {
+  padding: 12px 12px 13px;
+  background: linear-gradient(180deg, #0A0F19 0%, #0E1524 100%);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, .65),
+    inset 0 0 0 1px rgba(245, 158, 11, .2),
+    0 0 26px -16px rgba(245, 158, 11, .7);
+}
+.sv-vault .sv-bal b {
+  font-size: 34px;
+  text-shadow: 0 0 20px rgba(245, 158, 11, .45);
+}
+.sv-vault .sv-bal-star { width: 26px; height: 26px; }
+.sv-vault .sv-bar { height: 12px; }
+.sv-vault .sv-gift { border-inline-start-width: 2px; }
+
+/* the friends feed: a real list, scrollable inside the sheet, each avatar ringed in gold */
+.sv-vault .sv-friends {
+  max-height: 208px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: 2px;
+  scrollbar-width: thin;
+}
+.sv-vault .sv-friend-av {
+  box-shadow:
+    inset 0 0 0 1px var(--hair-off),
+    0 0 0 1px rgba(245, 158, 11, .3),
+    0 0 10px -6px rgba(245, 158, 11, .65);
+}
+.sv-vault .sv-friend[data-done="true"] .sv-friend-av {
+  box-shadow:
+    inset 0 0 0 1px var(--hair-off),
+    0 0 0 1px rgba(245, 158, 11, .55),
+    0 0 12px -4px rgba(245, 158, 11, .85);
+}
+
+/* the footer note: one quiet disclosure, closed by default */
+.vm-rules {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.vm-rules > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.vm-rules > summary::-webkit-details-marker { display: none; }
+.vm-rules > summary::after {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-inline-end: 1.6px solid var(--honey-ink);
+  border-bottom: 1.6px solid var(--honey-ink);
+  transform: rotate(45deg);
+  transition: transform var(--motion-fast);
+}
+.vm-rules[open] > summary::after { transform: rotate(-135deg); }
+.vm-rules > summary:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; border-radius: 14px; }
+.vm-rules .sv-note { padding: 0 12px 11px; }
+
+/* 320–344px: the subtitle steps aside so the title, the balance and the chevron all fit */
+@media (max-width: 344px) {
+  .vault-preview-card { gap: 8px; padding: 0 10px; }
+  .vault-preview-ico { width: 40px; height: 40px; border-radius: 12px; }
+  .vault-preview-star { width: 23px; height: 23px; }
+  .vault-preview-s { display: none; }
+  .vault-preview-track { width: 50px; }
+  .vault-preview-chev { width: 18px; height: 18px; }
+  .vault-modal-body { padding-inline: 11px; }
+  .sv-vault .sv-bal b { font-size: 30px; }
+}

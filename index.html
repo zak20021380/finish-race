@@ -305,6 +305,16 @@
            <path d="M21 3.6 14.2 20.4l-3.8-6.2L4.2 10.4Z" />
          </g>
        </symbol>
+      <!-- the vault's invite key: three nodes joined by two strokes — the share mark, struck
+           rather than pasted as an emoji, so the CTA reads as part of the same tool set -->
+      <symbol id="i-share" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17.6" cy="5.4" r="2.6" />
+          <circle cx="6.4" cy="12" r="2.6" />
+          <circle cx="17.6" cy="18.6" r="2.6" />
+          <path d="m8.8 10.7 6.4-4M8.8 13.3l6.4 4" />
+        </g>
+      </symbol>
       <!-- the referral hub's copy key: two offset sheets, the classic copy mark -->
       <symbol id="i-copy" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -1844,98 +1854,34 @@
               </div>
             </div>
             <div class="pf-sec sv-sec">
-              <!-- Stars Vault: the two-stage invite programme. Every figure is the room's own. -->
-              <section class="sv" id="pf-vault" aria-labelledby="sv-title">
-                <header class="sv-h">
-                  <span class="sv-h-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span>
-                  <span class="sv-h-t">
-                    <h2 class="sv-t" id="sv-title" data-i18n="vaultTitle">Stars Vault</h2>
-                    <span class="sv-s" data-i18n="vaultSub">Invite friends · fill the vault · cash out</span>
+              <!-- Stars Vault preview: one compact tile that opens the full vault sheet. Both
+                   surfaces are painted from the same server reading by src/menu.ts — the tile is
+                   a glance, the sheet is the programme. -->
+              <button class="vault-preview-card" type="button" id="vault-preview"
+                      aria-haspopup="dialog" aria-controls="modal-stars-vault"
+                      data-i18n-aria="vaultPreviewAria" aria-label="Open the Stars Vault">
+                <span class="vault-preview-ico" aria-hidden="true">
+                  <svg class="vault-preview-star" viewBox="0 0 56 56" focusable="false"><use href="#i-star-3d" /></svg>
+                </span>
+                <span class="vault-preview-txt">
+                  <span class="vault-preview-t" data-i18n="vaultTitle">Stars Vault</span>
+                  <span class="vault-preview-s" data-i18n="vaultPreviewSub">Tap to view progress &amp; cash out</span>
+                </span>
+                <span class="vault-preview-side">
+                  <span class="vault-preview-bal">
+                    <b id="vp-bal" dir="ltr">20</b>
+                    <span class="vault-preview-of" aria-hidden="true">/</span>
+                    <span id="vp-target" dir="ltr">50</span>
+                    <svg class="ico ico-star-3d vault-preview-glyph" aria-hidden="true"><use href="#i-star-3d" /></svg>
                   </span>
-                  <span class="sv-live" id="sv-live" data-live="false" aria-hidden="true"></span>
-                </header>
-
-                <div class="sv-meter">
-                  <p class="sv-bal" dir="ltr">
-                    <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
-                    <svg class="ico ico-star-3d sv-bal-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                  </p>
-                  <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="sv-title"
-                    aria-valuemin="0" aria-valuemax="50" aria-valuenow="20" aria-valuetext="20 / 50">
-                    <span class="sv-bar-fill" id="sv-bar-fill" style="width:40%"></span>
-                  </div>
-                  <p class="sv-gift">
-                    <span class="sv-gift-pod" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-                    <span class="sv-gift-t" id="sv-gift">Includes 20 Starter Gift! Collect 30 more to cash out 50 Stars</span>
-                  </p>
-                </div>
-
-                <div class="sv-pills">
-                  <span class="sv-pill">
-                    <span class="sv-pill-k" data-i18n="vaultPending">Pending</span>
-                    <b class="sv-pill-v" id="sv-pending" dir="ltr">0</b>
+                  <span class="vault-preview-track" aria-hidden="true">
+                    <span class="vault-preview-fill" id="vp-fill" style="width:40%"></span>
                   </span>
-                  <span class="sv-pill" data-tone="gold">
-                    <span class="sv-pill-k" data-i18n="vaultEarned">Earned</span>
-                    <b class="sv-pill-v" dir="ltr"><span id="sv-earned">+0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                  </span>
-                  <span class="sv-pill" data-tone="mint">
-                    <span class="sv-pill-k" data-i18n="vaultPaid">Paid Out</span>
-                    <b class="sv-pill-v" dir="ltr"><span id="sv-paid">0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                  </span>
-                </div>
-
-                <ol class="sv-steps">
-                  <li class="sv-step">
-                    <span class="sv-step-n" aria-hidden="true">1</span>
-                    <span class="sv-step-i" data-tone="link" aria-hidden="true"><svg class="ico"><use href="#i-link" /></svg></span>
-                    <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
-                  </li>
-                  <li class="sv-step">
-                    <span class="sv-step-n" aria-hidden="true">2</span>
-                    <span class="sv-step-i" data-tone="plays" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
-                    <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
-                    <span class="sv-step-r" dir="ltr">
-                      <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                      <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
-                    </span>
-                  </li>
-                  <li class="sv-step">
-                    <span class="sv-step-n" aria-hidden="true">3</span>
-                    <span class="sv-step-i" data-tone="rivals" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-                    <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
-                    <span class="sv-step-r" dir="ltr">
-                      <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                      <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
-                    </span>
-                  </li>
-                </ol>
-
-                <div class="sv-acts">
-                  <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
-                    <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-                    <span id="sv-share-t">Invite Friends &amp; Get 5 Stars Each</span>
-                  </button>
-                  <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
-                    <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
-                    <span class="sv-copy-t" data-i18n="vaultCopy">Copy</span>
-                  </button>
-                </div>
-                <button class="sv-payout" type="button" id="sv-payout" disabled>
-                  <span class="sv-payout-i" aria-hidden="true"><svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg></span>
-                  <span id="sv-payout-t">Unlocks at 50</span>
-                </button>
-                <p class="sv-notice" id="sv-notice" hidden></p>
-
-                <div class="sv-friends-h">
-                  <h3 class="sv-friends-t" data-i18n="vaultFriends">Invited Friends</h3>
-                  <span class="sv-friends-n" id="sv-friends-n" dir="ltr">0</span>
-                </div>
-                <ul class="sv-friends" id="sv-friends"></ul>
-                <p class="sv-empty" id="sv-empty" data-i18n="vaultEmpty">No friends yet — share your link and start filling the vault.</p>
-
-                <p class="sv-note" id="sv-note"></p>
-              </section>
+                </span>
+                <span class="vault-preview-chev" aria-hidden="true">
+                  <svg class="ico"><use href="#i-next" /></svg>
+                </span>
+              </button>
             </div>
             <div class="pf-sec pf-badges-sec">
               <h2 class="eq-h pf-sec-h">
@@ -2566,6 +2512,120 @@
         <!-- the stage itself is silent to a screen reader: one polite line carries the state -->
         <p class="sr-only" id="mm-live" role="status" aria-live="polite"></p>
       </section>
+
+      <!-- ============ Stars Vault · the full vault sheet (src/modal.ts) ============
+           Opened only by Profile's preview tile. One obsidian sheet over a blurred scrim:
+           the meter, the three counters, the guide, the two keys, the friends feeding it
+           and the rules. Nothing here computes a figure — every number is the Worker's own
+           verdict, painted by src/menu.ts. -->
+      <div class="vault-modal" id="modal-stars-vault" hidden>
+        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="vault-modal-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="vm-title" aria-describedby="vm-sub">
+          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <button class="vault-modal-x" type="button" id="vm-close" data-modal-close
+                  data-i18n-aria="vaultClose" aria-label="Close the Stars Vault">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+
+          <div class="vault-modal-body" data-scroll>
+            <header class="vm-head">
+              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span>
+              <span class="vm-head-t">
+                <h2 class="vm-title" id="vm-title" data-i18n="vaultTitle">Stars Vault</h2>
+                <p class="vm-sub" id="vm-sub" data-i18n="vaultSub">Invite friends · Fill the vault · Cash out</p>
+              </span>
+              <span class="sv-live" id="sv-live" data-live="false" aria-hidden="true"></span>
+            </header>
+
+            <div class="sv sv-vault">
+              <div class="sv-meter">
+                <p class="sv-bal" dir="ltr">
+                  <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
+                  <svg class="ico ico-star-3d sv-bal-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                </p>
+                <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="vm-title"
+                  aria-valuemin="0" aria-valuemax="50" aria-valuenow="20" aria-valuetext="20 / 50">
+                  <span class="sv-bar-fill" id="sv-bar-fill" style="width:40%"></span>
+                </div>
+                <p class="sv-gift">
+                  <span class="sv-gift-pod" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
+                  <span class="sv-gift-t" id="sv-gift">Includes 20 Starter Gift! Collect 30 more to cash out 50 Stars</span>
+                </p>
+              </div>
+
+              <div class="sv-pills">
+                <span class="sv-pill">
+                  <span class="sv-pill-k" data-i18n="vaultPending">Pending</span>
+                  <b class="sv-pill-v" id="sv-pending" dir="ltr">0</b>
+                </span>
+                <span class="sv-pill" data-tone="gold">
+                  <span class="sv-pill-k" data-i18n="vaultEarned">Earned</span>
+                  <b class="sv-pill-v" dir="ltr"><span id="sv-earned">+0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                </span>
+                <span class="sv-pill" data-tone="mint">
+                  <span class="sv-pill-k" data-i18n="vaultPaid">Paid Out</span>
+                  <b class="sv-pill-v" dir="ltr"><span id="sv-paid">0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                </span>
+              </div>
+
+              <ol class="sv-steps">
+                <li class="sv-step">
+                  <span class="sv-step-n" aria-hidden="true">1</span>
+                  <span class="sv-step-i" data-tone="link" aria-hidden="true"><svg class="ico"><use href="#i-link" /></svg></span>
+                  <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
+                </li>
+                <li class="sv-step">
+                  <span class="sv-step-n" aria-hidden="true">2</span>
+                  <span class="sv-step-i" data-tone="plays" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
+                  <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
+                  <span class="sv-step-r" dir="ltr">
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
+                  </span>
+                </li>
+                <li class="sv-step">
+                  <span class="sv-step-n" aria-hidden="true">3</span>
+                  <span class="sv-step-i" data-tone="rivals" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                  <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
+                  <span class="sv-step-r" dir="ltr">
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
+                  </span>
+                </li>
+              </ol>
+
+              <div class="sv-acts">
+                <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
+                  <svg class="ico" aria-hidden="true"><use href="#i-share" /></svg>
+                  <span id="sv-share-t">Invite Friends &amp; Earn 5 Stars</span>
+                </button>
+                <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
+                  <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
+                  <span class="sv-copy-t" data-i18n="vaultCopy">Copy</span>
+                </button>
+              </div>
+              <button class="sv-payout" type="button" id="sv-payout" disabled>
+                <span class="sv-payout-i" aria-hidden="true"><svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg></span>
+                <span id="sv-payout-t">Unlocks at 50</span>
+              </button>
+              <p class="sv-notice" id="sv-notice" hidden></p>
+
+              <div class="sv-friends-h">
+                <h3 class="sv-friends-t" data-i18n="vaultFriends">Invited Friends</h3>
+                <span class="sv-friends-n" id="sv-friends-n" dir="ltr">0</span>
+              </div>
+              <ul class="sv-friends" id="sv-friends"></ul>
+              <p class="sv-empty" id="sv-empty" data-i18n="vaultEmpty">No friends yet — share your link and start filling the vault.</p>
+            </div>
+
+            <details class="vm-rules">
+              <summary class="vm-rules-sum" data-i18n="vaultRules">Matchmaking rules &amp; monthly pool</summary>
+              <p class="sv-note" id="sv-note"></p>
+            </details>
+          </div>
+        </section>
+      </div>
 
       <div class="toast-host" id="toast-host" role="status" aria-live="polite"></div>
       <div class="scrim" id="scrim" hidden></div>
