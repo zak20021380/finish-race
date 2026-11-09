@@ -7621,13 +7621,14 @@ html.reduced-motion .hex-photo { transition: none; }
 
 /* ---- Stars Vault: the components inside the vault sheet and its two child sheets ----
    One obsidian language, read top to bottom: the balance against its target, the gift that
-   pre-fills it, three counters, a three-column step strip, one primary action and the payout
-   gate. Gold is spent only where it means something — the meter fill, the share key, and a
-   payout that has actually unlocked. Everything else stays quiet clay.
+   pre-fills it, one segmented ledger, the three-step timeline, one primary action and the payout
+   read-out. Gold is spent only where it means something — the meter fill, the share key, and a
+   payout that has actually unlocked. Everything else stays quiet glass.
 
    Every height here is deliberate. The vault sheet has to fit a phone viewport with no scroll
-   at all, so the counter strip is 36px, both keys are 42px, and the three steps run across
-   rather than down. The exact rule each step stands for is spelled out in the guide sheet.
+   at all, so the ledger is one 40px glass strip, the timeline is a single ring row, and the
+   primary key carries the copy action in its flank instead of standing beside it. The exact
+   rule each step stands for rides on the node itself and is spelled out in the guide sheet.
 
    Direction is surgical, per the app's rule: the sheets mirror for fa/ar, but the meter and
    every numeral stay LTR so a progress fill and a Latin figure never reverse. */
@@ -7738,29 +7739,39 @@ html.reduced-motion .hex-photo { transition: none; }
 .sv-gift-t { min-width: 0; overflow-wrap: anywhere; }
 html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px; }
 
-/* three counters: one 36px strip, label over figure, so a long Persian label never wraps it */
-.sv-pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+/* three counters on one continuous obsidian ledge: hairline dividers, never three boxes */
+.sv-pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  min-width: 0;
+  padding: 6px 4px;
+  border-radius: 12px;
+  background: rgba(14, 20, 32, .7);
+  border: 1px solid rgba(255, 255, 255, .06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
+}
 .sv-pill {
   box-sizing: border-box;
-  height: 36px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
   min-width: 0;
-  padding: 3px 5px;
-  border-radius: 11px;
-  background: var(--clay-face);
-  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+  padding: 1px 6px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
+.sv-pill + .sv-pill { border-inline-start: 1px solid rgba(255, 255, 255, .05); }
 .sv-pill-k {
   max-width: 100%;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .04em;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: rgba(148, 163, 184, .8);
   text-align: center;
   line-height: 1.25;
   white-space: nowrap;
@@ -7774,7 +7785,7 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   gap: 3px;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 900;
   color: var(--ink);
   direction: ltr;
@@ -7784,87 +7795,151 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   flex: none;
   width: 12px;
   height: 12px;
-  filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .35));
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .55));
 }
 .sv-pill[data-tone="gold"] .sv-pill-v { color: var(--honey-ink); }
 .sv-pill[data-tone="mint"] .sv-pill-v { color: var(--mint-ink); }
 
-/* the strip: three columns instead of three rows — icon, plain words, then the award. Half the
-   height of the old stack, which is what buys the sheet its no-scroll fit. */
+/* the journey: three chapter rings on one hairline track. The number is engraved inside its
+   ring, so nothing ever floats over an icon; the icon and the label sit centred beneath it. */
 .sv-steps {
   list-style: none;
+  position: relative;
   margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 2px 0;
+  display: flex;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
 }
+.sv-steps::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  inset-inline: calc(100% / 6);
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, .03) 0%,
+    rgba(255, 255, 255, .14) 16%,
+    rgba(255, 255, 255, .14) 84%,
+    rgba(255, 255, 255, .03) 100%);
+  pointer-events: none;
+}
 .sv-step {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-  padding: 5px 4px 6px;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, .025);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  gap: 3px;
   text-align: center;
 }
-.sv-step-i {
+.sv-step-ring {
   position: relative;
+  z-index: 1;
   flex: none;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--field);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06);
-}
-.sv-step-i .ico { flex: none; width: 13px; height: 13px; }
-.sv-step-n {
-  position: absolute;
-  top: -3px;
-  inset-inline-end: -4px;
-  width: 13px;
-  height: 13px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, #1B2434 0%, #0B111E 100%);
-  color: var(--honey-ink);
+  background:
+    radial-gradient(70% 70% at 32% 22%, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(165deg, #303C52 0%, #18202F 44%, #0A0F18 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .25),
+    inset 0 -3px 5px rgba(0, 0, 0, .65),
+    0 0 0 1px rgba(255, 255, 255, .12),
+    0 5px 12px -7px rgba(0, 0, 0, .95);
+}
+.sv-step-ring::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 2px 4px rgba(0, 0, 0, .45);
+  pointer-events: none;
+}
+.sv-step-n {
+  position: static;
+  display: block;
   font-family: var(--font-numeric);
-  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1;
   direction: ltr;
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4), 0 1px 3px rgba(0, 0, 0, .6);
+  color: #E8EEF9;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
 }
-.sv-step-i[data-tone="link"] { color: var(--honey-ink); }
-.sv-step-i[data-tone="plays"] {
-  color: #7DD3FC;
+.sv-step[data-tone="link"] .sv-step-ring {
+  background:
+    radial-gradient(70% 70% at 32% 22%, rgba(255, 255, 255, .24) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(165deg, #3B4659 0%, #1A2333 46%, #0A0F18 100%);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(125, 211, 252, .16),
-    0 0 10px -6px rgba(34, 211, 238, .6);
+    inset 0 1px 1px rgba(255, 255, 255, .3),
+    inset 0 -3px 5px rgba(0, 0, 0, .65),
+    0 0 0 1px rgba(226, 232, 240, .18),
+    0 5px 12px -7px rgba(0, 0, 0, .95);
 }
-.sv-step-i[data-tone="rivals"] {
-  color: #FDA4AF;
+.sv-step[data-tone="plays"] .sv-step-ring {
+  background:
+    radial-gradient(70% 70% at 32% 22%, rgba(165, 243, 252, .28) 0%, rgba(165, 243, 252, 0) 58%),
+    linear-gradient(165deg, #274453 0%, #10222C 46%, #071017 100%);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(251, 113, 133, .18),
-    0 0 10px -6px rgba(245, 158, 11, .5);
+    inset 0 1px 1px rgba(207, 250, 254, .28),
+    inset 0 -3px 5px rgba(0, 0, 0, .6),
+    0 0 0 1px rgba(125, 211, 252, .36),
+    0 0 16px -5px rgba(34, 211, 238, .55),
+    0 5px 12px -7px rgba(0, 0, 0, .9);
 }
+.sv-step[data-tone="plays"] .sv-step-n { color: #CFFAFE; text-shadow: 0 0 8px rgba(34, 211, 238, .5); }
+.sv-step[data-tone="rivals"] .sv-step-ring {
+  background:
+    radial-gradient(70% 70% at 32% 22%, rgba(253, 230, 138, .32) 0%, rgba(253, 230, 138, 0) 58%),
+    linear-gradient(165deg, #4A3A1C 0%, #241B0E 46%, #0F0B06 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(254, 243, 199, .3),
+    inset 0 -3px 5px rgba(0, 0, 0, .6),
+    0 0 0 1px rgba(245, 158, 11, .42),
+    0 0 18px -5px rgba(245, 158, 11, .6),
+    0 5px 12px -7px rgba(0, 0, 0, .9);
+}
+.sv-step[data-tone="rivals"] .sv-step-n { color: #FDE68A; text-shadow: 0 0 8px rgba(245, 158, 11, .5); }
+/* the track's direction caret: a hairline chevron that rides just before each new chapter */
+.sv-step + .sv-step::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 15.5px;
+  inset-inline-start: -5.5px;
+  width: 5px;
+  height: 5px;
+  border-top: 1px solid rgba(255, 255, 255, .2);
+  border-inline-end: 1px solid rgba(255, 255, 255, .2);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+html:lang(fa) .sv-step + .sv-step::before,
+html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
 .sv-step-t {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   font-size: 10px;
   font-weight: 800;
-  color: var(--ink);
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  color: var(--ink);
 }
+.sv-step-t .ico { flex: none; width: 11px; height: 11px; }
+.sv-step[data-tone="link"] .sv-step-t .ico { color: var(--honey-ink); }
+.sv-step[data-tone="plays"] .sv-step-t .ico { color: #7DD3FC; }
+.sv-step[data-tone="rivals"] .sv-step-t .ico { color: #FCD34D; }
+.sv-step-t span { min-width: 0; overflow-wrap: anywhere; }
 .sv-step-hint {
   font-size: 8.5px;
   font-weight: 700;
@@ -7872,19 +7947,27 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
+.sv-step-tag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
 .sv-step-bonus {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 16px;
+  height: 15px;
   padding: 0 5px;
-  border-radius: 6px;
+  border-radius: 5px;
   background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .06) 100%);
   color: var(--honey-ink);
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 900;
   line-height: 1;
   box-shadow:
@@ -7897,129 +7980,182 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   height: 10px;
   filter: drop-shadow(0 0 4px rgba(245, 158, 11, .5));
 }
+.sv-step-rule {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 
-/* one primary action beside its copy key; the payout gate is the only other button */
-.sv-acts { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
-.sv-cta {
-  --d: 3px;
+/* one primary decision: an obsidian-gold glass bar with the copy key socketed into its flank,
+   instead of a bright block and a second equal-looking button beside it */
+.sv-acts {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  height: 44px;
+  border-radius: 14px;
+  background:
+    radial-gradient(130% 190% at 8% -40%, rgba(253, 230, 138, .34) 0%, rgba(245, 158, 11, .1) 46%, rgba(245, 158, 11, 0) 72%),
+    linear-gradient(180deg, #2B2416 0%, #1B160D 52%, #110D07 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(245, 158, 11, .34),
+    0 12px 26px -18px rgba(0, 0, 0, .95),
+    0 0 22px -14px rgba(245, 158, 11, .55);
+  overflow: hidden;
+}
+/* `.sv :is(button, input) { font: inherit }` outranks a bare class, so the two keys scope
+   their type one level deeper to keep the intended hierarchy. */
+.sv .sv-cta {
   appearance: none;
   border: 0;
   cursor: pointer;
   flex: 1 1 auto;
   min-width: 0;
-  height: 42px;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 6px 11px;
-  border-radius: 13px;
-  background: var(--gold-face);
-  color: #10141D;
+  padding-inline: 14px 8px;
+  border-radius: 0;
+  background: none;
+  color: #FDE68A;
   font-size: 11.5px;
   font-weight: 900;
   line-height: 1.25;
   text-align: center;
-  box-shadow:
-    0 var(--d) 0 var(--gold-lip),
-    0 10px 20px -12px rgba(245, 158, 11, .6),
-    inset 0 1px 0 rgba(255, 255, 255, .5);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+  transition: background var(--motion-fast), color var(--motion-fast);
 }
-.sv-cta .ico { flex: none; width: 16px; height: 16px; color: #78350F; }
-.sv-cta span { min-width: 0; overflow-wrap: anywhere; }
-.sv-cta:hover:not(:active):not(:disabled) { filter: brightness(1.05); }
-.sv-cta:active:not(:disabled) { transform: translateY(var(--press-y)); --d: 1px; }
-.sv-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.sv-copy {
-  --d: 3px;
-  appearance: none;
-  border: 0;
-  cursor: pointer;
+.sv-cta .ico {
   flex: none;
-  width: 58px;
-  height: 42px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 4px;
-  border-radius: 13px;
-  background: var(--clay-face);
-  color: var(--chip-ink);
-  box-shadow: 0 var(--d) 0 #0A0E15, inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px var(--hair-off);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+  width: 16px;
+  height: 16px;
+  color: #FBBF24;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .45));
 }
-.sv-copy .ico { width: 15px; height: 15px; }
-.sv-copy-t {
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .03em;
-  text-transform: uppercase;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sv-copy:active:not(:disabled) { transform: translateY(var(--press-y)); --d: 1px; }
-.sv-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.sv-copy.copied { color: var(--mint-ink); box-shadow: 0 1px 0 #0A0E15, inset 0 0 0 1px rgba(110, 231, 183, .35); }
-.sv-cta:disabled, .sv-copy:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-
-.sv-payout {
-  --d: 3px;
+.sv-cta span { min-width: 0; overflow-wrap: anywhere; }
+.sv-cta:hover:not(:active):not(:disabled) { background: rgba(245, 158, 11, .07); color: #FEF3C7; }
+.sv-cta:active:not(:disabled) { background: rgba(0, 0, 0, .16); }
+.sv-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; border-radius: 13px; }
+.sv-copy {
   appearance: none;
   border: 0;
   cursor: pointer;
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-inline: 5px 6px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .05);
+  color: #FCD34D;
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.sv-copy::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -6px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: linear-gradient(180deg,
+    rgba(245, 158, 11, 0) 0%,
+    rgba(245, 158, 11, .32) 30%,
+    rgba(245, 158, 11, .32) 70%,
+    rgba(245, 158, 11, 0) 100%);
+  pointer-events: none;
+}
+.sv-copy .ico { width: 14px; height: 14px; }
+.sv-copy:hover:not(:active):not(:disabled) {
+  background: rgba(245, 158, 11, .12);
+  color: #FDE68A;
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .4),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.sv-copy:active:not(:disabled) { transform: scale(.94); }
+.sv-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sv-copy.copied {
+  color: var(--mint-ink);
+  background: rgba(16, 185, 129, .14);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .4);
+}
+.sv-cta:disabled, .sv-copy:disabled { opacity: .45; cursor: not-allowed; }
+
+/* the cash-out gate stays a quiet ledger line while the vault is locked — never a button that
+   pretends to be tappable; it only takes the gold face once the room says it can be paid */
+.sv .sv-payout {
+  appearance: none;
+  border: 0;
+  cursor: default;
   width: 100%;
   min-width: 0;
-  height: 42px;
-  margin-top: 4px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 6px 12px;
-  border-radius: 13px;
-  background: var(--field);
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .02);
   color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1.25;
   text-align: center;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair-off);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
 }
 .sv-payout-i {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   display: grid;
   place-items: center;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, .26);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .05);
+  background: none;
+  box-shadow: none;
+  color: rgba(148, 163, 184, .8);
 }
-.sv-payout-i .ico { width: 13px; height: 13px; }
+.sv-payout-i .ico { width: 11px; height: 11px; }
 .sv-payout span { min-width: 0; overflow-wrap: anywhere; }
 .sv-payout:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.sv-payout:disabled { cursor: not-allowed; }
+.sv-payout:disabled { cursor: default; }
 /* the one glow on the card: it only exists once the vault has actually unlocked */
 .sv-payout[data-state="ready"] {
+  --d: 3px;
+  height: 38px;
   cursor: pointer;
   background: var(--gold-face);
   color: #10141D;
+  font-size: 11.5px;
   font-weight: 900;
+  border-radius: 12px;
   box-shadow:
     0 var(--d) 0 var(--gold-lip),
     0 0 18px -4px rgba(245, 158, 11, .7),
     inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 .sv-payout[data-state="ready"] .sv-payout-i {
-  background: rgba(16, 20, 29, .2);
-  box-shadow: inset 0 0 0 1px rgba(16, 20, 29, .24);
+  width: 18px;
+  height: 18px;
+  color: #78350F;
+  background: rgba(16, 20, 29, .18);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(16, 20, 29, .22);
 }
+.sv-payout[data-state="ready"] .sv-payout-i .ico { width: 12px; height: 12px; }
 .sv-payout[data-state="ready"]:active { transform: translateY(var(--press-y)); --d: 1px; }
 .sv-payout[data-state="waiting"] { color: var(--honey-ink); }
 .sv-payout[data-state="waiting"] .sv-payout-i { color: var(--honey-ink); }
@@ -8226,13 +8362,12 @@ html:lang(fa) .sv-pill-k, html:lang(ar) .sv-pill-k {
   text-transform: none;
 }
 
-/* 320px: the copy key gives up its caption so the primary action keeps a readable label */
+/* 320px: the ledger and the timeline keep their figures; only the type tightens a hair */
 @media (max-width: 344px) {
-  .sv-copy { width: 46px; }
-  .sv-copy-t { display: none; }
   .sv-bal b { font-size: 26px; }
-  .sv-step-t { font-size: 9px; }
-  .sv-pill-k { font-size: 7.5px; }
+  .sv-step-t { font-size: 9.5px; }
+  .sv-step-rule { font-size: 7.5px; }
+  .sv-pill-k { font-size: 8px; letter-spacing: .06em; }
 }
 
 
@@ -38591,25 +38726,25 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
 }
 .vm-foot-btn {
   appearance: none;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, .05);
   cursor: pointer;
   box-sizing: border-box;
-  height: 40px;
+  height: 36px;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 9px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .035);
+  padding: 0 10px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .03);
   color: var(--ink-soft);
   font: inherit;
   font-size: 10px;
   font-weight: 800;
   line-height: 1.2;
   text-align: start;
-  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
-  transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  transition: color var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
 }
 .vm-foot-btn > .ico { flex: none; width: 14px; height: 14px; }
 .vm-foot-l {
@@ -38625,19 +38760,28 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   font-weight: 900;
   color: var(--honey-ink);
 }
-.vm-foot-chev { flex: none; width: 10px; height: 10px; opacity: .7; }
-.vm-foot-btn:hover:not(:active) { color: var(--ink); background: rgba(255, 255, 255, .07); }
+.vm-foot-chev { flex: none; width: 10px; height: 10px; opacity: .55; }
+.vm-foot-btn:hover:not(:active) {
+  color: var(--ink);
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
 .vm-foot-btn:active { transform: scale(.985); }
 .vm-foot-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* both chips stay quiet glass; only the guide's sprite keeps a breath of gold */
 .vm-foot-btn[data-tone="gold"] {
-  color: var(--honey-ink);
-  background: linear-gradient(180deg, rgba(245, 158, 11, .14) 0%, rgba(245, 158, 11, .04) 100%);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3), inset 0 1px 0 rgba(255, 255, 255, .07);
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .03);
+  border-color: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
+.vm-foot-btn[data-tone="gold"] > .ico { color: var(--honey-ink); }
 .vm-foot-btn[data-tone="gold"]:hover:not(:active) {
-  color: #FDE68A;
-  background: linear-gradient(180deg, rgba(245, 158, 11, .22) 0%, rgba(245, 158, 11, .07) 100%);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .48), inset 0 1px 0 rgba(255, 255, 255, .09);
+  color: var(--ink);
+  background: rgba(245, 158, 11, .07);
+  border-color: rgba(245, 158, 11, .28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
 }
 
 /* ---- the child sheets: the guide and the feed ----
@@ -38864,7 +39008,7 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   text-transform: none;
 }
 
-/* short phones: the vault gives up air, never content. Every tier stays inside 92dvh. */
+/* short phones: the vault gives up air, never content. Every tier stays inside 90dvh. */
 @media (max-height: 640px) {
   #modal-stars-vault .vault-modal-sheet { padding: 12px 14px calc(10px + env(safe-area-inset-bottom)); }
   #modal-stars-vault .vm-head-i { width: 28px; height: 28px; border-radius: 9px; }
@@ -38874,8 +39018,6 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   #modal-stars-vault .sv-bal b { font-size: 26px; }
   #modal-stars-vault .sv-bal-star { width: 20px; height: 20px; }
   #modal-stars-vault .sv-gift { padding: 4px 7px; font-size: 9.5px; }
-  #modal-stars-vault .sv-step { padding: 4px 3px 5px; }
-  #modal-stars-vault .vm-foot-btn { height: 36px; }
 }
 
 /* 320–344px: the subtitle steps aside so the title, the balance and the chevron all fit */
@@ -38895,48 +39037,20 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
 }
 
 /* ==========================================================================================
-   STARS VAULT — COMPACT ZERO-SCROLL FINISH
+   STARS VAULT — OBSIDIAN TIMELINE FINISH
    Appended last and ID-scoped so it is the last word on this sheet. The main modal is a single
-   flex column inside 92dvh with overflow:hidden; only the two child sheets may scroll. Steps are
-   three ultra-sleek ROWS (7px 10px / gap 8px), the footer is a clean 2-column pill row (gap 8px),
-   and short phones give up air — never content.
+   flex column inside 90dvh with overflow:hidden; only the two child sheets may scroll. The
+   journey is one hairline timeline of ringed chapters (no floating badges, no boxes), the ledger
+   is one segmented glass strip, and the primary key is a single obsidian-gold control with the
+   copy action socketed into its flank.
    ========================================================================================== */
+#modal-stars-vault .vault-modal-sheet { max-height: 90vh; max-height: 90dvh; }
 #modal-stars-vault .vm-foot { gap: 8px; }
-
-#modal-stars-vault .sv-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-#modal-stars-vault .sv-step {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-height: 0;
-  padding: 7px 10px;
-  border-radius: 11px;
-  text-align: start;
-}
-#modal-stars-vault .sv-step-i { width: 22px; height: 22px; border-radius: 7px; }
-#modal-stars-vault .sv-step-i .ico { width: 12px; height: 12px; }
-#modal-stars-vault .sv-step-n { top: -4px; inset-inline-end: -5px; width: 12px; height: 12px; font-size: 7.5px; }
-#modal-stars-vault .sv-step-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 10.5px;
-  line-height: 1.2;
-  text-align: start;
-}
-#modal-stars-vault .sv-step-hint,
-#modal-stars-vault .sv-step-bonus { flex: none; }
-#modal-stars-vault .sv-acts .sv-cta,
-#modal-stars-vault .sv-acts .sv-copy,
-#modal-stars-vault .sv-payout { height: 42px; }
-#modal-stars-vault .sv-pills .sv-pill { height: 36px; }
+#modal-stars-vault .sv-vault { gap: 7px; }
 #modal-stars-vault .sv-vault .sv-meter { padding: 10px 12px; margin-bottom: 0; }
+#modal-stars-vault .sv-acts { height: 44px; }
+#modal-stars-vault .sv-payout { height: 34px; }
+#modal-stars-vault .sv-pills { padding: 6px 4px; }
 
 /* ---- the tracker's empty state: obsidian icon well + promise + one direct share key ---- */
 #modal-vault-friends .sv-empty {
@@ -39008,33 +39122,30 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
 .sv-empty-share:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
 /* Persian is joined script: tracking is a rendering fault, and every text box keeps its own dir */
-html:lang(fa) :is(.sv-step-t, .sv-step-hint, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t),
-html:lang(ar) :is(.sv-step-t, .sv-step-hint, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t) {
+html:lang(fa) :is(.sv-pill-k, .sv-step-t, .sv-step-hint, .sv-step-rule, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t),
+html:lang(ar) :is(.sv-pill-k, .sv-step-t, .sv-step-hint, .sv-step-rule, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
 html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
 
-/* short phones (560px floor): the rows give up padding and the header gives up a few pixels.
-   Every tier still lands inside 92dvh with overflow:hidden and no vertical scrollbar. */
+/* short phones (560px floor): the sheet gives up air, never content, and the timeline keeps its
+   rings intact. Every tier still lands inside 90dvh with overflow:hidden and no scrollbar. */
 @media (max-height: 640px) {
-  #modal-stars-vault .sv-steps { gap: 5px; }
-  #modal-stars-vault .sv-step { padding: 4px 8px; gap: 7px; }
-  #modal-stars-vault .sv-step-i { width: 20px; height: 20px; }
-  #modal-stars-vault .sv-step-i .ico { width: 11px; height: 11px; }
-  #modal-stars-vault .sv-step-t { font-size: 10px; }
+  #modal-stars-vault .sv-vault { gap: 5px; }
   #modal-stars-vault .sv-vault .sv-meter { padding: 8px 11px; }
+  #modal-stars-vault .sv-acts { height: 40px; }
+  #modal-stars-vault .sv-copy { width: 30px; height: 30px; }
+  #modal-stars-vault .sv-payout { height: 32px; }
   #modal-stars-vault .vm-foot { gap: 7px; }
 }
-/* only below the campaign's 560px floor: the brief's 36px pills / 42px keys stay intact there */
+/* only below the campaign's 560px floor: the last few pixels of padding go, never a label */
 @media (max-height: 540px) {
   #modal-stars-vault .vault-modal-body { gap: 4px; }
   #modal-stars-vault .sv-vault { gap: 4px; }
-  #modal-stars-vault .sv-steps { gap: 4px; }
-  #modal-stars-vault .sv-step { padding: 3px 8px; }
-  #modal-stars-vault .sv-pills .sv-pill { height: 32px; }
-  #modal-stars-vault .sv-acts .sv-cta,
-  #modal-stars-vault .sv-acts .sv-copy,
-  #modal-stars-vault .sv-payout { height: 38px; }
+  #modal-stars-vault .sv-pills { padding: 4px 3px; }
+  #modal-stars-vault .sv-acts { height: 38px; }
+  #modal-stars-vault .sv-copy { width: 28px; height: 28px; }
+  #modal-stars-vault .sv-payout { height: 30px; }
   #modal-stars-vault .vm-foot-btn { height: 34px; }
 }

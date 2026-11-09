@@ -2390,17 +2390,16 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
     void copyText(link).then((ok) => {
       notify(ok ? 'success' : 'warning');
-      const label = svCopyBtn.querySelector<HTMLElement>('.sv-copy-t');
+      if (!ok) return;
       const icon = document.getElementById('sv-copy-ic');
-      if (!ok || !label) return;
-      label.textContent = t('vaultCopied');
       icon?.setAttribute('href', '#i-check');
       svCopyBtn.classList.add('copied');
+      svCopyBtn.setAttribute('aria-label', t('vaultCopied'));
       window.clearTimeout(svCopyTimer);
       svCopyTimer = window.setTimeout(() => {
-        label.textContent = t('vaultCopy');
         icon?.setAttribute('href', '#i-copy');
         svCopyBtn.classList.remove('copied');
+        svCopyBtn.setAttribute('aria-label', t('vaultCopyAria'));
       }, 1400);
     });
   });

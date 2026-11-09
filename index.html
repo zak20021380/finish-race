@@ -2579,37 +2579,44 @@
                 </span>
               </div>
 
-              <!-- three columns, not three rows: the exact rule rides along for screen readers and
-                   is spelled out in full in the guide the footer opens -->
+              <!-- the journey is one timeline, not three boxes: each chapter is a ring with its
+                   number engraved inside — never a badge floating over an icon — and the exact
+                   rule each step stands for rides beneath it, in plain words -->
               <ol class="sv-steps">
-                <li class="sv-step">
-                  <span class="sv-step-i" data-tone="link" aria-hidden="true">
-                    <svg class="ico"><use href="#i-link" /></svg>
-                    <b class="sv-step-n">1</b>
+                <li class="sv-step" data-tone="link">
+                  <span class="sv-step-ring" aria-hidden="true"><b class="sv-step-n">1</b></span>
+                  <span class="sv-step-t">
+                    <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
+                    <span data-i18n="vaultStep1">Invite Friend</span>
                   </span>
-                  <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
                   <span class="sv-step-hint" data-i18n="vaultStep1Hint">Share link</span>
                 </li>
-                <li class="sv-step">
-                  <span class="sv-step-i" data-tone="plays" aria-hidden="true">
-                    <svg class="ico"><use href="#i-gamepad" /></svg>
-                    <b class="sv-step-n">2</b>
+                <li class="sv-step" data-tone="plays">
+                  <span class="sv-step-ring" aria-hidden="true"><b class="sv-step-n">2</b></span>
+                  <span class="sv-step-t">
+                    <svg class="ico" aria-hidden="true"><use href="#i-gamepad" /></svg>
+                    <span data-i18n="vaultStep2">Friend Plays</span>
                   </span>
-                  <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
-                  <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                  <span class="sr-only" id="sv-step2-r" dir="ltr">10 matches in 3 days</span>
+                  <span class="sv-step-tag">
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
+                  </span>
                 </li>
-                <li class="sv-step">
-                  <span class="sv-step-i" data-tone="rivals" aria-hidden="true">
-                    <svg class="ico"><use href="#i-swords" /></svg>
-                    <b class="sv-step-n">3</b>
+                <li class="sv-step" data-tone="rivals">
+                  <span class="sv-step-ring" aria-hidden="true"><b class="sv-step-n">3</b></span>
+                  <span class="sv-step-t">
+                    <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+                    <span data-i18n="vaultStep3">Beats Rivals</span>
                   </span>
-                  <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
-                  <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                  <span class="sr-only" id="sv-step3-r" dir="ltr">5 online wins</span>
+                  <span class="sv-step-tag">
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
+                  </span>
                 </li>
               </ol>
 
+              <!-- one primary decision: the copy action is socketed into the CTA's flank, so
+                   the sheet no longer ends in a tower of equal-looking buttons -->
               <div class="sv-acts">
                 <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
                   <svg class="ico" aria-hidden="true"><use href="#i-share" /></svg>
@@ -2617,12 +2624,11 @@
                 </button>
                 <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
                   <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
-                  <span class="sv-copy-t" data-i18n="vaultCopy">Copy</span>
                 </button>
               </div>
               <button class="sv-payout" type="button" id="sv-payout" disabled>
                 <span class="sv-payout-i" aria-hidden="true"><svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg></span>
-                <span id="sv-payout-t">Unlocks at 50</span>
+                <span id="sv-payout-t">Locked · Requires 50 Stars to cash out</span>
               </button>
               <p class="sv-notice" id="sv-notice" hidden></p>
             </div>
