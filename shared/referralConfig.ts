@@ -11,7 +11,7 @@
 
 export const REFERRAL_CONFIG = {
   /** Pre-filled gift sitting in every vault from the first paint, so the meter is never empty. */
-  STARTER_VAULT_GIFT_STARS: 20,
+  STARTER_VAULT_GIFT_STARS: 5,
   /** Stage 1 — the friend finished onboarding and actually plays. */
   STAGE1_REWARD_STARS: 2,
   /** Stage 2 — the friend beats real rivals, not just the machine. */

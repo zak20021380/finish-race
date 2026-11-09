@@ -2208,7 +2208,9 @@ function readVaultAccount(raw: unknown): VaultAccount | null {
   return {
     id: r.id.slice(0, 64),
     name: vaultText(r.name, 48),
-    starterBonus: whole(r.starterBonus),
+    /* The gift is a campaign constant, not credit the player earned: a ledger written under an
+       older gift follows the config on the next read, so every vault shows the same opening fill. */
+    starterBonus: REFERRAL_CONFIG.STARTER_VAULT_GIFT_STARS,
     earnedStars: whole(r.earnedStars),
     paidOutStars: whole(r.paidOutStars),
     queuedStars: whole(r.queuedStars),

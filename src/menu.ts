@@ -1995,12 +1995,22 @@ export function createMenu(api: MenuApi): Menu {
   let svCopyTimer = 0;
 
   /* The programme itself lives in one modal sheet, not in the Profile rhythm: the preview tile
-     opens it, and the same reading paints both surfaces. The controller owns the scrim, the
-     close key, Escape, the scroll lock and the focus hand-back, so a closed vault leaves
-     nothing behind. */
+     opens it, and the same reading paints both surfaces. That sheet is sized to the viewport and
+     never scrolls, so the friends feed and the full explanation are child sheets its footer opens.
+     The controller owns the scrim, the close key, Escape, the scroll lock and the focus hand-back,
+     so a closed vault leaves nothing behind. */
   const vaultModalEl = document.getElementById('modal-stars-vault');
   const vaultPreviewEl = document.getElementById('vault-preview') as HTMLButtonElement | null;
   const vaultModal = vaultModalEl ? createModal(vaultModalEl) : null;
+  const friendsModalEl = document.getElementById('modal-vault-friends');
+  const guideModalEl = document.getElementById('modal-vault-guide');
+  const friendsModal = friendsModalEl ? createModal(friendsModalEl) : null;
+  const guideModal = guideModalEl ? createModal(guideModalEl) : null;
+  const svFriendsOpenEl = document.getElementById('sv-friends-open');
+  const svGuideOpenEl = document.getElementById('sv-guide-open');
+  /* The feed is rebuilt only when the verdict or the language actually changed, so a poll landing
+     while the player is reading a friend's row never throws their scroll position away. */
+  let svFriendsSig = '';
 
   /** `t()` with the campaign's own figures filled in. Every number arrives already Latin. */
   const svFill = (key: string, vars: Record<string, string>): string => {
@@ -2214,8 +2224,15 @@ export function createMenu(api: MenuApi): Menu {
     const live = document.getElementById('sv-live');
     if (live) live.dataset.live = String(vault.live);
 
-    svText('sv-friends-n', en(vault.pendingFriendsCount + vault.qualifiedFriendsCount));
-    if (svFriendsEl) {
+    const friendsTotal = en(vault.pendingFriendsCount + vault.qualifiedFriendsCount);
+    svText('sv-friends-n', friendsTotal);
+    svText('vf-count', friendsTotal);
+    const sig = `${lang}|${vault.friends.map((f) => [
+      f.id, f.name, f.avatar, f.matches, f.days, f.pvpWins,
+      f.stage1, f.stage2, f.flagged, f.credited,
+    ].join(':')).join('~')}`;
+    if (svFriendsEl && sig !== svFriendsSig) {
+      svFriendsSig = sig;
       svFriendsEl.textContent = '';
       const frag = document.createDocumentFragment();
       for (const f of vault.friends) frag.append(svFriendRow(f));
@@ -2225,6 +2242,26 @@ export function createMenu(api: MenuApi): Menu {
     if (empty) empty.hidden = vault.friends.length > 0;
 
     svText('sv-note', svFill('vaultNote', { max: en(C.MAX_QUALIFIED_PER_INVITER_MONTH) }));
+
+    /* The guide states the same four promises the meter does, in the player's own language and
+       with every figure taken from the campaign rather than written into the copy. */
+    const gift = en(vault.starterBonus);
+    const s1 = en(C.STAGE1_REWARD_STARS);
+    const s2 = en(C.STAGE2_REWARD_STARS);
+    svText('vg-1-t', t('vaultGuide1Title'));
+    svText('vg-1-n', gift);
+    svText('vg-1-b', svFill('vaultGuide1Body', { gift }));
+    svText('vg-2-t', t('vaultGuide2Title'));
+    svText('vg-2-n', `+${s1}`);
+    svText('vg-2-b', svFill('vaultGuide2Body', {
+      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS), s1,
+    }));
+    svText('vg-3-t', t('vaultGuide3Title'));
+    svText('vg-3-n', `+${s2}`);
+    svText('vg-3-b', svFill('vaultGuide3Body', { w: en(C.STAGE2_MIN_RANKED_PVP_WINS), s2 }));
+    svText('vg-4-t', svFill('vaultGuide4Title', { target: en(target) }));
+    svText('vg-4-n', en(target));
+    svText('vg-4-b', svFill('vaultGuide4Body', { target: en(target) }));
   }
 
   function stopVaultPoll(): void {
@@ -2259,6 +2296,20 @@ export function createMenu(api: MenuApi): Menu {
     vaultModal?.open(vaultPreviewEl);
     void refreshVault();
     startVaultPoll();
+  });
+
+  /* The two footer keys: the feed and the explanation each get their own sheet above the vault,
+     so the vault itself stays exactly one viewport tall no matter how many friends arrive. */
+  svFriendsOpenEl?.addEventListener('click', () => {
+    impact('light');
+    paintVault();
+    friendsModal?.open(svFriendsOpenEl);
+  });
+
+  svGuideOpenEl?.addEventListener('click', () => {
+    impact('light');
+    paintVault();
+    guideModal?.open(svGuideOpenEl);
   });
 
   svShareBtn?.addEventListener('click', () => {

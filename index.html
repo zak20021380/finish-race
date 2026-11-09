@@ -1854,7 +1854,7 @@
               </div>
             </div>
             <div class="pf-sec sv-sec">
-              <!-- Stars Vault preview: one compact tile that opens the full vault sheet. Both
+              <!-- Stars Vault preview: one compact tile that opens the vault sheet. Both
                    surfaces are painted from the same server reading by src/menu.ts — the tile is
                    a glance, the sheet is the programme. -->
               <button class="vault-preview-card" type="button" id="vault-preview"
@@ -1869,13 +1869,13 @@
                 </span>
                 <span class="vault-preview-side">
                   <span class="vault-preview-bal">
-                    <b id="vp-bal" dir="ltr">20</b>
+                    <b id="vp-bal" dir="ltr">5</b>
                     <span class="vault-preview-of" aria-hidden="true">/</span>
                     <span id="vp-target" dir="ltr">50</span>
                     <svg class="ico ico-star-3d vault-preview-glyph" aria-hidden="true"><use href="#i-star-3d" /></svg>
                   </span>
                   <span class="vault-preview-track" aria-hidden="true">
-                    <span class="vault-preview-fill" id="vp-fill" style="width:40%"></span>
+                    <span class="vault-preview-fill" id="vp-fill" style="width:10%"></span>
                   </span>
                 </span>
                 <span class="vault-preview-chev" aria-hidden="true">
@@ -2513,11 +2513,12 @@
         <p class="sr-only" id="mm-live" role="status" aria-live="polite"></p>
       </section>
 
-      <!-- ============ Stars Vault · the full vault sheet (src/modal.ts) ============
-           Opened only by Profile's preview tile. One obsidian sheet over a blurred scrim:
-           the meter, the three counters, the guide, the two keys, the friends feeding it
-           and the rules. Nothing here computes a figure — every number is the Worker's own
-           verdict, painted by src/menu.ts. -->
+      <!-- ============ Stars Vault · the compact vault sheet (src/modal.ts) ============
+           Opened only by Profile's preview tile. Sized to the viewport, never to its content:
+           the meter, the three counters, the three-step strip and both keys fit a phone without
+           a scroll. The friends feed and the full explanation live in the two child sheets the
+           footer opens, so this sheet never grows. Nothing here computes a figure — every number
+           is the Worker's own verdict, painted by src/menu.ts. -->
       <div class="vault-modal" id="modal-stars-vault" hidden>
         <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
         <section class="vault-modal-sheet" role="dialog" aria-modal="true" tabindex="-1"
@@ -2528,7 +2529,7 @@
             <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
           </button>
 
-          <div class="vault-modal-body" data-scroll>
+          <div class="vault-modal-body">
             <header class="vm-head">
               <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span>
               <span class="vm-head-t">
@@ -2541,16 +2542,16 @@
             <div class="sv sv-vault">
               <div class="sv-meter">
                 <p class="sv-bal" dir="ltr">
-                  <b id="sv-bal">20</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
+                  <b id="sv-bal">5</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
                   <svg class="ico ico-star-3d sv-bal-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
                 </p>
                 <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="vm-title"
-                  aria-valuemin="0" aria-valuemax="50" aria-valuenow="20" aria-valuetext="20 / 50">
-                  <span class="sv-bar-fill" id="sv-bar-fill" style="width:40%"></span>
+                  aria-valuemin="0" aria-valuemax="50" aria-valuenow="5" aria-valuetext="5 / 50">
+                  <span class="sv-bar-fill" id="sv-bar-fill" style="width:10%"></span>
                 </div>
                 <p class="sv-gift">
                   <span class="sv-gift-pod" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-                  <span class="sv-gift-t" id="sv-gift">Includes 20 Starter Gift! Collect 30 more to cash out 50 Stars</span>
+                  <span class="sv-gift-t" id="sv-gift">Includes 5 Starter Gift! Collect 45 more to cash out 50 Stars</span>
                 </p>
               </div>
 
@@ -2569,29 +2570,34 @@
                 </span>
               </div>
 
+              <!-- three columns, not three rows: the exact rule rides along for screen readers and
+                   is spelled out in full in the guide the footer opens -->
               <ol class="sv-steps">
                 <li class="sv-step">
-                  <span class="sv-step-n" aria-hidden="true">1</span>
-                  <span class="sv-step-i" data-tone="link" aria-hidden="true"><svg class="ico"><use href="#i-link" /></svg></span>
+                  <span class="sv-step-i" data-tone="link" aria-hidden="true">
+                    <svg class="ico"><use href="#i-link" /></svg>
+                    <b class="sv-step-n">1</b>
+                  </span>
                   <span class="sv-step-t" data-i18n="vaultStep1">Invite Friend</span>
+                  <span class="sv-step-hint" data-i18n="vaultStep1Hint">Share link</span>
                 </li>
                 <li class="sv-step">
-                  <span class="sv-step-n" aria-hidden="true">2</span>
-                  <span class="sv-step-i" data-tone="plays" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
+                  <span class="sv-step-i" data-tone="plays" aria-hidden="true">
+                    <svg class="ico"><use href="#i-gamepad" /></svg>
+                    <b class="sv-step-n">2</b>
+                  </span>
                   <span class="sv-step-t" data-i18n="vaultStep2">Friend Plays</span>
-                  <span class="sv-step-r" dir="ltr">
-                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                    <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
-                  </span>
+                  <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                  <span class="sr-only" id="sv-step2-r" dir="ltr">10 matches in 3 days</span>
                 </li>
                 <li class="sv-step">
-                  <span class="sv-step-n" aria-hidden="true">3</span>
-                  <span class="sv-step-i" data-tone="rivals" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-                  <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
-                  <span class="sv-step-r" dir="ltr">
-                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
-                    <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
+                  <span class="sv-step-i" data-tone="rivals" aria-hidden="true">
+                    <svg class="ico"><use href="#i-swords" /></svg>
+                    <b class="sv-step-n">3</b>
                   </span>
+                  <span class="sv-step-t" data-i18n="vaultStep3">Beats Rivals</span>
+                  <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                  <span class="sr-only" id="sv-step3-r" dir="ltr">5 online wins</span>
                 </li>
               </ol>
 
@@ -2610,19 +2616,141 @@
                 <span id="sv-payout-t">Unlocks at 50</span>
               </button>
               <p class="sv-notice" id="sv-notice" hidden></p>
+            </div>
 
-              <div class="sv-friends-h">
-                <h3 class="sv-friends-t" data-i18n="vaultFriends">Invited Friends</h3>
-                <span class="sv-friends-n" id="sv-friends-n" dir="ltr">0</span>
-              </div>
+            <footer class="vm-foot">
+              <button class="vm-foot-btn" type="button" id="sv-friends-open"
+                      aria-haspopup="dialog" aria-controls="modal-vault-friends"
+                      data-i18n-aria="vaultFriendsOpenAria" aria-label="View your invited friends">
+                <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                <span class="vm-foot-l"><span data-i18n="vaultFriends">Invited Friends</span> <b class="vm-foot-n" dir="ltr">(<span id="sv-friends-n">0</span>)</b></span>
+                <svg class="ico vm-foot-chev" aria-hidden="true"><use href="#i-next" /></svg>
+              </button>
+              <button class="vm-foot-btn" type="button" id="sv-guide-open" data-tone="gold"
+                      aria-haspopup="dialog" aria-controls="modal-vault-guide"
+                      data-i18n-aria="vaultHowAria" aria-label="Open the Stars Vault guide">
+                <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg>
+                <span class="vm-foot-l" data-i18n="vaultHow">How it Works?</span>
+                <svg class="ico vm-foot-chev" aria-hidden="true"><use href="#i-next" /></svg>
+              </button>
+            </footer>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ Stars Vault · the invited friends sheet ============
+           The feed the vault used to carry inline. It is the one surface here that may scroll,
+           because a player with twenty friends must still reach the close key. -->
+      <div class="vault-modal vault-sub" id="modal-vault-friends" hidden>
+        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="vault-modal-sheet vf-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="vf-title" aria-describedby="vf-sub">
+          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <button class="vault-modal-x" type="button" id="vf-close" data-modal-close
+                  data-i18n-aria="vaultFriendsClose" aria-label="Close the friends list">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+
+          <div class="vault-modal-body vf-body">
+            <header class="vm-head">
+              <span class="vm-head-i" data-tone="mint" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+              <span class="vm-head-t">
+                <h2 class="vm-title" id="vf-title" data-i18n="vaultFriends">Invited Friends</h2>
+                <p class="vm-sub" id="vf-sub" data-i18n="vaultFriendsSub">Everyone filling your vault, and their next step</p>
+              </span>
+              <b class="vf-count" id="vf-count" dir="ltr">0</b>
+            </header>
+
+            <div class="vf-scroll" id="vf-scroll" data-scroll tabindex="0">
               <ul class="sv-friends" id="sv-friends"></ul>
               <p class="sv-empty" id="sv-empty" data-i18n="vaultEmpty">No friends yet — share your link and start filling the vault.</p>
             </div>
 
-            <details class="vm-rules">
-              <summary class="vm-rules-sum" data-i18n="vaultRules">Matchmaking rules &amp; monthly pool</summary>
-              <p class="sv-note" id="sv-note"></p>
-            </details>
+            <button class="vf-back" type="button" id="vf-back" data-modal-close>
+              <svg class="ico" aria-hidden="true"><use href="#i-vault-seal" /></svg>
+              <span data-i18n="vaultFriendsBack">Back to Vault</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ Stars Vault · the bilingual guide ============
+           Four cards, one per promise the campaign makes: the gift already inside, both stages a
+           friend can complete, and the threshold that wakes the payout. Every figure is filled
+           from REFERRAL_CONFIG by src/menu.ts, in the language the player reads in. -->
+      <div class="vault-modal vault-sub" id="modal-vault-guide" hidden>
+        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="vault-modal-sheet vg-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="vg-title" aria-describedby="vg-sub">
+          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <button class="vault-modal-x" type="button" id="vg-close" data-modal-close
+                  data-i18n-aria="vaultGuideClose" aria-label="Close the guide">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+
+          <div class="vault-modal-body vg-body">
+            <header class="vm-head">
+              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-help" /></svg></span>
+              <span class="vm-head-t">
+                <h2 class="vm-title" id="vg-title" data-i18n="vaultGuideTitle">How Stars Vault Works</h2>
+                <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">Four steps from a free gift to a real payout</p>
+              </span>
+            </header>
+
+            <div class="vg-scroll" data-scroll tabindex="0">
+              <ol class="vg-cards">
+                <li class="vg-card" data-tone="gift">
+                  <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
+                  <span class="vg-txt">
+                    <span class="vg-head">
+                      <b class="vg-t" id="vg-1-t">Starter Gift</b>
+                      <b class="vg-n" dir="ltr"><span id="vg-1-n">5</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    </span>
+                    <span class="vg-b" id="vg-1-b">5 free Stars are already waiting in your vault as a starter gift.</span>
+                  </span>
+                </li>
+                <li class="vg-card" data-tone="plays">
+                  <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
+                  <span class="vg-txt">
+                    <span class="vg-head">
+                      <b class="vg-t" id="vg-2-t">Stage 1 · Friend Plays</b>
+                      <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    </span>
+                    <span class="vg-b" id="vg-2-b">When your invited friend finishes 10 matches across 3 days, you earn +2 Stars.</span>
+                  </span>
+                </li>
+                <li class="vg-card" data-tone="rivals">
+                  <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                  <span class="vg-txt">
+                    <span class="vg-head">
+                      <b class="vg-t" id="vg-3-t">Stage 2 · Beats Rivals</b>
+                      <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    </span>
+                    <span class="vg-b" id="vg-3-b">When your friend wins 5 online PvP duels, you unlock +3 more Stars.</span>
+                  </span>
+                </li>
+                <li class="vg-card" data-tone="cash">
+                  <span class="vg-ico" aria-hidden="true"><svg class="ico ico-star-3d"><use href="#i-star-3d" /></svg></span>
+                  <span class="vg-txt">
+                    <span class="vg-head">
+                      <b class="vg-t" id="vg-4-t">Cash Out at 50 Stars</b>
+                      <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    </span>
+                    <span class="vg-b" id="vg-4-b">Once your vault balance reaches 50 Stars, hit Request Payout to receive your reward.</span>
+                  </span>
+                </li>
+              </ol>
+
+              <div class="vg-fine">
+                <b class="vg-fine-t" data-i18n="vaultRules">Matchmaking rules &amp; monthly pool</b>
+                <p class="sv-note" id="sv-note"></p>
+              </div>
+            </div>
+
+            <button class="vg-done" type="button" id="vg-done" data-modal-close>
+              <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+              <span data-i18n="vaultGuideDone">Got It</span>
+            </button>
           </div>
         </section>
       </div>

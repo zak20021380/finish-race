@@ -7619,65 +7619,31 @@ html.reduced-motion .hex-photo { transition: none; }
 }
 .pf-toast.plain .coin { display: none; }
 
-/* ---- Stars Vault: the two-stage invite card in the Profile rhythm ----
-   One obsidian clay slab, read top to bottom: the balance against its target, the gift that
-   pre-fills it, three counters, the three-step guide, one primary action, the payout gate, and
-   the friends who are filling it. Gold is spent only where it means something — the meter fill,
-   the share key, and a payout that has actually unlocked. Everything else stays quiet clay, so
-   the card reads as one surface rather than a stack of competing glows.
+/* ---- Stars Vault: the components inside the vault sheet and its two child sheets ----
+   One obsidian language, read top to bottom: the balance against its target, the gift that
+   pre-fills it, three counters, a three-column step strip, one primary action and the payout
+   gate. Gold is spent only where it means something — the meter fill, the share key, and a
+   payout that has actually unlocked. Everything else stays quiet clay.
 
-   Direction is surgical, per the app's rule: the card mirrors for fa/ar, but the meter and every
-   numeral stay LTR so a progress fill and a Latin figure never reverse. */
+   Every height here is deliberate. The vault sheet has to fit a phone viewport with no scroll
+   at all, so the counter strip is 36px, both keys are 42px, and the three steps run across
+   rather than down. The exact rule each step stands for is spelled out in the guide sheet.
+
+   Direction is surgical, per the app's rule: the sheets mirror for fa/ar, but the meter and
+   every numeral stay LTR so a progress fill and a Latin figure never reverse. */
 .sv-sec { gap: var(--pf-rhythm-tight, 0); }
 .sv {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
-  padding: 12px 12px 16px;
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(245, 158, 11, .07) 0%, rgba(245, 158, 11, .015) 42%),
-    var(--clay-face);
-  box-shadow:
-    0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    inset 0 0 0 1px rgba(245, 158, 11, .16),
-    var(--clay-ring);
+  min-height: 0;
 }
 .sv :is(button, input) { font: inherit; }
-.sv .sv-star { flex: none; filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .35)); }
-.sv .sv-check { flex: none; width: 10px; height: 10px; }
+.sv-star { flex: none; filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .35)); }
+.sv-check { flex: none; width: 10px; height: 10px; }
 
-/* head: the seal, the name, and a quiet ember that only lights on a live server read */
-.sv-h { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.sv-h-i {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
-  color: var(--honey-ink);
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06);
-}
-.sv-h-i .ico { width: 19px; height: 19px; }
-.sv-h-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.sv-t {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: .01em;
-  color: var(--ink);
-  line-height: 1.2;
-}
-.sv-s {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  line-height: 1.3;
-}
+/* the quiet ember beside the title: it only lights on a live server read */
 .sv-live {
   flex: none;
   width: 7px;
@@ -7692,9 +7658,9 @@ html.reduced-motion .hex-photo { transition: none; }
 .sv-meter {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
-  padding: 10px 11px 11px;
+  padding: 10px 12px;
   border-radius: 15px;
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
@@ -7710,23 +7676,23 @@ html.reduced-motion .hex-photo { transition: none; }
   line-height: 1;
 }
 .sv-bal b {
-  font-size: 27px;
+  font-size: 30px;
   font-weight: 900;
   color: var(--honey-ink);
   letter-spacing: -.01em;
 }
-.sv-bal-of { font-size: 17px; font-weight: 800; color: var(--text-dim); }
-.sv-bal span:not(.sv-bal-of) { font-size: 17px; font-weight: 800; color: var(--ink-soft); }
+.sv-bal-of { font-size: 16px; font-weight: 800; color: var(--text-dim); }
+.sv-bal span:not(.sv-bal-of) { font-size: 16px; font-weight: 800; color: var(--ink-soft); }
 .sv-bal-star {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
   filter: drop-shadow(0 1px 3px rgba(245, 158, 11, .42));
 }
 .sv-bar {
   position: relative;
   direction: ltr;
-  height: 11px;
+  height: 10px;
   border-radius: var(--radius-pill);
   overflow: hidden;
   background: linear-gradient(180deg, #080C14 0%, #0E1526 100%);
@@ -7743,58 +7709,63 @@ html.reduced-motion .hex-photo { transition: none; }
 }
 .sv-gift {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
   min-width: 0;
   margin: 0;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-inline-start: 2px solid rgba(245, 158, 11, .55);
   border-radius: 4px 9px 9px 4px;
   background: linear-gradient(180deg, rgba(8, 12, 20, .62) 0%, rgba(8, 12, 20, .38) 100%);
   box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .12), inset 0 1px 0 rgba(255, 255, 255, .04);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--honey-ink);
 }
 .sv-gift-pod {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
-  margin-top: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: linear-gradient(180deg, rgba(245, 158, 11, .2), rgba(245, 158, 11, .05));
   color: var(--honey-ink);
   box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3), inset 0 1px 0 rgba(255, 255, 255, .1);
 }
-.sv-gift-pod .ico { width: 12px; height: 12px; }
+.sv-gift-pod .ico { width: 11px; height: 11px; }
 .sv-gift-t { min-width: 0; overflow-wrap: anywhere; }
 html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px; }
 
-/* three counters: label over figure, so a long Persian label never pushes the row wide */
+/* three counters: one 36px strip, label over figure, so a long Persian label never wraps it */
 .sv-pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; min-width: 0; }
 .sv-pill {
+  box-sizing: border-box;
+  height: 36px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 1px;
   min-width: 0;
-  padding: 6px 4px 7px;
-  border-radius: 12px;
+  padding: 3px 5px;
+  border-radius: 11px;
   background: var(--clay-face);
   box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 .sv-pill-k {
-  font-size: 8.5px;
+  max-width: 100%;
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--ink-soft);
   text-align: center;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sv-pill-v {
   display: inline-flex;
@@ -7811,60 +7782,67 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
 }
 .sv-pill-v .ico {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .35));
 }
 .sv-pill[data-tone="gold"] .sv-pill-v { color: var(--honey-ink); }
 .sv-pill[data-tone="mint"] .sv-pill-v { color: var(--mint-ink); }
 
-/* the guide: three numbered rows, icon then plain words then the exact rule */
+/* the strip: three columns instead of three rows — icon, plain words, then the award. Half the
+   height of the old stack, which is what buys the sheet its no-scroll fit. */
 .sv-steps {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   min-width: 0;
 }
 .sv-step {
-  display: grid;
-  grid-template-columns: 20px 32px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
-  padding: 7px 9px;
+  padding: 5px 4px 6px;
   border-radius: 13px;
   background: rgba(255, 255, 255, .025);
   box-shadow: inset 0 0 0 1px var(--hair-off);
-}
-.sv-step-n {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
-  color: var(--honey-ink);
-  font-family: var(--font-numeric);
-  font-size: 10px;
-  font-weight: 900;
-  direction: ltr;
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(245, 158, 11, .34);
+  text-align: center;
 }
 .sv-step-i {
-  width: 32px;
-  height: 32px;
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--field);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
-.sv-step-i .ico { flex: none; width: 16px; height: 16px; }
+.sv-step-i .ico { flex: none; width: 13px; height: 13px; }
+.sv-step-n {
+  position: absolute;
+  top: -3px;
+  inset-inline-end: -4px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #1B2434 0%, #0B111E 100%);
+  color: var(--honey-ink);
+  font-family: var(--font-numeric);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  direction: ltr;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4), 0 1px 3px rgba(0, 0, 0, .6);
+}
 .sv-step-i[data-tone="link"] { color: var(--honey-ink); }
 .sv-step-i[data-tone="plays"] {
   color: #7DD3FC;
@@ -7881,54 +7859,47 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
     0 0 10px -6px rgba(245, 158, 11, .5);
 }
 .sv-step-t {
-  grid-column: 3;
-  font-size: 11.5px;
+  font-size: 10px;
   font-weight: 800;
   color: var(--ink);
-  line-height: 1.3;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.sv-step-r {
-  grid-column: 3;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 3px 6px;
-  min-width: 0;
-  font-size: 9.5px;
+.sv-step-hint {
+  font-size: 8.5px;
   font-weight: 700;
+  line-height: 1.3;
   color: var(--ink-soft);
-  line-height: 1.35;
-  direction: ltr;
+  overflow-wrap: anywhere;
 }
 .sv-step-bonus {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 1px 5px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 6px;
   background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .06) 100%);
   color: var(--honey-ink);
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 900;
+  line-height: 1;
   box-shadow:
     inset 0 0 0 1px rgba(245, 158, 11, .28),
     inset 0 1px 0 rgba(255, 255, 255, .1);
 }
 .sv-step-bonus .ico {
   flex: none;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   filter: drop-shadow(0 0 4px rgba(245, 158, 11, .5));
 }
-.sv-step-rule { min-width: 0; overflow-wrap: anywhere; }
-.sv-step:first-child .sv-step-t { grid-row: 1 / span 2; }
 
 /* one primary action beside its copy key; the payout gate is the only other button */
-.sv-acts { display: flex; align-items: stretch; gap: 7px; min-width: 0; }
+.sv-acts { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
 .sv-cta {
   --d: 3px;
   appearance: none;
@@ -7936,18 +7907,18 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   cursor: pointer;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 48px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 8px 11px;
-  border-radius: 15px;
+  padding: 6px 11px;
+  border-radius: 13px;
   background: var(--gold-face);
   color: #10141D;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 900;
-  line-height: 1.3;
+  line-height: 1.25;
   text-align: center;
   box-shadow:
     0 var(--d) 0 var(--gold-lip),
@@ -7966,15 +7937,15 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   border: 0;
   cursor: pointer;
   flex: none;
-  width: 62px;
-  min-height: 48px;
+  width: 58px;
+  height: 42px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 6px 4px;
-  border-radius: 15px;
+  padding: 4px;
+  border-radius: 13px;
   background: var(--clay-face);
   color: var(--chip-ink);
   box-shadow: 0 var(--d) 0 #0A0E15, inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px var(--hair-off);
@@ -8003,26 +7974,27 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   cursor: pointer;
   width: 100%;
   min-width: 0;
-  min-height: 46px;
+  height: 42px;
+  margin-top: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 9px 12px;
-  border-radius: 15px;
+  padding: 6px 12px;
+  border-radius: 13px;
   background: var(--field);
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.25;
   text-align: center;
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair-off);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
 }
 .sv-payout-i {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 7px;
@@ -8062,11 +8034,11 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
 
 .sv-notice {
   margin: 0;
-  padding: 7px 9px;
-  border-radius: 11px;
-  font-size: 10px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.4;
   overflow-wrap: anywhere;
   background: var(--honey-soft);
   color: var(--honey-ink);
@@ -8079,27 +8051,8 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
 }
 .sv-notice[hidden] { display: none; }
 
-/* the friends who are filling it: two pills each, so the next step is never a guess */
-.sv-friends-h { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
-.sv-friends-t {
-  margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.sv-friends-n {
-  flex: none;
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  font-weight: 900;
-  color: var(--honey-ink);
-  direction: ltr;
-}
+/* the friends who are filling it: two pills each, so the next step is never a guess. The feed
+   lives in its own child sheet, which is the only vault surface allowed to scroll. */
 .sv-friends { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .sv-friends:empty { display: none; }
 .sv-friend {
@@ -8219,25 +8172,23 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
   overflow-wrap: anywhere;
 }
 
-/* Persian and Arabic read the card right to left; the meter and every numeral stay put. */
-html:lang(fa) .sv, html:lang(ar) .sv { direction: rtl; }
-html:lang(fa) .sv :is(.sv-t, .sv-s, .sv-gift, .sv-step-t, .sv-note, .sv-empty, .sv-notice, .sv-friends-t, .sv-pill-k, .sv-friend-held),
-html:lang(ar) .sv :is(.sv-t, .sv-s, .sv-gift, .sv-step-t, .sv-note, .sv-empty, .sv-notice, .sv-friends-t, .sv-pill-k, .sv-friend-held) {
+/* Persian and Arabic read the sheets right to left; the meter and every numeral stay put. */
+html:lang(fa) :is(.sv-gift, .sv-step-t, .sv-step-hint, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held),
+html:lang(ar) :is(.sv-gift, .sv-step-t, .sv-step-hint, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
-html:lang(fa) .sv :is(.sv-t, .sv-friends-t, .sv-pill-k), html:lang(ar) .sv :is(.sv-t, .sv-friends-t, .sv-pill-k) {
+html:lang(fa) .sv-pill-k, html:lang(ar) .sv-pill-k {
   letter-spacing: 0;
   text-transform: none;
 }
-html:lang(fa) .sv-step-r, html:lang(ar) .sv-step-r { direction: rtl; }
-html:lang(fa) .sv-friend-n, html:lang(ar) .sv-friend-n { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
 
 /* 320px: the copy key gives up its caption so the primary action keeps a readable label */
 @media (max-width: 344px) {
-  .sv { padding: 11px 10px 16px; }
   .sv-copy { width: 46px; }
   .sv-copy-t { display: none; }
-  .sv-bal b { font-size: 24px; }
+  .sv-bal b { font-size: 26px; }
+  .sv-step-t { font-size: 9px; }
+  .sv-pill-k { font-size: 7.5px; }
 }
 
 
@@ -38233,10 +38184,12 @@ html.reduced-motion .rd-decline { transition: none; }
 }
 
 
-/* ---- Stars Vault: the compact Profile preview and the full vault sheet ----------
-   The profile keeps one 76px tile; the meter, counters, guide, keys, friends and rules
-   live in #modal-stars-vault. Both surfaces read the same server verdict, and every
-   numeral stays Latin and tabular in every locale — the meter never mirrors. */
+/* ---- Stars Vault: the compact Profile preview and the three vault sheets ----------
+   The profile keeps one 76px tile. #modal-stars-vault holds the meter, the counters, the
+   step strip and both keys inside 92dvh with no scroll at all; its footer opens the guide
+   and the friends feed as child sheets, which are the only surfaces here that may scroll.
+   All three read the same server verdict, and every numeral stays Latin and tabular in
+   every locale — the meter never mirrors. */
 
 /* the tile: one recessed star pod, stacked copy, a live balance and its micro line */
 .vault-preview-card {
@@ -38434,13 +38387,18 @@ html:lang(ar) .vault-preview-t, html:lang(ar) .vault-preview-s {
 .vault-modal-sheet {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
   width: min(100%, var(--app-w));
-  max-height: calc(100vh - env(safe-area-inset-top) - 10px);
-  max-height: calc(100dvh - env(safe-area-inset-top) - 10px);
+  /* Sized to the viewport, never to its content: 92dvh leaves the scrim a margin above the
+     sheet, and overflow stays hidden so the vault can never grow a scrollbar. */
+  max-height: 92vh;
+  max-height: 92dvh;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   min-width: 0;
-  padding-top: 14px;
+  min-height: 0;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
   border-radius: 26px 26px 0 0;
   background:
     radial-gradient(120% 62% at 50% 0%, rgba(245, 158, 11, .17) 0%, rgba(245, 158, 11, 0) 62%),
@@ -38499,13 +38457,10 @@ html:lang(ar) .vault-preview-t, html:lang(ar) .vault-preview-s {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 6px 14px calc(18px + env(safe-area-inset-bottom));
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0;
+  overflow: hidden;
 }
 html.modal-open, html.modal-open body { overscroll-behavior: none; }
 html.reduced-motion .vault-modal-sheet, html.reduced-motion .vault-modal-scrim { transition: none; }
@@ -38513,30 +38468,36 @@ html.reduced-motion .vault-modal-sheet, html.reduced-motion .vault-modal-scrim {
   .vault-modal-sheet, .vault-modal-scrim, .vault-preview-fill { transition: none; }
 }
 
-/* the header: the seal, the two lines, and the quiet ember of a live reading */
+/* the header: one compact row — the seal, the two lines, and the ember of a live reading.
+   The body's 6px gap is the whole separation it gets; nothing here adds a second margin. */
 .vm-head {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
-  padding-inline-end: 34px;
+  padding-inline-end: 32px;
 }
 .vm-head-i {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
   color: var(--honey-ink);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(245, 158, 11, .22);
 }
-.vm-head-i .ico { width: 21px; height: 21px; }
-.vm-head-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vm-head-i .ico { width: 18px; height: 18px; }
+.vm-head-i[data-tone="mint"] {
+  color: var(--mint-ink);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(16, 185, 129, .28);
+}
+.vm-head-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .vm-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: .01em;
   line-height: 1.2;
@@ -38544,9 +38505,9 @@ html.reduced-motion .vault-modal-sheet, html.reduced-motion .vault-modal-scrim {
 }
 .vm-sub {
   margin: 0;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--ink-soft);
 }
 html:lang(fa) .vm-title, html:lang(fa) .vm-sub,
@@ -38555,85 +38516,310 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   letter-spacing: 0;
 }
 
-/* the card's own body, unrolled into the sheet: the same components, no second slab */
+/* the vault body: the same components, no second slab, and never a scroll */
 .sv-vault {
-  background: none;
-  box-shadow: none;
-  border-radius: 0;
-  padding: 0;
-  gap: 11px;
+  flex: 0 1 auto;
+  justify-content: space-between;
+  min-height: 0;
+  gap: 6px;
 }
 .sv-vault .sv-meter {
-  padding: 12px 12px 13px;
+  padding: 10px 12px;
   background: linear-gradient(180deg, #0A0F19 0%, #0E1524 100%);
   box-shadow:
     inset 0 2px 8px rgba(0, 0, 0, .65),
     inset 0 0 0 1px rgba(245, 158, 11, .2),
     0 0 26px -16px rgba(245, 158, 11, .7);
 }
-.sv-vault .sv-bal b {
-  font-size: 34px;
-  text-shadow: 0 0 20px rgba(245, 158, 11, .45);
-}
-.sv-vault .sv-bal-star { width: 26px; height: 26px; }
-.sv-vault .sv-bar { height: 12px; }
-.sv-vault .sv-gift { border-inline-start-width: 2px; }
+.sv-vault .sv-bal b { text-shadow: 0 0 20px rgba(245, 158, 11, .45); }
 
-/* the friends feed: a real list, scrollable inside the sheet, each avatar ringed in gold */
-.sv-vault .sv-friends {
-  max-height: 208px;
+/* ---- the two footer triggers: the feed and the explanation, side by side ----
+   These are what keep the sheet one viewport tall. The count rides inside the label so a
+   glance reads "Invited Friends (0)", and the chevron is a sprite, never a typed glyph. */
+.vm-foot {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.vm-foot-btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  height: 40px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: start;
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+  transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.vm-foot-btn > .ico { flex: none; width: 14px; height: 14px; }
+.vm-foot-l {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vm-foot-n {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: var(--honey-ink);
+}
+.vm-foot-chev { flex: none; width: 10px; height: 10px; opacity: .7; }
+.vm-foot-btn:hover:not(:active) { color: var(--ink); background: rgba(255, 255, 255, .07); }
+.vm-foot-btn:active { transform: scale(.985); }
+.vm-foot-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.vm-foot-btn[data-tone="gold"] {
+  color: var(--honey-ink);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .14) 0%, rgba(245, 158, 11, .04) 100%);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+.vm-foot-btn[data-tone="gold"]:hover:not(:active) {
+  color: #FDE68A;
+  background: linear-gradient(180deg, rgba(245, 158, 11, .22) 0%, rgba(245, 158, 11, .07) 100%);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .48), inset 0 1px 0 rgba(255, 255, 255, .09);
+}
+
+/* ---- the child sheets: the guide and the feed ----
+   Same obsidian chrome one rung above the vault. Their header and closing key stay pinned;
+   only the reading area between them may scroll, and it wears the vault's own gold thumb. */
+.vault-sub .vault-modal-body { justify-content: flex-start; gap: 8px; }
+.vg-scroll, .vf-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-inline-end: 2px;
+  -webkit-overflow-scrolling: touch;
+  padding-inline-end: 3px;
   scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, .38) transparent;
 }
-.sv-vault .sv-friend-av {
+.vg-scroll::-webkit-scrollbar, .vf-scroll::-webkit-scrollbar { display: block; width: 5px; height: 5px; }
+.vg-scroll::-webkit-scrollbar-track, .vf-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, .28); border-radius: 99px; }
+.vg-scroll::-webkit-scrollbar-thumb, .vf-scroll::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, .38); border-radius: 99px; }
+.vg-scroll::-webkit-scrollbar-thumb:hover, .vf-scroll::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, .62); }
+.vg-scroll:focus-visible, .vf-scroll:focus-visible { outline: 2px solid rgba(245, 158, 11, .45); outline-offset: 2px; border-radius: 12px; }
+
+/* the guide: four cards, one per promise — the gift, both stages, and the cash-out gate */
+.vg-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.vg-card {
+  --vg-tone: 245, 158, 11;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 14px;
+  border-inline-start: 2px solid rgba(var(--vg-tone), .5);
+  background: linear-gradient(180deg, rgba(var(--vg-tone), .07) 0%, rgba(255, 255, 255, .022) 62%);
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.vg-card[data-tone="plays"] { --vg-tone: 56, 189, 248; }
+.vg-card[data-tone="rivals"] { --vg-tone: 251, 113, 133; }
+.vg-card[data-tone="cash"] { --vg-tone: 16, 185, 129; }
+.vg-ico {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: rgb(var(--vg-tone));
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(var(--vg-tone), .26);
+}
+.vg-ico .ico { width: 16px; height: 16px; }
+.vg-ico .ico-star-3d { width: 19px; height: 19px; filter: drop-shadow(0 1px 4px rgba(245, 158, 11, .5)); }
+.vg-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vg-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.vg-t {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.vg-n {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(var(--vg-tone), .22) 0%, rgba(var(--vg-tone), .06) 100%);
+  color: rgb(var(--vg-tone));
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  direction: ltr;
+  box-shadow: inset 0 0 0 1px rgba(var(--vg-tone), .34), inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.vg-n .vg-star { flex: none; width: 11px; height: 11px; filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45)); }
+.vg-card[data-tone="cash"] .vg-n { color: var(--mint-ink); }
+.vg-b {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.vg-fine {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .26);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.vg-fine-t {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
+}
+.vg-done {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 13px;
+  background: var(--gold-face);
+  color: #10141D;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  box-shadow: 0 var(--d) 0 var(--gold-lip), 0 10px 20px -14px rgba(245, 158, 11, .7), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.vg-done .ico { flex: none; width: 15px; height: 15px; color: #78350F; }
+.vg-done:hover:not(:active) { filter: brightness(1.05); }
+.vg-done:active { transform: translateY(var(--press-y)); --d: 1px; }
+.vg-done:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* the feed: the list the vault used to carry inline, with its avatars ringed in gold */
+.vf-count {
+  flex: none;
+  min-width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  direction: ltr;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
+}
+.vf-scroll .sv-friend-av {
   box-shadow:
     inset 0 0 0 1px var(--hair-off),
     0 0 0 1px rgba(245, 158, 11, .3),
     0 0 10px -6px rgba(245, 158, 11, .65);
 }
-.sv-vault .sv-friend[data-done="true"] .sv-friend-av {
+.vf-scroll .sv-friend[data-done="true"] .sv-friend-av {
   box-shadow:
     inset 0 0 0 1px var(--hair-off),
     0 0 0 1px rgba(245, 158, 11, .55),
     0 0 12px -4px rgba(245, 158, 11, .85);
 }
-
-/* the footer note: one quiet disclosure, closed by default */
-.vm-rules {
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .025);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-}
-.vm-rules > summary {
-  list-style: none;
+.vf-back {
+  appearance: none;
+  border: 0;
   cursor: pointer;
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 42px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.4;
-  color: var(--ink-soft);
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 13px;
+  background: var(--clay-face);
+  color: var(--chip-ink);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1.2;
+  box-shadow: 0 3px 0 #0A0E15, inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
 }
-.vm-rules > summary::-webkit-details-marker { display: none; }
-.vm-rules > summary::after {
-  content: '';
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-inline-end: 1.6px solid var(--honey-ink);
-  border-bottom: 1.6px solid var(--honey-ink);
-  transform: rotate(45deg);
-  transition: transform var(--motion-fast);
+.vf-back .ico { flex: none; width: 16px; height: 16px; color: var(--honey-ink); }
+.vf-back:hover:not(:active) { color: var(--ink); }
+.vf-back:active { transform: translateY(var(--press-y)); box-shadow: 0 1px 0 #0A0E15, inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px var(--hair-off); }
+.vf-back:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* the sheets mirror for fa/ar; every numeral and every fill keeps its own LTR direction */
+html:lang(fa) .vault-modal-sheet, html:lang(ar) .vault-modal-sheet { direction: rtl; }
+html:lang(fa) .vm-foot-chev, html:lang(ar) .vm-foot-chev { transform: scaleX(-1); }
+html:lang(fa) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine-t, .vg-done, .vf-back),
+html:lang(ar) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine-t, .vg-done, .vf-back) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
-.vm-rules[open] > summary::after { transform: rotate(-135deg); }
-.vm-rules > summary:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; border-radius: 14px; }
-.vm-rules .sv-note { padding: 0 12px 11px; }
+html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foot-l) {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* short phones: the vault gives up air, never content. Every tier stays inside 92dvh. */
+@media (max-height: 640px) {
+  #modal-stars-vault .vault-modal-sheet { padding: 12px 14px calc(10px + env(safe-area-inset-bottom)); }
+  #modal-stars-vault .vm-head-i { width: 28px; height: 28px; border-radius: 9px; }
+  #modal-stars-vault .vm-head-i .ico { width: 16px; height: 16px; }
+  #modal-stars-vault .vm-title { font-size: 14px; }
+  #modal-stars-vault .sv-meter { gap: 5px; padding: 8px 11px; }
+  #modal-stars-vault .sv-bal b { font-size: 26px; }
+  #modal-stars-vault .sv-bal-star { width: 20px; height: 20px; }
+  #modal-stars-vault .sv-gift { padding: 4px 7px; font-size: 9.5px; }
+  #modal-stars-vault .sv-step { padding: 4px 3px 5px; }
+  #modal-stars-vault .vm-foot-btn { height: 36px; }
+}
 
 /* 320–344px: the subtitle steps aside so the title, the balance and the chevron all fit */
 @media (max-width: 344px) {
@@ -38643,6 +38829,10 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   .vault-preview-s { display: none; }
   .vault-preview-track { width: 50px; }
   .vault-preview-chev { width: 18px; height: 18px; }
-  .vault-modal-body { padding-inline: 11px; }
-  .sv-vault .sv-bal b { font-size: 30px; }
+  .vault-modal-sheet { padding-inline: 12px; }
+  .sv-vault .sv-bal b { font-size: 26px; }
+  .vm-foot-btn { gap: 5px; padding: 0 7px; font-size: 9.5px; }
+  .vm-foot-btn > .ico { width: 13px; height: 13px; }
+  .vg-card { gap: 8px; padding: 8px 9px; }
+  .vg-ico { width: 27px; height: 27px; }
 }

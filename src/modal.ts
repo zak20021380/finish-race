@@ -2,10 +2,14 @@
  * modal.ts — one modal sheet over its own blurred scrim.
  *
  * The Profile's Stars Vault is the first tenant: a compact tile opens a single obsidian sheet that
- * holds the whole programme. The controller owns what a modal must own — the scrim, the close key,
- * Escape, the page scroll lock and the focus hand-back — so the screen opening it only paints its
- * own content. A closed sheet stays in the DOM behind `hidden`, which is exactly what keeps it from
- * taking a tap, and every timer is cleared, so opening and closing never stacks listeners.
+ * holds the whole programme, and its two footer keys open child sheets above it. The controller owns
+ * what a modal must own — the scrim, the close key, Escape, the page scroll lock and the focus
+ * hand-back — so the screen opening it only paints its own content. A closed sheet stays in the DOM
+ * behind `hidden`, which is exactly what keeps it from taking a tap, and every timer is cleared, so
+ * opening and closing never stacks listeners.
+ *
+ * Sheets stack: the page stays locked until the last one closes, and Escape belongs to the topmost
+ * sheet alone, so dismissing the guide never dismisses the vault underneath it.
  */
 import { motionReduced } from './settings';
 import { impact } from './telegram';
@@ -24,35 +28,43 @@ export interface ModalHandle {
 
 /** Matches the sheet's own slide-out transition. */
 const CLOSE_MS = 240;
+/** `.vault-modal` sits at 40 in the stylesheet; each sheet above it takes the next rung. */
+const BASE_Z = 40;
+
+/** The open sheets, outermost first. */
+const stack: ModalHandle[] = [];
+let savedOverflow: string | null = null;
+
+function lockScroll(): void {
+  if (savedOverflow !== null) return;
+  savedOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  document.documentElement.classList.add('modal-open');
+}
+
+function unlockScroll(): void {
+  if (savedOverflow === null) return;
+  document.body.style.overflow = savedOverflow;
+  savedOverflow = null;
+  document.documentElement.classList.remove('modal-open');
+}
 
 export function createModal(root: HTMLElement, options: ModalOptions = {}): ModalHandle {
   const sheet = root.querySelector<HTMLElement>('[role="dialog"]') ?? root;
   let opener: HTMLElement | null = null;
   let timer = 0;
-  let savedOverflow: string | null = null;
 
   const isOpen = (): boolean => !root.hidden;
-
-  function lockScroll(): void {
-    if (savedOverflow !== null) return;
-    savedOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.classList.add('modal-open');
-  }
-
-  function unlockScroll(): void {
-    if (savedOverflow === null) return;
-    document.body.style.overflow = savedOverflow;
-    savedOverflow = null;
-    document.documentElement.classList.remove('modal-open');
-  }
 
   /** The one place the sheet goes away: focus back to its opener, scroll released. */
   function settle(): void {
     timer = 0;
     root.hidden = true;
     root.classList.remove('open', 'closing');
-    unlockScroll();
+    root.style.removeProperty('z-index');
+    const at = stack.indexOf(handle);
+    if (at >= 0) stack.splice(at, 1);
+    if (stack.length === 0) unlockScroll();
     const back = opener;
     opener = null;
     if (back && back.isConnected) {
@@ -65,8 +77,16 @@ export function createModal(root: HTMLElement, options: ModalOptions = {}): Moda
     open(source) {
       window.clearTimeout(timer);
       timer = 0;
+      /* Re-opened mid-close: keep its rung in the stack and simply cancel the slide-out. */
+      if (stack.includes(handle)) {
+        root.classList.remove('closing');
+        root.classList.add('open');
+        return;
+      }
       lockScroll();
       opener = source ?? (document.activeElement as HTMLElement | null);
+      stack.push(handle);
+      root.style.zIndex = String(BASE_Z + stack.length - 1);
       root.hidden = false;
       root.classList.remove('closing');
       void root.offsetWidth;                 // lay the sheet out at its closed position first
@@ -93,6 +113,7 @@ export function createModal(root: HTMLElement, options: ModalOptions = {}): Moda
 
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !isOpen()) return;
+    if (stack[stack.length - 1] !== handle) return;
     event.preventDefault();
     handle.close();
   });
