@@ -36594,56 +36594,51 @@ html.reduced-motion .cm-splash.is-on .cm-in { opacity: 1; transform: none; anima
 }
 
 /* ---- the arena plaque: the realm this seat actually holds ----
-   A struck plate, not a chip: 1px metal rim, one engraved line, no prose. */
+   Only Arena 1 has been opened, so the plaque wears one hard-capped metal: a recessed
+   obsidian pill behind a 1px bronze rim, its realm mark struck in the same amber. */
 #s-profile .pf-arena-plaque {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   max-width: 100%;
   min-width: 0;
-  height: 22px;
-  padding: 0 9px 0 6px;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  padding: 4px 10px;
+  border: 1px solid rgba(245, 158, 11, .26);
+  border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(27, 34, 49, .97) 0%, rgba(9, 13, 22, .99) 100%) padding-box,
-    linear-gradient(150deg, var(--ar-hi, #FDE68A) 0%, var(--ar-mid, #B45309) 46%, var(--ar-lo, #FCD34D) 100%) border-box;
+    linear-gradient(180deg, rgba(255, 236, 189, .06) 0%, rgba(255, 236, 189, 0) 58%),
+    rgba(25, 20, 14, .7);
   box-shadow:
-    0 1px 0 rgba(0, 0, 0, .7),
-    inset 0 1px 0 rgba(255, 255, 255, .08);
-  font-size: 10px;
+    0 1px 0 rgba(0, 0, 0, .6),
+    inset 0 1px 0 rgba(255, 230, 168, .08),
+    inset 0 -6px 12px -10px rgba(0, 0, 0, .9);
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: .01em;
-  color: var(--ar-ink, #FCD34D);
+  letter-spacing: .03em;
+  color: #FCD34D;
   white-space: nowrap;
 }
 #s-profile .pf-arena-ico {
   flex: none;
   display: grid;
   place-items: center;
-  width: 13px;
-  height: 13px;
-  color: var(--ar-ink, #FCD34D);
-  opacity: .92;
+  width: 14px;
+  height: 14px;
+  color: #FCD34D;
 }
 #s-profile .pf-arena-ico .ico {
-  width: 12px;
-  height: 12px;
-  filter: drop-shadow(0 0 4px rgba(var(--ar-glow, 245, 158, 11), .55));
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, .42));
 }
 #s-profile .pf-arena-t {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
-/* the six divisions of the live ladder, each with its own metal */
-#s-profile .pf-arena-plaque[data-tier="bronze"]     { --ar-hi: #E8C9A0; --ar-mid: #8A5A2B; --ar-lo: #C98A4B; --ar-ink: #F0C08A; --ar-glow: 201, 138, 75; }
-#s-profile .pf-arena-plaque[data-tier="silver"]     { --ar-hi: #F1F5F9; --ar-mid: #7B8794; --ar-lo: #CBD5E1; --ar-ink: #E2E8F0; --ar-glow: 203, 213, 225; }
-#s-profile .pf-arena-plaque[data-tier="gold"]       { --ar-hi: #FDE68A; --ar-mid: #B45309; --ar-lo: #FCD34D; --ar-ink: #FDE68A; --ar-glow: 245, 158, 11; }
-#s-profile .pf-arena-plaque[data-tier="platinum"]   { --ar-hi: #E0F2FE; --ar-mid: #0E7490; --ar-lo: #67E8F9; --ar-ink: #A5F3FC; --ar-glow: 34, 211, 238; }
-#s-profile .pf-arena-plaque[data-tier="diamond"]    { --ar-hi: #EDE9FE; --ar-mid: #6D28D9; --ar-lo: #C4B5FD; --ar-ink: #DDD6FE; --ar-glow: 167, 139, 250; }
-#s-profile .pf-arena-plaque[data-tier="challenger"] { --ar-hi: #FFE4E6; --ar-mid: #9F1239; --ar-lo: #FDA4AF; --ar-ink: #FECDD3; --ar-glow: 251, 113, 133; }
 
 /* ---- the Tactical Intelligence slab ----
    Deep obsidian, one 1px gold specular rim drawn as a gradient border, a lit brain and the
@@ -36996,8 +36991,8 @@ html[data-lang="fa"] #s-profile .pf-arena-t,
 html[data-lang="ar"] #s-profile .pf-arena-t {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
-  font-weight: 500;
-  line-height: 1.4;
+  font-weight: 600;
+  line-height: 1;
 }
 html[data-lang="fa"] #s-profile .pf-career .stat dt,
 html[data-lang="ar"] #s-profile .pf-career .stat dt {
@@ -39334,88 +39329,51 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
   color: #E2E8F0;
 }
 
-/* ---- the drawer key: one full-width tactile strip, chevron on the end ---- */
+/* ---- the drawer key: one centred micro-chevron, no labels, no furniture ---- */
 #s-profile .pf-hero-toggle {
   appearance: none;
   -webkit-appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 13px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 60%),
-    rgba(8, 12, 20, .5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .055),
-    inset 0 0 0 1px rgba(255, 255, 255, .045),
-    0 2px 0 rgba(0, 0, 0, .35);
-  color: #CBD5E1;
+  position: relative;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  color: var(--ink-soft);
   font: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
+}
+/* the handle stays 18px tall, the thumb still lands on 38px */
+#s-profile .pf-hero-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -10px -8px;
+  border-radius: 999px;
 }
 #s-profile .pf-hero-toggle:hover:not(:active) {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    inset 0 0 0 1px rgba(255, 255, 255, .07),
-    0 2px 0 rgba(0, 0, 0, .35);
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .1);
 }
 #s-profile .pf-hero-toggle:active { transform: translateY(1px); }
-#s-profile .pf-hero-toggle:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-#s-profile .pf-hero-toggle-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-#s-profile .pf-hero-toggle-label {
-  font-size: 11.5px;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: .015em;
-  color: #E2E8F0;
-  white-space: nowrap;
-}
-#s-profile .pf-hero-toggle-sub {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 9.5px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #8FA0B8;
-}
-/* one label at a time: the wide summary key collapses into a single Hide Details line */
-#s-profile .pf-toggle-hide { display: none; }
-#s-profile .pf-hero.is-expanded .pf-toggle-more { display: none; }
-#s-profile .pf-hero.is-expanded .pf-toggle-hide { display: inline; }
-#s-profile .pf-hero.is-expanded .pf-hero-toggle-sub { display: none; }
-#s-profile .pf-hero-toggle-chev {
-  flex: none;
+#s-profile .pf-hero-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+#s-profile .profile-hero-toggle-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .045);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
-  color: #94A3B8;
+  color: var(--ink-soft);
+  transition: transform 260ms cubic-bezier(.2, 0, 0, 1), color 260ms ease;
 }
-#s-profile .pf-hero-toggle-chev .ico {
-  width: 12px;
-  height: 12px;
-  transition: transform 280ms cubic-bezier(.22, 1, .36, 1);
+#s-profile .profile-hero-toggle-icon .ico { width: 11px; height: 11px; }
+#s-profile .pf-hero.is-expanded .profile-hero-toggle-icon {
+  transform: rotate(180deg);
+  color: var(--gold-ink);
 }
-#s-profile .pf-hero.is-expanded .pf-hero-toggle-chev { color: #E2E8F0; }
-#s-profile .pf-hero.is-expanded .pf-hero-toggle-chev .ico { transform: rotate(180deg); }
 
 /* ---- the inline drawer: grid-row animation, no popup, no backdrop ---- */
 #s-profile .profile-hero-drawer {
@@ -39470,8 +39428,6 @@ html[data-lang="ar"] #s-profile .pf-quick-squad {
   font-weight: 600;
   text-align: start;
 }
-html[data-lang="fa"] #s-profile .pf-hero-toggle,
-html[data-lang="ar"] #s-profile .pf-hero-toggle { direction: rtl; }
 html[data-lang="fa"] #s-profile .pf-quick-tiq b,
 html[data-lang="ar"] #s-profile .pf-quick-tiq b,
 html[data-lang="fa"] #s-profile #pf-coins,
@@ -39501,9 +39457,7 @@ html[data-lang="ar"] #s-profile .pf-quick-pct { direction: ltr; unicode-bidi: is
   #s-profile .pf-quick-pct { padding: 2px 3px; font-size: 7.5px; }
   #s-profile .pf-quick-aff { padding: 0 6px; gap: 4px; }
   #s-profile .pf-quick-squad { font-size: 10px; }
-  #s-profile .pf-hero-toggle { min-height: 38px; padding: 6px 9px; }
-  #s-profile .pf-hero-toggle-label { font-size: 11px; }
-  #s-profile .pf-hero-toggle-sub { font-size: 9px; }
+  #s-profile .pf-hero-toggle { width: 44px; height: 17px; }
 }
 /* the narrowest phones give the affiliation its own row instead of squeezing a name */
 @media (max-width: 340px) {
@@ -39515,11 +39469,11 @@ html[data-lang="ar"] #s-profile .pf-quick-pct { direction: ltr; unicode-bidi: is
 @media (prefers-reduced-motion: reduce) {
   #s-profile .profile-hero-drawer,
   #s-profile .pf-hero.is-expanded .profile-hero-drawer,
-  #s-profile .pf-hero-toggle-chev .ico { transition: none; }
+  #s-profile .profile-hero-toggle-icon { transition: none; }
 }
 html.reduced-motion #s-profile .profile-hero-drawer,
 html.reduced-motion #s-profile .pf-hero.is-expanded .profile-hero-drawer,
-html.reduced-motion #s-profile .pf-hero-toggle-chev .ico { transition: none; }
+html.reduced-motion #s-profile .profile-hero-toggle-icon { transition: none; }
 
 /* ==========================================================================
    CAREER PREVIEW TILE + PLAY WITH FRIENDS SHEET

@@ -288,6 +288,32 @@
           <path d="M9.2 12.1l1.9 1.9 3.7-3.9" />
         </g>
       </symbol>
+      <!-- the arena crest: an obsidian battle shield with crossed bronze blades and a struck
+           center boss — the realm mark, drawn metallic so it reads as a seal at 14px -->
+      <symbol id="i-arena" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="i-arena-rim" x1="12" y1="2.4" x2="12" y2="21.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#FFEDB8" />
+            <stop offset=".38" stop-color="#E8BE73" />
+            <stop offset=".68" stop-color="#B8843C" />
+            <stop offset="1" stop-color="#6F4A1E" />
+          </linearGradient>
+          <linearGradient id="i-arena-blade" x1="7.8" y1="7.6" x2="16.2" y2="16.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#FFF7DE" />
+            <stop offset=".55" stop-color="#E4C081" />
+            <stop offset="1" stop-color="#A97A33" />
+          </linearGradient>
+        </defs>
+        <path d="M12 2.7 19.3 5.4v5.8c0 4.7-3 8.1-7.3 9.6-4.3-1.5-7.3-4.9-7.3-9.6V5.4Z"
+          fill="#0B0F18" fill-opacity=".92" stroke="url(#i-arena-rim)" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M12 4.1 18 6.3v4.8c0 3.9-2.4 6.8-6 8.2-3.6-1.4-6-4.3-6-8.2V6.3Z"
+          fill="none" stroke="#FFEDB8" stroke-opacity=".16" stroke-width=".7" stroke-linejoin="round" />
+        <g stroke="url(#i-arena-blade)" stroke-linecap="round" fill="none">
+          <path d="M8.3 8.2 15.7 14.6" stroke-width="1.4" />
+          <path d="M15.7 8.2 8.3 14.6" stroke-width="1.4" />
+        </g>
+        <circle cx="12" cy="11.4" r="1.05" fill="#FFF3CE" />
+      </symbol>
       <!-- the shield's countdown: a dial with one hand, read at 9px on the relic hall's row -->
       <symbol id="i-clock" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
@@ -1728,11 +1754,11 @@
                     </button>
                   </div>
                   <div class="pf-meta-row">
-                    <!-- the arena bracket this seat currently holds, read off the live division
-                         ladder: the realm the player actually unlocked, never a static label -->
-                    <span class="pf-arena-plaque" id="pf-arena-plaque" data-tier="bronze">
-                      <span class="pf-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-chess-king" /></svg></span>
-                      <span class="pf-arena-t" id="pf-arena-t">Arena 1: Bronze</span>
+                    <!-- the active realm: content stops at Arena 1, so the plaque is hard-capped
+                         there even when the TIQ ladder would place the seat higher -->
+                    <span class="pf-arena-plaque" id="pf-arena-plaque" data-tier="crucible">
+                      <span class="pf-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-arena" /></svg></span>
+                      <span class="pf-arena-t" id="pf-arena-t">Arena 1: Crucible</span>
                     </span>
                     <!-- the worn honor as a metal tag: crest + server-confirmed edition serial.
                          One control, one destination — the medallion certificate. -->
@@ -1790,17 +1816,11 @@
                 </span>
               </div>
 
-              <!-- the drawer key: full-width tactile strip, chevron turns as the drawer opens -->
+              <!-- the drawer key: one centred micro-chevron, the only mark the drawer needs -->
               <button class="pf-hero-toggle" type="button" id="pf-hero-toggle"
-                aria-expanded="false" aria-controls="pf-hero-drawer">
-                <span class="pf-hero-toggle-copy">
-                  <span class="pf-hero-toggle-label">
-                    <span class="pf-toggle-more" data-i18n="pfShowDetails">More Details</span>
-                    <span class="pf-toggle-hide" data-i18n="pfHideDetails">Hide Details</span>
-                  </span>
-                  <span class="pf-hero-toggle-sub" data-i18n="pfShowDetailsSub">XP, Nation &amp; Squad</span>
-                </span>
-                <span class="pf-hero-toggle-chev" aria-hidden="true">
+                aria-expanded="false" aria-controls="pf-hero-drawer"
+                aria-label="Toggle Details" data-i18n-aria="pfToggleDetails">
+                <span class="profile-hero-toggle-icon" aria-hidden="true">
                   <svg class="ico"><use href="#i-chevron-down" /></svg>
                 </span>
               </button>

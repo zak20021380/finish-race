@@ -55,7 +55,7 @@ import { myTiq } from './matchmaking';
 import { relicShelter, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
 import { createModal } from './modal';
-import { ARENA_TIER_NAMES, arena, onArena, type ArenaTierId } from './arenaState';
+import { arena, onArena, type ArenaTierId } from './arenaState';
 import {
   fetchStarsVault, refreshReferral, referralLink, referralShareUrl, requestStarsPayout, starterVault,
   type StarsVault, type VaultFriend,
@@ -165,14 +165,9 @@ interface ArenaBracket {
   pct: number;
 }
 
-const ARENA_TIER_KEY: Record<ArenaTierId, string> = {
-  bronze: 'arenaTierBronze',
-  silver: 'arenaTierSilver',
-  gold: 'arenaTierGold',
-  platinum: 'arenaTierPlatinum',
-  diamond: 'arenaTierDiamond',
-  challenger: 'arenaTierChallenger',
-};
+/** Content, not TIQ, opens realms: every arena above Arena 1 is still sealed, so the profile
+ *  plaque never names one ahead of the build. */
+const ARENA_ACTIVE_CAP = 1;
 
 /**
  * The highest division whose TIQ gate this seat has passed. The ladder is the server's
@@ -187,13 +182,6 @@ function arenaBracket(tiq: number): ArenaBracket {
   const id = (rows[idx]?.id ?? 'bronze') as ArenaTierId;
   return { n: idx + 1, total, id, pct: Math.round(((idx + 1) / total) * 100) };
 }
-
-/** The division's own name, translated; a dictionary that predates the key still names it. */
-const arenaTierName = (id: ArenaTierId): string => {
-  const key = ARENA_TIER_KEY[id];
-  const word = t(key);
-  return word === key ? ARENA_TIER_NAMES[id] : word;
-};
 
 export function createMenu(api: MenuApi): Menu {
   const tabs = [...document.querySelectorAll<HTMLElement>('.tab[data-tab]')];
@@ -2553,14 +2541,16 @@ export function createMenu(api: MenuApi): Menu {
         .replace('{n}', String(bracket.n))
         .replace('{total}', String(bracket.total)));
     }
-    /* the arena plaque: the realm this seat actually holds, named in the player's own language */
+    /* the arena plaque: the highest realm the build has actually opened. Realms II–V are
+       sealed content, so a high-TIQ seat still wears Arena 1: Crucible — never a bracket the
+       game does not yet have. */
     const plaque = document.getElementById('pf-arena-plaque');
     if (plaque) {
-      const name = arenaTierName(bracket.id);
-      plaque.dataset.tier = bracket.id;
+      const activeArenaN = Math.min(ARENA_ACTIVE_CAP, bracket.n);
+      plaque.dataset.tier = 'crucible';
       const title = t('pfArenaPlaque')
-        .replace('{n}', String(bracket.n))
-        .replace('{name}', name);
+        .replace('{n}', String(activeArenaN))
+        .replace('{name}', t('pfArenaCrucible'));
       const label = document.getElementById('pf-arena-t');
       if (label) label.textContent = title;
       plaque.setAttribute('aria-label', title);
