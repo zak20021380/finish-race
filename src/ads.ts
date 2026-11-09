@@ -177,9 +177,11 @@ const readsAsNoFill = (result: AdsgramShowResult | null): boolean => {
  * CDN, an empty inventory and an early close are all ordinary outcomes here; the caller decides
  * what to say about them.
  *
- * Reward is granted on the `onReward` event OR on a `{ done: true, error: falsy }` resolution,
- * because builds differ on which one lands first. Listeners and the controller are released in
- * `finally`, so a thrown `show()` cannot leak the mutex and lock every later ad out.
+ * There is ONE claimable outcome: the promise settles `done === true` with no error, skip or no-fill
+ * flag raised. An `onReward` event alone never pays — some builds emit it and still settle an
+ * incomplete view, and a reward granted over a skip is worse than a lost one. Listeners and the
+ * controller are released in `finally`, so a thrown `show()` cannot leak the mutex and lock every
+ * later ad out.
  */
 export async function playRewardedAd(
   placement: Placement,
@@ -195,13 +197,13 @@ export async function playRewardedAd(
   isShowingAd = true;
 
   let controller: AdsgramController | null = null;
-  let rewardedByEvent = false;
   let skipped = false;
   let noFill = false;
+  let errored = false;
 
-  const onReward: AdsgramListener = () => { rewardedByEvent = true; };
   const onSkip: AdsgramListener = () => { skipped = true; };
   const onBannerNotFound: AdsgramListener = () => { noFill = true; };
+  const onError: AdsgramListener = () => { errored = true; };
 
   /** Older builds throw on an event they do not know; a missing listener must not kill the ad. */
   const listen = (event: AdsgramEvent, listener: AdsgramListener) => {
@@ -216,9 +218,9 @@ export async function playRewardedAd(
     if (options.stillWanted && !options.stillWanted()) return { rewarded: false, reason: 'skipped' };
 
     controller = sdk.init({ blockId, debug: ADSGRAM_DEBUG });
-    listen('onReward', onReward);
     listen('onSkip', onSkip);
     listen('onBannerNotFound', onBannerNotFound);
+    listen('onError', onError);
 
     let result: AdsgramShowResult | null = null;
     try {
@@ -228,24 +230,26 @@ export async function playRewardedAd(
       result = asResult(err);
     }
 
-    if (rewardedByEvent || (result !== null && result.done === true && !result.error)) {
-      return { rewarded: true };
-    }
+    /* Denials win over any positive signal: a skip or an error must never pay, even when a
+       build also resolves `done: true` on the same view. */
     if (noFill || readsAsNoFill(result)) return { rewarded: false, reason: 'no_fill' };
     if (skipped) return { rewarded: false, reason: 'skipped' };
-    /* a clean `done: false` is the SDK's own word for an incomplete view */
-    if (result !== null && result.done === false && result.error !== true) {
-      return { rewarded: false, reason: 'skipped' };
+    if (errored || (result !== null && result.error === true)) {
+      return { rewarded: false, reason: 'error' };
     }
+    if (result !== null && result.done === true) return { rewarded: true };
+    /* a clean `done: false` is the SDK's own word for an incomplete view */
+    if (result !== null && result.done === false) return { rewarded: false, reason: 'skipped' };
+    /* no authoritative completion ever arrived */
     return { rewarded: false, reason: 'error' };
   } catch {
     /* init itself failed: the script is present but unusable (bad id, blocked frame) */
-    return rewardedByEvent ? { rewarded: true } : { rewarded: false, reason: 'error' };
+    return { rewarded: false, reason: 'error' };
   } finally {
     try {
-      controller?.removeEventListener('onReward', onReward);
       controller?.removeEventListener('onSkip', onSkip);
       controller?.removeEventListener('onBannerNotFound', onBannerNotFound);
+      controller?.removeEventListener('onError', onError);
     } catch { /* already torn down */ }
     try { controller?.destroy(); } catch { /* a second destroy is harmless */ }
     isShowingAd = false;

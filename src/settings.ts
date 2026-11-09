@@ -810,6 +810,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* the band's own header once the shield lands: the key beside it already says "PROTECTED",
        so the header reports the stake, not the button state — two labels, two jobs */
     resultStakeReturned: 'STAKES BACK',
+    result_stake_saved: '🛡️ SAVED (+0 TIQ)',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'COINS',
     /* ---- the duel challenge: thrown from the result capsule, answered by the invitee ---- */
@@ -884,13 +885,24 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipClose: 'Close VIP',
     /* ---- rewarded video: the TIQ recovery & double-coins surfaces ---- */
     adRecoverCta: 'RECOVER',
-    adRecoverProtected: 'PROTECTED ✓',
+    adRecoverProtected: 'RECOVERED ✓',
     adRecoverLimit: 'LIMIT 0/3',
     adRecoverLimitVip: 'LIMIT 0/4',
     adDoubleCta: '2×',
-    adDoubleClaimed: '✓',
+    adDoubleClaimed: 'CLAIMED ✓',
     adToastSkipped: 'Watch the full video to claim your reward.',
     adToastUnavailable: 'No ad available right now. Try again shortly.',
+    /* the pre-watch consent sheet: the ad is fullscreen, so consent is explicit */
+    ad_confirm_title_tiq: 'LIFT TIQ PENALTY',
+    ad_confirm_title_coins: 'DOUBLE MATCH COINS',
+    ad_confirm_desc_tiq: 'Watch the full video to claim your reward. Closing or skipping early yields zero rewards.',
+    ad_confirm_desc_coins: 'Watch the full video to claim your reward. Closing or skipping early yields zero rewards.',
+    ad_confirm_watch: 'WATCH VIDEO',
+    ad_confirm_cancel: 'CANCEL',
+    /* the SDK closed without completing: no reward, and no recovery was spent */
+    ad_failed_incomplete: 'Video closed early! You must watch the complete ad to earn the reward.',
+    ad_success_tiq_saved: '🛡️ TIQ Saved! Match loss penalty successfully waived.',
+    ad_success_coins_doubled: '💰 Coins Doubled! +{coins} Coins added to your vault.',
     /* ---- badge detail: supply bento, unlock mission ---- */
     badgeTotalSupply: 'TOTAL',
     badgeClaimed: 'CLAIMED',
@@ -1641,6 +1653,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultMenu: 'منوی اصلی',
     resultStakeLost: 'امتیاز از دست رفته',
     resultStakeReturned: 'امتیاز بازگشت',
+    result_stake_saved: '🛡️ ذخیره شد (+0 TIQ)',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'سکه',
     /* ---- دعوت به دوئل: از پنجره نتیجه شروع می‌شود، حریف با پذیرش وارد می‌شود ---- */
@@ -1715,13 +1728,24 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipClose: 'بستن پنجره ویژه',
     /* ---- ویدیوی جایزه‌دار: بازیابی TIQ و دو برابر سکه ---- */
     adRecoverCta: 'بازیابی',
-    adRecoverProtected: 'محافظت شد ✓',
+    adRecoverProtected: 'بازیابی شد ✓',
     adRecoverLimit: 'سقف ۰/۳',
     adRecoverLimitVip: 'سقف ۰/۴',
     adDoubleCta: '۲×',
-    adDoubleClaimed: '✓',
+    adDoubleClaimed: 'دریافت شد ✓',
     adToastSkipped: 'برای دریافت پاداش، ویدیو را کامل تماشا کنید.',
     adToastUnavailable: 'در حال حاضر تبلیغی موجود نیست. کمی بعد تلاش کنید.',
+    /* ---- برگه تأیید پیش از تماشا: تبلیغ تمام‌صفحه است، پس رضایت صریح است ---- */
+    ad_confirm_title_tiq: 'لغو جریمه TIQ',
+    ad_confirm_title_coins: 'دو برابر کردن سکه‌ها',
+    ad_confirm_desc_tiq: 'ویدیو را تا آخر تماشا کنید. در صورت بستن زودهنگام یا رد کردن تبلیغ، هیچ پاداشی تعلق نمی‌گیرد.',
+    ad_confirm_desc_coins: 'ویدیو را تا آخر تماشا کنید. در صورت بستن زودهنگام یا رد کردن تبلیغ، هیچ پاداشی تعلق نمی‌گیرد.',
+    ad_confirm_watch: 'تماشای ویدیو',
+    ad_confirm_cancel: 'انصراف',
+    /* SDK بدون اتمام بسته شد: پاداشی نیست و سهمیه بازیابی هم خرج نمی‌شود */
+    ad_failed_incomplete: 'ویدیو کامل دیده نشد! برای دریافت پاداش باید تا پایان تبلیغ منتظر بمانید.',
+    ad_success_tiq_saved: '🛡️ امتیاز شما حفظ شد! جریمه باخت لغو گردید.',
+    ad_success_coins_doubled: '💰 سکه‌ها دو برابر شد! {coins} سکه به موجودی شما اضافه گردید.',
     /* ---- جزئیات مدال: موجودی، مأموریت آزادسازی ---- */
     badgeTotalSupply: 'تعداد کل',
     badgeClaimed: 'تصاحب‌شده',

@@ -418,6 +418,41 @@
   opacity: .62;
 }
 #result-coin-chip .result-bank-value { color: #FCD34D; }
+/* the double-coin claim: the total pulses once and a gold band sweeps the whole pill */
+#result-coin-chip { position: relative; }
+#result-coin-chip.is-celebrating .result-bank-value {
+  animation: result-coin-pulse .56s cubic-bezier(.22, 1, .36, 1) both;
+  color: #FDE68A;
+  text-shadow: 0 0 16px rgba(252, 211, 77, .62);
+}
+#result-coin-chip.is-celebrating .result-bank-ico .coin {
+  animation: result-coin-kick .56s cubic-bezier(.22, 1, .36, 1) both;
+}
+#result-coin-chip.is-celebrating::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 11px;
+  background: linear-gradient(100deg, transparent 24%, rgba(255, 246, 214, .3) 50%, transparent 76%);
+  background-size: 220% 100%;
+  pointer-events: none;
+  animation: result-coin-shimmer .62s ease-out both;
+}
+@keyframes result-coin-pulse {
+  0% { transform: scale(1); }
+  32% { transform: scale(1.13); }
+  64% { transform: scale(.98); }
+  100% { transform: scale(1); }
+}
+@keyframes result-coin-kick {
+  0% { transform: rotate(0) scale(1); }
+  35% { transform: rotate(-12deg) scale(1.16); }
+  100% { transform: rotate(0) scale(1); }
+}
+@keyframes result-coin-shimmer {
+  from { background-position: 130% 0; }
+  to { background-position: -30% 0; }
+}
 
 .result-stake-k {
   overflow: hidden;
@@ -454,6 +489,43 @@
 .result-stake.is-refunded .result-stake-n {
   color: #6EE7B7;
   text-shadow: 0 0 12px rgba(16, 185, 129, .45);
+}
+/* the strike is the first half of the refusal: the penalty is visibly cancelled, then replaced */
+.result-stake-n.is-struck {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(251, 113, 133, .95);
+  opacity: .5;
+  transition: color .3s ease, text-shadow .3s ease, opacity .26s ease;
+}
+/* the shield that lands after the strike: emerald, compact, one beat of arrival */
+.result-stake-saved {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+  border: 1px solid rgba(16, 185, 129, .5);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(16, 185, 129, .26), rgba(6, 78, 59, .36));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 12px -4px rgba(16, 185, 129, .72);
+  color: #A7F3D0;
+  font-family: var(--font-stat);
+  font-size: 7px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 8px rgba(16, 185, 129, .45);
+  white-space: nowrap;
+}
+.result-stake-saved.is-lit { animation: result-stake-saved-in .46s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes result-stake-saved-in {
+  from { opacity: 0; transform: scale(.82) translateY(2px); }
+  60% { opacity: 1; transform: scale(1.04); }
+  to { opacity: 1; transform: none; }
 }
 
 #result-tiq-chip[hidden],
@@ -943,7 +1015,162 @@
   transition: opacity .18s ease, transform .18s ease;
 }
 .ad-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.ad-toast.is-error {
+  border-color: rgba(244, 63, 94, .42);
+  background: rgba(18, 7, 11, .96);
+  color: #FDA4AF;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 12px 28px -16px rgba(0, 0, 0, .95),
+    0 0 18px -8px rgba(244, 63, 94, .55);
+}
+.ad-toast.is-success {
+  border-color: rgba(16, 185, 129, .46);
+  background: rgba(6, 20, 16, .96);
+  color: #A7F3D0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 12px 28px -16px rgba(0, 0, 0, .95),
+    0 0 18px -8px rgba(16, 185, 129, .6);
+}
 html.reduced-motion .ad-toast { transition: none; }
+
+/* ==========================================================================
+   PRE-WATCH CONSENT — a compact obsidian micro-sheet over the scorecard.
+   The rewarded video is fullscreen, so consent is explicit: one warning, one
+   primary key, one quiet exit. Closing early is the only thing it must prevent.
+   ========================================================================== */
+.ad-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: end center;
+  padding: 12px;
+}
+.ad-confirm[hidden] { display: none !important; }
+.ad-confirm-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 8, .7);
+  -webkit-backdrop-filter: blur(7px) saturate(1.1);
+  backdrop-filter: blur(7px) saturate(1.1);
+  animation: ad-confirm-scrim-in .2s ease-out both;
+}
+.ad-confirm-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 344px);
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(243, 212, 131, .3);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 92% at 50% -22%, rgba(243, 212, 131, .14), transparent 62%),
+    linear-gradient(168deg, rgba(24, 22, 30, .98) 0%, rgba(10, 9, 14, .99) 60%, rgba(5, 5, 9, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 26px 58px -22px rgba(0, 0, 0, .96);
+  color: var(--ink);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(16px) scale(.985);
+}
+.ad-confirm.open .ad-confirm-sheet { animation: ad-confirm-in .28s cubic-bezier(.2, 1.14, .36, 1) both; }
+@keyframes ad-confirm-in {
+  from { opacity: 0; transform: translateY(16px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ad-confirm-scrim-in {
+  from { opacity: 0; }
+}
+.ad-confirm-grip {
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin: 0 auto 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .16);
+}
+.ad-confirm-crest {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 9px;
+  border: 1px solid rgba(243, 212, 131, .34);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(255, 246, 214, .28), rgba(243, 212, 131, .08) 52%, transparent 76%);
+  color: #F3D483;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 0 18px -8px rgba(243, 212, 131, .6);
+}
+.ad-confirm-crest .ico {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 5px rgba(243, 212, 131, .5));
+}
+.ad-confirm-title {
+  margin: 0;
+  color: #F7E8C4;
+  font-family: var(--font-stat);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.ad-confirm-desc {
+  max-width: 30ch;
+  margin: 7px auto 14px;
+  color: #B9B3A6;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+.ad-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.ad-confirm-btn {
+  appearance: none;
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, background .16s ease, border-color .16s ease, color .16s ease;
+}
+.ad-confirm-btn:active { transform: scale(.98); }
+.ad-confirm-btn.is-primary {
+  border-color: rgba(243, 212, 131, .52);
+  background:
+    linear-gradient(180deg, rgba(255, 246, 214, .2), rgba(255, 246, 214, 0) 52%),
+    linear-gradient(135deg, #F3D483 0%, #D4AF37 54%, #A8801F 100%);
+  color: #191203;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .36),
+    0 8px 18px -10px rgba(0, 0, 0, .9),
+    0 0 16px -8px rgba(243, 212, 131, .7);
+}
+.ad-confirm-btn.is-ghost {
+  border-color: rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .035);
+  color: #B8B2A6;
+}
+.ad-confirm-btn:focus-visible {
+  outline: 2px solid rgba(243, 212, 131, .8);
+  outline-offset: 2px;
+}
 
 /* ---- lifecycles ---- */
 @keyframes result-veil {
@@ -1032,6 +1259,10 @@ html.reduced-motion .ad-toast { transition: none; }
   .result-bank-value { font-size: .95rem; }
   .result-stake-n { font-size: .92rem; }
   #btn-double-coins { padding-inline: 7px 8px; }
+  .ad-confirm { padding: 10px; }
+  .ad-confirm-sheet { padding: 10px 13px calc(12px + env(safe-area-inset-bottom)); border-radius: 19px; }
+  .ad-confirm-title { font-size: 12px; letter-spacing: .04em; }
+  .ad-confirm-desc { font-size: 10.5px; }
 }
 @media (max-width: 340px) {
   /* 320px: the ledger and the shield share 250px — every glyph pays a pixel */
@@ -1088,6 +1319,14 @@ html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
 html.reduced-motion .btn-play-again::after,
 html.reduced-motion .btn-challenge .result-btn-ico { animation: none; }
 html.reduced-motion .btn-play-again::after { opacity: 0; }
+html.reduced-motion .ad-confirm-scrim,
+html.reduced-motion .ad-confirm.open .ad-confirm-sheet,
+html.reduced-motion .result-stake-saved.is-lit,
+html.reduced-motion #result-coin-chip.is-celebrating .result-bank-value,
+html.reduced-motion #result-coin-chip.is-celebrating .result-bank-ico .coin,
+html.reduced-motion #result-coin-chip.is-celebrating::after { animation: none; }
+html.reduced-motion #result-coin-chip.is-celebrating::after { opacity: 0; }
+html.reduced-motion .result-stake-n.is-struck { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .btn-play-again::after,
   .btn-challenge .result-btn-ico { animation: none; }
@@ -1159,6 +1398,20 @@ html[data-lang="fa"] .overlay.result .result-stake-n {
   font-family: var(--font-numeric);
   unicode-bidi: isolate;
 }
+/* the consent sheet and the shield follow the capsule's reading direction */
+html[data-lang="fa"] .overlay.result .ad-confirm-sheet,
+html[data-lang="ar"] .overlay.result .ad-confirm-sheet { direction: rtl; }
+html[data-lang="fa"] .overlay.result :is(
+  .ad-confirm-title,
+  .ad-confirm-desc,
+  .ad-confirm-btn,
+  .result-stake-saved
+) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+html[data-lang="fa"] .overlay.result .result-stake-saved { unicode-bidi: isolate; }
 
 /* ---- a checkmated seat: the rank is still its own, the row reads as a struck record ---- */
 .result-row.is-out { opacity: .56; }

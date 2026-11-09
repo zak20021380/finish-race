@@ -2312,6 +2312,7 @@
                   <span class="result-bank-body">
                     <span class="result-stake-k sr-only" id="result-stake-k">STAKES LOST</span>
                     <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
+                    <span class="result-stake-saved" id="result-stake-saved" hidden>🛡️ SAVED (+0 TIQ)</span>
                   </span>
                   <button class="ad-chip ad-chip--shield" id="btn-recover-tiq" type="button" hidden>
                     <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
@@ -2394,7 +2395,30 @@
                  from the lobby, Home and this result stage by the one controller. -->
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
                  costs the card no height and cannot be swallowed by the veil -->
-            <p class="ad-toast" id="ad-toast" role="status" aria-live="polite"></p>
+            <p class="ad-toast" id="ad-toast" role="status" aria-live="polite" dir="auto"></p>
+
+            <!-- Pre-watch consent. The rewarded video opens fullscreen over everything, so the
+                 player gets one explicit warning first: closing early pays nothing. It lives
+                 outside the card, which goes inert while this sheet is up. -->
+            <div class="ad-confirm" id="ad-confirm" hidden>
+              <span class="ad-confirm-scrim" data-ad-confirm-cancel aria-hidden="true"></span>
+              <section class="ad-confirm-sheet" id="ad-confirm-sheet" role="dialog" aria-modal="true"
+                aria-labelledby="ad-confirm-title" aria-describedby="ad-confirm-desc" tabindex="-1">
+                <span class="ad-confirm-grip" aria-hidden="true"></span>
+                <span class="ad-confirm-crest" aria-hidden="true">
+                  <svg class="ico" viewBox="0 0 24 24"><use id="ad-confirm-ico" href="#i-shield" /></svg>
+                </span>
+                <h3 class="ad-confirm-title" id="ad-confirm-title" dir="auto">LIFT TIQ PENALTY</h3>
+                <p class="ad-confirm-desc" id="ad-confirm-desc" dir="auto">Watch the full video to claim
+                  your reward. Closing or skipping early yields zero rewards.</p>
+                <div class="ad-confirm-actions">
+                  <button class="ad-confirm-btn is-primary" id="ad-confirm-watch" type="button"
+                    dir="auto">WATCH VIDEO</button>
+                  <button class="ad-confirm-btn is-ghost" id="ad-confirm-cancel" type="button"
+                    data-ad-confirm-cancel dir="auto">CANCEL</button>
+                </div>
+              </section>
+            </div>
           </div>
         </section>
       </div>

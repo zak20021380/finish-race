@@ -191,6 +191,7 @@ function restartClass(el: HTMLElement, ...names: string[]): void {
 const canvas = $<HTMLCanvasElement>('board');
 const wrap = $<HTMLDivElement>('board-wrap');
 const overlay = $<HTMLDivElement>('overlay');
+const resultCard = $<HTMLDivElement>('result-card');
 const verdict = $<HTMLHeadingElement>('verdict');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
@@ -204,6 +205,7 @@ const resultCoinsN = $<HTMLElement>('result-coins-n');
 const resultStake = $<HTMLElement>('result-stake');
 const resultStakeK = $<HTMLElement>('result-stake-k');
 const resultStakeN = $<HTMLElement>('result-stake-n');
+const resultStakeSaved = $<HTMLElement>('result-stake-saved');
 /* the two rewarded-video keys: a chip in the stake band and a chip inside the coin pill */
 const recoverBtn = $<HTMLButtonElement>('btn-recover-tiq');
 const recoverLabel = $<HTMLElement>('recover-tiq-label');
@@ -213,6 +215,12 @@ const doubleBtn = $<HTMLButtonElement>('btn-double-coins');
 const doubleLabel = $<HTMLElement>('double-coins-label');
 const doubleSpin = $<HTMLElement>('double-coins-spin');
 const adToast = $<HTMLParagraphElement>('ad-toast');
+/* the pre-watch consent sheet: it must be answered before the SDK may open a fullscreen video */
+const adConfirm = $<HTMLDivElement>('ad-confirm');
+const adConfirmTitle = $<HTMLElement>('ad-confirm-title');
+const adConfirmDesc = $<HTMLElement>('ad-confirm-desc');
+const adConfirmIco = document.getElementById('ad-confirm-ico') as SVGUseElement | null;
+const adConfirmWatch = $<HTMLButtonElement>('ad-confirm-watch');
 const againLabel = $<HTMLSpanElement>('again-label');
 const againIco = document.getElementById('again-ico') as SVGUseElement | null;
 const shareBtn = $<HTMLButtonElement>('share');
@@ -1146,9 +1154,10 @@ interface ResultView {
 
 let resultView: ResultView | null = null;
 let resultRaf = 0;
-/** the two claim count-ups keep their own handles: claiming coins must not freeze the stake */
-let stakeRaf = 0;
+/** the coin count-up keeps its own handle: claiming coins must not freeze the stake */
 let coinRaf = 0;
+/** The stake is mid-morph (struck out, waiting for the shield): repaints must not snap it back. */
+let stakeMorphing = false;
 let resultTimers: number[] = [];
 /** The rival walked out of the settled race: the rematch key and the banter dock are dead. */
 let resultLocked = false;
@@ -1156,10 +1165,12 @@ let resultLocked = false;
 /** Stop every clock the result owns: the count-up and the haptic beats. */
 function clearResultMotion() {
   if (resultRaf) { cancelAnimationFrame(resultRaf); resultRaf = 0; }
-  if (stakeRaf) { cancelAnimationFrame(stakeRaf); stakeRaf = 0; }
   if (coinRaf) { cancelAnimationFrame(coinRaf); coinRaf = 0; }
   for (const id of resultTimers) window.clearTimeout(id);
   resultTimers = [];
+  stakeMorphing = false;
+  resultCoinChip.classList.remove('is-celebrating');
+  resultStakeSaved.classList.remove('is-lit');
 }
 
 const resultLater = (fn: () => void, ms: number) => {
@@ -1398,6 +1409,8 @@ function paintResultCopy(): void {
   paintResultLock();
   paintRewardButtons();
   paintResultRoster();
+  /* a language flip can land while the consent sheet is up: its warning must switch too */
+  paintAdConfirmCopy();
 }
 
 /**
@@ -1475,8 +1488,9 @@ function paintRewardButtons(): void {
   recoverBtn.classList.toggle('is-claimed', claimed);
   /* the exhausted chip wears the limit in its own label, so the badge would only repeat it */
   recoverBtn.classList.toggle('is-exhausted', !claimed && left <= 0);
-  /* announced, not `disabled`: a real `disabled` key drops out of the tab order and stops
-     explaining itself, while this chip's label already says why it will not pay */
+  /* The claimed key is spent: a real `disabled` takes it out of the tab order for good. The
+     exhausted key stays announced-only, because its label still explains why it will not pay. */
+  setDisabled(recoverBtn, claimed);
   recoverBtn.setAttribute('aria-disabled', String(claimed || left <= 0));
   recoverLabel.textContent = claimed
     ? t('adRecoverProtected')
@@ -1489,6 +1503,7 @@ function paintRewardButtons(): void {
   doubleBtn.hidden = coins <= 0;
   doubleBtn.classList.toggle('is-claimed', paid);
   doubleBtn.classList.remove('is-exhausted');
+  setDisabled(doubleBtn, paid);
   doubleBtn.setAttribute('aria-disabled', String(paid));
   doubleLabel.textContent = paid ? t('adDoubleClaimed') : t('adDoubleCta');
   /* the consolation tint belongs to the reward, never to the key that doubles it */
@@ -1501,15 +1516,17 @@ function paintStakeValue(): void {
   const refunded = hasClaimedInMatch('recover_tiq');
   resultStake.classList.toggle('is-refunded', refunded);
   /* the band's header and the key beside it are two different sentences: the header reports
-     the stake ("STAKES BACK"), the key reports its own state ("PROTECTED ✓"). Reusing one
+     the stake ("STAKES BACK"), the key reports its own state ("RECOVERED ✓"). Reusing one
      string for both is what made the row read twice. */
   resultStakeK.textContent = t(refunded ? 'resultStakeReturned' : 'resultStakeLost');
-  /* the refund count-down owns the number until it lands: a repaint mid-flight (a language flip,
-     a second paint) must not jump the band to zero ahead of the animation already running */
-  if (stakeRaf) return;
-  resultStakeN.textContent = refunded
-    ? `0 ${t('resultTiqUnit')}`
-    : `−${resultAbs(resultView.stake)} ${t('resultTiqUnit')}`;
+  resultStakeSaved.textContent = t('result_stake_saved');
+  /* the morph owns the pair until the shield lands: a repaint mid-flight (a language flip,
+     a second paint) must not jump the band ahead of the animation already running */
+  if (stakeMorphing) return;
+  resultStakeN.hidden = refunded;
+  resultStakeSaved.hidden = !refunded;
+  resultStakeN.classList.remove('is-struck');
+  if (!refunded) resultStakeN.textContent = `−${resultAbs(resultView.stake)} ${t('resultTiqUnit')}`;
 }
 
 /** A chip's working face: spinner out, taps off, `aria-busy` on. */
@@ -1519,21 +1536,90 @@ function setChipBusy(btn: HTMLButtonElement, spin: HTMLElement, busy: boolean): 
   spin.hidden = !busy;
 }
 
+/* ---- the pre-watch consent sheet ----
+   No rewarded video may open from a bare chip tap: the SDK takes the whole screen, and a player
+   who closes it early loses the reward without warning. The sheet is a promise the chip awaits;
+   only its primary key resolves `true`, and every dismissal resolves `false`. */
+type AdConfirmKind = 'tiq' | 'coins';
+
+let adConfirmKind: AdConfirmKind | null = null;
+let adConfirmResolve: ((accepted: boolean) => void) | null = null;
+let adConfirmOpener: HTMLElement | null = null;
+
+function paintAdConfirmCopy(): void {
+  if (!adConfirmKind) return;
+  const tiq = adConfirmKind === 'tiq';
+  adConfirmTitle.textContent = t(tiq ? 'ad_confirm_title_tiq' : 'ad_confirm_title_coins');
+  adConfirmDesc.textContent = t(tiq ? 'ad_confirm_desc_tiq' : 'ad_confirm_desc_coins');
+  adConfirmWatch.textContent = t('ad_confirm_watch');
+  adConfirmIco?.setAttribute('href', tiq ? '#i-shield' : '#i-play');
+}
+
+function askAdConfirm(kind: AdConfirmKind): Promise<boolean> {
+  if (adConfirmResolve || !adConfirm.hidden) return Promise.resolve(false);
+  adConfirmKind = kind;
+  paintAdConfirmCopy();
+  hideAdToast();
+  adConfirmOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  adConfirm.hidden = false;
+  void adConfirm.offsetWidth;                 // lay the sheet out at its closed position first
+  adConfirm.classList.add('open');
+  /* the card behind the scrim is not a tab stop while the consent sheet is the only answer */
+  resultCard.toggleAttribute('inert', true);
+  try { adConfirmWatch.focus({ preventScroll: true }); } catch { /* no focus in headless */ }
+  return new Promise<boolean>((resolve) => { adConfirmResolve = resolve; });
+}
+
+function closeAdConfirm(accepted: boolean): void {
+  const resolve = adConfirmResolve;
+  if (!resolve) return;
+  adConfirmResolve = null;
+  adConfirmKind = null;
+  adConfirm.hidden = true;
+  adConfirm.classList.remove('open');
+  resultCard.removeAttribute('inert');
+  const back = adConfirmOpener;
+  adConfirmOpener = null;
+  if (back && back.isConnected) {
+    try { back.focus({ preventScroll: true }); } catch { /* opener is gone */ }
+  }
+  resolve(accepted);
+}
+
+adConfirm.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('[data-ad-confirm-cancel]')) return;
+  impact('light');
+  closeAdConfirm(false);
+});
+adConfirmWatch.addEventListener('click', () => { impact('light'); closeAdConfirm(true); });
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !adConfirmResolve) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  impact('light');
+  closeAdConfirm(false);
+}, true);
+
+type AdToastTone = 'info' | 'success' | 'error';
+
 let adToastTimer = 0;
 /** The ad's answer, over the capsule rather than inside it: the card never grows a line. */
-function showAdToast(msg: string): void {
+function showAdToast(msg: string, tone: AdToastTone = 'info', ms = 3600): void {
   adToast.textContent = msg;
+  adToast.classList.toggle('is-success', tone === 'success');
+  adToast.classList.toggle('is-error', tone === 'error');
   adToast.classList.add('show');
   clearTimeout(adToastTimer);
   adToastTimer = window.setTimeout(() => {
-    adToast.classList.remove('show');
+    adToast.classList.remove('show', 'is-success', 'is-error');
     adToast.textContent = '';
-  }, 3600);
+  }, ms);
 }
 
 function hideAdToast(): void {
   clearTimeout(adToastTimer);
-  adToast.classList.remove('show');
+  adToast.classList.remove('show', 'is-success', 'is-error');
   adToast.textContent = '';
 }
 
@@ -1564,20 +1650,35 @@ function animateClaim(ms: number, paint: (eased: number) => void, store: (id: nu
   store(requestAnimationFrame(tick));
 }
 
-/** `−120 TIQ` winds down to `0 TIQ`, and the crimson band turns emerald as it lands. */
-function animateStakeRefund(from: number): void {
-  animateClaim(520, (eased) => {
-    resultStakeN.textContent = `−${resultAbs(from * (1 - eased))} ${t('resultTiqUnit')}`;
-    if (eased < 1) return;
+/**
+ * The crimson `−14 TIQ` is struck out first, then a glowing emerald shield lands in its place.
+ * The beat between the two is deliberate: the player reads the penalty being cancelled before
+ * the value changes, instead of the number silently turning into a different one.
+ */
+function animateStakeRefund(): void {
+  stakeMorphing = true;
+  resultStakeSaved.hidden = true;
+  resultStakeSaved.classList.remove('is-lit');
+  resultStakeN.hidden = false;
+  resultStakeN.classList.add('is-struck');
+  const settle = () => {
+    stakeMorphing = false;
+    resultStakeN.classList.remove('is-struck');
+    resultStakeN.hidden = true;
+    resultStakeSaved.textContent = t('result_stake_saved');
+    resultStakeSaved.hidden = false;
     resultStake.classList.add('is-refunded');
-    resultStakeN.textContent = `0 ${t('resultTiqUnit')}`;
-    resultStakeK.textContent = t('adRecoverProtected');
-  }, (id) => { stakeRaf = id; });
+    resultStakeK.textContent = t('resultStakeReturned');
+    restartClass(resultStakeSaved, 'is-lit');
+  };
+  resultLater(settle, motionReduced() ? 0 : 480);
 }
 
-/** The pill's total climbs from `+X` to `+(2X)` in 500ms. */
+/** The pill's total climbs from `+X` to `+(2X)` while the coin takes one gold shimmer. */
 function animateCoinTotal(base: number): void {
-  animateClaim(500, (eased) => {
+  restartClass(resultCoinChip, 'is-celebrating');
+  resultLater(() => resultCoinChip.classList.remove('is-celebrating'), motionReduced() ? 0 : 700);
+  animateClaim(520, (eased) => {
     resultCoinsN.textContent = resultAbs(base * (1 + eased));
   }, (id) => { coinRaf = id; });
 }
@@ -1594,6 +1695,12 @@ async function claimTiqRecovery(): Promise<void> {
   if (!view || view.won || view.stake <= 0) return;
   /* one video at a time across both chips: the SDK's own mutex would answer `skipped`, which
      reads as the player's fault rather than a tap that simply arrived too early */
+  if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
+  if (getRemainingTiqRecoveries() <= 0) return;
+
+  if (!(await askAdConfirm('tiq'))) return;
+  /* the sheet can outlive the card: re-check the settlement before a fullscreen video opens */
+  if (resultView !== view || !overlayOpen) return;
   if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
   if (getRemainingTiqRecoveries() <= 0) return;
 
@@ -1614,19 +1721,21 @@ async function claimTiqRecovery(): Promise<void> {
 
   if (!outcome.rewarded) {
     paintRewardButtons();
-    showAdToast(t(outcome.reason === 'skipped' ? 'adToastSkipped' : 'adToastUnavailable'));
+    const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
+    showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
     return;
   }
 
   const stake = view.stake;
   earnTiq(stake);                           // the save flushes, so every HUD reader follows
-  recordTiqRecovery();
+  recordTiqRecovery();                      // the receipt: only a completed view spends a recovery
   markClaimedInMatch('recover_tiq');
   paintSeatIdentity();                      // the top HUD's TIQ pill reads the save
-  /* the count-down starts first and owns the number; the repaint then only moves the chip and the
-     band's copy, so the band winds −stake → 0 instead of flashing the destination first */
-  animateStakeRefund(stake);
+  /* the strike starts first and owns the number; the repaint then only moves the chip and the
+     band's copy, so the band strikes −stake before the shield replaces it */
+  animateStakeRefund();
   paintRewardButtons();
+  showAdToast(t('ad_success_tiq_saved'), 'success');
   notify('success');
 }
 
@@ -1634,6 +1743,10 @@ async function claimTiqRecovery(): Promise<void> {
 async function claimDoubleCoins(): Promise<void> {
   const view = resultView;
   if (!view || view.coins <= 0) return;
+  if (doubleBusy || recoverBusy || hasClaimedInMatch('double_coins')) return;
+
+  if (!(await askAdConfirm('coins'))) return;
+  if (resultView !== view || !overlayOpen) return;
   if (doubleBusy || recoverBusy || hasClaimedInMatch('double_coins')) return;
 
   doubleBusy = true;
@@ -1650,7 +1763,8 @@ async function claimDoubleCoins(): Promise<void> {
 
   if (!outcome.rewarded) {
     paintRewardButtons();
-    showAdToast(t(outcome.reason === 'skipped' ? 'adToastSkipped' : 'adToastUnavailable'));
+    const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
+    showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
     return;
   }
 
@@ -1659,6 +1773,8 @@ async function claimDoubleCoins(): Promise<void> {
   markClaimedInMatch('double_coins');
   animateCoinTotal(bonus);
   paintRewardButtons();
+  const doubled = String(Math.round(bonus * 2));
+  showAdToast(t('ad_success_coins_doubled').replace('{coins}', doubled), 'success', 4600);
   notify('success');
 }
 
@@ -1683,6 +1799,10 @@ function showOverlay() {
   setChipBusy(recoverBtn, recoverSpin, false);
   setChipBusy(doubleBtn, doubleSpin, false);
   resultStake.classList.remove('is-refunded');
+  resultStakeN.hidden = false;
+  resultStakeN.classList.remove('is-struck');
+  resultStakeSaved.hidden = true;
+  closeAdConfirm(false);
   hideAdToast();
   const won = state.winner === localSide;
   /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
@@ -1973,6 +2093,7 @@ function ui() {
     overlayOpen = false;
     overlay.hidden = true;
     clearResultMotion();
+    closeAdConfirm(false);
     hideAdToast();
     resultView = null;
     resultLocked = false;
@@ -2424,6 +2545,7 @@ function restart() {
   saidTurn = '';
   clearGoalBeat();
   clearResultMotion();
+  closeAdConfirm(false);
   resultView = null;
   resultLocked = false;
   closeVipSheet();
@@ -3073,6 +3195,7 @@ function quitToMenu() {
   stopDefeat();
   if (overlayOpen) {
     clearResultMotion();
+    closeAdConfirm(false);
     resultView = null;
     resultLocked = false;
     banter.close();
