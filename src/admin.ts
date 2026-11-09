@@ -3649,12 +3649,15 @@ export function createAdmin(api: AdminApi): Admin {
   };
   const SORT_LABEL: Record<DirSort, string> = {
     default: 'Default', lastPlayed: 'Last played', joined: 'Newest', tiq: 'Top TIQ',
+    stars: 'Stars ↓', stars_asc: 'Stars ↑',
   };
   const SORT_MENU: Record<DirSort, { label: string; icon: string }> = {
     default: { label: 'Default order', icon: '#i-tune' },
     lastPlayed: { label: 'Last played', icon: '#i-bolt' },
     joined: { label: 'Newest joined', icon: '#i-calendar' },
     tiq: { label: 'Highest TIQ', icon: '#i-brain' },
+    stars: { label: 'Most Stars (high → low)', icon: '#i-star-3d' },
+    stars_asc: { label: 'Least Stars (low → high)', icon: '#i-star-3d' },
   };
   const AGE_BANDS = Object.keys(AGE_LABEL) as AgeBand[];
   const SORTS = Object.keys(SORT_LABEL) as DirSort[];
@@ -3824,6 +3827,20 @@ export function createAdmin(api: AdminApi): Admin {
     sub.append(handle, document.createTextNode(' '), tiqPill);
     const vipDays = userVipDays(p, now);
     if (vipDays) sub.append(document.createTextNode(' '), vipDays);
+
+    /* the economy at a glance: every row carries its Stars next to TIQ, dimmed at zero so the
+       funded accounts stand out in the collapsed list without opening a single card */
+    const stars = Math.max(0, Math.floor(p.stars || 0));
+    const starsBadge = document.createElement('span');
+    starsBadge.className = 'adm-user-stars-badge';
+    starsBadge.title = stars === 1 ? '1 Star' : `${figure(stars)} Stars`;
+    if (stars === 0) starsBadge.dataset.zero = 'true';
+    starsBadge.append(icon('#i-star-3d', 'ico-star-3d'));
+    const starsValue = document.createElement('b');
+    starsValue.className = 'adm-user-stars-v';
+    starsValue.textContent = figure(stars);
+    starsBadge.append(starsValue);
+    sub.append(document.createTextNode(' '), starsBadge);
 
     const activity = activityOf(p);
     const act = document.createElement('span');
@@ -6320,8 +6337,8 @@ export function createAdmin(api: AdminApi): Admin {
       /* the standard chips are whole views: a plan left over from the VIP shortcut or the
          dropdown clears with them, so one chip is always the view on screen */
       usersPlan = 'all';
-      if (next === 'tiq') usersSort = 'tiq';
-      else if (previous === 'tiq') usersSort = 'default';
+      if (next === 'tiq' || next === 'stars') usersSort = next;
+      else if (previous === 'tiq' || previous === 'stars') usersSort = 'default';
       openPlayer = '';
       paintChipState();
       syncAdvanced();
@@ -6399,8 +6416,12 @@ export function createAdmin(api: AdminApi): Admin {
       onPick: (value) => {
         const next = value as DirSort;
         usersSort = SORTS.includes(next) ? next : 'default';
-        /* the Top TIQ chip is only a shortcut: choosing another order leaves it for All Players */
+        /* the Top TIQ and Top Stars chips are only shortcuts: choosing another order leaves them for All Players */
         if (usersFilter === 'tiq' && usersSort !== 'tiq') {
+          usersFilter = 'all';
+          paintChipState();
+        }
+        if (usersFilter === 'stars' && usersSort !== 'stars' && usersSort !== 'stars_asc') {
           usersFilter = 'all';
           paintChipState();
         }

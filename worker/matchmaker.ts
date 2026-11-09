@@ -1137,9 +1137,9 @@ export interface PlayerRecord {
 }
 
 /** The directory views the Users tab's filter chips select. */
-export type PlayerFilter = 'all' | 'active' | 'tiq' | 'flagged';
+export type PlayerFilter = 'all' | 'active' | 'tiq' | 'flagged' | 'stars';
 
-const FILTERS: readonly PlayerFilter[] = ['all', 'active', 'tiq', 'flagged'];
+const FILTERS: readonly PlayerFilter[] = ['all', 'active', 'tiq', 'flagged', 'stars'];
 
 const filterOf = (raw: string | null): PlayerFilter =>
   (FILTERS as readonly string[]).includes(raw ?? '') ? (raw as PlayerFilter) : 'all';
@@ -1162,9 +1162,9 @@ const inAgeBand = (age: number, band: AgeBand): boolean => {
 };
 
 /** How the directory orders the rows that survive its filters. */
-export type PlayerSort = 'default' | 'lastPlayed' | 'joined' | 'tiq';
+export type PlayerSort = 'default' | 'lastPlayed' | 'joined' | 'tiq' | 'stars' | 'stars_asc';
 
-const SORTS: readonly PlayerSort[] = ['default', 'lastPlayed', 'joined', 'tiq'];
+const SORTS: readonly PlayerSort[] = ['default', 'lastPlayed', 'joined', 'tiq', 'stars', 'stars_asc'];
 
 /** Null when the client sent no sort at all, so the filter's own legacy order can stand. */
 const sortOf = (raw: string | null): PlayerSort | null =>
@@ -5447,7 +5447,7 @@ export class MatchmakerDO {
     const country = /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : '';
     const age = ageBandOf(params.get('age'));
     const plan = vipPlanFilterOf(params.get('plan'));
-    const sort = sortOf(params.get('sort')) ?? (filter === 'tiq' ? 'tiq' : 'default');
+    const sort = sortOf(params.get('sort')) ?? (filter === 'tiq' ? 'tiq' : filter === 'stars' ? 'stars' : 'default');
     const offset = Math.max(0, Math.floor(Number(params.get('offset')) || 0));
     const limit = Math.min(PLAYERS_LIMIT, Math.max(1, Math.floor(Number(params.get('limit')) || 40)));
     const now = Date.now();
@@ -5461,6 +5461,7 @@ export class MatchmakerDO {
     }
     if (filter === 'active') rows = rows.filter((p) => p.inMatch || now - p.lastSeen <= ACTIVE_MS);
     if (filter === 'flagged') rows = rows.filter((p) => p.banned || p.muted);
+    if (filter === 'stars') rows = rows.filter((p) => p.stars > 0);
     if (country) rows = rows.filter((p) => p.country === country);
     if (age !== 'all') rows = rows.filter((p) => inAgeBand(p.age, age));
     if (plan !== 'all') rows = rows.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
@@ -5469,6 +5470,8 @@ export class MatchmakerDO {
     if (sort === 'lastPlayed') rows.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
     else if (sort === 'joined') rows.sort((a, b) => b.firstSeen - a.firstSeen);
     else if (sort === 'tiq') rows.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+    else if (sort === 'stars') rows.sort((a, b) => b.stars - a.stars || b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+    else if (sort === 'stars_asc') rows.sort((a, b) => a.stars - b.stars || a.tiq - b.tiq || b.lastSeen - a.lastSeen);
     else if (filter === 'flagged') rows.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
     else rows.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
     const total = rows.length;

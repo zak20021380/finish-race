@@ -46,14 +46,14 @@ export interface DirPlayer {
   inMatch: boolean;
 }
 
-/** The four directory views behind the filter chips. */
-export type DirFilter = 'all' | 'active' | 'tiq' | 'flagged';
+/** The directory views behind the filter chips. `stars` is the economy audit: holders, ranked. */
+export type DirFilter = 'all' | 'active' | 'tiq' | 'flagged' | 'stars';
 
 /** The demographic cohorts behind the Age picker. `age` 0 never matches a named band. */
 export type AgeBand = 'all' | 'u18' | '18-24' | '25-34' | '35p';
 
 /** How the directory orders the rows that survive its filters. */
-export type DirSort = 'default' | 'lastPlayed' | 'joined' | 'tiq';
+export type DirSort = 'default' | 'lastPlayed' | 'joined' | 'tiq' | 'stars' | 'stars_asc';
 
 export interface DirQuery {
   q: string;
@@ -231,8 +231,9 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : '';
   const age = query.age ?? 'all';
   const plan = query.plan ?? 'all';
-  /* the Top TIQ chip is a sort shortcut, but an explicit pick from the Sort control wins */
-  const sort = query.filter === 'tiq' && query.sort === 'default' ? 'tiq' : (query.sort ?? 'default');
+  /* the Top TIQ and Top Stars chips are sort shortcuts, but an explicit pick from the Sort control wins */
+  const auto: DirSort = query.filter === 'stars' ? 'stars' : query.filter === 'tiq' ? 'tiq' : 'default';
+  const sort = query.sort === 'default' ? auto : (query.sort ?? auto);
   let out = rows;
   if (tokens.length) {
     out = out.filter((p) => {
@@ -242,6 +243,7 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   }
   if (query.filter === 'active') out = out.filter((p) => p.inMatch || now - p.lastSeen <= ACTIVE_MS);
   if (query.filter === 'flagged') out = out.filter((p) => p.banned || p.muted);
+  if (query.filter === 'stars') out = out.filter((p) => p.stars > 0);
   if (country) out = out.filter((p) => p.country === country);
   if (age !== 'all') out = out.filter((p) => inAgeBand(p.age, age));
   if (plan !== 'all') out = out.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
@@ -249,6 +251,8 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   if (sort === 'lastPlayed') rank.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
   else if (sort === 'joined') rank.sort((a, b) => b.firstSeen - a.firstSeen);
   else if (sort === 'tiq') rank.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+  else if (sort === 'stars') rank.sort((a, b) => b.stars - a.stars || b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+  else if (sort === 'stars_asc') rank.sort((a, b) => a.stars - b.stars || a.tiq - b.tiq || b.lastSeen - a.lastSeen);
   else if (query.filter === 'flagged') rank.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
   else rank.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
   /* the operator's own seat leads the untouched default view: it is the row they look for first */
