@@ -47,7 +47,10 @@ import {
   sendSquadBroadcast, setSquadApprovalOnServer, squadErrorMessage, syncSquadScore, verifySquadChat,
   type RequestDecision, type SquadChatPreview, type SquadVerifyResult,
 } from './squadRegister';
-import { copyText } from './gamemodes';
+import {
+  buildShareUrl, copyText, getFriendDuelSnapshot, leaveFriendDuel, onFriendDuelState,
+  openFriendDuel, syncFriendDuelScreen, type FriendDuelSnapshot,
+} from './gamemodes';
 import { myTiq } from './matchmaking';
 import { relicShelter, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
@@ -3732,6 +3735,158 @@ export function createMenu(api: MenuApi): Menu {
     const quickSquad = document.getElementById('pf-quick-squad');
     if (quickSquad) quickSquad.textContent = squad ? squadName : t('pfNoSquad');
   };
+  /* ---- Career tile → Play with Friends ----
+     The tile is the human-only record's front door. Its sheet paints one live room from the
+     snapshot `gamemodes.ts` publishes; the room is the same one the mode drawer opens, so the
+     code, the invite link and the launch countdown are the ones friends already use. There is
+     no bot path in this sheet: it only ever waits for a second real person. */
+  const friendDuelModalEl = document.getElementById('modal-friend-duel');
+  const friendDuelTile = document.getElementById('pf-quest-empty') as HTMLButtonElement | null;
+  const friendDuelModal = friendDuelModalEl
+    ? createModal(friendDuelModalEl, { onClose: () => syncFriendDuelScreen() })
+    : null;
+  const fdGateway = document.getElementById('fd-gateway');
+  const fdRoom = document.getElementById('fd-room');
+  const fdCodeInput = document.getElementById('fd-code') as HTMLInputElement | null;
+  const fdJoinBtn = document.getElementById('fd-join') as HTMLButtonElement | null;
+  const fdErr = document.getElementById('fd-err');
+  const fdWait = document.getElementById('fd-wait');
+  const fdWaitT = document.getElementById('fd-wait-t');
+
+  /** One painter for every surface of the sheet: gateway, live room, wait line and refusal. */
+  const paintFriendDuel = (snap: FriendDuelSnapshot | null): void => {
+    const live = !!snap && !!snap.code && snap.status !== 'closed';
+    if (fdGateway) fdGateway.hidden = live;
+    if (fdRoom) fdRoom.hidden = !live;
+    const codeEl = document.getElementById('fd-room-code');
+    if (codeEl && snap) codeEl.textContent = snap.code;
+    if (fdErr) {
+      const msg = snap?.error ?? '';
+      fdErr.textContent = msg;
+      fdErr.hidden = !msg;
+    }
+    if (!live || !snap) return;
+    /* `ready` covers both sides of the last second before the countdown: the host has just seen
+       the friend's seat light up, the guest has just seen the host's. */
+    const state = snap.status === 'solo' || !snap.online
+      ? 'offline'
+      : snap.launching || snap.racing || (snap.rival && snap.ready)
+        ? 'ready'
+        : 'waiting';
+    if (fdWait) fdWait.dataset.state = state;
+    if (fdWaitT) {
+      fdWaitT.textContent = state === 'offline' ? t('fdOffline')
+        : state === 'ready' ? t('fdStarting')
+        : snap.host ? t('fdWaiting') : t('fdWaitingHost');
+    }
+  };
+
+  friendDuelTile?.addEventListener('click', () => {
+    impact('light');
+    if (!friendDuelModal) return;
+    paintFriendDuel(getFriendDuelSnapshot());
+    friendDuelModal.open(friendDuelTile);
+    /* Opening the sheet is opening the room: a roster already full re-arms its countdown. */
+    syncFriendDuelScreen();
+  });
+
+  document.getElementById('fd-create')?.addEventListener('click', () => {
+    impact('medium');
+    if (!openFriendDuel()) {
+      paintFriendDuel(getFriendDuelSnapshot());
+      return;
+    }
+    notify('success');
+    paintFriendDuel(getFriendDuelSnapshot());
+  });
+
+  const fdSyncJoin = (): void => {
+    if (fdJoinBtn) fdJoinBtn.disabled = (fdCodeInput?.value ?? '').replace(/\D/g, '').length !== 4;
+  };
+  fdSyncJoin();
+
+  const fdDoJoin = (): void => {
+    const raw = (fdCodeInput?.value ?? '').replace(/\D/g, '').slice(0, 4);
+    if (raw.length !== 4) {
+      if (fdErr) {
+        fdErr.textContent = t('fdJoinInvalid');
+        fdErr.hidden = false;
+      }
+      fdCodeInput?.focus({ preventScroll: true });
+      return;
+    }
+    impact('medium');
+    if (!openFriendDuel(raw)) {
+      paintFriendDuel(getFriendDuelSnapshot());
+      return;
+    }
+    notify('success');
+    if (fdCodeInput) fdCodeInput.value = '';
+    fdSyncJoin();
+    paintFriendDuel(getFriendDuelSnapshot());
+  };
+  fdJoinBtn?.addEventListener('click', fdDoJoin);
+  fdCodeInput?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    fdDoJoin();
+  });
+  fdCodeInput?.addEventListener('input', () => {
+    if (fdCodeInput) fdCodeInput.value = fdCodeInput.value.replace(/\D/g, '').slice(0, 4);
+    if (fdErr) {
+      fdErr.hidden = true;
+      fdErr.textContent = '';
+    }
+    fdSyncJoin();
+  });
+
+  /* The native Telegram share is the whole invite: the recipient lands straight in this room. */
+  document.getElementById('fd-share')?.addEventListener('click', () => {
+    const code = getFriendDuelSnapshot()?.code ?? '';
+    if (!/^\d{4}$/.test(code)) return;
+    impact('light');
+    openTelegramShare(buildShareUrl(code));
+  });
+
+  const fdCopyCode = async (tag?: HTMLElement | null): Promise<void> => {
+    const code = getFriendDuelSnapshot()?.code ?? '';
+    if (!/^\d{4}$/.test(code)) return;
+    const ok = await copyText(code);
+    if (!ok) {
+      notify('warning');
+      showToast(t('copyFailed'), 'error');
+      return;
+    }
+    notify('success');
+    if (tag) {
+      tag.classList.add('is-copied');
+      window.setTimeout(() => tag.classList.remove('is-copied'), 1400);
+    }
+    showToast(t('fdCodeCopied'), 'success');
+  };
+  document.getElementById('fd-copy')?.addEventListener('click', () => { void fdCopyCode(); });
+  document.getElementById('fd-code-tag')?.addEventListener('click', (e) => {
+    void fdCopyCode(e.currentTarget as HTMLElement);
+  });
+
+  document.getElementById('fd-cancel')?.addEventListener('click', () => {
+    impact('light');
+    leaveFriendDuel();
+    paintFriendDuel(null);
+    if (fdErr) {
+      fdErr.hidden = true;
+      fdErr.textContent = '';
+    }
+  });
+
+  /* A launch hands the screen to the board: the sheet has nothing left to say once the countdown
+     has fired or the guest's race frame has landed. */
+  onFriendDuelState((snap) => {
+    paintFriendDuel(snap);
+    if (snap.launching || snap.racing) friendDuelModal?.close();
+  });
+  onLang(() => paintFriendDuel(getFriendDuelSnapshot()));
+
   /* One signature for the whole Profile panel. Coming back to the tab repaints
      only when something it shows actually moved; an unchanged tab keeps every
      node it already has. Watchers that fire on a write force the repaint. */
@@ -3776,6 +3931,8 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-rate').textContent = `${career.rate}%`;
     $('pf-best').textContent = en(career.best);
     $('pf-streak').textContent = en(career.run);
+    const careerN = document.getElementById('pf-career-count');
+    if (careerN) careerN.textContent = en(career.matches);
     /* empty stats become an exciting quest card until the first duel lands */
     const quest = document.getElementById('pf-quest');
     const empty = document.getElementById('pf-quest-empty');

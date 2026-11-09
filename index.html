@@ -1888,19 +1888,26 @@
               </h2>
               <div class="pf-quest" id="pf-quest" data-empty="true">
                 <span class="pf-quest-bg" aria-hidden="true"></span>
-                <div class="pf-quest-empty" id="pf-quest-empty">
-                  <span class="pf-quest-ico" aria-hidden="true">
+                <!-- The career glimpse is a single horizontal key, not a poster: it carries the
+                     human-only record and opens the dedicated Play with Friends duel sheet. -->
+                <button class="career-preview-tile" type="button" id="pf-quest-empty"
+                        aria-haspopup="dialog" aria-controls="modal-friend-duel"
+                        data-i18n-aria="pfCareerTileAria" aria-label="Open Play with Friends">
+                  <span class="cpt-ico" aria-hidden="true">
                     <svg class="ico"><use href="#i-swords" /></svg>
                   </span>
-                  <div class="pf-quest-copy">
-                    <p class="pf-quest-title" data-i18n="pfCareerEmptyTitle">No Ranked Duels Yet</p>
-                    <p class="pf-quest-sub" data-i18n="pfCareerEmptySub">Only live PvP matchmaking duels are recorded here. Practice runs are excluded.</p>
-                  </div>
-                  <span class="pf-quest-pill">
-                    <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
-                    <span data-i18n="pfCareerEmptyPill">0 Ranked Matches</span>
+                  <span class="cpt-txt">
+                    <span class="cpt-title" data-i18n="pfCareerTileTitle">Career Duels</span>
+                    <span class="cpt-sub">
+                      <b id="pf-career-count" dir="ltr">0</b>
+                      <span data-i18n="pfCareerTileSub">Ranked Duels · Tap to challenge a friend</span>
+                    </span>
                   </span>
-                </div>
+                  <span class="cpt-action" aria-hidden="true">
+                    <span class="cpt-action-t" data-i18n="pfCareerTileCta">Duel Friend</span>
+                    <svg class="ico"><use href="#i-next" /></svg>
+                  </span>
+                </button>
                 <div class="pf-quest-stats" id="pf-quest-stats" hidden>
                   <!-- three human-vs-human readings. No bot board may ever move one of them,
                        so this matrix is the public competitive record and nothing else. -->
@@ -2842,6 +2849,100 @@
               <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
               <span data-i18n="vaultGuideDone">Got It</span>
             </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ Play with Friends · the Career tile's dedicated duel sheet ============
+           One live room, human-only. Create mints a 4-digit code and the native Telegram share;
+           Join takes a friend's code. There is no bot path here at all: the room only launches
+           once a second real person is seated and connected. Painted by src/menu.ts from the
+           room snapshot src/gamemodes.ts publishes. -->
+      <div class="vault-modal fd-modal" id="modal-friend-duel" hidden>
+        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="vault-modal-sheet fd-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="fd-title" aria-describedby="fd-sub">
+          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <button class="vault-modal-x" type="button" id="fd-close" data-modal-close
+                  data-i18n-aria="fdCloseAria" aria-label="Close Play with Friends">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+
+          <div class="vault-modal-body fd-body">
+            <header class="vm-head">
+              <span class="vm-head-i fd-head-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+              <span class="vm-head-t">
+                <h2 class="vm-title" id="fd-title" data-i18n="fdTitle">Play with Friends</h2>
+                <p class="vm-sub" id="fd-sub" data-i18n="fdSub">Live 1v1 PvP Duel · Real Opponents Only</p>
+              </span>
+            </header>
+
+            <p class="fd-real-pill">
+              <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+              <span data-i18n="fdHumanPill">REAL PLAYERS · NO BOTS</span>
+            </p>
+
+            <!-- the two pathways: host a private duel, or enter a friend's code -->
+            <div class="fd-gateway" id="fd-gateway">
+              <button class="fd-host" type="button" id="fd-create">
+                <span class="fd-host-ico" aria-hidden="true"><svg class="ico"><use href="#i-plus" /></svg></span>
+                <span class="fd-host-txt">
+                  <span class="fd-host-t" data-i18n="fdHostTitle">Create Private Duel</span>
+                  <span class="fd-host-s" data-i18n="fdHostSub">Mint a room code and invite a friend</span>
+                </span>
+                <span class="fd-host-go" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
+              </button>
+
+              <p class="fd-or" aria-hidden="true"><span data-i18n="fdOr">or join a friend’s room</span></p>
+
+              <div class="fd-join">
+                <label class="fd-well" for="fd-code">
+                  <span class="fd-hash" aria-hidden="true">#</span>
+                  <input id="fd-code" class="fd-input" type="text" inputmode="numeric" maxlength="4"
+                    placeholder="Enter Code" data-i18n-ph="fdCodePlaceholder" autocomplete="off"
+                    spellcheck="false" enterkeyhint="go" dir="ltr" data-i18n-aria="fdCodeAria"
+                    aria-label="Enter a 4-digit room code" />
+                </label>
+                <button class="fd-join-btn" type="button" id="fd-join" disabled data-i18n="fdJoinBtn">Join &amp; Play</button>
+              </div>
+            </div>
+
+            <!-- the live room: one code, the native share, and the honest wait -->
+            <div class="fd-room" id="fd-room" hidden>
+              <div class="fd-code-card">
+                <span class="fd-code-k" data-i18n="fdRoomCodeLabel">ROOM CODE</span>
+                <button class="fd-code" type="button" id="fd-code-tag"
+                        data-i18n-aria="fdCopyCodeAria" aria-label="Copy room code">
+                  <svg class="fd-code-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 12.5l5.2 5.2L20 6.8" fill="none" stroke="currentColor" stroke-width="3"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="fd-code-hash" aria-hidden="true">#</span>
+                  <b id="fd-room-code" dir="ltr">0000</b>
+                </button>
+              </div>
+
+              <div class="fd-room-actions">
+                <button class="fd-share" type="button" id="fd-share">
+                  <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+                  <span data-i18n="fdShare">Share Invite Link</span>
+                </button>
+                <button class="fd-copy" type="button" id="fd-copy"
+                        data-i18n-aria="fdCopyCodeAria" aria-label="Copy room code">
+                  <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
+                  <span data-i18n="fdCopyCode">Copy Code</span>
+                </button>
+              </div>
+
+              <p class="fd-wait" id="fd-wait" data-state="waiting" role="status" aria-live="polite">
+                <span class="fd-wait-dot" aria-hidden="true"></span>
+                <span class="fd-wait-t" id="fd-wait-t">Waiting for friend to join…</span>
+              </p>
+              <p class="fd-fine" data-i18n="fdRealNote">Only a real friend can fill the other seat — this room never starts against bots.</p>
+              <button class="fd-cancel" type="button" id="fd-cancel" data-i18n="fdCancelRoom">Cancel room</button>
+            </div>
+
+            <p class="fd-err" id="fd-err" role="status" hidden></p>
           </div>
         </section>
       </div>
