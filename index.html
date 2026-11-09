@@ -3033,21 +3033,23 @@
               </button>
             </div>
 
-            <div class="adm-inbox-filters" role="group" aria-label="Filter squads by chat type">
-              <button class="adm-chip" type="button" data-sqtype="all" aria-pressed="true"
-                aria-label="All squad types">All Types</button>
-              <button class="adm-chip" type="button" data-sqtype="channel" aria-pressed="false">Channels</button>
-              <button class="adm-chip" type="button" data-sqtype="group" aria-pressed="false">Groups</button>
-            </div>
-            <div class="adm-inbox-filters" role="group" aria-label="Filter squads by verification">
-              <button class="adm-chip" type="button" data-sqstatus="all" aria-pressed="true"
-                aria-label="All verification states">All</button>
-              <button class="adm-chip" type="button" data-sqstatus="verified" aria-pressed="false"
-                aria-label="Verified admins">Verified</button>
-              <button class="adm-chip" type="button" data-sqstatus="pending" aria-pressed="false"
-                aria-label="Pending verification">Pending</button>
-              <button class="adm-chip" type="button" data-sqstatus="revoked" aria-pressed="false"
-                aria-label="Rejected or unverified">Rejected</button>
+            <div class="adm-filter-stack">
+              <div class="adm-inbox-filters" role="group" aria-label="Filter squads by chat type">
+                <button class="adm-chip" type="button" data-sqtype="all" aria-pressed="true"
+                  aria-label="All squad types">All Types</button>
+                <button class="adm-chip" type="button" data-sqtype="channel" aria-pressed="false">Channels</button>
+                <button class="adm-chip" type="button" data-sqtype="group" aria-pressed="false">Groups</button>
+              </div>
+              <div class="adm-inbox-filters" role="group" aria-label="Filter squads by verification">
+                <button class="adm-chip" type="button" data-sqstatus="all" aria-pressed="true"
+                  aria-label="All verification states">All</button>
+                <button class="adm-chip" type="button" data-sqstatus="verified" aria-pressed="false"
+                  aria-label="Verified admins">Verified</button>
+                <button class="adm-chip" type="button" data-sqstatus="pending" aria-pressed="false"
+                  aria-label="Pending verification">Pending</button>
+                <button class="adm-chip" type="button" data-sqstatus="revoked" aria-pressed="false"
+                  aria-label="Rejected or unverified">Rejected</button>
+              </div>
             </div>
 
             <div class="adm-users-meta">

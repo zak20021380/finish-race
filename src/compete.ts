@@ -1699,6 +1699,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     }
     if (gu) {
       const span = gu.querySelector<HTMLElement>('span');
+      /* Strict scope: the personal dossier mounts no action bar at all, so its squad key is
+         hidden with it — a stylesheet can never resurrect `View squad` as a floating ghost. */
+      gu.hidden = !visible;
       gu.disabled = false;
       gu.removeAttribute('aria-disabled');
       if (span) span.textContent = kind === 'guild' ? t('squadViewChannel') : t('msViewSquad');
@@ -1718,6 +1721,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       msEls.challenge.disabled = true;
       msEls.challenge.setAttribute('aria-disabled', 'true');
     }
+    if (msEls.guild) msEls.guild.hidden = true;   // the squad key leaves with the dossier
     if (msEls.body) msEls.body.replaceChildren();
     if (msEls.sheet && !msEls.sheet.hidden) api.sheets.close();
   }

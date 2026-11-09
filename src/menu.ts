@@ -4313,11 +4313,20 @@ export function createMenu(api: MenuApi): Menu {
    * and on every route into the tab.
    */
   function clearRivalContext(): void {
+    /* The personal Profile owns no action bar. Every container a rival dossier could have
+       mounted is detached here — including the legacy `View squad` key — so nothing can hover
+       over the bottom dock on this screen. */
     document
-      .querySelectorAll<HTMLElement>('#s-profile .pf-actions, #s-profile .profile-actions, #s-profile .drawer-actions')
+      .querySelectorAll<HTMLElement>(
+        '#s-profile #pf-actions, #s-profile .pf-actions, #s-profile .profile-actions,'
+        + ' #s-profile .drawer-actions',
+      )
       .forEach((node) => node.remove());
     document
-      .querySelectorAll<HTMLElement>('#s-profile .btn-duel-badge, #s-profile .pf-act-duel')
+      .querySelectorAll<HTMLElement>(
+        '#s-profile .btn-duel-badge, #s-profile .pf-act-duel,'
+        + ' #s-profile .btn-view-squad, #s-profile [data-rival-action]',
+      )
       .forEach((node) => node.remove());
   }
 
@@ -4327,6 +4336,9 @@ export function createMenu(api: MenuApi): Menu {
          and whether the dock belongs on this screen at all. */
       tabbar.hidden = id === 'game';
       if (id !== 'profile') vaultModal?.close();   // the vault belongs to Profile, not to the next screen
+      /* The dock's Profile key always lands on the pristine personal card: any inspection state
+         left by another screen is dropped before this panel paints, never after it. */
+      if (id === 'profile') clearRivalContext();
       const raw = id === 'compete' ? 'arena' : id;
       const active = raw === 'home' || raw === 'modes' || raw === 'custom' || raw === 'game' ? 'home' : raw;
       for (const t of tabs) {

@@ -21102,17 +21102,25 @@ html[data-lang="ar"] :is(.event-title, .event-tier, .event-k, .admin-events-live
   flex-wrap: wrap;
   gap: 6px;
 }
+/* the type bar and the verification bar read as one control group, not two loose rows */
+.adm-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
 .adm-chip {
   appearance: none;
   border: 0;
   font: inherit;
   cursor: pointer;
-  min-height: 34px;
+  height: 32px;
+  min-height: 32px;
   padding: 0 12px;
   border-radius: var(--radius-pill);
   background: var(--field);
   color: var(--ink-soft);
-  font-size: var(--t-micro);
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .01em;
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
@@ -21121,13 +21129,16 @@ html[data-lang="ar"] :is(.event-title, .event-tier, .event-k, .admin-events-live
 }
 .adm-chip:active { transform: translateY(var(--press-y)); }
 .adm-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* active: an obsidian chip lit by amber, not a filled pill competing with the page's one action */
 .adm-chip[aria-pressed="true"] {
-  background: var(--gold-face);
-  color: #10141D;
+  color: var(--honey-ink);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, .2) 0%, rgba(245, 158, 11, .06) 100%),
+    var(--field);
   box-shadow:
-    0 2px 0 var(--gold-lip),
-    inset 0 1px 0 rgba(255, 255, 255, .5),
-    0 0 14px -4px rgba(245, 158, 11, .7);
+    inset 0 0 0 1px rgba(245, 158, 11, .44),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 14px -6px rgba(245, 158, 11, .85);
 }
 /* the Obsidian VIP shortcut: gold ink over an obsidian face, lit but not filled until chosen */
 .adm-chip-vip {
@@ -22224,7 +22235,7 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   flex-direction: column;
   gap: 9px;
   min-width: 0;
-  padding: 11px 11px 12px;
+  padding: 11px 11px 14px;
   border-radius: var(--radius-md);
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
@@ -22275,28 +22286,63 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   flex-direction: column;
   gap: 2px;
 }
+/* two clean lines: a mixed fa/en title keeps each script whole instead of being cut mid-word */
 .adm-squad-name {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
   font-size: var(--t-2);
   font-weight: 800;
+  line-height: 1.25;
   color: var(--ink);
 }
+.adm-squad-sub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+/* the handle is never ellipsised: it wraps, so @Computer_Science100 stays complete */
 .adm-squad-handle {
-  display: block;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-micro);
+  font-size: 10px;
   font-weight: 700;
+  line-height: 1.35;
   color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.adm-squad-kind {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-squad-kind[data-kind="channel"] {
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .32);
+}
+.adm-squad-kind[data-kind="group"] {
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
 }
 .adm-squad-badges {
   flex: none;
@@ -22342,16 +22388,61 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   color: var(--bad-ink, #fecdd3);
   box-shadow: inset 0 0 0 1px rgba(244, 63, 94, .45);
 }
-.adm-squad-owner {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--ink-soft);
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
+/* the enlisted facts, as micro-tags: owner, chat id (copyable), registration stamp */
+.adm-squad-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
 }
-.adm-squad-owner b { color: var(--ink); font-weight: 800; }
+.adm-squad-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hair);
+  background: rgba(255, 255, 255, .02);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.adm-squad-tag-ico {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  opacity: .8;
+}
+.adm-squad-tag b { color: var(--ink-soft); font-weight: 800; }
+.adm-squad-owner-h {
+  color: var(--brand-ink);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.adm-squad-id {
+  appearance: none;
+  font: inherit;
+  font-family: var(--font-numeric);
+  text-align: start;
+  cursor: pointer;
+  transition: color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-squad-id span { min-width: 0; overflow-wrap: anywhere; }
+.adm-squad-id-ico { color: var(--honey-ink); opacity: .8; }
+.adm-squad-id:hover:not(:disabled) {
+  color: var(--honey-ink);
+  border-color: rgba(245, 158, 11, .44);
+  box-shadow: 0 0 14px -8px rgba(245, 158, 11, .9);
+}
+.adm-squad-id:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-squad-id:disabled { opacity: .5; cursor: not-allowed; }
+.adm-squad-tag-date span { white-space: nowrap; }
 .adm-squad-cells {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -22386,24 +22477,35 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+/* two equal keys on top, the war verdict across the full width: nothing can be clipped */
 .adm-squad-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+  min-width: 0;
 }
 .adm-squad-actions .adm-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 48px;
-  padding: 0 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
   font-size: var(--t-micro);
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
-.adm-squad-actions .adm-squad-verify { flex: 1 1 auto; }
+.adm-squad-actions .adm-squad-act-ico { flex: none; width: 13px; height: 13px; }
+.adm-squad-actions .adm-squad-open.is-full,
+.adm-squad-actions .adm-squad-restore { grid-column: 1 / -1; }
 /* the purge is a quiet crimson key: it never competes with Verify as a second loud action */
 .adm-squad-actions .adm-squad-purge {
+  grid-column: 1 / -1;
   color: #FECDD3;
   background: var(--clay-face);
   box-shadow:
@@ -22414,6 +22516,11 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 .adm-squad-actions .adm-btn[disabled] { opacity: .45; cursor: not-allowed; }
 @media (max-width: 359px) {
   .adm-squad-cells { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 344px) {
+  .adm-squad { padding: 10px 10px 14px; }
+  .adm-squad-actions .adm-btn { font-size: 9px; padding: 6px 6px; }
+  .adm-squad-st { font-size: 8.5px; padding: 2px 6px; }
 }
 
 /* ==========================================================================

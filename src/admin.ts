@@ -4104,6 +4104,40 @@ export function createAdmin(api: AdminApi): Admin {
     return cell;
   }
 
+  /** `Oct 31, 2026 · 17:59` — Latin digits, one compact registration stamp. */
+  function squadDate(ms: number): string {
+    if (!Number.isFinite(ms) || ms <= 0) return '—';
+    const at = new Date(ms);
+    const day = at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const time = at.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${day} · ${time}`;
+  }
+
+  /** Copy a chat id: the clipboard API where the webview offers one, the selection path otherwise. */
+  async function copySquadText(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* a webview that refuses the API still gets the selection path */ }
+    try {
+      const well = document.createElement('textarea');
+      well.value = text;
+      well.setAttribute('readonly', '');
+      well.style.position = 'fixed';
+      well.style.inset = '0';
+      well.style.opacity = '0';
+      document.body.append(well);
+      well.select();
+      const ok = document.execCommand('copy');
+      well.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
   /** One audit card: chat identity, ownership badge, the two war figures, and the keys. */
   function squadCard(row: SquadRow): HTMLLIElement {
     const li = document.createElement('li');
@@ -4138,13 +4172,24 @@ export function createAdmin(api: AdminApi): Admin {
     txt.className = 'adm-squad-txt';
     const name = document.createElement('span');
     name.className = 'adm-squad-name';
+    /* A title can arrive as two scripts around a pipe or a mixed fa/en phrase. `dir=auto` plus
+       `unicode-bidi: isolate` keeps every run whole, and the two-line clamp replaces the old
+       single-line ellipsis that used to cut Persian titles mid-word. */
+    name.dir = 'auto';
     name.textContent = row.name || row.handle;
+    const sub = document.createElement('span');
+    sub.className = 'adm-squad-sub';
     const handle = document.createElement('span');
     handle.className = 'adm-squad-handle';
-    handle.textContent = `${row.handle} · ${row.kind === 'channel' ? 'Channel' : 'Group'}`
-      + (row.chatId ? ` · ${row.chatId}` : '');
-    handle.title = handle.textContent ?? '';
-    txt.append(name, handle);
+    handle.dir = 'ltr';
+    handle.textContent = row.handle;
+    handle.title = row.handle;
+    const kind = document.createElement('span');
+    kind.className = 'adm-squad-kind';
+    kind.dataset.kind = row.kind;
+    kind.textContent = row.kind === 'channel' ? 'Channel' : 'Group';
+    sub.append(handle, kind);
+    txt.append(name, sub);
 
     const badges = document.createElement('span');
     badges.className = 'adm-squad-badges';
@@ -4166,14 +4211,64 @@ export function createAdmin(api: AdminApi): Admin {
     }
     head.append(glyph, txt, badges);
 
-    const owner = document.createElement('p');
-    owner.className = 'adm-squad-owner';
+    /* The enlisted line, structured: who owns it, which chat it is, and when it registered. */
+    const meta = document.createElement('div');
+    meta.className = 'adm-squad-meta';
+
+    const ownerTag = document.createElement('span');
+    ownerTag.className = 'adm-squad-tag adm-squad-tag-owner';
+    ownerTag.title = row.ownerId ? `Owner ID ${row.ownerId}` : 'Owner ID unavailable';
+    ownerTag.append(icon('#i-user', 'adm-squad-tag-ico'));
     const ownerName = document.createElement('b');
+    ownerName.dir = 'auto';
     ownerName.textContent = row.ownerName
       || (row.ownerUsername ? `@${row.ownerUsername}` : 'Unknown owner');
-    const ownerMeta = `${row.ownerName && row.ownerUsername ? ` (@${row.ownerUsername})` : ''}`
-      + ` · ID ${row.ownerId || '—'} · Enlisted ${stamp(row.createdAt)}`;
-    owner.append('Enlisted by ', ownerName, ownerMeta);
+    ownerTag.append(ownerName);
+    if (row.ownerName && row.ownerUsername) {
+      const ownerHandle = document.createElement('span');
+      ownerHandle.className = 'adm-squad-owner-h';
+      ownerHandle.dir = 'ltr';
+      ownerHandle.textContent = `(@${row.ownerUsername})`;
+      ownerTag.append(ownerHandle);
+    }
+
+    const idValue = row.chatId || row.ownerId;
+    const idTag = document.createElement('button');
+    idTag.type = 'button';
+    idTag.className = 'adm-squad-tag adm-squad-id';
+    idTag.dataset.copyId = idValue;
+    idTag.disabled = !idValue;
+    idTag.title = idValue ? 'Copy chat ID' : 'This chat has no id on record';
+    idTag.setAttribute('aria-label', idValue ? `Copy chat ID ${idValue}` : 'Chat id unavailable');
+    const idText = document.createElement('span');
+    idText.dir = 'ltr';
+    idText.textContent = `ID: ${idValue || '—'}`;
+    idTag.append(idText, icon('#i-copy', 'adm-squad-tag-ico adm-squad-id-ico'));
+    idTag.addEventListener('click', () => {
+      const value = idTag.dataset.copyId ?? '';
+      if (!value) return;
+      impact('light');
+      void copySquadText(value).then((ok) => {
+        if (ok) {
+          notify('success');
+          api.note(`Chat ID ${value} copied.`, false, 1800);
+        } else {
+          notify('error');
+          api.note('Could not copy the chat ID — select it from the row.', true, 2400);
+        }
+      });
+    });
+
+    const dateTag = document.createElement('span');
+    dateTag.className = 'adm-squad-tag adm-squad-tag-date';
+    dateTag.title = 'Registration date';
+    dateTag.append(icon('#i-clock', 'adm-squad-tag-ico'));
+    const dateText = document.createElement('span');
+    dateText.dir = 'ltr';
+    dateText.textContent = squadDate(row.createdAt);
+    dateTag.append(dateText);
+
+    meta.append(ownerTag, idTag, dateTag);
 
     const cells = document.createElement('div');
     cells.className = 'adm-squad-cells';
@@ -4191,8 +4286,22 @@ export function createAdmin(api: AdminApi): Admin {
       ),
     );
 
+    /* Two balanced columns for the audited keys, one full-width row for the war verdict: the
+       destructive key can never be squeezed into a third of the card and clipped. */
     const actions = document.createElement('div');
     actions.className = 'adm-squad-actions';
+    const openKey = (full: boolean): HTMLAnchorElement => {
+      const link = document.createElement('a');
+      link.className = `adm-btn adm-squad-open${full ? ' is-full' : ''}`;
+      const href = telegramChatLink(row.handle);
+      if (href) link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const label = document.createElement('span');
+      label.textContent = 'Open Channel';
+      link.append(icon('#i-ext', 'adm-squad-act-ico'), label);
+      return link;
+    };
     if (!row.banned) {
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -4202,16 +4311,7 @@ export function createAdmin(api: AdminApi): Admin {
       toggle.dataset.squadAction = row.verification === 'verified' ? 'REVOKE' : 'VERIFY';
       toggle.textContent = row.verification === 'verified' ? 'Revoke Verification' : 'Verify Admin';
       toggle.disabled = squadsBusy;
-      actions.append(toggle);
-
-      const open = document.createElement('a');
-      open.className = 'adm-btn';
-      const href = telegramChatLink(row.handle);
-      if (href) open.href = href;
-      open.target = '_blank';
-      open.rel = 'noopener noreferrer';
-      open.textContent = 'Open Channel';
-      actions.append(open);
+      actions.append(toggle, openKey(false));
 
       const purge = document.createElement('button');
       purge.type = 'button';
@@ -4223,23 +4323,14 @@ export function createAdmin(api: AdminApi): Admin {
     } else {
       const restore = document.createElement('button');
       restore.type = 'button';
-      restore.className = 'adm-btn adm-btn-primary adm-squad-verify';
+      restore.className = 'adm-btn adm-btn-primary adm-squad-verify adm-squad-restore';
       restore.dataset.squadAction = 'UNBAN';
       restore.textContent = 'Restore to War';
       restore.disabled = squadsBusy;
-      actions.append(restore);
-
-      const open = document.createElement('a');
-      open.className = 'adm-btn';
-      const href = telegramChatLink(row.handle);
-      if (href) open.href = href;
-      open.target = '_blank';
-      open.rel = 'noopener noreferrer';
-      open.textContent = 'Open Channel';
-      actions.append(open);
+      actions.append(openKey(true), restore);
     }
 
-    li.append(head, owner, cells, actions);
+    li.append(head, meta, cells, actions);
     return li;
   }
 
