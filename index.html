@@ -1870,7 +1870,7 @@
                       aria-haspopup="dialog" aria-controls="modal-stars-vault"
                       data-i18n-aria="vaultPreviewAria" aria-label="Open the Stars Vault">
                 <span class="vault-preview-ico" aria-hidden="true">
-                  <svg class="vault-preview-star" viewBox="0 0 56 56" focusable="false"><use href="#i-star-3d" /></svg>
+                  <img class="ico-star-img vault-preview-star" src="./src/assets/images/telegram_stars.png" width="26" height="26" alt="Stars" loading="eager" draggable="false" />
                 </span>
                 <span class="vault-preview-txt">
                   <span class="vault-preview-t" data-i18n="vaultTitle">Stars Vault</span>
@@ -1881,7 +1881,7 @@
                     <b id="vp-bal" dir="ltr">5</b>
                     <span class="vault-preview-of" aria-hidden="true">/</span>
                     <span id="vp-target" dir="ltr">50</span>
-                    <svg class="ico ico-star-3d vault-preview-glyph" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                    <img class="ico-star-img vault-preview-glyph" src="./src/assets/images/telegram_stars.png" width="22" height="22" alt="Stars" loading="eager" draggable="false" />
                   </span>
                   <span class="vault-preview-track" aria-hidden="true">
                     <span class="vault-preview-fill" id="vp-fill" style="width:10%"></span>
@@ -2540,7 +2540,7 @@
 
           <div class="vault-modal-body">
             <header class="vm-head">
-              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-vault-seal" /></svg></span>
+              <span class="vm-head-i" aria-hidden="true"><img class="ico-star-img vm-head-star" src="./src/assets/images/telegram_stars.png" width="20" height="20" alt="Stars" loading="eager" draggable="false" /></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vm-title" data-i18n="vaultTitle">Stars Vault</h2>
                 <p class="vm-sub" id="vm-sub" data-i18n="vaultSub">Invite friends · Fill the vault · Cash out</p>
@@ -2552,7 +2552,7 @@
               <div class="sv-meter">
                 <p class="sv-bal" dir="ltr">
                   <b id="sv-bal">5</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
-                  <svg class="ico ico-star-3d sv-bal-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  <img class="ico-star-img sv-bal-star" src="./src/assets/images/telegram_stars.png" width="24" height="24" alt="Stars" loading="eager" draggable="false" />
                 </p>
                 <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="vm-title"
                   aria-valuemin="0" aria-valuemax="50" aria-valuenow="5" aria-valuetext="5 / 50">
@@ -2571,11 +2571,11 @@
                 </span>
                 <span class="sv-pill" data-tone="gold">
                   <span class="sv-pill-k" data-i18n="vaultEarned">Earned</span>
-                  <b class="sv-pill-v" dir="ltr"><span id="sv-earned">+0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                  <b class="sv-pill-v" dir="ltr"><span id="sv-earned">+0</span><img class="ico-star-img sv-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </span>
                 <span class="sv-pill" data-tone="mint">
                   <span class="sv-pill-k" data-i18n="vaultPaid">Paid Out</span>
-                  <b class="sv-pill-v" dir="ltr"><span id="sv-paid">0</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                  <b class="sv-pill-v" dir="ltr"><span id="sv-paid">0</span><img class="ico-star-img sv-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </span>
               </div>
 
@@ -2598,7 +2598,7 @@
                     <span data-i18n="vaultStep2">Friend Plays</span>
                   </span>
                   <span class="sv-step-tag">
-                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step2-n">+2</span><img class="ico-star-img sv-star" src="./src/assets/images/telegram_stars.png" width="15" height="15" alt="Stars" loading="eager" draggable="false" /></b>
                     <span class="sv-step-rule" id="sv-step2-r">10 matches in 3 days</span>
                   </span>
                 </li>
@@ -2609,7 +2609,7 @@
                     <span data-i18n="vaultStep3">Beats Rivals</span>
                   </span>
                   <span class="sv-step-tag">
-                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><svg class="ico ico-star-3d sv-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                    <b class="sv-step-bonus" dir="ltr"><span id="sv-step3-n">+3</span><img class="ico-star-img sv-star" src="./src/assets/images/telegram_stars.png" width="15" height="15" alt="Stars" loading="eager" draggable="false" /></b>
                     <span class="sv-step-rule" id="sv-step3-r">5 online wins</span>
                   </span>
                 </li>
@@ -2620,15 +2620,18 @@
               <div class="sv-acts">
                 <button class="sv-cta" type="button" id="sv-share" data-i18n-aria="vaultShareAria" aria-label="Share your invite link on Telegram">
                   <svg class="ico" aria-hidden="true"><use href="#i-share" /></svg>
-                  <span id="sv-share-t">Invite Friends &amp; Earn 5 Stars</span>
+                  <span id="sv-share-t" class="sv-cta-t"><span>Invite Friends &amp; Earn</span> <b>5</b><img class="ico-star-img sv-cta-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /><span>Stars</span></span>
                 </button>
                 <button class="sv-copy" type="button" id="sv-copy" data-i18n-aria="vaultCopyAria" aria-label="Copy invite link">
                   <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
                 </button>
               </div>
               <button class="sv-payout" type="button" id="sv-payout" disabled>
-                <span class="sv-payout-i" aria-hidden="true"><svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg></span>
-                <span id="sv-payout-t">Locked · Requires 50 Stars to cash out</span>
+                <span class="sv-payout-i" aria-hidden="true">
+                  <svg class="ico" id="sv-payout-glyph"><use id="sv-payout-ic" href="#i-lock" /></svg>
+                  <img id="sv-payout-star" class="ico-star-img sv-payout-ic-star" src="./src/assets/images/telegram_stars.png" width="14" height="14" alt="Stars" loading="eager" draggable="false" hidden />
+                </span>
+                <span class="sv-payout-t" id="sv-payout-t">Unlocks at 50<img class="ico-star-img" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></span>
               </button>
               <p class="sv-notice" id="sv-notice" hidden></p>
             </div>
@@ -2673,9 +2676,9 @@
                 <h2 class="vm-title" id="vf-title" data-i18n="vaultFriends">Invited Friends</h2>
                 <p class="vm-sub" id="vf-sub" data-i18n="vaultFriendsSub">Everyone filling your vault, and their next step</p>
                 <!-- the summary pill: the headcount and the Stars those friends have actually
-                     generated, both Latin figures, beside the official Star sprite -->
+                     generated, both Latin figures, beside the official Star asset -->
                 <b class="vf-summary" id="vf-summary">
-                  <svg class="ico ico-star-3d vf-summary-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  <img class="ico-star-img vf-summary-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" />
                   <span class="vf-summary-t" id="vf-summary-t" dir="auto">0 Friends · +0 Stars Earned</span>
                 </b>
               </span>
@@ -2733,7 +2736,7 @@
                   <span class="vg-txt">
                     <span class="vg-head">
                       <b class="vg-t" id="vg-1-t">Starter Gift</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-1-n">5</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <b class="vg-n" dir="ltr"><span id="vg-1-n">5</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
                     </span>
                     <span class="vg-b" id="vg-1-b">You start with 5 free Stars in your vault. Collect 45 more to unlock payout.</span>
                   </span>
@@ -2743,7 +2746,7 @@
                   <span class="vg-txt">
                     <span class="vg-head">
                       <b class="vg-t" id="vg-2-t">Stage 1 · Friend Plays</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
                     </span>
                     <span class="vg-b" id="vg-2-b">When your friend plays 10 matches across 3 different days, you immediately get +2 Stars.</span>
                   </span>
@@ -2753,17 +2756,17 @@
                   <span class="vg-txt">
                     <span class="vg-head">
                       <b class="vg-t" id="vg-3-t">Stage 2 · Friend Wins</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
                     </span>
                     <span class="vg-b" id="vg-3-b">When your friend wins 5 online PvP matches against real rivals, you get +3 more Stars (5 Stars total).</span>
                   </span>
                 </li>
                 <li class="vg-card" data-tone="cash">
-                  <span class="vg-ico" aria-hidden="true"><svg class="ico ico-star-3d"><use href="#i-star-3d" /></svg></span>
+                  <span class="vg-ico" aria-hidden="true"><img class="ico-star-img" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></span>
                   <span class="vg-txt">
                     <span class="vg-head">
                       <b class="vg-t" id="vg-4-t">Cash Out at 50 Stars</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><svg class="ico ico-star-3d vg-star" aria-hidden="true"><use href="#i-star-3d" /></svg></b>
+                      <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
                     </span>
                     <span class="vg-b" id="vg-4-b">Once your vault reaches 50 Stars, tap Request Payout and receive your Stars reward.</span>
                   </span>

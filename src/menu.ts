@@ -65,6 +65,19 @@ import type { Sheets } from './sheets';
 import { impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
 import { CHANNEL_URL, telegramShareLink } from '../shared/config';
 import { REFERRAL_CONFIG } from '../shared/referralConfig';
+import telegramStarsImg from './assets/images/telegram_stars.png';
+
+/** The authentic Telegram Stars asset — never a sprite, glyph or emoji, in any locale. */
+export function renderStarAsset(size: number = 20, extraClass: string = ''): string {
+  return `<img src="${telegramStarsImg}" class="ico-star-img ${extraClass}" width="${size}" height="${size}" alt="Stars" loading="eager" draggable="false" />`;
+}
+
+/** The same asset as a live node, for labels that are rebuilt around a translated figure. */
+function starAssetEl(size: number, extraClass: string = ''): HTMLImageElement {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = renderStarAsset(size, extraClass);
+  return tpl.content.firstElementChild as HTMLImageElement;
+}
 
 export interface MenuApi {
   router: Router;
@@ -2135,8 +2148,8 @@ export function createMenu(api: MenuApi): Menu {
         n: `${f.credited > 0 ? '+' : ''}${en(f.credited)}`,
         total: en(C.TOTAL_PER_FRIEND_STARS),
       })),
-      svIcon('#i-star-3d', 'ico-star-3d sv-star'),
     );
+    total.insertAdjacentHTML('beforeend', renderStarAsset(16));
     if (complete) total.append(svIcon('#i-check', 'sv-check'));
     total.dataset.complete = String(complete);
 
@@ -2233,7 +2246,16 @@ export function createMenu(api: MenuApi): Menu {
     }));
 
     const link = referralLink();
-    svText('sv-share-t', svFill('vaultShare', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
+    const shareT = document.getElementById('sv-share-t');
+    if (shareT) {
+      const shareTemplate = t('vaultShare').split('{n}');
+      shareT.textContent = '';
+      shareT.append(
+        document.createTextNode(`${shareTemplate[0]}${en(C.TOTAL_PER_FRIEND_STARS)}`),
+        starAssetEl(18, 'sv-cta-star'),
+        document.createTextNode(shareTemplate[1] ?? ''),
+      );
+    }
     if (svShareBtn) {
       svShareBtn.disabled = !link;
       svShareBtn.setAttribute('aria-label', link ? t('vaultShareAria') : t('vaultLinkPending'));
@@ -2241,18 +2263,37 @@ export function createMenu(api: MenuApi): Menu {
     if (svCopyBtn) svCopyBtn.disabled = !link;
 
     if (svPayoutBtn) {
+      const locked = !vault.waiting && !vault.canPayout;
       const label = vault.waiting
         ? t('vaultPayoutWaiting')
         : vault.canPayout
           ? svFill('vaultPayoutReady', { n: en(balance) })
           : svFill('vaultPayoutLocked', { n: en(target) });
-      svText('sv-payout-t', label);
+      const payoutT = document.getElementById('sv-payout-t');
+      if (payoutT) {
+        payoutT.textContent = '';
+        if (locked) {
+          const lockTemplate = t('vaultPayoutLocked').split('{n}');
+          payoutT.append(
+            document.createTextNode(`${lockTemplate[0]}${en(target)}`),
+            starAssetEl(16),
+            document.createTextNode(lockTemplate[1] ?? ''),
+          );
+        } else {
+          payoutT.textContent = label;
+        }
+      }
       svPayoutBtn.disabled = vaultBusy || !vault.canPayout;
       svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
-      svPayoutBtn.setAttribute('aria-label', label);
+      svPayoutBtn.setAttribute('aria-label', locked ? `${label} ${t('vaultStarsUnit')}` : label);
+      const payoutGlyph = document.getElementById('sv-payout-glyph');
+      const payoutStar = document.getElementById('sv-payout-star');
+      const showStar = vault.canPayout && !vault.waiting;
+      if (payoutGlyph) payoutGlyph.style.display = showStar ? 'none' : '';
+      if (payoutStar) (payoutStar as HTMLImageElement).hidden = !showStar;
       document.getElementById('sv-payout-ic')?.setAttribute(
         'href',
-        vault.waiting ? '#i-clock' : vault.canPayout ? '#i-star-3d' : '#i-lock',
+        vault.waiting ? '#i-clock' : '#i-lock',
       );
     }
 

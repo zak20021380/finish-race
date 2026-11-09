@@ -1656,6 +1656,15 @@ html.reduced-motion .tut-confirm { transition: none; }
    ========================================================================== */
 
 .ico { width: 1.25em; height: 1.25em; flex: none; display: block; }
+/* the authentic Telegram Stars asset: one optical size per host, never a distortion */
+.ico-star-img {
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, 0.35));
+}
 /* the one coin: inline SVG from coin.ts, sized in ems so it tracks its host text */
 .coin { width: 1.15em; height: 1.15em; flex: none; display: block; }
 .coin .coin-sweep { opacity: 0; }
@@ -7670,7 +7679,7 @@ html.reduced-motion .hex-photo { transition: none; }
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   direction: ltr;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
@@ -7686,9 +7695,9 @@ html.reduced-motion .hex-photo { transition: none; }
 .sv-bal span:not(.sv-bal-of) { font-size: 16px; font-weight: 800; color: var(--ink-soft); }
 .sv-bal-star {
   flex: none;
-  width: 23px;
-  height: 23px;
-  filter: drop-shadow(0 1px 3px rgba(245, 158, 11, .42));
+  width: 24px;
+  height: 24px;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
 }
 .sv-bar {
   position: relative;
@@ -7782,7 +7791,7 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 5px;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 13px;
@@ -7791,11 +7800,11 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   direction: ltr;
   white-space: nowrap;
 }
-.sv-pill-v .ico {
+.sv-pill-v .ico-star-img {
   flex: none;
-  width: 12px;
-  height: 12px;
-  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .55));
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
 }
 .sv-pill[data-tone="gold"] .sv-pill-v { color: var(--honey-ink); }
 .sv-pill[data-tone="mint"] .sv-pill-v { color: var(--mint-ink); }
@@ -7959,8 +7968,8 @@ html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 15px;
+  gap: 5px;
+  height: 17px;
   padding: 0 5px;
   border-radius: 5px;
   background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .06) 100%);
@@ -7974,11 +7983,11 @@ html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
     inset 0 0 0 1px rgba(245, 158, 11, .28),
     inset 0 1px 0 rgba(255, 255, 255, .1);
 }
-.sv-step-bonus .ico {
+.sv-step-bonus .ico-star-img {
   flex: none;
-  width: 10px;
-  height: 10px;
-  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .5));
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
 }
 .sv-step-rule {
   font-size: 8px;
@@ -8039,6 +8048,15 @@ html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
   color: #FBBF24;
   filter: drop-shadow(0 0 6px rgba(245, 158, 11, .45));
 }
+.sv-cta-t {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+.sv-cta-t b { font: inherit; }
 .sv-cta span { min-width: 0; overflow-wrap: anywhere; }
 .sv-cta:hover:not(:active):not(:disabled) { background: rgba(245, 158, 11, .07); color: #FEF3C7; }
 .sv-cta:active:not(:disabled) { background: rgba(0, 0, 0, .16); }
@@ -8129,7 +8147,16 @@ html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
   color: rgba(148, 163, 184, .8);
 }
 .sv-payout-i .ico { width: 11px; height: 11px; }
+.sv-payout-ic-star { width: 14px; height: 14px; }
 .sv-payout span { min-width: 0; overflow-wrap: anywhere; }
+.sv-payout-t {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
 .sv-payout:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .sv-payout:disabled { cursor: default; }
 /* the one glow on the card: it only exists once the vault has actually unlocked */
@@ -8233,7 +8260,7 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
@@ -8242,7 +8269,12 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
   direction: ltr;
   white-space: nowrap;
 }
-.sv-friend-total .ico { flex: none; width: 11px; height: 11px; }
+.sv-friend-total .ico-star-img {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
+}
 .sv-friend-total[data-complete="true"] { color: var(--honey-ink); }
 /* ---- the two stage tracks inside each friend card ----
    Stage 1 is gated by BOTH matches and distinct days, so its fill is half of each ratio; the
@@ -38467,7 +38499,7 @@ html.reduced-motion .rd-decline { transition: none; }
 .vault-preview-bal {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   direction: ltr;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
@@ -38486,10 +38518,9 @@ html.reduced-motion .rd-decline { transition: none; }
 .vault-preview-of { opacity: .55; }
 .vault-preview-glyph {
   flex: none;
-  width: 12px;
-  height: 12px;
-  margin-inline-start: 2px;
-  filter: drop-shadow(0 1px 3px rgba(245, 158, 11, .5));
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
 }
 .vault-preview-track {
   display: block;
@@ -38671,6 +38702,7 @@ html.reduced-motion .vault-modal-sheet, html.reduced-motion .vault-modal-scrim {
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(245, 158, 11, .22);
 }
 .vm-head-i .ico { width: 18px; height: 18px; }
+.vm-head-i .ico-star-img { width: 20px; height: 20px; }
 .vm-head-i[data-tone="mint"] {
   color: var(--mint-ink);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(16, 185, 129, .28);
@@ -38843,7 +38875,7 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(var(--vg-tone), .26);
 }
 .vg-ico .ico { width: 16px; height: 16px; }
-.vg-ico .ico-star-3d { width: 19px; height: 19px; filter: drop-shadow(0 1px 4px rgba(245, 158, 11, .5)); }
+.vg-ico .ico-star-img { width: 18px; height: 18px; filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35)); }
 .vg-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .vg-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 .vg-t {
@@ -38858,8 +38890,8 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 18px;
+  gap: 5px;
+  height: 20px;
   padding: 0 6px;
   border-radius: 7px;
   background: linear-gradient(180deg, rgba(var(--vg-tone), .22) 0%, rgba(var(--vg-tone), .06) 100%);
@@ -38872,7 +38904,7 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   direction: ltr;
   box-shadow: inset 0 0 0 1px rgba(var(--vg-tone), .34), inset 0 1px 0 rgba(255, 255, 255, .1);
 }
-.vg-n .vg-star { flex: none; width: 11px; height: 11px; filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45)); }
+.vg-n .vg-star { flex: none; width: 18px; height: 18px; filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35)); }
 .vg-card[data-tone="cash"] .vg-n { color: var(--mint-ink); }
 .vg-b {
   font-size: 10px;
@@ -38927,7 +38959,7 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
 .vg-done:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* the feed: the list the vault used to carry inline, with its avatars ringed in gold */
-/* the summary pill rides under the title: headcount + Stars generated, Latin figures, Star sprite */
+/* the summary pill rides under the title: headcount + Stars generated, Latin figures, Star asset */
 .vf-summary {
   flex: none;
   align-self: flex-start;
@@ -38949,7 +38981,7 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   line-height: 1.25;
   box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34), inset 0 1px 0 rgba(255, 255, 255, .08);
 }
-.vf-summary-star { flex: none; width: 13px; height: 13px; filter: drop-shadow(0 0 4px rgba(245, 158, 11, .55)); }
+.vf-summary-star { flex: none; width: 16px; height: 16px; filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35)); }
 .vf-summary-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html:lang(fa) .vf-summary, html:lang(ar) .vf-summary {
   direction: rtl;
@@ -39013,6 +39045,7 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   #modal-stars-vault .vault-modal-sheet { padding: 12px 14px calc(10px + env(safe-area-inset-bottom)); }
   #modal-stars-vault .vm-head-i { width: 28px; height: 28px; border-radius: 9px; }
   #modal-stars-vault .vm-head-i .ico { width: 16px; height: 16px; }
+  #modal-stars-vault .vm-head-i .ico-star-img { width: 17px; height: 17px; }
   #modal-stars-vault .vm-title { font-size: 14px; }
   #modal-stars-vault .sv-meter { gap: 5px; padding: 8px 11px; }
   #modal-stars-vault .sv-bal b { font-size: 26px; }
