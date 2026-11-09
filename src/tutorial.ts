@@ -12,9 +12,9 @@
  * interactive MINE placement step — and gets out of the way for good the instant the charge is
  * planted. Step 4A spotlights the mine key and its inventory counter; 4B spotlights one legal tile
  * ahead of the rival, STAGES a real mine there so the board's ✓/✕ confirm/cancel pair takes over,
- * carries a short exploding/respawning tooltip, and answers a confirmed plant with a gold
- * confirmation ring + checkmark on that very tile. Cancelling puts the tile spotlight straight
- * back. Step 4 then sends the player on to the FINISH line.
+ * and carries a short exploding/respawning tooltip. Cancelling puts the tile spotlight straight
+ * back; confirming buries the charge and hands the board straight back to live play. Step 4 then
+ * sends the player on to the FINISH line.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one.
@@ -111,13 +111,6 @@ export const TUTORIAL_MINE_STAGED: Readonly<Record<TutorialLang, string>> = {
   en: STRINGS.en.tutorialMineStaged,
   fa: STRINGS.fa.tutorialMineStaged,
   ru: STRINGS.ru.tutorialMineStaged,
-};
-
-/** The placement confirmation ring's caption, in the step's own language. */
-export const TUTORIAL_MINE_CONFIRM: Readonly<Record<TutorialLang, string>> = {
-  en: STRINGS.en.tutorialMinePlaced,
-  fa: STRINGS.fa.tutorialMinePlaced,
-  ru: STRINGS.ru.tutorialMinePlaced,
 };
 
 /** Every word the lesson speaks, in one language, for one stage. */
@@ -477,8 +470,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const readyEl = byId<HTMLElement>('tut-ready');
   const readyTxt = byId<HTMLElement>('tut-ready-txt');
   const tipEl = byId<HTMLElement>('tut-tip');
-  const confirmEl = byId<HTMLElement>('tut-confirm');
-  const confirmTxt = byId<HTMLElement>('tut-confirm-t');
 
   let open = false;
   /** The wall is up and the board is being played for real: no overlay, no gate, step held. */
@@ -492,12 +483,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let flow = 0;
   let lang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
   let readyTimer = 0;
-  let confirmTimer = 0;
   /** Step 4B has staged a real charge: the ✓/✕ pair is the live target, not the tile. */
   let mineStaged = false;
-  /** The tile box from step 4B's LAST good spotlight, kept for the confirmation ring. `play()`
-      hands the turn to the rival, which makes `hooks.minePlace()` answer null a beat later. */
-  let mineTileRect: TutorialRect | null = null;
 
   const stage = (): TutorialStage | null =>
     open ? TUTORIAL_STEPS[stepIndex].stage : null;
@@ -621,45 +608,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     }, 3200);
   };
 
-  /** The confirmation ring is a fixed 132x96 badge: clamp it so 320px phones never overflow. */
-  const CONFIRM_W = 132;
-  const CONFIRM_H = 96;
-
-  const hideConfirm = () => {
-    if (confirmTimer) { window.clearTimeout(confirmTimer); confirmTimer = 0; }
-    confirmEl.classList.remove('show');
-    confirmEl.hidden = true;
-  };
-
-  /**
-   * Step 4B succeeded: ring the exact tile the spotlight was pointing at with a gold checkmark.
-   * The badge is a SIBLING of the overlay, not a child, so hiding `#tutorial` closes the lesson
-   * immediately while the ring still reads for a beat. It is clamped and never takes a tap.
-   */
-  const showConfirm = (rect: TutorialRect | null = null) => {
-    const r: { left: number; top: number; width: number; height: number } | null =
-      rect ?? (spotEl.hidden ? null : spotEl.getBoundingClientRect());
-    if (!r || r.width < 1 || r.height < 1) return;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const cx = clamp(r.left + r.width / 2, CONFIRM_W / 2 + 8, vw - CONFIRM_W / 2 - 8);
-    const cy = clamp(r.top + r.height / 2, CONFIRM_H / 2 + 8, vh - CONFIRM_H / 2 - 8);
-    confirmEl.style.left = `${cx - CONFIRM_W / 2}px`;
-    confirmEl.style.top = `${cy - CONFIRM_H / 2}px`;
-    confirmEl.dataset.lang = lang;
-    confirmEl.dir = tutorialDir(lang);
-    confirmEl.lang = lang;
-    confirmTxt.textContent = TUTORIAL_MINE_CONFIRM[lang];
-    confirmEl.hidden = false;
-    confirmEl.classList.remove('show');
-    void confirmEl.offsetWidth;
-    confirmEl.classList.add('show');
-    if (confirmTimer) window.clearTimeout(confirmTimer);
-    confirmTimer = window.setTimeout(() => {
-      confirmTimer = 0;
-      hideConfirm();
-    }, 1400);
-  };
-
   const fullPath = (): string =>
     `M0 0H${Math.ceil(window.innerWidth)}V${Math.ceil(window.innerHeight)}H0Z`;
 
@@ -774,9 +722,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     }
     const pad = def.stage === 'mine-arm' ? 8 : TUTORIAL_SPOT_PAD;
     const hole = clampRect(atLeast(padRect(spot.rect, pad), 48, 48));
-    /* remember the tile while its target is still live: after the plant the turn has passed and
-       `hooks.minePlace()` goes null, but the confirmation ring must still land on THAT square. */
-    if (def.stage === 'mine-place') mineTileRect = hole;
     drawMask(hole, spot.radius ?? 16);
     placeAid(def.stage, aidFor(def.stage));
     pointer.style.display = '';
@@ -845,7 +790,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     const at = TUTORIAL_STEPS.findIndex((s) => s.stage === next);
     if (at < 0) { close('finished'); return; }
     mineStaged = false;               // a new stage always starts from its own target
-    mineTileRect = null;
     stepIndex = at;
     render();
   };
@@ -880,7 +824,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     open = false;
     suspended = true;
     mineStaged = false;
-    mineTileRect = null;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -903,7 +846,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     open = false;
     suspended = false;
     mineStaged = false;
-    mineTileRect = null;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -915,14 +857,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.classList.remove('lang-swap');
     document.body.classList.remove('tutorial-live');
     detach();
-    if (result === 'finished') {
-      /* the mine's confirmation ring outlives the overlay for one beat; only the ready toast
-         joins it. Any other ending (Skip, Escape, leaving) takes the ring down at once. */
-      showReady();
-    } else {
-      hideReady();
-      hideConfirm();
-    }
+    if (result === 'finished') showReady();
+    else hideReady();
     hooks.refresh(null);
     hooks.end(result);
   }
@@ -953,10 +889,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       open = true;
       suspended = false;
       mineStaged = false;
-      mineTileRect = null;
       stepIndex = 0;
       hideReady();
-      hideConfirm();
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -969,10 +903,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       suspended = false;
       open = true;
       mineStaged = false;
-      mineTileRect = null;
       const at = TUTORIAL_STEPS.findIndex((s) => s.stage === TUTORIAL_RESUME_STAGE);
       if (at >= 0) stepIndex = at;
-      hideConfirm();
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -1004,11 +936,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       }
       if (now === 'mine-place') {
         /* The mine is buried. `play()` already handed the turn to the rival, so do NOT re-place:
-           the tile target is gone by now. Ring the saved tile box instead, then the overlay and
-           the lesson are done, immediately and for good. The rival walks onto the charge as part
-           of the live match, not a scripted watch beat. */
+           the overlay and the lesson are done immediately and for good, with no confirmation
+           badge between the plant and the rival's live reply. The rival walks onto the charge as
+           part of the live match, not a scripted watch beat. */
         mineStaged = false;
-        showConfirm(mineTileRect);
         close('finished');
         return;
       }

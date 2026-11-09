@@ -3479,7 +3479,7 @@ function tutorialTap(p: Vec) {
         return;
       }
       /* The ✓ tap (or any other confirmed mine door): bury it through the same `play()` every
-         real race uses, then let the lesson close with the gold confirmation ring. */
+         real race uses, then let the lesson close straight into live play. */
       if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
       break;
     case 'mine-arm':

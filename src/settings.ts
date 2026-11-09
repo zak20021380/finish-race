@@ -779,15 +779,13 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* ---- hands-on lesson: the four-step curriculum and the interactive mine step ----
        These are the guidance lines the tutorial overlay speaks. `tutorialMineStep` leads the
        mine key step, `tutorialMineTip` is the exploding/respawning tooltip on the tile step,
-       `tutorialMineStaged` names the ✓/✕ placement confirmation pair, and
-       `tutorialMinePlaced` labels the placement confirmation ring. */
+       and `tutorialMineStaged` names the ✓/✕ placement confirmation pair. */
     tutorialLessonMove: 'Movement — pick your pawn and step toward the FINISH row.',
     tutorialLessonWall: 'Placing Walls — set a wall across the path ahead of your rival.',
     tutorialMineStep: '💣 Mines: plant a charge ahead of the rival and confirm it — step on it and they blast back!',
     tutorialLessonFinish: 'Finishing the Race — the first pawn onto the gold FINISH row wins.',
     tutorialMineTip: '💥 Enemy pieces detonate on contact and fall back 2 rows.',
     tutorialMineStaged: '✓ Confirm to bury the mine, or ✕ to cancel and pick another tile.',
-    tutorialMinePlaced: 'MINE PLANTED',
     gotIt: 'Got it',
     helpMove: "<b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.",
     helpWall: "<b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Each side brings 8 walls to a race; the counters under the board show what is left.",
@@ -1634,7 +1632,6 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     tutorialLessonFinish: 'پایان مسابقه — اولین مهره‌ای که به ردیف طلایی FINISH برسه برنده است.',
     tutorialMineTip: '💥 مهره حریف با برخورد به مین، منفجر و ۲ ردیف عقب می‌ره.',
     tutorialMineStaged: '✓ بزن تا مین کار گذاشته بشه، یا ✕ بزن تا لغو کنی و خونه دیگه‌ای انتخاب کنی.',
-    tutorialMinePlaced: 'مین کار گذاشته شد',
     gotIt: 'فهمیدم',
     helpMove: '<b>حرکت</b> — یکی از مهره‌هات رو بزن، بعد روی نقطه نورانی کنارش بزن. هر نوبت یک قدم؛ تیم‌ها یکی‌یکی بازی می‌کنن و هر تیم می‌تونه هر کدوم از مهره‌هاش رو حرکت بده.',
     helpWall: '<b>دیوار</b> — روی خط شبکه بزن، بعد دوباره روی دیوار شبح‌وار بزن تا ساخته بشه. هر طرف 8 دیوار داره؛ شمارنده زیر صفحه نشون می‌ده چقدر مونده.',
@@ -1894,7 +1891,6 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     tutorialLessonFinish: 'Финиш — первая фишка на золотой линии FINISH побеждает.',
     tutorialMineTip: '💥 Первая фишка соперника, наступившая на мину, взрывается и возрождается на две строки назад.',
     tutorialMineStaged: '✓ Подтверди, чтобы заложить мину, или ✕, чтобы отменить и выбрать другую клетку.',
-    tutorialMinePlaced: 'МИНА УСТАНОВЛЕНА',
     /* ---- живой счётчик кнопки админа и лента событий двух уровней (src/admin.ts) ---- */
     adminFabAria: 'Открыть центр управления',
     adminFabUnread: 'Открыть центр управления, {n} непрочитанных событий',
@@ -2077,7 +2073,6 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     tutorialLessonFinish: 'إنهاء السباق — أول قطعة تصل إلى صف FINISH الذهبي تفوز.',
     tutorialMineTip: '💥 أول قطعة للخصم تخطو على اللغم تنفجر وتعود صفّين إلى الخلف.',
     tutorialMineStaged: '✓ لتأكيد زرع اللغم، أو ✕ للإلغاء واختيار مربع آخر.',
-    tutorialMinePlaced: 'تم زرع اللغم',
     /* ---- عدّاد زر الأدمن المباشر وموجّه الأحداث بمستويين (src/admin.ts) ---- */
     adminFabAria: 'فتح مركز القيادة',
     adminFabUnread: 'فتح مركز القيادة، {n} إشعارات غير مقروءة',
@@ -2260,7 +2255,6 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     tutorialLessonFinish: 'Llegar a la meta — la primera ficha en la fila dorada FINISH gana.',
     tutorialMineTip: '💥 La primera ficha rival que pise la mina estalla y reaparece dos filas atrás.',
     tutorialMineStaged: '✓ Confirma para enterrar la mina, o ✕ para cancelar y elegir otra casilla.',
-    tutorialMinePlaced: 'MINA COLOCADA',
     /* ---- contador en vivo del botón de admin y el feed de dos niveles (src/admin.ts) ---- */
     adminFabAria: 'Abrir el Centro de Mando',
     adminFabUnread: 'Abrir el Centro de Mando, {n} eventos sin leer',

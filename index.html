@@ -2453,8 +2453,8 @@
            a mine. The mine step is fully interactive: step 4A spotlights the mine key and its
            inventory counter, 4B spotlights one legal tile ahead of the rival, STAGES a real mine
            so the board's ✓/✕ confirm/cancel pair takes over, and carries the exploding/respawning
-           tooltip (#tut-tip); a confirmed plant answers with the gold confirmation ring + checkmark
-           (#tut-confirm) on that very tile. The scrim and the
+           tooltip (#tut-tip); a confirmed plant buries the charge and hands the board straight
+           back to live play. The scrim and the
            .tut-block guard share one SVG cut-out, so the live target is sharp AND receives
            the tap; everything outside the hole is swallowed. Only step 1 has a Next key. The
            top bar carries a live EN / فارسی / RU switcher; copy lives in src/tutorial.ts and
@@ -2515,15 +2515,6 @@
         <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
         <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
       </div>
-      <!-- placement confirmation: a gold ring + checkmark anchored to the planted tile. A sibling
-           of the overlay (not a child), so the lesson can close the instant the mine is buried. -->
-      <div class="tut-confirm" id="tut-confirm" data-lang="en" dir="ltr" role="status" aria-live="polite" hidden>
-        <span class="tut-confirm-ring" aria-hidden="true">
-          <svg class="ico" focusable="false"><use href="#i-check" /></svg>
-        </span>
-        <span class="tut-confirm-t" id="tut-confirm-t">MINE PLANTED</span>
-      </div>
-
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->
       <section class="mm" id="overlay-matchmaking" hidden role="dialog" aria-modal="true" aria-labelledby="mm-title">
