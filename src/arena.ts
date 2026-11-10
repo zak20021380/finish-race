@@ -11,7 +11,7 @@
  * route entry, on a save that moved TIQ, and on a language switch.
  */
 import { myTiq } from './matchmaking';
-import { lang, onLang, t } from './settings';
+import { onLang, t } from './settings';
 import { onChange } from './storage';
 
 export interface ArenaRoad {
@@ -107,14 +107,15 @@ export const ARENA_TIERS: readonly ArenaTier[] = [
   },
 ];
 
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-
-/** Persian copy reads with Persian figures; every other locale keeps Latin digits. */
-const localizeDigits = (value: string): string =>
-  lang === 'fa' ? value.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : value;
-
+/**
+ * The road counts in Latin figures in every locale — including Persian. A TIQ reading is
+ * the same numeral the ladder, the result card and the Worker print, so 3,880 can never
+ * be re-cut into Persian figures, and two screens can never quote one score two ways.
+ * Only the numerals are pinned: the Persian copy around them keeps its own RTL flow and
+ * the CSS keeps tabular lining figures so the counts never shift width mid-animation.
+ */
 const num = (n: number): string =>
-  localizeDigits(Math.max(0, Math.round(n)).toLocaleString('en-US'));
+  Math.max(0, Math.round(n)).toLocaleString('en-US');
 
 function fill(key: string, vars: Record<string, string>): string {
   let out = t(key);
@@ -174,7 +175,7 @@ export function createArenaRoad(): ArenaRoad {
         style="--tier-a:${tier.accent};--tier-a2:${tier.accentAlt};--tier-soft:${tier.soft};--tier-line:${tier.line};--tier-trim-a:${tier.trimA};--tier-trim-b:${tier.trimB}"
         aria-label="${label}">
       <div class="arena-tier-rail" aria-hidden="true">
-        <span class="arena-tier-node">${localizeDigits(String(tier.rank).padStart(2, '0'))}</span>
+        <span class="arena-tier-node">${String(tier.rank).padStart(2, '0')}</span>
       </div>
       <div class="arena-tier-card">
         <svg class="arena-tier-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="${tier.icon}" /></svg>

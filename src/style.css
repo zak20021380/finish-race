@@ -34492,6 +34492,25 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   .arena-ribbon { top: 12px; right: -34px; width: 128px; font-size: 6.5px; }
 }
 
+/* ---- Latin figures, always: the road counts in 0-9 ----
+   Every Arena number is emitted as an ASCII numeral, and this keeps the font from
+   substituting Persian glyphs for it under the fa locale. Tabular lining figures hold
+   the counts at a fixed width, so 3,880 / 5,000 never breathes as it counts up. The
+   number-only spans take their own LTR reading as well, so the ratio keeps its
+   left-to-right order inside an otherwise RTL card; the Persian copy around them is
+   untouched. */
+#s-arena :is(.arena-tiq-num, .arena-tiq-unit, .arena-progress-now, .arena-progress-goal,
+  .arena-progress-sep, .arena-progress-unit, .arena-tier-node, .arena-tier-kicker,
+  .arena-milestone-n, .arena-milestone-plus) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1, "locl" 0, "ss01" 0, "ss02" 0, "ss03" 0;
+}
+#s-arena :is(.arena-tiq-num, .arena-progress-now, .arena-progress-goal, .arena-progress-sep,
+  .arena-tier-node, .arena-milestone-n) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 /* ---- Persian: RTL text inside the same unflipped shell ----
    The app never mirrors the document; each text container takes its own
    direction, the rail stays on the left, and Latin tokens (TIQ, figures) keep
