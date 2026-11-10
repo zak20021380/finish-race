@@ -2657,8 +2657,8 @@ export function createMenu(api: MenuApi): Menu {
   /* Honor & Badges: the Genius Triad on one focused shelf. Three archetype
      tiles — crest, title, archetype — and the tile itself is the equip control:
      an unlocked tap swaps the active honor, a locked tap opens its lore. The
-     shelf's note line and the avatar pin share one spotlight, so a badge can
-     always name its title and archetype in words. */
+     avatar pin shares the spotlight, so a badge can always name its title and
+     archetype in words. */
   const badgeMetricIcon = (b: BadgeDef): string =>
     b.accent === 'quantum' ? 'i-brain' : b.accent === 'titanium' ? 'i-shield' : 'i-swords';
 
@@ -2755,23 +2755,6 @@ export function createMenu(api: MenuApi): Menu {
       const unlocked = isBadgeUnlocked(b.id);
       const prog = badgeProgress(b.id);
       rack.append(makeSlot(b, unlocked, unlocked && profile.badge === b.id, prog.label));
-    }
-    /* the note under the shelf always names the equipped honor's archetype */
-    const note = document.getElementById('pf-badge-note');
-    const eq = equippedBadge();
-    if (note) {
-      if (eq) {
-        const text = `${eq.archetype} · ${eq.pillar} — ${eq.description}`;
-        if (note.textContent !== text) note.textContent = text;
-        note.hidden = false;
-        note.dataset.badge = eq.id;
-        note.dataset.accent = eq.accent;
-      } else {
-        note.hidden = true;
-        note.textContent = '';
-        delete note.dataset.badge;
-        delete note.dataset.accent;
-      }
     }
     paintBadgeList();
     paintBadgeStatus();

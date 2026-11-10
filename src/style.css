@@ -29407,42 +29407,6 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   100% { opacity: 0; transform: scale(1.02); }
 }
 
-/* the note under the shelf: the equipped honor's archetype, in prose */
-#s-profile .pf-badge-note {
-  --note-aura: 148, 163, 184;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0;
-  padding: 0 2px;
-  font-size: 9.5px;
-  line-height: 1.35;
-  font-weight: 700;
-  letter-spacing: .01em;
-  color: #8FA0B8;
-  transition: color var(--motion-fast);
-}
-#s-profile .pf-badge-note::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin-top: 4px;
-  border-radius: 50%;
-  background: rgba(var(--note-aura), .55);
-  box-shadow: 0 0 0 2px rgba(var(--note-aura), .12);
-  transition: background var(--motion-fast), box-shadow var(--motion-fast);
-}
-#s-profile .pf-badge-note[data-accent="titanium"] { --note-aura: 6, 182, 212; }
-#s-profile .pf-badge-note[data-accent="quantum"]  { --note-aura: 245, 158, 11; }
-#s-profile .pf-badge-note[data-accent="frost"]    { --note-aura: 16, 185, 129; }
-#s-profile .pf-badge-note[hidden] { display: none; }
-#s-profile .pf-badge-note.is-lit { color: #E2E8F0; }
-#s-profile .pf-badge-note.is-lit::before {
-  background: rgb(var(--note-aura));
-  box-shadow: 0 0 8px rgba(var(--note-aura), .8), 0 0 0 2px rgba(var(--note-aura), .2);
-}
-
 /* ---- the avatar pin is now a control: a 24px medallion in a 1.5px brushed-metal
    rim, over a 48px hit band. The rim is a conic gradient painted in the border box,
    so it reads as machined metal rather than a painted outline. ---- */
@@ -29569,9 +29533,7 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 html.reduced-motion #s-profile .badge-slot,
 html.reduced-motion #s-profile .badge-slot-crest,
 html.reduced-motion #s-profile .badge-slot-crest .badge-crest,
-html.reduced-motion #s-profile .pf-equipped-badge,
-html.reduced-motion #s-profile .pf-badge-note,
-html.reduced-motion #s-profile .pf-badge-note::before { transition: none; }
+html.reduced-motion #s-profile .pf-equipped-badge { transition: none; }
 html.reduced-motion #s-profile .badge-slot-crest,
 html.reduced-motion .badge-ico-lg::after,
 html.reduced-motion .badge-ico-lg .badge-crest,
