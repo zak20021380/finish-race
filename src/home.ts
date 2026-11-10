@@ -2,11 +2,11 @@
  * home.ts — Home: identity card, flexible highlights, then the single Play launcher.
  *
  * Home never scrolls vertically; the carousel is the one horizontal gesture
- * (CSS scroll-snap + `touch-action: pan-x`), so a swipe runs on the compositor.
- * It only advances on direct input — no idle loop, no timer churn.
- * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
- * only the active slide shows cleanly between the paging dots. `.is-active`
- * marks the slide in focus (state binding preserved, no visual peek).
+ * (a composited `translate3d` track + `touch-action: pan-y`), so a swipe runs on
+ * the GPU. It only advances on direct input — no idle loop, no timer churn.
+ * Each slide is locked to one shared fixed height inside an overflow-hidden
+ * viewport, so only the active slide shows and switching can never shift the
+ * container. `.is-active` marks the slide in focus (state binding preserved).
  * Three slides, in this order: Channel War (index 0, the hero the Play tab
  * opens on), Nations Cup, The Mind Ladder.
  *
@@ -140,32 +140,31 @@ const DIFF_HINT: Record<Difficulty, string> = {
 export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const homeScreen = $('s-home');
   const carousel = $('home-carousel') as HTMLElement;
+  const track = $('home-carousel-track') as HTMLElement;
   const dots = [...document.querySelectorAll<HTMLButtonElement>('#home-dots .dot')];
-  const slides = [...carousel.querySelectorAll<HTMLElement>('.car-card')];
+  const slides = [...track.querySelectorAll<HTMLElement>('.car-card')];
 
-  /* ---------- carousel: dots + direct input only ---------- */
+  /* ---------- carousel: one transform state + direct input only ---------- */
 
-  /* One card step is the distance between two slides. Slides are 100% of the
-     viewport width with no gap/peek, so step === viewport width and exactly
-     one active card fills the wrap between the paging dots. Measured on mount
-     and on resize only — never from the scroll path. */
-  let slideStep = 1;
-  const measureStep = (): void => {
-    slideStep = slides.length < 2
-      ? carousel.clientWidth || 1
-      : slides[1].offsetLeft - slides[0].offsetLeft || carousel.clientWidth || 1;
-  };
-
-  /* Index 0 is the 200 Stars Tournament: the track is authored in that order,
-     so the boot state below simply agrees with the markup. The index painted
-     into the dots is the only carousel state; a scroll inside one slide is a
-     no-op — no class writes, no measurements, no style recalc. */
-  let paintedSlide = -1;
-
+  /* The settled slide index is the only carousel state. The track is a composited
+     flex row: every commit is one `translate3d(-index * 100%)`, so a swipe never
+     touches layout and the three fixed-height slides cannot shift the container. */
+  let activeIndex = 0;
   const clampIndex = (i: number): number => Math.min(slides.length - 1, Math.max(0, i));
 
-  const activeSlide = (): number =>
-    clampIndex(Math.round(carousel.scrollLeft / (slideStep || 1)));
+  const activeSlide = (): number => activeIndex;
+
+  const paintSlide = (index: number, animate: boolean): void => {
+    if (animate && !motionReduced()) {
+      track.style.transition = '';
+      track.style.transform = `translate3d(${-index * 100}%, 0, 0)`;
+    } else {
+      track.style.transition = 'none';
+      track.style.transform = `translate3d(${-index * 100}%, 0, 0)`;
+    }
+  };
+
+  let paintedSlide = -1;
 
   const paintDots = (force = false): void => {
     const a = activeSlide();
@@ -192,7 +191,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const syncDots = (): void => {
     if (!dotsBox) return;
     const host = dotsBox.parentElement;
-    const card = carousel.querySelector<HTMLElement>('.car-card.is-active') ?? slides[activeSlide()];
+    const card = slides[activeSlide()];
     if (!host || !card) return;
     const hr = host.getBoundingClientRect();
     const crd = card.getBoundingClientRect();
@@ -205,40 +204,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
   };
 
-  /* One eased step to a neighbouring slide. A rAF tween drives the move with snap
-     briefly released so the mandatory snap points cannot fight the animation; a
-     settle timer guarantees the track lands exactly on the target even where rAF
-     is throttled (a backgrounded WebView), so a flick can never strand the deck
-     between two cards. Reduced motion jumps straight there. */
-  let slideRaf = 0;
-  let slideSettle = 0;
+  /* One eased step to the settled neighbour. The dots paint on release, before the
+     230ms composited transform starts, so the pager never lags the finger. Reduced
+     motion jumps straight there. */
   const goSlide = (i: number): void => {
     const n = clampIndex(i);
-    const target = slides[n] ? slides[n].offsetLeft - slides[0].offsetLeft : 0;
-    cancelAnimationFrame(slideRaf);
-    window.clearTimeout(slideSettle);
-    const settle = (): void => {
-      cancelAnimationFrame(slideRaf);
-      window.clearTimeout(slideSettle);
-      carousel.scrollLeft = target;
-      carousel.style.scrollBehavior = '';
-      carousel.style.scrollSnapType = '';
-    };
-    if (motionReduced() || Math.abs(target - carousel.scrollLeft) < 1) { settle(); return; }
-    const from = carousel.scrollLeft;
-    const dist = target - from;
-    const start = performance.now();
-    const dur = 300;
-    carousel.style.scrollBehavior = 'auto';
-    carousel.style.scrollSnapType = 'none';
-    slideSettle = window.setTimeout(settle, dur + 80);
-    const step = (now: number): void => {
-      const p = Math.min(1, (now - start) / dur);
-      carousel.scrollLeft = from + dist * (1 - Math.pow(1 - p, 3));
-      if (p < 1) slideRaf = requestAnimationFrame(step);
-      else settle();
-    };
-    slideRaf = requestAnimationFrame(step);
+    activeIndex = n;
+    paintDots(true);
+    paintSlide(n, true);
   };
 
   for (const d of dots) {
@@ -247,13 +220,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       goSlide(Number(d.dataset.dot));
     });
   }
-  carousel.addEventListener('scroll', () => paintDots(), { passive: true });
 
   /* The one horizontal gesture: a drag follows the finger 1:1 but can only ever
-     commit to the neighbouring slide (see carousel.ts). Dots and the scroll paint
-     above stay the single source of truth for which card is in focus. */
+     commit to the neighbouring slide (see carousel.ts). The settled index above is
+     the single source of truth for the transform and the pager. */
   bindSwipe({
     el: carousel,
+    track,
     count: () => slides.length,
     index: activeSlide,
     goTo: goSlide,
@@ -261,11 +234,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   });
 
   // Keep the inside-dots glued to the card bottom across resizes/rotations.
-  const remeasure = (): void => { measureStep(); syncDots(); };
+  const remeasure = (): void => { syncDots(); };
   try {
-    /* The Channel War poster hugs its own content, so a font swap or a language
-       switch can change its height without resizing the track. Observing the
-       slides keeps the pager glued to the active card's bottom edge. */
+    /* All three slides are locked to the same height, so the pager never moves on a
+       swipe; observing keeps it exact through font swaps and language switches. */
     const observer = new ResizeObserver(remeasure);
     observer.observe(carousel);
     for (const slide of slides) observer.observe(slide);
@@ -1321,12 +1293,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   paintNationMine(null);
   void loadCountries();
   void loadMinds();
-  /* Boot on the hero slide. Index 0 is the tournament, and a browser that
-     restores the track's scroll offset on reload must not land the Play tab
-     halfway down the deck. Re-asserted once after layout, then left alone. */
+  /* Boot on the hero slide. Index 0 is the tournament, and the transform is
+     re-asserted after layout so a restored WebView can never strand the deck. */
   const bootHero = (): void => {
-    if (carousel.scrollLeft !== 0) carousel.scrollLeft = 0;
-    measureStep();
+    activeIndex = 0;
+    paintSlide(0, false);
     paintDots(true);
   };
   bootHero();
@@ -1339,7 +1310,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       if (id !== 'home') return;
       /* The panel itself is already mounted; only its chrome and a stale read are
          refreshed here, and the router runs this after the tab has painted. */
-      measureStep();
       paintDots(true);
       paintLauncher();
       paintSheet();

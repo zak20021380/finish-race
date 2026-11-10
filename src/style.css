@@ -4553,22 +4553,20 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   .id-bell.icon-btn.xs { width: 30px; height: 30px; min-width: 30px; min-height: 30px; }
 }
 
-/* ---- highlights: single contained slide, no peek ----
-   The track is a 100%-width scroll-snap slider so exactly one active card
-   fills the viewport between the paging dots. No adjacent slivers, no edge
-   cut-off. Horizontal clipping lives on the track (overflow-x: auto); the
-   wrap stays visible vertically so card shadows paint instead of clipping.
-   Shadow fix: the scroll container clips card drop shadows at its padding
-   box, so it carries 20px of vertical breathing room (cancelled with an
-   equal negative margin, so the column budget is unchanged). The wrap stays
-   transparent and lets that breathing room paint instead of clipping it. */
+/* ---- highlights: one composited track, three identical fixed slides ----
+   The wrap sizes the viewport; the track is a 100%-wide flex row driven by a
+   single `translate3d(-index * 100%)`. Every slide is locked to the same
+   `--slide-h`, so a swipe can never move the container vertically: the card
+   bounding boxes are identical and CLS is zero. The viewport is a little taller
+   than the track so the card's soft drop shadow paints instead of clipping. */
 .carousel-wrap {
+  --slide-h: clamp(330px, 52vh, 410px);
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;          /* the hero sits in the middle of its own zone */
+  justify-content: center;          /* the fixed-height viewport sits mid-zone */
   /* Leftover height (a very tall viewport) is pushed ABOVE the hero: the dock never
      drifts away from the card, and the dots keep hugging its bottom edge. */
   margin-top: auto;
@@ -4584,75 +4582,57 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   border: 0;
 }
 .carousel {
+  position: relative;
   flex: 1 1 auto;
-  min-height: 128px;
-  /* No fixed ceiling: the track takes the whole center zone, so the card is as tall as
-     the phone allows and spreads its own lines (`.car-card` is space-between) rather
-     than leaving a band of dead space between the highlights and the dock. A slide is
-     still exactly the track's content box tall — see the container-query lock below. */
-  max-height: 100%;
+  width: 100%;
+  min-height: 0;
   display: flex;
-  align-items: stretch;
-  gap: 0;
-  padding-inline: 0;
-  padding-block: 20px;                /* shadow extent: soft 0 8px 20px drop fits inside */
-  margin-inline: 0;
-  margin-block: -20px;                /* cancels the padding so siblings do not shift */
-  overflow-x: auto;
-  overflow-y: visible;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  scroll-padding-inline: 0;
-  scroll-snap-stop: always;
-  /* Horizontal travel is owned by the 1:1 gesture controller (carousel.ts); the
-     browser keeps vertical panning and pinch-zoom. `pan-x` here would let native
-     momentum race the track past the single step a drag is allowed to take. */
+  align-items: center;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
   touch-action: pan-y pinch-zoom;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: transparent;
   background-color: transparent;
   box-shadow: none;
   border: 0;
 }
-.carousel::-webkit-scrollbar { display: none; }
 .carousel:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-/* Strict footprint lock: every slide in the Home track is exactly the track's
-   content box tall, so a content change on one slide can never push the track,
-   the dots or the sibling slides by a single pixel. The container unit falls
-   back to the authored stretch when container queries are unsupported. */
-@supports (container-type: size) {
-  .carousel { container-type: size; }
-  #home-carousel > .car-card { height: 100cqh; }
+/* The moving layer: no layout props animate, only the composited transform. */
+.carousel-track {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: var(--slide-h);
+  transform: translate3d(0, 0, 0);
+  transition: transform 230ms cubic-bezier(.2, .9, .3, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+  touch-action: pan-y pinch-zoom;
 }
-/* One dot reserve on every slide: the pager dots sit 8px off the card edge with
-   6px of air above them, so switching slides never moves the pagination row. */
-#home-carousel > .car-card { padding-bottom: 34px; }
-/* The Channel War poster hugs its own content instead of stretching to the whole
-   track: it is centred in the row, never taller than the track, and the pager
-   stays glued to its bottom edge (`home.ts` measures the active card). Siblings
-   keep the strict 100cqh footprint lock. */
-#home-carousel > .car-card.carousel-slide-tournament {
-  height: auto;
-  max-height: 100cqh;
-  align-self: center;
-  padding-bottom: 36px;
+/* Each card is exactly one viewport wide and the track's full height. */
+.carousel-track > .car-card {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
+/* One dot reserve on every slide: the pager sits 8px off the card edge with
+   6px of air above it, so switching slides never moves the pagination row. */
+.carousel-track > .car-card { padding-bottom: 34px; }
 @media (max-height: 620px) {
-  #home-carousel > .car-card { padding-bottom: 32px; }
+  .carousel-track > .car-card { padding-bottom: 32px; }
 }
-/* Contained slider: every card is exactly the viewport width, centred on snap.
-   Off-screen cards stay fully off-screen — nothing peeks at the edges.
-   Children never shrink: a card that is too short for its own lines overflows
-   visibly, which is what the layout check can measure. */
+/* Contained slider: every card is exactly the viewport width, with no gap or peek.
+   Off-screen cards stay fully off-screen — nothing peeks at the edges. */
 .car-card {
   flex: 0 0 100%;
   max-width: 100%;
   min-width: 0;
   min-height: 0;
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
   display: flex;
   flex-direction: column;
   justify-content: space-between;   /* a taller card spreads its lines instead of opening one hole */
@@ -23980,8 +23960,8 @@ html.reduced-motion .mind-av-img { transition: none; }
 
 /* the card is a frame for that column: it keeps only the bottom reserve the pager
    dots live in (16px here + the column's 8px = 24px of air under the CTA) */
-#home-carousel > .car-card.nations-cup,
-#home-carousel > .car-card.mind-ladder {
+.carousel-track > .car-card.nations-cup,
+.carousel-track > .car-card.mind-ladder {
   justify-content: stretch;
   gap: 0;
   padding: 0 0 16px;
@@ -40903,4 +40883,88 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
   #s-home .car-card.nations-cup .nations-mine .hm-u { font-size: 7px; letter-spacing: .03em; }
   #s-home .car-card.nations-cup .nations-mine .hm-r { gap: 3px; }
   #s-home .car-card.nations-cup .slide-cta { font-size: 10.5px; padding: 0 10px; }
+}
+
+/* ============================================================================================
+   CAROUSEL LUXURY OVERHAUL — ONE FIXED BOX, ONE COMPOSITED SWIPE (final word)
+   ============================================================================================
+   All three Home slides share one `--slide-h` bounding box. The track is the only
+   moving object and it moves solely on `translate3d`, so the container cannot jump
+   and the compositor owns every frame of the 230ms snap. `--slide-h` is viewport-
+   relative so the card stays inside the home column on 568–896px phones, while the
+   330px floor and 410px ceiling keep the three internal compositions identical.
+   ============================================================================================ */
+
+/* 1 — THE SHARED BOX. Height is asserted after every legacy per-slide rule, so the
+   Channel War poster can no longer hug its content and the two leaderboards can no
+   longer collapse to their rows. Identical height + identical width = identical
+   bounding box on all three slides. */
+#s-home .carousel-wrap { --slide-h: clamp(330px, 52vh, 410px); }
+#home-carousel {
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  scroll-snap-type: none !important;
+  touch-action: pan-y pinch-zoom !important;
+}
+#home-carousel-track {
+  display: flex !important;
+  width: 100% !important;
+  height: var(--slide-h) !important;
+  transform: translate3d(0, 0, 0);
+  /* Deliberately not !important: carousel.ts sets `transition: none` inline while a
+     finger is down so the layer tracks the touch 1:1, then clears it on release. */
+  transition: transform 230ms cubic-bezier(.2, .9, .3, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+  touch-action: pan-y pinch-zoom !important;
+}
+#home-carousel-track > .car-card {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  height: var(--slide-h) !important;
+  min-height: var(--slide-h) !important;
+  max-height: var(--slide-h) !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  align-self: auto !important;
+  overflow: hidden !important;
+}
+
+/* 2 — THE LEADERBOARD COLUMNS FILL THE BOX. The card keeps its pager lane; the inner
+   column owns the remaining height and pins header, band and foot to both edges. */
+#s-home .carousel-track > .car-card.nations-cup,
+#s-home .carousel-track > .car-card.mind-ladder {
+  justify-content: stretch !important;
+}
+#s-home .carousel-track > .car-card.nations-cup > .slide-inner,
+#s-home .carousel-track > .car-card.mind-ladder > .slide-inner {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  justify-content: space-between !important;
+}
+#s-home .carousel-track > .car-card.nations-cup { padding-block: 14px 34px !important; }
+#s-home .carousel-track > .car-card.nations-cup > .slide-inner { gap: 8px !important; }
+/* the three preview rows share the band; the group stays centred when the box grows */
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  justify-content: center !important;
+}
+#s-home .carousel-track > .car-card.nations-cup .slide-foot,
+#s-home .carousel-track > .car-card.mind-ladder .slide-foot {
+  margin-top: auto !important;
+  flex: none !important;
+}
+/* five ladder rows share whatever the fixed box leaves, never overflow the foot */
+#s-home .carousel-track > .car-card.mind-ladder .mind-podium {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
 }
