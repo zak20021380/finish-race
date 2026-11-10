@@ -248,7 +248,12 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   if (age !== 'all') out = out.filter((p) => inAgeBand(p.age, age));
   if (plan !== 'all') out = out.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
   const rank = [...out];
-  if (sort === 'lastPlayed') rank.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
+  /* "Last played" orders by the same stamp the card prints — the freshest of a sighting and a
+     settled race — so the list descends in the order the eye reads. Ordering by the race time
+     alone buried a seat that had just opened the app under one whose last race was older. */
+  if (sort === 'lastPlayed') rank.sort((a, b) =>
+    Math.max(b.lastSeen, b.lastPlayed) - Math.max(a.lastSeen, a.lastPlayed)
+    || b.lastSeen - a.lastSeen || a.id.localeCompare(b.id));
   else if (sort === 'joined') rank.sort((a, b) => b.firstSeen - a.firstSeen);
   else if (sort === 'tiq') rank.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
   else if (sort === 'stars') rank.sort((a, b) => b.stars - a.stars || b.tiq - a.tiq || b.lastSeen - a.lastSeen);

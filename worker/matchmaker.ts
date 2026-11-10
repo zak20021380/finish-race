@@ -5469,7 +5469,11 @@ export class MatchmakerDO {
     if (plan !== 'all') rows = rows.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
     /* the default order reads like the room: flagged first when that is the view, else live boards,
        then the freshest seats. The three explicit sorts answer an audit question instead. */
-    if (sort === 'lastPlayed') rows.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
+    /* The card prints `max(lastSeen, lastPlayed)`, so that is the key "Last played" sorts on:
+       a seat that just opened the app must never sit under one whose last race is older. */
+    if (sort === 'lastPlayed') rows.sort((a, b) =>
+      Math.max(b.lastSeen, b.lastPlayed) - Math.max(a.lastSeen, a.lastPlayed)
+      || b.lastSeen - a.lastSeen || a.id.localeCompare(b.id));
     else if (sort === 'joined') rows.sort((a, b) => b.firstSeen - a.firstSeen);
     else if (sort === 'tiq') rows.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
     else if (sort === 'stars') rows.sort((a, b) => b.stars - a.stars || b.tiq - a.tiq || b.lastSeen - a.lastSeen);

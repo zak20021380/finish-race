@@ -2024,6 +2024,14 @@ export function createAdmin(api: AdminApi): Admin {
   let usersPlan: VipPlanFilter = 'all';
   let usersSort: DirSort = 'default';
   let usersRows: DirPlayer[] = [];
+  /**
+   * "Last played" re-applied on this side too: the list on screen is always in the order the
+   * operator picked, even when the Worker behind the page is an older build. The key is the same
+   * activity stamp the card prints — the freshest of a sighting and a settled race.
+   */
+  const orderByActivity = (rows: DirPlayer[]): DirPlayer[] => [...rows].sort((a, b) =>
+    Math.max(b.lastSeen, b.lastPlayed) - Math.max(a.lastSeen, a.lastPlayed)
+    || b.lastSeen - a.lastSeen || a.id.localeCompare(b.id));
   let usersTotal = 0;
   /** True once `/admin/players` has answered this session: the panel is governing a real registry. */
   let usersOn = false;
@@ -4036,7 +4044,8 @@ export function createAdmin(api: AdminApi): Admin {
       usersProbed = true;
       usersOn = !!live;
       if (live) {
-        usersRows = reset ? live.players : [...usersRows, ...live.players];
+        const rows = reset ? live.players : [...usersRows, ...live.players];
+        usersRows = usersSort === 'lastPlayed' ? orderByActivity(rows) : rows;
         usersTotal = live.total;
         usersReady = true;
         paintUsers();
