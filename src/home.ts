@@ -18,6 +18,7 @@
  * builder and a sticky Start button whose label updates live.
  */
 import type { Difficulty } from './bot';
+import { bindSwipe } from './carousel';
 import { lang, menuState, motionReduced, onLang, saveMenu, t } from './settings';
 import { nameOf } from './countries';
 import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
@@ -204,10 +205,40 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
   };
 
+  /* One eased step to a neighbouring slide. A rAF tween drives the move with snap
+     briefly released so the mandatory snap points cannot fight the animation; a
+     settle timer guarantees the track lands exactly on the target even where rAF
+     is throttled (a backgrounded WebView), so a flick can never strand the deck
+     between two cards. Reduced motion jumps straight there. */
+  let slideRaf = 0;
+  let slideSettle = 0;
   const goSlide = (i: number): void => {
     const n = clampIndex(i);
-    const left = slides[n] ? slides[n].offsetLeft - slides[0].offsetLeft : 0;
-    carousel.scrollTo({ left, behavior: motionReduced() ? 'auto' : 'smooth' });
+    const target = slides[n] ? slides[n].offsetLeft - slides[0].offsetLeft : 0;
+    cancelAnimationFrame(slideRaf);
+    window.clearTimeout(slideSettle);
+    const settle = (): void => {
+      cancelAnimationFrame(slideRaf);
+      window.clearTimeout(slideSettle);
+      carousel.scrollLeft = target;
+      carousel.style.scrollBehavior = '';
+      carousel.style.scrollSnapType = '';
+    };
+    if (motionReduced() || Math.abs(target - carousel.scrollLeft) < 1) { settle(); return; }
+    const from = carousel.scrollLeft;
+    const dist = target - from;
+    const start = performance.now();
+    const dur = 300;
+    carousel.style.scrollBehavior = 'auto';
+    carousel.style.scrollSnapType = 'none';
+    slideSettle = window.setTimeout(settle, dur + 80);
+    const step = (now: number): void => {
+      const p = Math.min(1, (now - start) / dur);
+      carousel.scrollLeft = from + dist * (1 - Math.pow(1 - p, 3));
+      if (p < 1) slideRaf = requestAnimationFrame(step);
+      else settle();
+    };
+    slideRaf = requestAnimationFrame(step);
   };
 
   for (const d of dots) {
@@ -217,6 +248,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     });
   }
   carousel.addEventListener('scroll', () => paintDots(), { passive: true });
+
+  /* The one horizontal gesture: a drag follows the finger 1:1 but can only ever
+     commit to the neighbouring slide (see carousel.ts). Dots and the scroll paint
+     above stay the single source of truth for which card is in focus. */
+  bindSwipe({
+    el: carousel,
+    count: () => slides.length,
+    index: activeSlide,
+    goTo: goSlide,
+    reduced: motionReduced,
+  });
 
   // Keep the inside-dots glued to the card bottom across resizes/rotations.
   const remeasure = (): void => { measureStep(); syncDots(); };

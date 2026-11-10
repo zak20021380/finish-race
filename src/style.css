@@ -4601,9 +4601,13 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   overflow-x: auto;
   overflow-y: visible;
   scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
   scroll-padding-inline: 0;
   scroll-snap-stop: always;
-  touch-action: pan-x;
+  /* Horizontal travel is owned by the 1:1 gesture controller (carousel.ts); the
+     browser keeps vertical panning and pinch-zoom. `pan-x` here would let native
+     momentum race the track past the single step a drag is allowed to take. */
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -4648,6 +4652,7 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   min-width: 0;
   min-height: 0;
   scroll-snap-align: center;
+  scroll-snap-stop: always;
   display: flex;
   flex-direction: column;
   justify-content: space-between;   /* a taller card spreads its lines instead of opening one hole */
@@ -40529,4 +40534,192 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
   #s-home .car-card.nations-cup .nations-mine .mind-brain { width: 14px; height: 14px; }
   #s-home .car-card.nations-cup .slide-cta { padding: 0 10px; font-size: 10.5px; gap: 6px; }
   #s-home .car-card.nations-cup .slide-cta-go { width: 18px; height: 18px; }
+}
+
+/* ============================================================================================
+   COUNTRY RANKINGS — SWIPE-LOCK & PEDESTAL PASS (final word on the Nations Cup slide)
+   ============================================================================================
+   The card hugs its own content and sits centred in the track instead of stretching
+   to the full column height, so a 1-, 2- or 3-row registry keeps the same optical
+   balance with no dead band above the rows or below the CTA. The pinned standing bar
+   is an obsidian pedestal; the footer is one 44px command with the pager tucked 8px
+   beneath it. Dark obsidian palette, Latin tabular figures and RTL mirroring intact.
+   ============================================================================================ */
+
+/* 1 — THE COMPACT FRAME. Content height, centred in the track; the bottom reserve is
+   the pager lane (8px gap + 20px dots + 12px edge), not empty stretch. */
+#s-home .car-card.nations-cup {
+  height: auto;
+  max-height: 100cqh;
+  align-self: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 14px 14px 40px;
+}
+#s-home .car-card.nations-cup > .slide-inner {
+  flex: 0 0 auto;
+  height: auto;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0;
+}
+#s-home .car-card.nations-cup .nations-head { padding: 0; }
+
+/* 2 — THE ROWS BAND. Fixed 44px rows on a 28px / 1fr / auto grid, 8px apart. The band
+   never grows, so two countries render two honest rows without stretching or collapse. */
+#s-home .car-card.nations-cup .mini-rank.nations-rank {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  padding: 4px 10px;
+}
+#s-home .car-card.nations-cup .mini-rank.nations-rank > li.is-error {
+  flex: 0 0 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+}
+
+/* 3 — THE FOOTER. Hairline → pedestal → command, pinned with no trailing margin. */
+#s-home .car-card.nations-cup .slide-foot {
+  margin-top: 0;
+  padding: 0;
+  gap: 8px;
+}
+
+/* 4 — THE OBSIDIAN PEDESTAL. The pinned user-country strip, elevated. */
+#s-home .car-card.nations-cup .hud-mine.nations-mine {
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid rgba(56, 189, 248, .45);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(14, 116, 144, .22) 0%, rgba(15, 23, 42, .85) 100%);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .45), 0 0 16px rgba(56, 189, 248, .12);
+}
+#s-home .car-card.nations-cup .nations-mine .hm-flag {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(226, 232, 240, .4);
+  box-shadow: 0 0 8px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+#s-home .car-card.nations-cup .nations-mine .hm-flag .fp { --fp-d: 24px; }
+#s-home .car-card.nations-cup .nations-mine .hm-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: #FFFFFF;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-meta { gap: 5px; flex-wrap: nowrap; min-width: 0; }
+#s-home .car-card.nations-cup .nations-mine .hm-rank {
+  padding: 2px 6px;
+  border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 4px;
+  background: rgba(245, 158, 11, .15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: #FCD34D;
+  font-size: 9px;
+  font-weight: 800;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-pill {
+  padding: 2px 6px;
+  border: 1px solid rgba(14, 165, 233, .35);
+  border-radius: 4px;
+  background: rgba(14, 165, 233, .15);
+  color: #7DD3FC;
+  font-size: 9px;
+  font-weight: 800;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-pill b { color: #BAE6FD; font-size: 9px; }
+/* The score is a free amber lockup, not a boxed badge: value + unit + brain glyph. */
+#s-home .car-card.nations-cup .nations-mine .hm-r {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  gap: 4px;
+}
+#s-home .car-card.nations-cup .nations-mine .hm-v {
+  font-size: 15px;
+  color: #FCD34D;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 0 12px rgba(252, 211, 77, .35);
+}
+#s-home .car-card.nations-cup .nations-mine .hm-u { font-size: 8px; color: #7DD3FC; }
+
+/* 5 — THE COMMAND. One 44px obsidian key with a recessed gold chevron. */
+#s-home .car-card.nations-cup .slide-cta {
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  width: 100%;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .1), 0 4px 14px rgba(0, 0, 0, .4);
+  color: #F8FAFC;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  gap: 8px;
+}
+#s-home .car-card.nations-cup .slide-cta-go {
+  width: 22px;
+  height: 22px;
+  background: radial-gradient(circle at 50% 38%, rgba(245, 158, 11, .28) 0%, rgba(120, 53, 15, .18) 72%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(245, 158, 11, .4);
+  color: #FCD34D;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .35));
+}
+
+/* 6 — THE PAGER. The JS glues the row 8px under the CTA; no stray flow margin. */
+#home-dots { margin-top: 0; }
+
+/* 7 — SHORT COLUMNS. The card rides to the top of its track and sheds chrome so its
+   foot clears the floating admin shield; the 44px rows and command stay whole. */
+@media (max-height: 700px) {
+  #s-home .car-card.nations-cup { align-self: flex-start; padding: 12px 14px 36px; }
+  #s-home .car-card.nations-cup > .slide-inner { gap: 6px; }
+  #s-home .car-card.nations-cup .nations-cup-subtitle { display: none; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank { gap: 6px; }
+  #s-home .car-card.nations-cup .slide-foot { gap: 5px; }
+  #s-home .car-card.nations-cup .slide-foot::before { display: none; }
+  #s-home .car-card.nations-cup .hud-mine.nations-mine { min-height: 44px; padding: 8px 12px; }
+}
+@media (max-height: 600px) {
+  #s-home .car-card.nations-cup { padding: 10px 12px 34px; }
+  #s-home .car-card.nations-cup > .slide-inner { gap: 5px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank { gap: 5px; }
+  #s-home .car-card.nations-cup .slide-foot { gap: 4px; }
+}
+
+/* 8 — NARROW PHONES. The name keeps the slack; the score stays a compact lockup and
+   the two badges hold a single line instead of stacking into a taller pedestal. */
+@media (max-width: 360px) {
+  #s-home .car-card.nations-cup { padding-left: 12px; padding-right: 12px; }
+  #s-home .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding: 4px 8px;
+  }
+  #s-home .car-card.nations-cup .nations-mine .hm-l { gap: 6px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-name { font-size: 11.5px; letter-spacing: .02em; }
+  #s-home .car-card.nations-cup .nations-mine .hm-meta { gap: 4px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-rank,
+  #s-home .car-card.nations-cup .nations-mine .hm-pill { font-size: 8px; padding: 2px 5px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-pill b { font-size: 8px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-v { font-size: 13px; }
+  #s-home .car-card.nations-cup .nations-mine .hm-u { font-size: 7px; letter-spacing: .03em; }
+  #s-home .car-card.nations-cup .nations-mine .hm-r { gap: 3px; }
+  #s-home .car-card.nations-cup .slide-cta { font-size: 10.5px; padding: 0 10px; }
 }
