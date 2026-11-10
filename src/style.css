@@ -38664,97 +38664,108 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
 .vg-scroll::-webkit-scrollbar-thumb:hover, .vf-scroll::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, .62); }
 .vg-scroll:focus-visible, .vf-scroll:focus-visible { outline: 2px solid rgba(245, 158, 11, .45); outline-offset: 2px; border-radius: 12px; }
 
-/* the guide: four cards, one per promise — the gift, both stages, and the cash-out gate */
+.vg-sheet {
+  width: min(100%, 480px);
+  padding-top: 22px;
+  background: linear-gradient(160deg, #191C23 0%, #10131A 48%, #0C0F15 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 -16px 48px rgba(0, 0, 0, .6);
+  font-variant-numeric: tabular-nums;
+}
+.vg-sheet .vm-sub { font-size: 10px; font-weight: 500; line-height: 1.5; }
+.vg-scroll { padding-inline-end: 0; }
 .vg-cards {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .vg-card {
   --vg-tone: 245, 158, 11;
+  box-sizing: border-box;
   display: flex;
-  align-items: flex-start;
-  gap: 9px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
-  padding: 9px 10px;
+  min-height: 52px;
+  padding: 10px 14px;
   border-radius: 14px;
-  border-inline-start: 2px solid rgba(var(--vg-tone), .5);
-  background: linear-gradient(180deg, rgba(var(--vg-tone), .07) 0%, rgba(255, 255, 255, .022) 62%);
-  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .03);
 }
 .vg-card[data-tone="plays"] { --vg-tone: 56, 189, 248; }
 .vg-card[data-tone="rivals"] { --vg-tone: 251, 113, 133; }
 .vg-card[data-tone="cash"] { --vg-tone: 16, 185, 129; }
 .vg-ico {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 10px;
-  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  background: #10131A;
   color: rgb(var(--vg-tone));
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(var(--vg-tone), .26);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(var(--vg-tone), .14), 0 0 10px rgba(var(--vg-tone), .05);
 }
 .vg-ico .ico { width: 16px; height: 16px; }
-.vg-ico .ico-star-img { width: 18px; height: 18px; filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35)); }
-.vg-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.vg-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.vg-ico .ico-star-img { width: 18px; height: 18px; }
+.vg-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
 .vg-t {
   min-width: 0;
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
   line-height: 1.3;
   color: var(--ink);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .vg-n {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 20px;
-  padding: 0 6px;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 5px;
   border-radius: 7px;
-  background: linear-gradient(180deg, rgba(var(--vg-tone), .22) 0%, rgba(var(--vg-tone), .06) 100%);
+  background: rgba(var(--vg-tone), .1);
   color: rgb(var(--vg-tone));
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1;
   direction: ltr;
-  box-shadow: inset 0 0 0 1px rgba(var(--vg-tone), .34), inset 0 1px 0 rgba(255, 255, 255, .1);
+  unicode-bidi: isolate;
+  box-shadow: inset 0 0 0 1px rgba(var(--vg-tone), .18);
 }
-.vg-n .vg-star { flex: none; width: 18px; height: 18px; filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35)); }
+.vg-n .vg-star { flex: none; width: 16px; height: 16px; filter: none; }
 .vg-card[data-tone="cash"] .vg-n { color: var(--mint-ink); }
 .vg-b {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.5;
   color: var(--ink-soft);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .vg-fine {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, .26);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  margin: 6px 0 10px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, .05);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .02);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  text-align: center;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.vg-fine-t {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--honey-ink);
-}
+.vg-fine:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
 .vg-done {
   --d: 3px;
   appearance: none;
@@ -38763,20 +38774,21 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   flex: none;
   box-sizing: border-box;
   width: 100%;
-  height: 42px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   padding: 0 12px;
-  border-radius: 13px;
+  border-radius: 12px;
   background: var(--gold-face);
   color: #10141D;
   font: inherit;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
+  letter-spacing: .04em;
   line-height: 1.2;
-  box-shadow: 0 var(--d) 0 var(--gold-lip), 0 10px 20px -14px rgba(245, 158, 11, .7), inset 0 1px 0 rgba(255, 255, 255, .5);
+  box-shadow: 0 var(--d) 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .35);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
 }
 .vg-done .ico { flex: none; width: 15px; height: 15px; color: #78350F; }
@@ -38857,11 +38869,11 @@ html:lang(fa) .vf-summary, html:lang(ar) .vf-summary {
 /* the sheets mirror for fa/ar; every numeral and every fill keeps its own LTR direction */
 html:lang(fa) .vault-modal-sheet, html:lang(ar) .vault-modal-sheet { direction: rtl; }
 html:lang(fa) .vm-foot-chev, html:lang(ar) .vm-foot-chev { transform: scaleX(-1); }
-html:lang(fa) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine-t, .vg-done, .vf-back),
-html:lang(ar) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine-t, .vg-done, .vf-back) {
+html:lang(fa) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine, .vg-done, .vf-back),
+html:lang(ar) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine, .vg-done, .vf-back) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
-html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foot-l) {
+html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .vg-done, .vm-foot-l) {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -38879,7 +38891,6 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   .vm-foot-btn { gap: 5px; padding: 0 7px; font-size: 9.5px; }
   .vm-foot-btn > .ico { width: 13px; height: 13px; }
   .vg-card { gap: 8px; padding: 8px 9px; }
-  .vg-ico { width: 27px; height: 27px; }
 }
 
 /* Keep the scrim full-screen; only the visible dialog takes the viewport-sized footprint. */

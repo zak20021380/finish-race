@@ -2794,10 +2794,7 @@
         </section>
       </div>
 
-      <!-- ============ Stars Vault · the bilingual guide ============
-           Four cards, one per promise the campaign makes: the gift already inside, both stages a
-           friend can complete, and the threshold that wakes the payout. Every figure is filled
-           from REFERRAL_CONFIG by src/menu.ts, in the language the player reads in. -->
+      <!-- Guide values stay in sync with REFERRAL_CONFIG. -->
       <div class="vault-modal vault-sub" id="modal-vault-guide" hidden>
         <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
         <section class="vault-modal-sheet vg-sheet" role="dialog" aria-modal="true" tabindex="-1"
@@ -2813,7 +2810,7 @@
               <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-info" /></svg></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vg-title" data-i18n="vaultGuideTitle">How Stars Vault Works</h2>
-                <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">Four steps from a free gift to a real payout</p>
+                <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">4 simple steps to cash out Stars</p>
               </span>
             </header>
 
@@ -2822,49 +2819,38 @@
                 <li class="vg-card" data-tone="gift">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
                   <span class="vg-txt">
-                    <span class="vg-head">
-                      <b class="vg-t" id="vg-1-t">Starter Gift</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-1-n">5</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
-                    </span>
-                    <span class="vg-b" id="vg-1-b">You start with 5 free Stars in your vault. Collect 45 more to unlock payout.</span>
+                    <b class="vg-t" id="vg-1-t">Starter Gift</b>
+                    <span class="vg-b" id="vg-1-b">5 Stars are already waiting in your vault!</span>
                   </span>
+                  <b class="vg-n" dir="ltr"><span id="vg-1-n">+5</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="plays">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
                   <span class="vg-txt">
-                    <span class="vg-head">
-                      <b class="vg-t" id="vg-2-t">Stage 1 · Friend Plays</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
-                    </span>
-                    <span class="vg-b" id="vg-2-b">When your friend plays 10 matches across 3 different days, you immediately get +2 Stars.</span>
+                    <b class="vg-t" id="vg-2-t">Friend Plays</b>
+                    <span class="vg-b" id="vg-2-b">Friend finishes 10 matches across 3 days.</span>
                   </span>
+                  <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="rivals">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
                   <span class="vg-txt">
-                    <span class="vg-head">
-                      <b class="vg-t" id="vg-3-t">Stage 2 · Friend Wins</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
-                    </span>
-                    <span class="vg-b" id="vg-3-b">When your friend wins 5 online PvP matches against real rivals, you get +3 more Stars (5 Stars total).</span>
+                    <b class="vg-t" id="vg-3-t">Friend Wins</b>
+                    <span class="vg-b" id="vg-3-b">Friend wins 5 online PvP duels.</span>
                   </span>
+                  <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="cash">
                   <span class="vg-ico" aria-hidden="true"><img class="ico-star-img" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></span>
                   <span class="vg-txt">
-                    <span class="vg-head">
-                      <b class="vg-t" id="vg-4-t">Cash Out at 50 Stars</b>
-                      <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="18" height="18" alt="Stars" loading="eager" draggable="false" /></b>
-                    </span>
-                    <span class="vg-b" id="vg-4-b">Once your vault reaches 50 Stars, tap Request Payout and receive your Stars reward.</span>
+                    <b class="vg-t" id="vg-4-t">Cash Out</b>
+                    <span class="vg-b" id="vg-4-b">Reach 50 Stars and withdraw directly!</span>
                   </span>
+                  <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><img class="ico-star-img vg-star" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                 </li>
               </ol>
 
-              <div class="vg-fine">
-                <b class="vg-fine-t" data-i18n="vaultRules">Matchmaking rules &amp; monthly pool</b>
-                <p class="sv-note" id="sv-note"></p>
-              </div>
+              <p class="vg-fine" id="sv-note" tabindex="0">🛡️ Fair Play: Real PvP duels only • Up to 20 friends per month</p>
             </div>
 
             <button class="vg-done" type="button" id="vg-done" data-modal-close>

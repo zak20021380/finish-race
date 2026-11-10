@@ -2319,27 +2319,23 @@ export function createMenu(api: MenuApi): Menu {
 
     svText('sv-note', svFill('vaultNote', { max: en(C.MAX_QUALIFIED_PER_INVITER_MONTH) }));
 
-    /* The guide states the same four promises the meter does, in the player's own language and
-       with every figure taken from the campaign rather than written into the copy. */
     const gift = en(vault.starterBonus);
-    const more = en(Math.max(0, target - vault.starterBonus));
-    const perFriend = en(C.TOTAL_PER_FRIEND_STARS);
     const s1 = en(C.STAGE1_REWARD_STARS);
     const s2 = en(C.STAGE2_REWARD_STARS);
     svText('vg-1-t', t('vaultGuide1Title'));
-    svText('vg-1-n', gift);
-    svText('vg-1-b', svFill('vaultGuide1Body', { gift, more }));
+    svText('vg-1-n', `+${gift}`);
+    svText('vg-1-b', svFill('vaultGuide1Body', { gift }));
     svText('vg-2-t', t('vaultGuide2Title'));
     svText('vg-2-n', `+${s1}`);
     svText('vg-2-b', svFill('vaultGuide2Body', {
-      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS), s1,
+      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
     }));
     svText('vg-3-t', t('vaultGuide3Title'));
     svText('vg-3-n', `+${s2}`);
     svText('vg-3-b', svFill('vaultGuide3Body', {
-      w: en(C.STAGE2_MIN_RANKED_PVP_WINS), s2, total: perFriend,
+      w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
     }));
-    svText('vg-4-t', svFill('vaultGuide4Title', { target: en(target) }));
+    svText('vg-4-t', t('vaultGuide4Title'));
     svText('vg-4-n', en(target));
     svText('vg-4-b', svFill('vaultGuide4Body', { target: en(target) }));
   }
