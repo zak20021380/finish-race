@@ -1899,6 +1899,251 @@ html.no-flags .flag-code { display: inline-block; }
   box-shadow: none;
 }
 
+/* ---- friendship quest: opt-in Home scrolling, no change to the organic lobby ---- */
+#s-home.has-referral-quest {
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-block-end: 12px;
+  scroll-padding-block: 12px;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+#s-home.has-referral-quest > :is(.id-card, .launcher, #lobby-quest-banner) {
+  flex-shrink: 0;
+}
+#s-home.has-referral-quest > .carousel-wrap {
+  flex: 0 0 auto;
+  height: calc(var(--slide-h) + 6px);
+  min-height: 0;
+  max-height: none;
+  margin-block-start: 0;
+  padding-block: 0;
+}
+
+/* Main owns visibility, text, direction and the existing rewarded-ad button. */
+#lobby-quest-banner,
+#result-quest-reward,
+#quest-wrong-mode-notice {
+  min-width: 0;
+  max-width: 100%;
+  color: #E5EDF5;
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-align: start;
+  text-transform: none;
+  overflow-wrap: anywhere;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  unicode-bidi: isolate;
+}
+:is(#lobby-quest-banner, #result-quest-reward, #quest-wrong-mode-notice)[dir="rtl"] {
+  direction: rtl;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+:is(#lobby-quest-banner, #result-quest-reward, #quest-wrong-mode-notice)[dir="ltr"] {
+  direction: ltr;
+}
+#lobby-quest-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(245, 185, 75, .3);
+  border-radius: 18px;
+  background:
+    radial-gradient(100% 120% at 0 0, rgba(245, 185, 75, .07), transparent 65%),
+    linear-gradient(145deg, #141923, #0B1019);
+  box-shadow: inset 0 1px 0 rgba(255, 239, 200, .06), 0 3px 10px rgba(0, 0, 0, .25);
+}
+#lobby-quest-banner .quest-banner-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+#lobby-quest-banner .quest-banner-trophy {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(245, 185, 75, .08);
+  font-size: 18px;
+  line-height: 1;
+}
+#quest-banner-title {
+  min-width: 0;
+  margin: 0;
+  color: #FFE2A3;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+#lobby-quest-banner .quest-progress {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+#lobby-quest-banner .quest-progress > span {
+  flex: 1 1 72px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid rgba(125, 211, 230, .12);
+  border-radius: 9px;
+  background: #0A101A;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  unicode-bidi: isolate;
+}
+#quest-banner-wins { color: #FFE2A3; }
+#quest-banner-matches { color: #9BE7F2; }
+#quest-banner-day { color: #C0CBD9; }
+#quest-banner-time {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  max-width: 88px;
+  padding: 4px 8px;
+  border: 1px solid rgba(245, 185, 75, .2);
+  border-radius: 999px;
+  background: rgba(245, 185, 75, .06);
+  color: #F9D58E;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  unicode-bidi: isolate;
+}
+#quest-banner-cta,
+#btn-double-coins.ad-chip--quest {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  height: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 185, 75, .5);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #302719, #171C24);
+  box-shadow: inset 0 1px 0 rgba(255, 233, 180, .1), 0 0 10px rgba(245, 185, 75, .06);
+  color: #FFE6B0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  animation: none;
+  transition: none;
+}
+#quest-banner-cta { grid-column: 1 / -1; }
+#quest-banner-cta:focus-visible,
+#btn-double-coins.ad-chip--quest:focus-visible {
+  outline: 2px solid #8AE5F0;
+  outline-offset: 2px;
+}
+#quest-banner-cta:active:not(:disabled),
+#btn-double-coins.ad-chip--quest:active:not(:disabled) {
+  transform: none;
+  border-color: #8AE5F0;
+}
+#quest-banner-cta:disabled,
+#btn-double-coins.ad-chip--quest:is(:disabled, .is-exhausted) {
+  opacity: 1;
+  filter: none;
+  color: #BBC5D3;
+  border-color: rgba(187, 197, 211, .25);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+#quest-banner-cap {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #F9D58E;
+  font-size: 12px;
+}
+#quest-wrong-mode-notice {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 185, 75, .22);
+  border-inline-start: 3px solid #D9A64C;
+  border-radius: 12px;
+  background: #191810;
+  color: #F5DCAA;
+}
+#result-quest-reward {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-block: 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(125, 211, 230, .2);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #111A24, #0A1018);
+  box-shadow: inset 0 1px 0 rgba(125, 211, 230, .06);
+}
+#quest-ad-slot { display: flex; width: 100%; min-width: 0; }
+#btn-double-coins.ad-chip--quest { --ad-spin-x: 12px; }
+#btn-double-coins.ad-chip--quest .ad-chip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  line-height: 1.6;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+#btn-double-coins.ad-chip--quest .ad-chip-ico {
+  width: 16px;
+  height: 16px;
+  filter: none;
+}
+#btn-double-coins.ad-chip--quest .ad-chip-spin {
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+}
+#btn-double-coins.ad-chip--quest.is-claimed {
+  color: #A7EAF2;
+  border-color: rgba(125, 211, 230, .4);
+  background: #12252C;
+  box-shadow: none;
+  animation: none;
+}
+#quest-ad-subtitle { margin: 0; color: #BDCADA; font-size: 12px; }
+#lobby-quest-banner[hidden],
+#lobby-quest-banner [hidden],
+#quest-wrong-mode-notice[hidden],
+#result-quest-reward[hidden],
+#result-quest-reward [hidden],
+#btn-double-coins.ad-chip--quest[hidden] { display: none !important; }
+html.reduced-motion #btn-double-coins.ad-chip--quest .ad-chip-spin { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  #btn-double-coins.ad-chip--quest .ad-chip-spin { animation: none; }
+}
+
 /* ---- quiet text actions (how to play, leave team) ---- */
 .link {
   appearance: none;

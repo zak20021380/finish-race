@@ -12,23 +12,28 @@
 export const REFERRAL_CONFIG = {
   /** Pre-filled gift sitting in every vault from the first paint, so the meter is never empty. */
   STARTER_VAULT_GIFT_STARS: 5,
-  /** Stage 1 — the friend finished onboarding and actually plays. */
+  /** Legacy stage allocation, retained for already-earned Stars. */
   STAGE1_REWARD_STARS: 2,
-  /** Stage 2 — the friend beats real rivals, not just the machine. */
+  /** Legacy second-stage allocation; the quest now awards the remaining total at once. */
   STAGE2_REWARD_STARS: 3,
   /** What one fully qualified friend is worth: 2 + 3. */
   TOTAL_PER_FRIEND_STARS: 5,
 
-  /** Stage 1: valid matches played, counted only by the server. */
+  /** Quest lifetime from the referral ledger's immutable firstSeenAt. */
+  QUEST_DURATION_MS: 72 * 60 * 60 * 1000,
+  /** Ad-verified HardBot 1v1 matches accepted per UTC day. */
+  QUEST_DAILY_MATCH_CAP: 10,
+
+  /** Quest completion: ad-verified HardBot matches (legacy key retained). */
   STAGE1_MIN_MATCHES: 10,
-  /** Stage 1: distinct UTC days those matches landed on. */
+  /** Legacy display/audit setting only; no longer a quest requirement. */
   STAGE1_MIN_DAYS: 3,
   /** Stage 1: random-matchmaking duels against another person. */
   STAGE1_MIN_PVP_MATCHES: 3,
   /** Stage 1: distinct human opponents across those duels. */
   STAGE1_MIN_DISTINCT_OPPONENTS: 2,
 
-  /** Stage 2: random-matchmaking duels the friend WON. */
+  /** Quest alternative: ad-verified HardBot wins (legacy key retained). */
   STAGE2_MIN_RANKED_PVP_WINS: 5,
   /** Stage 2 alternative: reaching this Arena realm unlocks it without the win count. */
   STAGE2_ALT_ARENA_UNLOCK: 3,

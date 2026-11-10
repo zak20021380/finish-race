@@ -73,12 +73,14 @@ export interface ReferralContactPayload extends ReferralStatePayload {
   deviceBlocked: boolean;
 }
 
-/** The permanent link the Stars Vault builds its two-stage progression on. */
+/** The permanent link and immutable clock the Stars Vault quest uses. */
 export interface ReferralBindingPayload {
   ok: true;
   userId: string;
   /** The one inviter this player arrived behind, or '' when they never were invited. */
   inviterId: string;
+  /** First contact with the ledger; starting a quest never resets this timestamp. */
+  firstSeenAt: number;
   code: string;
 }
 
@@ -399,7 +401,8 @@ export class ReferralLedgerDO {
       if (!TG_ID.test(userId)) return json({ ok: false, error: 'bad_user' }, 400);
       const row = this.users.get(userId);
       const payload: ReferralBindingPayload = {
-        ok: true, userId, inviterId: row?.inviterId ?? '', code: row?.code ?? '',
+        ok: true, userId, inviterId: row?.inviterId ?? '', firstSeenAt: row?.firstSeenAt ?? 0,
+        code: row?.code ?? '',
       };
       return json(payload);
     }

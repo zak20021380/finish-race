@@ -226,7 +226,7 @@ export async function playRewardedAd(
     try {
       result = asResult(await controller.show());
     } catch (err) {
-      /* a rejection is still an answer: the payload carries done/error/description */
+      errored = true;
       result = asResult(err);
     }
 

@@ -57,7 +57,8 @@ import { isSelfPlayerId } from './players';
 import { createModal } from './modal';
 import { arena, onArena, type ArenaTierId } from './arenaState';
 import {
-  fetchStarsVault, refreshReferral, referralLink, referralShareUrl, requestStarsPayout, starterVault,
+  fetchStarsVault, isReferralQuestActive, onReferralQuestChange, referralQuestUser,
+  refreshReferral, refreshReferralQuest, referralLink, referralShareUrl, requestStarsPayout, starterVault,
   type StarsVault, type VaultFriend,
 } from './referral';
 import { playReward } from './sound';
@@ -117,7 +118,12 @@ export interface Menu {
 }
 
 /** A race to start: how sharp the opponent is and how many balls each side fields. */
-export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
+export interface RaceSetup {
+  difficulty: Difficulty;
+  sizes: [number, number];
+  mode?: 'vs_bot';
+  isQuestMatch?: boolean;
+}
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
@@ -2145,34 +2151,24 @@ export function createMenu(api: MenuApi): Menu {
     stages.className = 'sv-stages';
 
     const matches = Math.min(f.matches, C.STAGE1_MIN_MATCHES);
-    const days = Math.min(f.days, C.STAGE1_MIN_DAYS);
-    /* Both halves of Stage 1 gate the award, so each owns half of the fill: the track only
-       reaches 100% when the friend has enough matches on enough different UTC days. */
-    const pct1 = (matches / C.STAGE1_MIN_MATCHES + days / C.STAGE1_MIN_DAYS) * 50;
+    const pct1 = matches / C.STAGE1_MIN_MATCHES * 100;
     stages.append(svStageTrack({
       tone: 'mint',
-      done: f.stage1,
-      reward: C.STAGE1_REWARD_STARS,
-      doneKey: 'vaultStage1Done',
+      done: f.referralQuestStatus === 'completed',
+      reward: C.TOTAL_PER_FRIEND_STARS,
+      doneKey: 'quest_complete',
       pct: pct1,
-      label: svFill('vaultStage1Label', {
-        s: en(C.STAGE1_REWARD_STARS),
-        m: en(matches), max: en(C.STAGE1_MIN_MATCHES),
-        d: en(days), days: en(C.STAGE1_MIN_DAYS),
-      }),
+      label: svFill('quest_track_matches', { n: en(matches) }),
     }));
 
-    const wins = Math.min(f.pvpWins, C.STAGE2_MIN_RANKED_PVP_WINS);
+    const wins = Math.min(f.hardWins, C.STAGE2_MIN_RANKED_PVP_WINS);
     stages.append(svStageTrack({
       tone: 'gold',
-      done: f.stage2,
-      reward: C.STAGE2_REWARD_STARS,
-      doneKey: 'vaultStage2Done',
+      done: f.referralQuestStatus === 'completed',
+      reward: C.TOTAL_PER_FRIEND_STARS,
+      doneKey: 'quest_complete',
       pct: (wins / C.STAGE2_MIN_RANKED_PVP_WINS) * 100,
-      label: svFill('vaultStage2Label', {
-        s: en(C.STAGE2_REWARD_STARS),
-        w: en(wins), max: en(C.STAGE2_MIN_RANKED_PVP_WINS),
-      }),
+      label: svFill('quest_track_wins', { n: en(wins) }),
     }));
 
     if (f.flagged) {
@@ -2235,15 +2231,11 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-earned', `+${en(vault.earnedStars)}`);
     svText('sv-paid', en(vault.paidOutStars));
 
-    svText('sv-quest-title', svFill('vaultQuestTitle', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
-    svText('sv-stage1-reward', `+${en(C.STAGE1_REWARD_STARS)}`);
-    svText('sv-stage2-reward', `+${en(C.STAGE2_REWARD_STARS)}`);
-    svText('sv-stage1-rule', svFill('vaultQuestStage1Rule', {
-      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
-    }));
-    svText('sv-stage2-rule', svFill('vaultQuestStage2Rule', {
-      w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
-    }));
+    svText('sv-quest-title', svFill('quest_rules_title', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
+    svText('sv-stage1-reward', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
+    svText('sv-stage2-reward', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
+    svText('sv-stage1-rule', t('quest_rule_matches'));
+    svText('sv-stage2-rule', t('quest_rule_wins'));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');
@@ -2311,7 +2303,7 @@ export function createMenu(api: MenuApi): Menu {
       count: friendsTotal, earned: en(vault.earnedStars),
     }));
     const sig = `${lang}|${vault.friends.map((f) => [
-      f.id, f.name, f.avatar, f.matches, f.days, f.pvpWins,
+      f.id, f.name, f.avatar, f.matches, f.hardWins, f.referralQuestStatus,
       f.stage1, f.stage2, f.flagged, f.credited,
     ].join(':')).join('~')}`;
     if (svFriendsEl && sig !== svFriendsSig) {
@@ -2334,21 +2326,16 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-note', svFill('vaultNote', { max: en(C.MAX_QUALIFIED_PER_INVITER_MONTH) }));
 
     const gift = en(vault.starterBonus);
-    const s1 = en(C.STAGE1_REWARD_STARS);
-    const s2 = en(C.STAGE2_REWARD_STARS);
+    const questReward = en(C.TOTAL_PER_FRIEND_STARS);
     svText('vg-1-t', t('vaultGuide1Title'));
     svText('vg-1-n', `+${gift}`);
     svText('vg-1-b', svFill('vaultGuide1Body', { gift }));
-    svText('vg-2-t', t('vaultGuide2Title'));
-    svText('vg-2-n', `+${s1}`);
-    svText('vg-2-b', svFill('vaultGuide2Body', {
-      m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
-    }));
-    svText('vg-3-t', t('vaultGuide3Title'));
-    svText('vg-3-n', `+${s2}`);
-    svText('vg-3-b', svFill('vaultGuide3Body', {
-      w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
-    }));
+    svText('vg-2-t', t('quest_path_matches'));
+    svText('vg-2-n', `+${questReward}`);
+    svText('vg-2-b', t('quest_guide_matches'));
+    svText('vg-3-t', t('quest_path_wins'));
+    svText('vg-3-n', `+${questReward}`);
+    svText('vg-3-b', svFill('quest_guide_wins', { n: questReward }));
     svText('vg-4-t', t('vaultGuide4Title'));
     svText('vg-4-n', en(target));
     svText('vg-4-b', svFill('vaultGuide4Body', { target: en(target) }));
@@ -2453,6 +2440,50 @@ export function createMenu(api: MenuApi): Menu {
       paintVault();
     });
   });
+
+  const questBanner = $('lobby-quest-banner');
+  const questCta = $<HTMLButtonElement>('quest-banner-cta');
+
+  function paintQuestBanner(): void {
+    const user = referralQuestUser();
+    const active = isReferralQuestActive(user);
+    questBanner.hidden = !active;
+    questBanner.style.display = active ? '' : 'none';
+    $('s-home').classList.toggle('has-referral-quest', active);
+    if (!active) return;
+    questBanner.dir = langDef(lang).dir;
+    $('quest-banner-title').textContent = t('quest_banner_title');
+    const values: Array<[string, string, number]> = [
+      ['quest-banner-wins', 'quest_banner_wins', user.hardWins],
+      ['quest-banner-matches', 'quest_banner_matches', user.matchesCount],
+      ['quest-banner-day', 'quest_banner_day', Math.max(1, Math.min(3,
+        Math.floor((Date.now() - user.referralQuestStartedAt) / 86_400_000) + 1))],
+      ['quest-banner-time', 'quest_banner_time', Math.max(0, Math.ceil((user.referralQuestExpiresAt - Date.now()) / 3_600_000))],
+    ];
+    for (const [id, key, value] of values) $(id).textContent = t(key).replace('{n}', String(value));
+    questCta.textContent = t('quest_banner_cta');
+    const capped = user.dailyMatches >= user.dailyMatchCap;
+    $('quest-banner-cap').hidden = !capped;
+    $('quest-banner-cap').textContent = t('quest_daily_cap');
+  }
+
+  questCta.addEventListener('click', () => {
+    if (!isReferralQuestActive(referralQuestUser()) || api.router.current === 'game') {
+      paintQuestBanner();
+      return;
+    }
+    impact('medium');
+    api.start({ mode: 'vs_bot', difficulty: 'hard', sizes: [1, 1], isQuestMatch: true });
+  });
+  onReferralQuestChange(paintQuestBanner);
+  onLang(paintQuestBanner);
+  paintQuestBanner();
+  window.setInterval(() => {
+    if (!$('s-home').hidden) {
+      paintQuestBanner();
+      void refreshReferralQuest();
+    }
+  }, 30_000);
 
   onLang(paintVault);
   paintVault();
@@ -4710,6 +4741,10 @@ export function createMenu(api: MenuApi): Menu {
       }
     },
     refresh(id) {
+      if (id === 'home') {
+        paintQuestBanner();
+        void refreshReferralQuest();
+      }
       if (id === 'profile') {
         clearRivalContext();                      // the personal card never inherits a rival action
         setHeroExpanded(false, true);             // every entry lands on the compact summary

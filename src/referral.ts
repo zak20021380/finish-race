@@ -14,7 +14,7 @@
  * A plain browser tab has no signed Telegram identity, so it keeps a stable device code for the
  * local demo; a real Mini App always shows the server code.
  */
-import { profile, readJson, syncReferralLedger, writeJson } from './storage';
+import { profile, readJson, syncReferralLedger, userScopedKey, writeJson } from './storage';
 import { startParam, tgInitData } from './telegram';
 import { workerUrl } from './adminApi';
 import { lang, referralInvites } from './settings';
@@ -38,6 +38,145 @@ interface LedgerReading {
   unavailable?: unknown;
   link?: unknown;
   error?: unknown;
+}
+
+export interface ReferralQuestUser {
+  referredBy: string | null;
+  referralQuestStatus: 'none' | 'in_progress' | 'completed' | 'expired';
+  referralQuestExpiresAt: number;
+  referralQuestStartedAt: number;
+  matchesCount: number;
+  hardWins: number;
+  dailyMatches: number;
+  dailyMatchCap: number;
+  activeDay: number;
+}
+
+const EMPTY_QUEST: ReferralQuestUser = {
+  referredBy: null, referralQuestStatus: 'none', referralQuestExpiresAt: 0,
+  referralQuestStartedAt: 0, matchesCount: 0, hardWins: 0, dailyMatches: 0,
+  dailyMatchCap: REFERRAL_CONFIG.QUEST_DAILY_MATCH_CAP, activeDay: 0,
+};
+const QUEST_KEY = userScopedKey('detour.referral-quest.v1');
+const QUEST_PENDING_KEY = userScopedKey('detour.referral-quest-pending.v1');
+// Cached progress is never eligibility: each session starts hidden until the ledger answers.
+let questUser: ReferralQuestUser = { ...EMPTY_QUEST };
+let questExpiryTimer = 0;
+let questRequestVersion = 0;
+let questMatchSequence = 0;
+const questWatchers = new Set<() => void>();
+
+export function isReferralQuestActive(user: Pick<ReferralQuestUser,
+  'referredBy' | 'referralQuestStatus' | 'referralQuestExpiresAt'> | null | undefined): boolean {
+  return Boolean(user?.referredBy && user.referralQuestStatus === 'in_progress'
+    && Date.now() <= user.referralQuestExpiresAt);
+}
+
+export const referralQuestUser = (): Readonly<ReferralQuestUser> => questUser;
+
+export function onReferralQuestChange(watcher: () => void): () => void {
+  questWatchers.add(watcher);
+  return () => { questWatchers.delete(watcher); };
+}
+
+function publishQuest(raw: unknown): void {
+  const user = raw as Partial<ReferralQuestUser> | null;
+  if (!user || !['none', 'in_progress', 'completed', 'expired'].includes(user.referralQuestStatus ?? '')) return;
+  questUser = {
+    referredBy: typeof user.referredBy === 'string' && user.referredBy.trim() ? user.referredBy : null,
+    referralQuestStatus: user.referralQuestStatus!,
+    referralQuestExpiresAt: count(user.referralQuestExpiresAt, Number.MAX_SAFE_INTEGER),
+    referralQuestStartedAt: count(user.referralQuestStartedAt, Number.MAX_SAFE_INTEGER),
+    matchesCount: count(user.matchesCount, REFERRAL_CONFIG.STAGE1_MIN_MATCHES),
+    hardWins: count(user.hardWins, REFERRAL_CONFIG.STAGE2_MIN_RANKED_PVP_WINS),
+    dailyMatches: count(user.dailyMatches, REFERRAL_CONFIG.QUEST_DAILY_MATCH_CAP),
+    dailyMatchCap: REFERRAL_CONFIG.QUEST_DAILY_MATCH_CAP,
+    activeDay: count(user.activeDay, 3),
+  };
+  writeJson(QUEST_KEY, questUser);
+  window.clearTimeout(questExpiryTimer);
+  if (isReferralQuestActive(questUser)) {
+    questExpiryTimer = window.setTimeout(() => {
+      publishQuest({ ...questUser, referralQuestStatus: 'expired' });
+    }, Math.min(2_147_483_647, questUser.referralQuestExpiresAt - Date.now() + 1));
+  }
+  for (const watcher of questWatchers) watcher();
+}
+
+interface QuestReply {
+  ok: boolean;
+  user?: unknown;
+  matchId?: string;
+  matchSequence?: number;
+  verified?: boolean;
+  error?: string;
+}
+
+async function questRequest(path = '', body?: Record<string, unknown>): Promise<QuestReply | null> {
+  const url = workerUrl(`/api/stars/quest${path}`);
+  if (!url || !tgInitData()) return null;
+  const version = ++questRequestVersion;
+  const clock = timeout(8000);
+  try {
+    const res = await fetch(url, {
+      method: body ? 'POST' : 'GET', headers: headers(), signal: clock.signal,
+      cache: 'no-store', ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const reply = await res.json() as QuestReply;
+    questMatchSequence = Math.max(questMatchSequence, count(reply.matchSequence, Number.MAX_SAFE_INTEGER));
+    if (version === questRequestVersion) {
+      if (res.status === 401 || res.status === 403) publishQuest(EMPTY_QUEST);
+      else if (reply.user) publishQuest(reply.user);
+    }
+    return reply;
+  } catch {
+    return null;
+  } finally {
+    clock.done();
+  }
+}
+
+let questRefresh: Promise<void> | null = null;
+export function refreshReferralQuest(): Promise<void> {
+  if (!questRefresh) questRefresh = (async () => {
+    await questRequest();
+    const pending = readJson<{ matchId: string; won: boolean }>(QUEST_PENDING_KEY);
+    if (pending?.matchId && typeof pending.won === 'boolean') await verifyReferralQuestMatch(pending.matchId, pending.won);
+  })().finally(() => { questRefresh = null; });
+  return questRefresh;
+}
+
+export function createReferralQuestMatch(stillWanted: () => boolean): () => Promise<string | null> {
+  const requestId = crypto.randomUUID();
+  let sequence = 0;
+  let matchId: string | null = null;
+  let inFlight: Promise<string | null> | null = null;
+  return () => {
+    if (!stillWanted()) return Promise.resolve(null);
+    if (matchId) return Promise.resolve(matchId);
+    if (!inFlight) inFlight = (async () => {
+      await refreshReferralQuest();
+      if (!stillWanted() || !isReferralQuestActive(questUser)) return null;
+      const pending = readJson<{ matchId: string; won: boolean }>(QUEST_PENDING_KEY);
+      if (pending?.matchId && typeof pending.won === 'boolean') return null;
+      // Retries keep their sequence; delayed starts cannot displace a newer board's receipt.
+      if (!sequence) sequence = ++questMatchSequence;
+      const reply = await questRequest('/start', { mode: 'vs_bot', difficulty: 'hard', requestId, sequence });
+      if (reply?.ok && typeof reply.matchId === 'string') matchId = reply.matchId;
+      return matchId;
+    })().finally(() => { inFlight = null; });
+    return inFlight;
+  };
+}
+
+export async function verifyReferralQuestMatch(matchId: string, won: boolean): Promise<{ verified: boolean; error?: string }> {
+  writeJson(QUEST_PENDING_KEY, { matchId, won });
+  const reply = await questRequest('/verify', { matchId, winner: won ? 'player' : 'bot', adCompleted: true });
+  const verified = reply?.ok === true && reply.verified === true;
+  if (verified || ['quest_expired', 'quest_completed', 'not_referred', 'invalid_match', 'banned'].includes(reply?.error ?? '')) {
+    writeJson(QUEST_PENDING_KEY, null);
+  }
+  return { verified, error: reply?.error };
 }
 
 export interface GateResult {
@@ -172,7 +311,9 @@ async function fetchReferralState(): Promise<boolean> {
     const query = ref ? `?ref=${encodeURIComponent(referralPayload(ref))}` : '';
     const res = await fetch(`${url}${query}`, { signal: t.signal, headers: headers() });
     if (!res.ok) return false;
-    return fold((await res.json()) as LedgerReading);
+    const changed = fold((await res.json()) as LedgerReading);
+    await refreshReferralQuest();
+    return changed;
   } catch {
     return false;
   } finally {
@@ -201,6 +342,7 @@ export async function gateReferral(): Promise<GateResult | null> {
     const data = (await res.json()) as LedgerReading;
     if (data.ok !== true) return null;
     fold(data);
+    void refreshReferralQuest();
     return {
       ok: true,
       joined: data.joined === true,
@@ -227,6 +369,8 @@ export interface VaultFriend {
   name: string;
   avatar: string;
   matches: number;
+  hardWins: number;
+  referralQuestStatus: ReferralQuestUser['referralQuestStatus'];
   days: number;
   pvpMatches: number;
   opponents: number;
@@ -298,6 +442,8 @@ function readVault(raw: unknown): StarsVault | null {
         name: label(f.name, 48),
         avatar: label(f.avatar, 300),
         matches: count(f.matches),
+        hardWins: count(f.hardWins, 5),
+        referralQuestStatus: f.referralQuestStatus ?? 'none',
         days: count(f.days, 366),
         pvpMatches: count(f.pvpMatches),
         opponents: count(f.opponents),

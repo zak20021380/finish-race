@@ -83,6 +83,10 @@ import { showVsClash, type VsRival, type VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
 import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
+import {
+  createReferralQuestMatch, isReferralQuestActive, onReferralQuestChange, referralQuestUser,
+  verifyReferralQuestMatch,
+} from './referral';
 
 /* ---------- render-loop state ----------
  * Kept at the very top of the module, ahead of every boot wiring call. A resize, a language flip
@@ -1160,9 +1164,16 @@ interface ResultView {
   tiq: number;
   /** The magnitude of the crimson stake loss a defeat wears. */
   stake: number;
+  hardBotDuel: boolean;
+  questMatch: () => Promise<string | null>;
+  questAdCompleted: boolean;
+  questVerified: boolean;
 }
 
 let resultView: ResultView | null = null;
+let hardBotDuel = false;
+let questEpoch = 0;
+let questMatch: () => Promise<string | null> = async () => null;
 let resultRaf = 0;
 /** the coin count-up keeps its own handle: claiming coins must not freeze the stake */
 let coinRaf = 0;
@@ -1508,14 +1519,35 @@ function paintRewardButtons(): void {
   recoverQuota.textContent = `${left}/${limit}`;
   recoverQuota.hidden = claimed || left <= 0;
 
-  /* ---- double coins: only a settlement that actually paid coins ---- */
+  const user = referralQuestUser();
+  const activeQuest = isReferralQuestActive(user);
+  const capped = user.dailyMatches >= user.dailyMatchCap;
+  const quest = activeQuest && resultView.hardBotDuel && !capped;
+  const pending = quest && resultView.questAdCompleted && !resultView.questVerified;
+  const questReward = $('result-quest-reward');
+  const wrongMode = $('quest-wrong-mode-notice');
+  questReward.hidden = !quest;
+  questReward.dir = langDef(lang).dir;
+  wrongMode.hidden = !activeQuest || (resultView.hardBotDuel && !capped);
+  wrongMode.dir = langDef(lang).dir;
+  wrongMode.textContent = t(resultView.hardBotDuel && capped ? 'quest_daily_cap' : 'quest_wrong_mode_notice');
+  $('quest-ad-subtitle').textContent = t(pending ? 'quest_sync_failed' : 'quest_ad_subtitle');
+  const target = quest ? $('quest-ad-slot') : resultCoinChip;
+  if (doubleBtn.parentElement !== target) target.append(doubleBtn);
+  doubleBtn.classList.toggle('ad-chip--quest', quest);
+  doubleBtn.classList.toggle('ad-chip--mini', !quest);
+  if (quest) doubleBtn.setAttribute('aria-describedby', 'quest-ad-subtitle');
+  else doubleBtn.removeAttribute('aria-describedby');
   const paid = hasClaimedInMatch('double_coins');
-  doubleBtn.hidden = coins <= 0;
-  doubleBtn.classList.toggle('is-claimed', paid);
+  doubleBtn.hidden = coins <= 0 && !quest;
+  doubleBtn.classList.toggle('is-claimed', paid && !pending);
   doubleBtn.classList.remove('is-exhausted');
-  setDisabled(doubleBtn, paid);
-  doubleBtn.setAttribute('aria-disabled', String(paid));
-  doubleLabel.textContent = paid ? t('adDoubleClaimed') : t('adDoubleCta');
+  setDisabled(doubleBtn, paid && !pending);
+  doubleBtn.setAttribute('aria-disabled', String(paid && !pending));
+  doubleLabel.textContent = pending ? t('quest_sync_retry')
+    : paid ? t(quest && resultView.questVerified ? 'quest_verified' : 'adDoubleClaimed')
+    : quest ? t(user.matchesCount === 9 || user.hardWins === 4 ? 'quest_ad_button_final' : 'quest_ad_button_standard')
+    : t('adDoubleCta');
   /* the consolation tint belongs to the reward, never to the key that doubles it */
   resultCoinChip.classList.toggle('is-doubled', coins > 0);
 }
@@ -1749,43 +1781,62 @@ async function claimTiqRecovery(): Promise<void> {
   notify('success');
 }
 
-/** The prism: one rewarded video pays the settlement a second time, so the total is 2×. */
 async function claimDoubleCoins(): Promise<void> {
   const view = resultView;
-  if (!view || view.coins <= 0) return;
-  if (doubleBusy || recoverBusy || hasClaimedInMatch('double_coins')) return;
-
-  if (!(await askAdConfirm('coins'))) return;
-  if (resultView !== view || !overlayOpen) return;
-  if (doubleBusy || recoverBusy || hasClaimedInMatch('double_coins')) return;
+  if (!view || doubleBusy || recoverBusy) return;
+  const user = referralQuestUser();
+  const quest = isReferralQuestActive(user) && view.hardBotDuel && user.dailyMatches < user.dailyMatchCap;
+  const retry = quest && view.questAdCompleted && !view.questVerified;
+  if ((view.coins <= 0 && !quest) || (hasClaimedInMatch('double_coins') && !retry)) return;
 
   doubleBusy = true;
   setChipBusy(doubleBtn, doubleSpin, true);
-  stopDefeat();                             // no fanfare under a rewarded video
-  holdAudio();
-  const outcome = await playRewardedAd('double_coins', {
-    stillWanted: () => overlayOpen && resultView === view,
-  }).finally(releaseAudio);
-  doubleBusy = false;
-  setChipBusy(doubleBtn, doubleSpin, false);
-
-  if (resultView !== view) return;
-
-  if (!outcome.rewarded) {
-    paintRewardButtons();
-    const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
-    showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
-    return;
+  try {
+    const matchId = quest ? await view.questMatch() : null;
+    if (resultView !== view || !overlayOpen) return;
+    if (quest && !matchId) {
+      showAdToast(t('quest_unavailable'), 'error');
+      return;
+    }
+    if (!retry) {
+      if (!(await askAdConfirm('coins'))) return;
+      if (resultView !== view || !overlayOpen) return;
+      stopDefeat();
+      holdAudio();
+      const outcome = await playRewardedAd('double_coins', {
+        stillWanted: () => overlayOpen && resultView === view,
+      }).finally(releaseAudio);
+      if (resultView !== view) return;
+      if (!outcome.rewarded) {
+        const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
+        showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
+        return;
+      }
+      earnCoins(view.coins);
+      markClaimedInMatch('double_coins');
+      animateCoinTotal(view.coins);
+      view.questAdCompleted = quest;
+    }
+    if (quest && matchId && isReferralQuestActive(referralQuestUser())) {
+      const verified = await verifyReferralQuestMatch(matchId, view.won);
+      view.questVerified = verified.verified;
+      if (resultView !== view) return;
+      showAdToast(t(verified.verified ? 'quest_match_verified_toast'
+        : verified.error === 'daily_cap' ? 'quest_daily_cap' : 'quest_sync_failed'),
+      verified.verified ? 'success' : 'error', 4600);
+      notify(verified.verified ? 'success' : 'warning');
+    } else {
+      const doubled = String(Math.round(view.coins * 2));
+      showAdToast(t('ad_success_coins_doubled').replace('{coins}', doubled), 'success', 4600);
+      notify('success');
+    }
+  } finally {
+    if (resultView === view) {
+      doubleBusy = false;
+      setChipBusy(doubleBtn, doubleSpin, false);
+      paintRewardButtons();
+    }
   }
-
-  const bonus = view.coins;
-  earnCoins(bonus);                         // 1× extra on top of the settled 1× = 2× total
-  markClaimedInMatch('double_coins');
-  animateCoinTotal(bonus);
-  paintRewardButtons();
-  const doubled = String(Math.round(bonus * 2));
-  showAdToast(t('ad_success_coins_doubled').replace('{coins}', doubled), 'success', 4600);
-  notify('success');
 }
 
 recoverBtn.addEventListener('click', () => { void claimTiqRecovery(); });
@@ -1854,6 +1905,10 @@ function showOverlay() {
     coins: earned,
     tiq: mine ? Math.max(0, afterTiq - beforeTiq) : 0,
     stake: mine ? Math.max(5, Math.round(runtime.winTiq * 0.1)) : 0,
+    hardBotDuel: hardBotDuel && !active && forfeit === null,
+    questMatch,
+    questAdCompleted: false,
+    questVerified: false,
   };
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
@@ -2513,6 +2568,11 @@ function restart() {
     beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
   }
   gen++;
+  const questGeneration = ++questEpoch;
+  questMatch = hardBotDuel && !tutorialStandalone
+    ? createReferralQuestMatch(() => questGeneration === questEpoch)
+    : async () => null;
+  void questMatch();
   blastGen++;      // drop any combo beats still scheduled against the previous board
   /* Release bot thinks parked by the pause sheet on the PREVIOUS board. Their `token !== gen`
      check drops them as soon as they resume, so a stale reply cannot move a fresh pawn — and no
@@ -2865,6 +2925,8 @@ function seatChrome(): void {
 /** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */
 interface StartSetup {
   difficulty: Difficulty;
+  mode?: 'vs_bot';
+  isQuestMatch?: boolean;
   /** one entry per seat — `[1, 1]` is a duel, `[1, 1, 1, 1]` a four-way. Capped at `MAX_TEAMS`. */
   sizes: readonly number[];
   online?: OnlineSession | LobbyRace | null;
@@ -2947,7 +3009,9 @@ function startGame(setup: StartSetup) {
      first duel settles, so the normal first-time rule is unchanged afterwards. A MANUAL request
      (`requested`, from the lobby training card) is never gated by this. */
   const inviteBootWindow = INVITE_DUEL_LAUNCH && !inviteDuelSettled && !completed;
+  const questLaunch = setup.isQuestMatch === true && isReferralQuestActive(referralQuestUser());
   const autoLesson = !completed
+    && !questLaunch
     && !inviteBootWindow
     && autoTutorialForLaunch()
     && shouldAutoStartTutorial({
@@ -2959,9 +3023,7 @@ function startGame(setup: StartSetup) {
   /* A lesson that replaces the launch is the whole match: its end returns to Home. Pause →
      Replay is the one lesson that runs inside a real match and hands the board straight back. */
   tutorialStandalone = wantsTutorial;
-  /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
-     so every start path (vs Bot card, Play) runs the level the sheet shows. */
-  difficulty = menuState.difficulty;
+  difficulty = setup.difficulty;
   /* An online seat brings its own board and side; a local race is always seat 0 against the rest. */
   active = setup.online ?? null;
   forfeit = null;
@@ -2985,6 +3047,8 @@ function startGame(setup: StartSetup) {
   /* One brain per seat: a room ladders its machine seats, a plain race plays one level throughout. */
   const lobby = room;
   opponent = makeBot(lobby ? (seat) => difficultyFor(lobby, seat) : difficulty);
+  hardBotDuel = !active && (!room || setup.mode === 'vs_bot') && difficulty === 'hard'
+    && sizes.length === 2 && sizes.every((n) => n === 1) && !wantsTutorial;
   paused = false;
   restart();
   seatChrome();
@@ -3077,7 +3141,7 @@ function startGame(setup: StartSetup) {
   };
   /* A room that already counted itself down has had its ceremony — the FIGHT flash *was* the
      reveal — so it goes straight to the board rather than paying for a second cinematic. */
-  if (setup.quiet) { reveal(); return; }
+  if (setup.quiet || questLaunch) { reveal(); return; }
   const rivals = wantsTutorial ? [] : clashRivals();
   showVsClash(rivals, {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
@@ -4644,7 +4708,8 @@ function launchSelectedMode(): void {
   const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
   const lobby = openLocalRoom(botTier);
   showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
-  startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby });
+  startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby,
+    ...(sel.id === 'bot' ? { mode: 'vs_bot' as const } : {}) });
 }
 
 /* The drawer repaints its own Start label inside its own `onGameModeChange` handler, and
@@ -4685,6 +4750,7 @@ onLang(paintParty);
 /* the result is a live surface too: a language flip repaints its copy, tags and aria labels.
    The race's own name rides along — it is translated copy on the pause header and this caption. */
 onLang(() => { paintRaceTags(); if (overlayOpen && resultView) paintResultCopy(); });
+onReferralQuestChange(() => { if (overlayOpen && resultView) paintRewardButtons(); });
 watchPartyLabel();
 paintParty();
 paintRoster();
