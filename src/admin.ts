@@ -935,6 +935,67 @@ async function pushPlayerAction(
 
 export type SquadChatKind = 'channel' | 'group';
 export type SquadVerification = 'verified' | 'pending' | 'revoked';
+export type SquadMemberRole = 'leader' | 'admin' | 'member';
+
+/** One real mini-app player on the squad's in-game roster. */
+export interface SquadMemberRow {
+  id: string;
+  name: string;
+  tiq: number;
+  role: SquadMemberRole;
+  joinedAt: number;
+  country: string;
+  username: string;
+  photo: string;
+}
+
+/** The Telegram audience bands the Squads tab can filter on. */
+export type SquadRealBand = 'all' | 'lt1k' | '1k-10k' | '10k-100k' | '100k';
+/** The in-game roster bands the Squads tab can filter on. */
+export type SquadGameBand = 'all' | 'zero' | '1-9' | '10-49' | '50';
+
+const SQUAD_REAL_LABEL: Record<SquadRealBand, string> = {
+  all: 'Any audience',
+  lt1k: 'Under 1K',
+  '1k-10k': '1K – 10K',
+  '10k-100k': '10K – 100K',
+  '100k': '100K+',
+};
+
+const SQUAD_GAME_LABEL: Record<SquadGameBand, string> = {
+  all: 'Any roster',
+  zero: 'No players (0)',
+  '1-9': '1 – 9',
+  '10-49': '10 – 49',
+  '50': '50+',
+};
+
+/** The closed interval [min, max] each band accepts. `Infinity` is the open top. */
+const SQUAD_REAL_RANGE: Record<SquadRealBand, readonly [number, number]> = {
+  all: [0, Infinity],
+  lt1k: [0, 999],
+  '1k-10k': [1000, 9999],
+  '10k-100k': [10000, 99999],
+  '100k': [100000, Infinity],
+};
+
+const SQUAD_GAME_RANGE: Record<SquadGameBand, readonly [number, number]> = {
+  all: [0, Infinity],
+  zero: [0, 0],
+  '1-9': [1, 9],
+  '10-49': [10, 49],
+  '50': [50, Infinity],
+};
+
+const asSquadRealBand = (value: string): SquadRealBand =>
+  value === 'lt1k' || value === '1k-10k' || value === '10k-100k' || value === '100k'
+    ? value
+    : 'all';
+
+const asSquadGameBand = (value: string): SquadGameBand =>
+  value === 'zero' || value === '1-9' || value === '10-49' || value === '50'
+    ? value
+    : 'all';
 
 /** One registered squad, exactly as the Worker frames it for the Squads tab. */
 export interface SquadRow {
@@ -949,6 +1010,8 @@ export interface SquadRow {
   members: number;
   /** The Telegram chat's own audience, kept as an external stat beside the roster. */
   subscribers: number;
+  /** The in-game roster, leader first then by TIQ. */
+  roster: SquadMemberRow[];
   ownerId: string;
   ownerName: string;
   ownerUsername: string;
@@ -1008,6 +1071,46 @@ const squadText = (value: unknown, max: number): string =>
 const squadCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 
+/** One in-game roster row from the Worker: every field folded and bounded. */
+function readSquadMember(raw: unknown): SquadMemberRow | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<SquadMemberRow>;
+  const id = squadText(r.id, 24);
+  if (!id) return null;
+  const role: SquadMemberRole =
+    r.role === 'leader' || r.role === 'admin' ? r.role : 'member';
+  const country = squadText(r.country, 2).toUpperCase();
+  const photo = squadText(r.photo, 300);
+  return {
+    id,
+    name: squadText(r.name, 24),
+    tiq: squadCount(r.tiq),
+    role,
+    joinedAt: squadCount(r.joinedAt),
+    country: /^[A-Z]{2}$/.test(country) ? country : '',
+    username: squadText(r.username, 32).replace(/^@+/, ''),
+    photo: /^https:\/\/[^\s]+$/i.test(photo) ? photo : '',
+  };
+}
+
+/** Read the roster the Worker sends, keeping the leader at the head and TIQ descending. */
+function readSquadRoster(raw: unknown): SquadMemberRow[] {
+  if (!Array.isArray(raw)) return [];
+  const roster: SquadMemberRow[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    const member = readSquadMember(entry);
+    if (!member || seen.has(member.id)) continue;
+    seen.add(member.id);
+    roster.push(member);
+    if (roster.length >= 5000) break;
+  }
+  return roster.sort((a, b) =>
+    Number(b.role === 'leader') - Number(a.role === 'leader')
+    || b.tiq - a.tiq
+    || a.joinedAt - b.joinedAt);
+}
+
 /**
  * A registry row folded field by field: a missing or hand-edited entry is never trusted. The
  * Worker's canonical registry names (`title`, `type`, `enlistedAt`, `enlistedBy`, `membersCount`,
@@ -1036,6 +1139,7 @@ function readSquadRow(raw: unknown): SquadRow | null {
         : 'pending';
   const enlistedBy = squadText(r.enlistedBy, 40);
   const byHandle = enlistedBy.startsWith('@');
+  const roster = readSquadRoster(r.roster);
   return {
     id,
     chatId: squadText(r.chatId, 32),
@@ -1044,8 +1148,9 @@ function readSquadRow(raw: unknown): SquadRow | null {
     kind: r.type === 'channel' || r.kind === 'channel' ? 'channel' : 'group',
     avatar: squadText(r.avatar, 160),
     tag: squadText(r.tag, 8),
-    members: squadCount(r.membersCount) || squadCount(r.members),
+    members: squadCount(r.membersCount) || squadCount(r.members) || roster.length,
     subscribers: squadCount((r as { subscribers?: unknown }).subscribers),
+    roster,
     ownerId: squadText(r.ownerId, 24) || (byHandle ? '' : enlistedBy),
     ownerName: squadText(r.ownerName, 40),
     ownerUsername: squadText(r.ownerUsername, 40) || (byHandle ? enlistedBy.slice(1, 41) : ''),
@@ -1926,6 +2031,12 @@ export function createAdmin(api: AdminApi): Admin {
   const squadKpiVerifiedSub = $<HTMLElement>('squad-kpi-verified-sub');
   const squadKpiMembers = $<HTMLElement>('squad-kpi-members');
   const squadKpiMembersSub = $<HTMLElement>('squad-kpi-members-sub');
+  const squadsRealFilter = $<HTMLSelectElement>('squads-real-filter');
+  const squadsRealV = $<HTMLElement>('squads-real-v');
+  const squadsRealPod = document.querySelector<HTMLElement>('[data-sqadv="real"]');
+  const squadsGameFilter = $<HTMLSelectElement>('squads-game-filter');
+  const squadsGameV = $<HTMLElement>('squads-game-v');
+  const squadsGamePod = document.querySelector<HTMLElement>('[data-sqadv="game"]');
   /* The Stars Vault payout queue: four KPIs, the request list, and the collusion review slab */
   const vaultList = $<HTMLElement>('adm-vault-list');
   const vaultEmpty = $<HTMLElement>('adm-vault-empty');
@@ -2054,7 +2165,10 @@ export function createAdmin(api: AdminApi): Admin {
   let squadsTotals: SquadTotals | null = null;
   let squadsType: 'all' | SquadChatKind = 'all';
   let squadsStatus: 'all' | SquadVerification = 'all';
+  let squadsReal: SquadRealBand = 'all';
+  let squadsGame: SquadGameBand = 'all';
   let squadsQuery = '';
+  let openSquad = '';
   let squadsOn = false;
   let squadsReady = false;
   let squadsBusy = false;
@@ -4105,13 +4219,23 @@ export function createAdmin(api: AdminApi): Admin {
     revoked: 'Revoked',
   };
 
+  const SQUAD_ROLE_TEXT: Record<SquadMemberRole, string> = {
+    leader: 'Leader',
+    admin: 'Officer',
+    member: 'Member',
+  };
+
   const squadsEmptyTitle = squadsEmpty?.querySelector<HTMLElement>('.adm-users-empty-t') ?? null;
   const squadsEmptySub = squadsEmpty?.querySelector<HTMLElement>('.adm-users-empty-s') ?? null;
 
-  /** True when a row survives the type, verification and search filters. */
+  /** True when a row survives the type, verification, member-range and search filters. */
   function squadMatches(row: SquadRow): boolean {
     if (squadsType !== 'all' && row.kind !== squadsType) return false;
     if (squadsStatus !== 'all' && row.verification !== squadsStatus) return false;
+    const realRange = SQUAD_REAL_RANGE[squadsReal];
+    if (row.subscribers < realRange[0] || row.subscribers > realRange[1]) return false;
+    const gameRange = SQUAD_GAME_RANGE[squadsGame];
+    if (row.members < gameRange[0] || row.members > gameRange[1]) return false;
     const q = squadsQuery.trim().toLowerCase();
     if (!q) return true;
     return [row.name, row.handle, row.chatId, row.ownerId, row.ownerName, row.ownerUsername]
@@ -4139,6 +4263,12 @@ export function createAdmin(api: AdminApi): Admin {
     return `${day} · ${time}`;
   }
 
+  /** `Oct 31, 2026` — the date half, for a roster row's joined stamp. */
+  function squadDay(ms: number): string {
+    if (!Number.isFinite(ms) || ms <= 0) return '—';
+    return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   /** Copy a chat id: the clipboard API where the webview offers one, the selection path otherwise. */
   async function copySquadText(text: string): Promise<boolean> {
     try {
@@ -4164,15 +4294,104 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
-  /** One audit card: chat identity, ownership badge, the two war figures, and the keys. */
+  /** One in-game roster row: portrait, identity, role/join line and the player's own TIQ. */
+  function squadMemberRow(member: SquadMemberRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-squad-member';
+    li.dataset.role = member.role;
+    li.title = `Telegram ID ${member.id}`;
+
+    const av = document.createElement('span');
+    av.className = 'adm-squad-mav';
+    av.setAttribute('aria-hidden', 'true');
+    av.textContent = (member.name || member.username || member.id).charAt(0).toUpperCase() || '?';
+    if (member.photo) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.src = member.photo;
+      img.addEventListener('error', () => img.remove());
+      av.append(img);
+    }
+
+    const txt = document.createElement('span');
+    txt.className = 'adm-squad-mtxt';
+    const name = document.createElement('b');
+    name.className = 'adm-squad-mname';
+    name.dir = 'auto';
+    name.textContent = member.name || (member.username ? `@${member.username}` : `Player ${member.id}`);
+    const meta = document.createElement('span');
+    meta.className = 'adm-squad-mmeta';
+    const bits = [SQUAD_ROLE_TEXT[member.role]];
+    if (member.username) bits.push(`@${member.username}`);
+    if (member.country) bits.push(nameOf(member.country));
+    if (member.joinedAt) bits.push(`joined ${squadDay(member.joinedAt)}`);
+    meta.textContent = bits.join(' · ');
+    txt.append(name, meta);
+
+    const tiq = document.createElement('span');
+    tiq.className = 'adm-squad-mtiq';
+    tiq.textContent = `TIQ ${figure(member.tiq)}`;
+    li.append(av, txt, tiq);
+    return li;
+  }
+
+  /** The in-game roster drawer: leader first, then TIQ order, scrollable inside the card. */
+  function squadRoster(row: SquadRow): HTMLElement {
+    const wrap = document.createElement('section');
+    wrap.className = 'adm-squad-roster';
+    wrap.setAttribute('aria-label', `In-game roster for ${row.name}`);
+
+    const head = document.createElement('div');
+    head.className = 'adm-squad-roster-h';
+    const title = document.createElement('b');
+    title.textContent = 'In-Game Roster';
+    const total = document.createElement('span');
+    const listed = row.roster.length;
+    total.textContent = listed === row.members
+      ? `${figure(listed)} ${listed === 1 ? 'player' : 'players'}`
+      : `${figure(listed)} of ${figure(row.members)} players`;
+    head.append(title, total);
+    wrap.append(head);
+
+    if (!row.roster.length) {
+      const empty = document.createElement('p');
+      empty.className = 'adm-squad-roster-empty';
+      empty.textContent = row.members > 0
+        ? 'The roster is not available in this registry read.'
+        : 'No player has joined this squad in the game yet.';
+      wrap.append(empty);
+      return wrap;
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'adm-squad-roster-list';
+    for (const member of row.roster) list.append(squadMemberRow(member));
+    wrap.append(list);
+    return wrap;
+  }
+
+  /**
+   * One registry row, closed by default: identity, the two member counts and the audit badge.
+   * Opening it reveals the ownership line, the real audience and the full in-game roster.
+   */
   function squadCard(row: SquadRow): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'adm-squad';
     li.dataset.squad = row.id;
     li.dataset.banned = String(row.banned);
+    const expanded = row.id === openSquad;
+    if (expanded) li.classList.add('is-open');
 
-    const head = document.createElement('div');
-    head.className = 'adm-squad-head';
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'adm-squad-main';
+    main.dataset.squadOpen = row.id;
+    main.setAttribute('aria-expanded', String(expanded));
+    main.title = expanded ? `Collapse ${row.name}` : `Expand ${row.name}`;
+
     /* A Telegram photo is a bonus: the crest mark is painted underneath and stays when the CDN
        answers a private chat with a 404 or a 1x1 placeholder. */
     const glyph = document.createElement('span');
@@ -4194,6 +4413,7 @@ export function createAdmin(api: AdminApi): Admin {
     const photoUrl = telegramAvatarUrl(row.handle);
     if (photoUrl) photo.src = photoUrl;
     glyph.append(mark, photo);
+
     const txt = document.createElement('span');
     txt.className = 'adm-squad-txt';
     const name = document.createElement('span');
@@ -4214,9 +4434,30 @@ export function createAdmin(api: AdminApi): Admin {
     kind.className = 'adm-squad-kind';
     kind.dataset.kind = row.kind;
     kind.textContent = row.kind === 'channel' ? 'Channel' : 'Group';
-    sub.append(handle, kind);
+
+    /* Both member readings sit in the closed row: the real Telegram audience and the joined
+       in-game roster. The labels stay explicit so neither number can be mistaken for the other. */
+    const counts = document.createElement('span');
+    counts.className = 'adm-squad-counts';
+    const count = (value: number, label: string): HTMLSpanElement => {
+      const part = document.createElement('span');
+      const figureEl = document.createElement('b');
+      figureEl.textContent = figure(value);
+      part.append(figureEl, document.createTextNode(` ${label}`));
+      return part;
+    };
+    counts.append(
+      count(row.members, 'in-game'),
+      document.createTextNode(' · '),
+      count(row.subscribers, 'real'),
+    );
+    counts.title = `${figure(row.members)} joined player${row.members === 1 ? '' : 's'} in the game`
+      + ` · ${figure(row.subscribers)} Telegram subscribers`;
+    sub.append(handle, kind, counts);
     txt.append(name, sub);
 
+    const side = document.createElement('span');
+    side.className = 'adm-squad-side';
     const badges = document.createElement('span');
     badges.className = 'adm-squad-badges';
     const status = document.createElement('span');
@@ -4235,7 +4476,14 @@ export function createAdmin(api: AdminApi): Admin {
       purged.textContent = 'Purged';
       badges.append(purged);
     }
-    head.append(glyph, txt, badges);
+    side.append(badges, icon('#i-chevron-down', 'adm-squad-chev'));
+
+    main.append(glyph, txt, side);
+    li.append(main);
+    if (!expanded) return li;
+
+    const body = document.createElement('div');
+    body.className = 'adm-squad-body';
 
     /* The enlisted line, structured: who owns it, which chat it is, and when it registered. */
     const meta = document.createElement('div');
@@ -4296,19 +4544,29 @@ export function createAdmin(api: AdminApi): Admin {
 
     meta.append(ownerTag, idTag, dateTag);
 
+    const avgTiq = row.members ? Math.round(row.warTiq / row.members) : 0;
     const cells = document.createElement('div');
     cells.className = 'adm-squad-cells';
     cells.append(
       squadCell(
+        figure(row.subscribers),
+        'Real Members',
+        `${row.subscribers.toLocaleString('en-US')} Telegram subscribers — the channel's own audience`,
+      ),
+      squadCell(
         figure(row.members),
-        'Members',
-        `${row.members.toLocaleString('en-US')} joined player${row.members === 1 ? '' : 's'}`
-          + (row.subscribers > 0 ? ` · ${row.subscribers.toLocaleString('en-US')} Telegram subscribers` : ''),
+        'In-Game Members',
+        `${row.members.toLocaleString('en-US')} player${row.members === 1 ? '' : 's'} joined the squad in the game`,
       ),
       squadCell(
         figure(row.warTiq),
         'War TIQ',
         `${row.warTiq.toLocaleString('en-US')} TIQ from ${row.contributors} contributor${row.contributors === 1 ? '' : 's'}`,
+      ),
+      squadCell(
+        figure(avgTiq),
+        'Squad IQ',
+        `${avgTiq.toLocaleString('en-US')} average TIQ across the in-game roster`,
       ),
     );
 
@@ -4356,7 +4614,8 @@ export function createAdmin(api: AdminApi): Admin {
       actions.append(openKey(true), restore);
     }
 
-    li.append(head, meta, cells, actions);
+    body.append(meta, cells, squadRoster(row), actions);
+    li.append(body);
     return li;
   }
 
@@ -4400,6 +4659,23 @@ export function createAdmin(api: AdminApi): Admin {
     for (const chip of squadStatusChips) {
       chip.setAttribute('aria-pressed', String((chip.dataset.sqstatus ?? 'all') === squadsStatus));
     }
+
+    const realLabel = SQUAD_REAL_LABEL[squadsReal];
+    if (squadsRealV) squadsRealV.textContent = realLabel;
+    if (squadsRealFilter) {
+      if (squadsRealFilter.value !== squadsReal) squadsRealFilter.value = squadsReal;
+      squadsRealFilter.setAttribute('aria-label', `Real Telegram members: ${realLabel}`);
+    }
+    if (squadsRealPod) squadsRealPod.dataset.on = String(squadsReal !== 'all');
+
+    const gameLabel = SQUAD_GAME_LABEL[squadsGame];
+    if (squadsGameV) squadsGameV.textContent = gameLabel;
+    if (squadsGameFilter) {
+      if (squadsGameFilter.value !== squadsGame) squadsGameFilter.value = squadsGame;
+      squadsGameFilter.setAttribute('aria-label', `In-game squad members: ${gameLabel}`);
+    }
+    if (squadsGamePod) squadsGamePod.dataset.on = String(squadsGame !== 'all');
+
     if (squadsQClear) squadsQClear.hidden = !squadsQuery;
 
     if (squadsSourceEl) {
@@ -4453,7 +4729,7 @@ export function createAdmin(api: AdminApi): Admin {
           if (squadsEmptySub) {
             squadsEmptySub.textContent = squadsRows.length === 0
               ? 'No channel or group has enlisted yet. The first registration lands here.'
-              : 'Widen the type or verification filter, or clear the search.';
+              : 'Widen the type, verification or member-count filter, or clear the search.';
           }
         }
         if (squadsReset) squadsReset.hidden = !squadsReady;
@@ -4557,9 +4833,14 @@ export function createAdmin(api: AdminApi): Admin {
   function resetSquadFilters(): void {
     squadsType = 'all';
     squadsStatus = 'all';
+    squadsReal = 'all';
+    squadsGame = 'all';
     squadsQuery = '';
+    openSquad = '';
     if (squadsQ) squadsQ.value = '';
     if (squadsQClear) squadsQClear.hidden = true;
+    if (squadsRealFilter) squadsRealFilter.value = 'all';
+    if (squadsGameFilter) squadsGameFilter.value = 'all';
     impact('light');
     paintSquads();
   }
@@ -6508,10 +6789,11 @@ export function createAdmin(api: AdminApi): Admin {
     }
   });
 
-  /* the Squads tab: real-time search, two filter axes, and one delegated audit listener */
+  /* the Squads tab: real-time search, four filter axes, and one delegated audit listener */
   squadsQ?.addEventListener('input', () => {
     squadsQuery = squadsQ.value.slice(0, 80);
     if (squadsQClear) squadsQClear.hidden = !squadsQuery;
+    openSquad = '';
     paintSquads();
   });
   squadsQClear?.addEventListener('click', () => {
@@ -6521,6 +6803,7 @@ export function createAdmin(api: AdminApi): Admin {
       squadsQ.focus({ preventScroll: true });
     }
     if (squadsQClear) squadsQClear.hidden = true;
+    openSquad = '';
     impact('light');
     paintSquads();
   });
@@ -6530,6 +6813,7 @@ export function createAdmin(api: AdminApi): Admin {
       if (next !== 'all' && next !== 'channel' && next !== 'group') return;
       if (next === squadsType) return;
       squadsType = next;
+      openSquad = '';
       impact('light');
       paintSquads();
     });
@@ -6540,10 +6824,30 @@ export function createAdmin(api: AdminApi): Admin {
       if (next !== 'all' && next !== 'verified' && next !== 'pending' && next !== 'revoked') return;
       if (next === squadsStatus) return;
       squadsStatus = next;
+      openSquad = '';
       impact('light');
       paintSquads();
     });
   }
+
+  /* the two member-count selectors: the real Telegram audience and the joined in-game roster */
+  squadsRealFilter?.addEventListener('change', () => {
+    const next = asSquadRealBand(squadsRealFilter.value);
+    if (next === squadsReal) return;
+    squadsReal = next;
+    openSquad = '';
+    impact('light');
+    paintSquads();
+  });
+  squadsGameFilter?.addEventListener('change', () => {
+    const next = asSquadGameBand(squadsGameFilter.value);
+    if (next === squadsGame) return;
+    squadsGame = next;
+    openSquad = '';
+    impact('light');
+    paintSquads();
+  });
+
   squadsReset?.addEventListener('click', resetSquadFilters);
   squadsRefresh?.addEventListener('click', () => {
     if (squadsBusy) return;
@@ -6551,12 +6855,30 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshSquads(true);
   });
   squadsList?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-squad-action]');
-    if (!btn) return;
-    const card = btn.closest<HTMLElement>('[data-squad]');
-    const action = btn.dataset.squadAction;
-    if (!card || (action !== 'VERIFY' && action !== 'REVOKE' && action !== 'BAN' && action !== 'UNBAN')) return;
-    requestSquadAction(card.dataset.squad ?? '', action);
+    const el = e.target as HTMLElement;
+    const btn = el.closest<HTMLButtonElement>('[data-squad-action]');
+    if (btn) {
+      const card = btn.closest<HTMLElement>('[data-squad]');
+      const action = btn.dataset.squadAction;
+      if (!card || (action !== 'VERIFY' && action !== 'REVOKE' && action !== 'BAN' && action !== 'UNBAN')) return;
+      requestSquadAction(card.dataset.squad ?? '', action);
+      return;
+    }
+    const open = el.closest<HTMLButtonElement>('[data-squad-open]');
+    if (!open) return;
+    const id = open.dataset.squadOpen ?? '';
+    if (!id) return;
+    openSquad = openSquad === id ? '' : id;
+    impact('light');
+    paintSquads();
+  });
+  squadsList?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openSquad) {
+      /* the stage's own Escape must not close the whole panel while a row is open */
+      e.stopPropagation();
+      openSquad = '';
+      paintSquads();
+    }
   });
 
   /* The payout queue and the review slab: both lists are rebuilt on every paint, so one delegated

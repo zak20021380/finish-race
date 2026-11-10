@@ -22210,8 +22210,9 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 
 /* ==========================================================================
    SQUADS & CHANNEL WAR — the registry audit. Four compact pulse tiles over a
-   real-time filter bar, then one card per registered channel or group with its
-   ownership badge, war contribution and the three tactical keys.
+   real-time filter bar, then one closed drawer per registered channel or group
+   carrying its identity, the real Telegram audience and the in-game roster
+   count; opening it reveals the audit stat grid and the full in-game roster.
    ========================================================================== */
 .adm-grid-squads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .adm-grid-squads .adm-card { min-height: 116px; }
@@ -22225,26 +22226,88 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   padding: 0;
   list-style: none;
 }
+.adm-adv-squads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .adm-squad {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
+  display: block;
   min-width: 0;
-  padding: 11px 11px 14px;
+  padding: 0;
   border-radius: var(--radius-md);
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  transition: box-shadow var(--motion-fast);
+}
+.adm-squad.is-open {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(252, 211, 77, .28);
 }
 .adm-squad[data-banned="true"] {
   box-shadow:
     var(--clay-drop), var(--clay-spec), var(--clay-bevel),
     inset 0 0 0 1px rgba(244, 63, 94, .34);
 }
-.adm-squad-head {
+.adm-squad[data-banned="true"].is-open {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(244, 63, 94, .5);
+}
+/* the closed drawer: one tap on the whole summary line opens the audit body */
+.adm-squad-main {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 11px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.adm-squad-main:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-squad-side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.adm-squad-chev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--ink-soft);
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.adm-squad.is-open .adm-squad-chev {
+  transform: rotate(180deg);
+  color: var(--honey-ink);
+}
+.adm-squad-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
   min-width: 0;
+  padding-left: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.adm-squad-counts b {
+  color: var(--honey-ink);
+  font-weight: 900;
+}
+.adm-squad-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 11px 13px;
 }
 .adm-squad-ico {
   position: relative;
@@ -22472,6 +22535,131 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+/* the in-game roster: a bounded scroll well so a large squad never stretches the drawer */
+.adm-squad-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-squad-roster-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.adm-squad-roster-h b {
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-squad-roster-h span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-squad-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  max-height: 296px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.adm-squad-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .02);
+}
+.adm-squad-member[data-role="leader"] {
+  background: linear-gradient(180deg, rgba(252, 211, 77, .10) 0%, rgba(252, 211, 77, .02) 100%);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .22);
+}
+.adm-squad-member[data-role="admin"] {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .18);
+}
+.adm-squad-mav {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.adm-squad-mav img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.adm-squad-mtxt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.adm-squad-mname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.adm-squad-mmeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+.adm-squad-mtiq {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 900;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.adm-squad-roster-empty {
+  margin: 0;
+  padding: 4px 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
 /* two equal keys on top, the war verdict across the full width: nothing can be clipped */
 .adm-squad-actions {
   display: grid;
@@ -22511,11 +22699,14 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 .adm-squad-actions .adm-btn[disabled] { opacity: .45; cursor: not-allowed; }
 @media (max-width: 359px) {
   .adm-squad-cells { grid-template-columns: minmax(0, 1fr); }
+  .adm-squad-counts { padding-left: 0; }
 }
 @media (max-width: 344px) {
-  .adm-squad { padding: 10px 10px 14px; }
+  .adm-squad-main { padding: 8px 9px; }
+  .adm-squad-body { padding: 0 9px 12px; }
   .adm-squad-actions .adm-btn { font-size: 9px; padding: 6px 6px; }
   .adm-squad-st { font-size: 8.5px; padding: 2px 6px; }
+  .adm-squad-counts { font-size: 9px; }
 }
 
 /* ==========================================================================

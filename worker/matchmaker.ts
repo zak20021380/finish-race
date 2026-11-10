@@ -76,7 +76,7 @@ import {
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
   verifyAndBuildSquad, verifySquadChat,
-  type RegisteredSquad, type SquadAnnouncementRow, type SquadVerification,
+  type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
 import { REFERRAL_CONFIG, arenaRankOf, utcDayKey, utcMonthKey } from '../shared/referralConfig';
@@ -1843,6 +1843,8 @@ export interface SquadWarRow {
   members: number;
   /** The Telegram chat's own audience, shown beside the roster as an external stat. */
   subscribers: number;
+  /** The in-game roster, leader first then by TIQ. Admin-only detail for the drawer. */
+  roster: SquadMemberRow[];
   /** The enlisting player: the squad's leader. */
   creatorId: string;
   ownerId: string;
@@ -3294,6 +3296,12 @@ export class MatchmakerDO {
     const owner = owners.get(squad.creatorId);
     const warTiq = contribution?.tiq ?? squadWarTiq(squad);
     const members = squad.roster.length;
+    const roster = [...squad.roster]
+      .sort((a, b) =>
+        Number(b.role === 'leader') - Number(a.role === 'leader')
+        || b.tiq - a.tiq
+        || a.joinedAt - b.joinedAt)
+      .map((member) => ({ ...member }));
     return {
       id: squad.id,
       chatId: squad.chatId,
@@ -3304,6 +3312,7 @@ export class MatchmakerDO {
       tag: squad.tag,
       members,
       subscribers: squad.subscribers,
+      roster,
       creatorId: squad.creatorId,
       ownerId: squad.creatorId,
       ownerName: owner?.name ?? '',

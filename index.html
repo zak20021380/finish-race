@@ -3410,6 +3410,37 @@
               </div>
             </div>
 
+            <div class="adm-adv adm-adv-squads" role="group" aria-label="Filter squads by member counts">
+              <label class="adm-fn adm-fn-plan" data-sqadv="real" data-on="false">
+                <span class="adm-fn-k" aria-hidden="true">Real members</span>
+                <span class="adm-fn-face adm-fn-plan-face" aria-hidden="true">
+                  <span class="adm-fn-v" id="squads-real-v">Any audience</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-select" id="squads-real-filter" aria-label="Real Telegram members: any audience">
+                  <option value="all" selected>Any audience</option>
+                  <option value="lt1k">Under 1K</option>
+                  <option value="1k-10k">1K – 10K</option>
+                  <option value="10k-100k">10K – 100K</option>
+                  <option value="100k">100K+</option>
+                </select>
+              </label>
+              <label class="adm-fn adm-fn-plan" data-sqadv="game" data-on="false">
+                <span class="adm-fn-k" aria-hidden="true">In-game members</span>
+                <span class="adm-fn-face adm-fn-plan-face" aria-hidden="true">
+                  <span class="adm-fn-v" id="squads-game-v">Any roster</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-select" id="squads-game-filter" aria-label="In-game squad members: any roster">
+                  <option value="all" selected>Any roster</option>
+                  <option value="zero">No players (0)</option>
+                  <option value="1-9">1 – 9</option>
+                  <option value="10-49">10 – 49</option>
+                  <option value="50">50+</option>
+                </select>
+              </label>
+            </div>
+
             <div class="adm-users-meta">
               <span id="squads-total" aria-live="polite">—</span>
               <span class="adm-users-meta-r">
