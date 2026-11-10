@@ -23,7 +23,7 @@
   pointer-events: none;
 }
 
-/* ---- one message: a short clay bubble, tail down toward the pawn ---- */
+/* ---- one message: a compact obsidian bubble, tail down toward the pawn ---- */
 .chat-bubble {
   /* the sender's pawn identity, repainted by .is-red / .is-blue on every placement */
   --pawn-rim: #ff3366;
@@ -31,25 +31,9 @@
   --bubble-plate: #1C2433;
   position: absolute;
   isolation: isolate;
-  max-width: 148px;
-  min-height: 30px;
-  max-height: 44px;
-  padding: 6px 10px;
   display: flex;
   align-items: center;
   border: 1px solid var(--pawn-rim);
-  border-radius: 14px;
-  background: var(--clay-face);
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: .005em;
-  box-shadow:
-    0 2px 0 #080C14,
-    0 0 16px var(--pawn-glow),
-    0 8px 16px -10px var(--shadow-soft),
-    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
   transform: scale(.5) translateY(6px);
   /* the tail's root is the hinge: the pop grows out of the point that faces the pawn, and chat.ts
@@ -57,6 +41,38 @@
   transform-origin: 100% 100%;
   transition: opacity .22s ease, transform .22s ease;
   pointer-events: none;
+}
+/* ---- the compact luxury footprint ----
+   One chassis for every spoken line: the player's and the rival's board bubbles, plus the tutorial /
+   quick-chat aliases. 150px is the whole budget, so a line never hogs the grid; the plate is the
+   same obsidian glass as the dock and the rim is still the speaker's own neon. `pointer-events:
+   none` (and no selection) is load-bearing: a bubble floats over the board and every tap, drag and
+   long-press has to fall through to the tile beneath it. The emote capsule is excluded — it owns
+   its 48x48 face geometry further down. */
+.chat-bubble:not(.is-emote),
+.board-chat-bubble:not(.is-emote),
+.bot-speech-bubble:not(.is-emote),
+.tutorial-bot-bubble:not(.is-emote) {
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  max-width: 150px !important;
+  min-height: 30px;
+  max-height: 44px;
+  padding: 6px 12px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  border-radius: 12px !important;
+  background: rgba(13, 19, 33, 0.92) !important;
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 0 10px var(--pawn-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.45) !important;
+  color: #F8FAFC !important;
+  z-index: 35 !important;
+  --bubble-plate: #0D1321;
 }
 .chat-bubble.show {
   opacity: 1;

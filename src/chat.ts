@@ -9,8 +9,10 @@
  * so it is the same tongue the next time it opens.
  *
  * The board is read, never written. A message no longer hangs off the sender's HUD card: it
- * spawns in the gameplay zone, in the quadrant of the sender's pawn that the board still has room
- * for. The renderer owns the only true pawn position, so `pawn()` hands chat the live screen point,
+ * spawns in the gameplay zone: the local line in the quadrant of the sender's pawn the board still
+ * has room for, the rival's line on the right flank of its ball so it never reaches back across the
+ * player's own ball or movement rings. The renderer owns the only true pawn position, so `pawn()`
+ * hands chat the live screen point,
  * radius, tile metric and colour family of a seat's ball; chat drops the `.pawn-you` / `.pawn-bot`
  * marker on that point and hangs the chassis near it. The chassis never crosses the four cardinal
  * move-dot halos, and its tail is aimed, not bolted to a corner: chat recomputes the wedge's root
@@ -100,6 +102,16 @@ const PAWN_OFFSET_MIN_PX = 18;
 /** The cardinal move-dot halo plus daylight: the chassis may never enter this radius. */
 const DOT_CLEAR_CELLS = 0.4;
 const DOT_CLEAR_MIN_PX = 15;
+/** The rival's bubble parks with its left edge this far left of the ball's centre, so the body
+ *  opens toward the board's right flank and its tail root lands on the bottom-left corner. */
+const FOE_LEFT_OVERHANG_PX = 6;
+/** The rival bubble's daylight above its own ball crown, in cells then px: a readable tail. */
+const FOE_LIFT_CELLS = 0.72;
+const FOE_LIFT_MIN_PX = 28;
+/** The rival's bubble keeps this much daylight off the player's ball itself. */
+const FOE_KEEPOUT_GAP_PX = 5;
+/** ...and this much off the whole cluster when it has to slide clear of the player's rings. */
+const FOE_CLUSTER_GAP_PX = 6;
 /** The fallback lift when a race has no drawn pawn yet: the bubble still clears the chip it names. */
 const CHIP_GAP_PX = 44;
 /** The lane's own margin: a clamped bubble keeps this much board between its box and the frame. */
@@ -140,8 +152,8 @@ export function createChat(o: ChatOptions): Chat {
   /* ---------- the bubbles ---------- */
 
   const bubbles: Record<Side, HTMLElement> = {
-    me: el('div', 'chat-bubble is-mine'),
-    foe: el('div', 'chat-bubble is-foe'),
+    me: el('div', 'chat-bubble is-mine board-chat-bubble'),
+    foe: el('div', 'chat-bubble is-foe board-chat-bubble bot-speech-bubble'),
   };
   const bubbleText: Record<Side, HTMLElement> = {
     me: el('span', 'chat-bubble-t'),
@@ -184,8 +196,14 @@ export function createChat(o: ChatOptions): Chat {
    * box parks in the quadrant nearest it — north-west first, the corner the board was always read
    * from. A quadrant only counts when the whole box fits the lane and its corner stays outside every
    * cardinal move-dot halo, which leaves the upward tile and all four dots fully visible. When the
-   * edges leave no clean quadrant, the north-west intent is clamped in and pushed clear. Either way
-   * `aimTail` re-points the wedge afterward, so the tip still lands on this token's crown.
+   * edges leave no clean quadrant, the north-west intent is clamped in and pushed clear.
+   *
+   * The rival's line is different: it opens to the RIGHT of the blue ball, clamped inside the right
+   * inner edge, because a bubble that grew leftward from a blue pawn parked beside the player is
+   * exactly what used to swallow the red ball's movement rings. Its keep-out set is the player's
+   * ball plus that ball's four cardinal target rings, so no slot is taken until it is proven clear
+   * of them. Either way `aimTail` re-points the wedge afterward: the tip still lands on this
+   * token's crown, and for the rival that root sits on the bubble's bottom-left corner.
    */
   function place(side: Side, seat: Player) {
     const bubble = bubbles[side];
@@ -220,54 +238,108 @@ export function createChat(o: ChatOptions): Chat {
       const clear = Math.max(DOT_CLEAR_MIN_PX, at.cell * DOT_CLEAR_CELLS);
       /* the four legal-move dots sit one cell out on each axis; their halos are the keep-out
          circles the chassis must never enter */
-      const dots: Array<[number, number]> = [
-        [ax, ay - at.cell], [ax, ay + at.cell], [ax - at.cell, ay], [ax + at.cell, ay],
+      const dotBlockers: Array<readonly [number, number, number]> = [
+        [ax, ay - at.cell, clear], [ax, ay + at.cell, clear],
+        [ax - at.cell, ay, clear], [ax + at.cell, ay, clear],
       ];
-      const clearOfDots = (l: number, t: number): boolean => {
-        const r = l + w;
-        const b = t + h;
-        for (const [dx, dy] of dots) {
-          const nx = clamp(dx, l, r);
-          const ny = clamp(dy, t, b);
-          if ((nx - dx) ** 2 + (ny - dy) ** 2 < clear * clear) return false;
+      /** Does the box touch a keep-out disc? Measured to the nearest point of the rect. */
+      const hits = (
+        l: number, t: number, blockers: ReadonlyArray<readonly [number, number, number]>,
+      ): boolean => {
+        for (const [cx, cy, rad] of blockers) {
+          const nx = clamp(cx, l, l + w);
+          const ny = clamp(cy, t, t + h);
+          if ((nx - cx) ** 2 + (ny - cy) ** 2 < rad * rad) return true;
         }
-        return true;
+        return false;
       };
       const fits = (l: number, t: number): boolean => l >= LANE_EDGE_PX && t >= LANE_EDGE_PX
         && l + w <= laneBox.width - LANE_EDGE_PX && t + h <= laneBox.height - LANE_EDGE_PX;
-      /* The quadrants in preference order. Taking the next corner when an edge is in the way keeps
-         the box off the token — and off the pawn parked beside it — instead of clamping the bubble
-         back onto the cluster, which is what let a fixed corner tail point at the wrong ball. */
-      const corners: Array<[number, number]> = [
-        [ax - offset - w, ay - offset - h],
-        [ax + offset, ay - offset - h],
-        [ax - offset - w, ay + offset],
-        [ax + offset, ay + offset],
-      ];
-      const clean = corners.find(([l, t]) => fits(l, t) && clearOfDots(l, t));
-      if (clean) {
-        left = clean[0];
-        top = clean[1];
+      if (side === 'foe') {
+        /* RIGHT FLANK: the rival's line opens over the right side of its own ball. The player's
+           ball and its four cardinal target rings are the keep-out set, so the lane the player is
+           about to tap can never be covered, however close the two tokens stand. */
+        const player = o.pawn(o.localSide());
+        const blockers: Array<readonly [number, number, number]> = [];
+        let cluster: { top: number; right: number } | null = null;
+        if (player && seat !== o.localSide()) {
+          const px = player.x - laneBox.left;
+          const py = player.y - laneBox.top;
+          const ring = Math.max(DOT_CLEAR_MIN_PX, player.cell * DOT_CLEAR_CELLS);
+          const skin = player.radius + FOE_KEEPOUT_GAP_PX;
+          blockers.push([px, py, skin]);
+          blockers.push(
+            [px, py - player.cell, ring], [px, py + player.cell, ring],
+            [px - player.cell, py, ring], [px + player.cell, py, ring],
+          );
+          const pad = Math.max(ring, skin);
+          cluster = { top: py - player.cell - pad, right: px + player.cell + pad };
+        }
+        const lift = Math.max(FOE_LIFT_MIN_PX, at.cell * FOE_LIFT_CELLS);
+        /* the left edge starts at the ball's centre-left, so the body grows rightward and the tail
+           root comes to rest on the bubble's bottom-left corner, alongside the blue pawn */
+        const openRight = clamp(ax - FOE_LEFT_OVERHANG_PX, LANE_EDGE_PX, maxLeft);
+        const above = clamp(ay - lift - h, LANE_EDGE_PX, maxTop);
+        const clearAbove = clamp(
+          cluster ? cluster.top - FOE_CLUSTER_GAP_PX - h : above, LANE_EDGE_PX, maxTop,
+        );
+        const rightOfCluster = cluster
+          ? clamp(cluster.right + FOE_CLUSTER_GAP_PX, LANE_EDGE_PX, maxLeft)
+          : openRight;
+        const candidates: Array<[number, number]> = [
+          [openRight, above],
+          [openRight, clearAbove],
+          [rightOfCluster, above],
+          [rightOfCluster, clearAbove],
+          [maxLeft, above],
+          [maxLeft, clearAbove],
+        ];
+        const pick = candidates.find(([l, t]) => !hits(l, t, blockers));
+        if (pick) {
+          left = pick[0];
+          top = pick[1];
+        } else {
+          /* a cramped board with the two tokens touching: stand the box off above the cluster; the
+             aimed tail still points down onto the blue pawn */
+          left = openRight;
+          top = clamp(Math.min(above, clearAbove), LANE_EDGE_PX, maxTop);
+        }
       } else {
-        left = clamp(ax - offset - w, LANE_EDGE_PX, maxLeft);
-        top = clamp(ay - offset - h, LANE_EDGE_PX, maxTop);
-        if (!clearOfDots(left, top)) {
-          /* an edge clamp pushed the bubble back toward the pawn: lift it clear above the up dot,
-             or, when the top edge is already there, slide it clear of the left, down and right dots */
-          const above = clamp(ay - at.cell - clear - h, LANE_EDGE_PX, maxTop);
-          const below = clamp(ay + at.cell + clear, LANE_EDGE_PX, maxTop);
-          const leftOf = clamp(ax - at.cell - clear - w, LANE_EDGE_PX, maxLeft);
-          const rightOf = clamp(ax + at.cell + clear, LANE_EDGE_PX, maxLeft);
-          const candidates = [
-            { left, top: above },
-            { left: leftOf, top },
-            { left: leftOf, top: above },
-            { left, top: below },
-            { left: rightOf, top },
-            { left: rightOf, top: above },
-          ];
-          for (const c of candidates) {
-            if (clearOfDots(c.left, c.top)) { left = c.left; top = c.top; break; }
+        /* The local player's line parks in the quadrant nearest its ball — north-west first, the
+           corner the board was always read from. Taking the next corner when an edge is in the way
+           keeps the box off the token — and off the pawn parked beside it — instead of clamping the
+           bubble back onto the cluster. */
+        const corners: Array<[number, number]> = [
+          [ax - offset - w, ay - offset - h],
+          [ax + offset, ay - offset - h],
+          [ax - offset - w, ay + offset],
+          [ax + offset, ay + offset],
+        ];
+        const clean = corners.find(([l, t]) => fits(l, t) && !hits(l, t, dotBlockers));
+        if (clean) {
+          left = clean[0];
+          top = clean[1];
+        } else {
+          left = clamp(ax - offset - w, LANE_EDGE_PX, maxLeft);
+          top = clamp(ay - offset - h, LANE_EDGE_PX, maxTop);
+          if (hits(left, top, dotBlockers)) {
+            /* an edge clamp pushed the bubble back toward the pawn: lift it clear above the up dot,
+               or, when the top edge is already there, slide it clear of the left, down and right */
+            const above = clamp(ay - at.cell - clear - h, LANE_EDGE_PX, maxTop);
+            const below = clamp(ay + at.cell + clear, LANE_EDGE_PX, maxTop);
+            const leftOf = clamp(ax - at.cell - clear - w, LANE_EDGE_PX, maxLeft);
+            const rightOf = clamp(ax + at.cell + clear, LANE_EDGE_PX, maxLeft);
+            const candidates = [
+              { left, top: above },
+              { left: leftOf, top },
+              { left: leftOf, top: above },
+              { left, top: below },
+              { left: rightOf, top },
+              { left: rightOf, top: above },
+            ];
+            for (const c of candidates) {
+              if (!hits(c.left, c.top, dotBlockers)) { left = c.left; top = c.top; break; }
+            }
           }
         }
       }
