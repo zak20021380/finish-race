@@ -7755,194 +7755,81 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
 .sv-pill[data-tone="gold"] .sv-pill-v { color: var(--honey-ink); }
 .sv-pill[data-tone="mint"] .sv-pill-v { color: var(--mint-ink); }
 
-/* the journey: three chapter rings on one hairline track. The number is engraved inside its
-   ring, so nothing ever floats over an icon; the icon and the label sit centred beneath it. */
-.sv-steps {
-  list-style: none;
-  position: relative;
-  margin: 0;
-  padding: 2px 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-}
-.sv-steps::before {
-  content: "";
-  position: absolute;
-  top: 18px;
-  inset-inline: calc(100% / 6);
-  height: 1px;
-  background: linear-gradient(90deg,
-    rgba(255, 255, 255, .03) 0%,
-    rgba(255, 255, 255, .14) 16%,
-    rgba(255, 255, 255, .14) 84%,
-    rgba(255, 255, 255, .03) 100%);
-  pointer-events: none;
-}
-.sv-step {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
+.sv-quest {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  text-align: center;
-}
-.sv-step-ring {
-  position: relative;
-  z-index: 1;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(70% 70% at 32% 22%, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 58%),
-    linear-gradient(165deg, #303C52 0%, #18202F 44%, #0A0F18 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, .25),
-    inset 0 -3px 5px rgba(0, 0, 0, .65),
-    0 0 0 1px rgba(255, 255, 255, .12),
-    0 5px 12px -7px rgba(0, 0, 0, .95);
-}
-.sv-step-ring::before {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 2px 4px rgba(0, 0, 0, .45);
-  pointer-events: none;
-}
-.sv-step-n {
-  position: static;
-  display: block;
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1;
-  direction: ltr;
-  color: #E8EEF9;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
-}
-.sv-step[data-tone="link"] .sv-step-ring {
-  background:
-    radial-gradient(70% 70% at 32% 22%, rgba(255, 255, 255, .24) 0%, rgba(255, 255, 255, 0) 58%),
-    linear-gradient(165deg, #3B4659 0%, #1A2333 46%, #0A0F18 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, .3),
-    inset 0 -3px 5px rgba(0, 0, 0, .65),
-    0 0 0 1px rgba(226, 232, 240, .18),
-    0 5px 12px -7px rgba(0, 0, 0, .95);
-}
-.sv-step[data-tone="plays"] .sv-step-ring {
-  background:
-    radial-gradient(70% 70% at 32% 22%, rgba(165, 243, 252, .28) 0%, rgba(165, 243, 252, 0) 58%),
-    linear-gradient(165deg, #274453 0%, #10222C 46%, #071017 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(207, 250, 254, .28),
-    inset 0 -3px 5px rgba(0, 0, 0, .6),
-    0 0 0 1px rgba(125, 211, 252, .36),
-    0 0 16px -5px rgba(34, 211, 238, .55),
-    0 5px 12px -7px rgba(0, 0, 0, .9);
-}
-.sv-step[data-tone="plays"] .sv-step-n { color: #CFFAFE; text-shadow: 0 0 8px rgba(34, 211, 238, .5); }
-.sv-step[data-tone="rivals"] .sv-step-ring {
-  background:
-    radial-gradient(70% 70% at 32% 22%, rgba(253, 230, 138, .32) 0%, rgba(253, 230, 138, 0) 58%),
-    linear-gradient(165deg, #4A3A1C 0%, #241B0E 46%, #0F0B06 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(254, 243, 199, .3),
-    inset 0 -3px 5px rgba(0, 0, 0, .6),
-    0 0 0 1px rgba(245, 158, 11, .42),
-    0 0 18px -5px rgba(245, 158, 11, .6),
-    0 5px 12px -7px rgba(0, 0, 0, .9);
-}
-.sv-step[data-tone="rivals"] .sv-step-n { color: #FDE68A; text-shadow: 0 0 8px rgba(245, 158, 11, .5); }
-/* the track's direction caret: a hairline chevron that rides just before each new chapter */
-.sv-step + .sv-step::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  top: 15.5px;
-  inset-inline-start: -5.5px;
-  width: 5px;
-  height: 5px;
-  border-top: 1px solid rgba(255, 255, 255, .2);
-  border-inline-end: 1px solid rgba(255, 255, 255, .2);
-  transform: rotate(45deg);
-  pointer-events: none;
-}
-html:lang(fa) .sv-step + .sv-step::before,
-html:lang(ar) .sv-step + .sv-step::before { transform: rotate(-45deg); }
-.sv-step-t {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 10px;
   min-width: 0;
-  max-width: 100%;
+}
+.sv-quest-title {
+  margin: 0;
   font-size: 10px;
   font-weight: 800;
-  line-height: 1.25;
-  color: var(--ink);
+  line-height: 1.5;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #B9A578;
 }
-.sv-step-t .ico { flex: none; width: 11px; height: 11px; }
-.sv-step[data-tone="link"] .sv-step-t .ico { color: var(--honey-ink); }
-.sv-step[data-tone="plays"] .sv-step-t .ico { color: #7DD3FC; }
-.sv-step[data-tone="rivals"] .sv-step-t .ico { color: #FCD34D; }
-.sv-step-t span { min-width: 0; overflow-wrap: anywhere; }
-.sv-step-hint {
-  font-size: 8.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--ink-soft);
-  overflow-wrap: anywhere;
+.sv-quest-track {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.sv-step-tag {
+.sv-quest-stage {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01));
+  text-align: start;
+}
+.sv-quest-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #7DD3FC;
+  background: #0C1720;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(125, 211, 252, .16), 0 0 14px rgba(34, 211, 238, .08);
+}
+.sv-quest-icon .ico { width: 20px; height: 20px; }
+.sv-quest-stage[data-tone="rivals"] .sv-quest-icon {
+  color: #FCD34D;
+  background: #1B160D;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(245, 158, 11, .18), 0 0 14px rgba(245, 158, 11, .08);
+}
+.sv-quest-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
-  max-width: 100%;
 }
-.sv-step-bonus {
-  flex: none;
+.sv-quest-name { font-size: 12px; font-weight: 800; line-height: 1.5; color: var(--ink); }
+.sv-quest-rule { font-size: 10.5px; font-weight: 500; line-height: 1.5; color: #A5AFBE; }
+.sv-quest-reward {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 17px;
-  padding: 0 5px;
-  border-radius: 5px;
-  background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .06) 100%);
-  color: var(--honey-ink);
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid rgba(245, 158, 11, .17);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, .07);
+  color: #FCD34D;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .28),
-    inset 0 1px 0 rgba(255, 255, 255, .1);
-}
-.sv-step-bonus .ico-star-img {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  filter: drop-shadow(0 2px 6px rgba(255, 184, 0, .35));
-}
-.sv-step-rule {
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1.35;
-  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
   white-space: nowrap;
-  overflow-wrap: normal;
 }
+.sv-quest-reward .ico-star-img { width: 16px; height: 16px; }
 
 /* one primary decision: an obsidian-gold glass bar with the copy key socketed into its flank,
    instead of a bright block and a second equal-looking button beside it */
@@ -8331,8 +8218,8 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
 }
 
 /* Persian and Arabic read the sheets right to left; the meter and every numeral stay put. */
-html:lang(fa) :is(.sv-gift, .sv-step-t, .sv-step-hint, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held),
-html:lang(ar) :is(.sv-gift, .sv-step-t, .sv-step-hint, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held) {
+html:lang(fa) :is(.sv-gift, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held),
+html:lang(ar) :is(.sv-gift, .sv-note, .sv-empty, .sv-notice, .sv-pill-k, .sv-friend-n, .sv-friend-held) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
 html:lang(fa) .sv-pill-k, html:lang(ar) .sv-pill-k {
@@ -8340,11 +8227,9 @@ html:lang(fa) .sv-pill-k, html:lang(ar) .sv-pill-k {
   text-transform: none;
 }
 
-/* 320px: the ledger and the timeline keep their figures; only the type tightens a hair */
+/* Narrow ledgers keep their numeric columns intact. */
 @media (max-width: 344px) {
   .sv-bal b { font-size: 26px; }
-  .sv-step-t { font-size: 9.5px; }
-  .sv-step-rule { font-size: 7.5px; }
   .sv-pill-k { font-size: 8px; letter-spacing: .06em; }
 }
 
@@ -38981,19 +38866,6 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   text-transform: none;
 }
 
-/* short phones: the vault gives up air, never content. Every tier stays inside 90dvh. */
-@media (max-height: 640px) {
-  #modal-stars-vault .vault-modal-sheet { padding: 12px 14px calc(10px + env(safe-area-inset-bottom)); }
-  #modal-stars-vault .vm-head-i { width: 28px; height: 28px; border-radius: 9px; }
-  #modal-stars-vault .vm-head-i .ico { width: 16px; height: 16px; }
-  #modal-stars-vault .vm-head-i .ico-star-img { width: 17px; height: 17px; }
-  #modal-stars-vault .vm-title { font-size: 14px; }
-  #modal-stars-vault .sv-meter { gap: 5px; padding: 8px 11px; }
-  #modal-stars-vault .sv-bal b { font-size: 26px; }
-  #modal-stars-vault .sv-bal-star { width: 20px; height: 20px; }
-  #modal-stars-vault .sv-gift { padding: 4px 7px; font-size: 9.5px; }
-}
-
 /* 320–344px: the subtitle steps aside so the title, the balance and the chevron all fit */
 @media (max-width: 344px) {
   .vault-preview-card { gap: 8px; padding: 0 10px; }
@@ -39010,21 +38882,176 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
   .vg-ico { width: 27px; height: 27px; }
 }
 
-/* ==========================================================================================
-   STARS VAULT — OBSIDIAN TIMELINE FINISH
-   Appended last and ID-scoped so it is the last word on this sheet. The main modal is a single
-   flex column inside 90dvh with overflow:hidden; only the two child sheets may scroll. The
-   journey is one hairline timeline of ringed chapters (no floating badges, no boxes), the ledger
-   is one segmented glass strip, and the primary key is a single obsidian-gold control with the
-   copy action socketed into its flank.
-   ========================================================================================== */
-#modal-stars-vault .vault-modal-sheet { max-height: 90vh; max-height: 90dvh; }
+/* Keep the scrim full-screen; only the visible dialog takes the viewport-sized footprint. */
+#modal-stars-vault { align-items: center; }
+#modal-stars-vault .vault-modal-sheet {
+  width: min(94vw, 410px) !important;
+  max-height: 94dvh !important;
+  height: auto !important;
+  padding: 20px 18px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  border-radius: 24px !important;
+  background: linear-gradient(160deg, #191C23 0%, #10131A 48%, #0C0F15 100%);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .08) !important;
+}
+#modal-stars-vault .vault-modal-body {
+  width: 100%;
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+#modal-stars-vault .vault-modal-x {
+  top: 18px;
+  inset-inline-end: 16px;
+  width: 34px;
+  height: 34px;
+  background: #22252D;
+}
+#modal-stars-vault .vault-modal-x:hover { background: #30343D; }
+#modal-stars-vault .vm-head { align-items: flex-start; gap: 10px; padding-inline-end: 38px; }
+#modal-stars-vault .vm-head-i { width: 34px; height: 34px; }
+#modal-stars-vault .vm-head-t { gap: 4px; }
+#modal-stars-vault .vm-title { font-size: 18px; font-weight: 800; line-height: 1.4; }
+#modal-stars-vault .vm-sub { font-size: 10.5px; font-weight: 500; line-height: 1.5; color: #BCA77B; }
+#modal-stars-vault .sv-live { margin-top: 9px; width: 5px; height: 5px; }
+#modal-stars-vault .sv-vault { flex: none; gap: 12px; }
+#modal-stars-vault .sv-vault > * { flex-shrink: 0; }
+#modal-stars-vault .sv-vault .sv-meter {
+  gap: 12px;
+  padding: 14px;
+  margin: 0;
+  border-radius: 16px;
+  background: #0C1018;
+  box-shadow: inset 0 1px 6px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+#modal-stars-vault .sv-bal { gap: 7px; line-height: 1.3; }
+#modal-stars-vault .sv-bal :is(b, span) { font-size: 26px; font-weight: 800; text-shadow: none; }
+#modal-stars-vault .sv-bal-of { color: #626D7F; }
+#modal-stars-vault .sv-bal-star { width: 26px; height: 26px; }
+#modal-stars-vault .ico-star-img {
+  display: inline-block;
+  object-fit: contain;
+  flex: none;
+  vertical-align: -.18em;
+  filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .18));
+}
+#modal-stars-vault :is(.sv-bal, .sv-pill-v, .sv-quest-reward, .sv-cta-reward) > .ico-star-img { transform: translateY(-1px); }
+#modal-stars-vault .sv-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: none;
+}
+#modal-stars-vault .sv-bar-fill {
+  min-width: 0;
+  background: linear-gradient(180deg, #FFE298 0%, #F5B632 45%, #D68A13 100%);
+  box-shadow: 0 0 8px rgba(245, 158, 11, .35), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+#modal-stars-vault .sv-gift {
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(245, 158, 11, .25);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, .1);
+  box-shadow: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: #E6C779;
+}
+#modal-stars-vault .sv-gift-pod { width: 16px; height: 16px; background: none; box-shadow: none; }
+#modal-stars-vault .sv-gift-pod .ico { width: 16px; height: 16px; }
+#modal-stars-vault .sv-pills {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .06);
+  box-shadow: none;
+}
+#modal-stars-vault .sv-pill { gap: 4px; }
+#modal-stars-vault .sv-pill + .sv-pill { border-inline-start-color: rgba(255, 255, 255, .04); }
+#modal-stars-vault .sv-pill-k { font-size: 9px; line-height: 1.5; color: #9AA5B5; }
+#modal-stars-vault .sv-pill-v { font-size: 15px; line-height: 1.4; gap: 4px; }
+#modal-stars-vault .sv-pill-v .ico-star-img { width: 14px; height: 14px; }
+#modal-stars-vault .sv-acts {
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), 0 4px 12px rgba(0, 0, 0, .18);
+}
+#modal-stars-vault .sv-cta {
+  gap: 6px;
+  padding-inline: 10px 6px;
+  color: #0F172A;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-shadow: none;
+}
+#modal-stars-vault .sv-cta > .ico { width: 15px; height: 15px; color: #59360B; filter: none; }
+#modal-stars-vault .sv-cta-t { display: block; }
+#modal-stars-vault .sv-cta-reward { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; vertical-align: middle; }
+#modal-stars-vault .sv-cta-reward b { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; }
+#modal-stars-vault .sv-cta-star { width: 18px; height: 18px; }
+#modal-stars-vault .sv-cta:hover:not(:active):not(:disabled) { background: rgba(255, 255, 255, .12); }
+#modal-stars-vault .sv-copy {
+  width: 42px;
+  height: 46px;
+  margin: 0;
+  border-radius: 0;
+  border-inline-start: 1px solid rgba(15, 23, 42, .18);
+  color: #0F172A;
+  background: rgba(15, 23, 42, .04);
+  box-shadow: none;
+}
+#modal-stars-vault .sv-copy::before { content: none; }
+#modal-stars-vault .sv-copy .ico { width: 16px; height: 16px; }
+#modal-stars-vault .sv-copy:hover:not(:active):not(:disabled) { background: rgba(255, 255, 255, .14); box-shadow: none; }
+#modal-stars-vault .sv-copy.copied { background: rgba(6, 78, 59, .14); color: #064E3B; }
+#modal-stars-vault .sv-copy:focus-visible { outline-color: #0F172A; outline-offset: -3px; }
+#modal-stars-vault .sv-payout { height: 38px; font-size: 11px; line-height: 1.5; }
+#modal-stars-vault .sv-payout-t { display: block; }
+#modal-stars-vault .sv-payout[data-state="locked"] { background: rgba(255, 255, 255, .025); color: #A5AFBE; }
+#modal-stars-vault .sv-payout[data-state="ready"] {
+  background: rgba(245, 158, 11, .1);
+  color: #FCD34D;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .35);
+  animation: none;
+}
+#modal-stars-vault .sv-payout[data-state="ready"]:active { transform: scale(.985); }
 #modal-stars-vault .vm-foot { gap: 8px; }
-#modal-stars-vault .sv-vault { gap: 7px; }
-#modal-stars-vault .sv-vault .sv-meter { padding: 10px 12px; margin-bottom: 0; }
-#modal-stars-vault .sv-acts { height: 44px; }
-#modal-stars-vault .sv-payout { height: 34px; }
-#modal-stars-vault .sv-pills { padding: 6px 4px; }
+#modal-stars-vault .vm-foot-btn {
+  height: 38px;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .07);
+  color: #B4BDCA;
+  font-size: 10.5px;
+  line-height: 1.5;
+  font-weight: 600;
+  box-shadow: none;
+}
+#modal-stars-vault .vm-foot-btn:hover { background: rgba(255, 255, 255, .07); color: var(--ink); }
+#modal-stars-vault .vm-foot-l { white-space: normal; overflow: visible; }
+#modal-stars-vault .vm-foot-n { display: inline-block; }
+#modal-stars-vault .vm-foot-btn > .ico:not(.vm-foot-chev) { display: none; }
+#modal-stars-vault .sv-notice { font-size: 10.5px; line-height: 1.5; }
+html:lang(fa) #modal-stars-vault .vault-modal-body,
+html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
+html:lang(fa) .sv-quest-title, html:lang(ar) .sv-quest-title { letter-spacing: 0; text-transform: none; }
+@media (max-width: 360px) {
+  #modal-stars-vault .sv-quest-stage { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 8px; padding: 10px; }
+  #modal-stars-vault .sv-quest-icon { width: 32px; height: 32px; }
+  #modal-stars-vault .sv-quest-reward { padding-inline: 5px; }
+  #modal-stars-vault .sv-cta > .ico { display: none; }
+}
 
 /* ---- the tracker's empty state: obsidian icon well + promise + one direct share key ---- */
 #modal-vault-friends .sv-empty {
@@ -39096,33 +39123,12 @@ html:lang(fa) :is(.vg-fine-t, .vm-foot-l), html:lang(ar) :is(.vg-fine-t, .vm-foo
 .sv-empty-share:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
 /* Persian is joined script: tracking is a rendering fault, and every text box keeps its own dir */
-html:lang(fa) :is(.sv-pill-k, .sv-step-t, .sv-step-hint, .sv-step-rule, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t),
-html:lang(ar) :is(.sv-pill-k, .sv-step-t, .sv-step-hint, .sv-step-rule, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t) {
+html:lang(fa) :is(.sv-pill-k, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t),
+html:lang(ar) :is(.sv-pill-k, .sv-stage-l, .sv-stage-done, .sv-empty-t, .sv-empty-share, .vf-summary-t) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
 html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
-
-/* short phones (560px floor): the sheet gives up air, never content, and the timeline keeps its
-   rings intact. Every tier still lands inside 90dvh with overflow:hidden and no scrollbar. */
-@media (max-height: 640px) {
-  #modal-stars-vault .sv-vault { gap: 5px; }
-  #modal-stars-vault .sv-vault .sv-meter { padding: 8px 11px; }
-  #modal-stars-vault .sv-acts { height: 40px; }
-  #modal-stars-vault .sv-copy { width: 30px; height: 30px; }
-  #modal-stars-vault .sv-payout { height: 32px; }
-  #modal-stars-vault .vm-foot { gap: 7px; }
-}
-/* only below the campaign's 560px floor: the last few pixels of padding go, never a label */
-@media (max-height: 540px) {
-  #modal-stars-vault .vault-modal-body { gap: 4px; }
-  #modal-stars-vault .sv-vault { gap: 4px; }
-  #modal-stars-vault .sv-pills { padding: 4px 3px; }
-  #modal-stars-vault .sv-acts { height: 38px; }
-  #modal-stars-vault .sv-copy { width: 28px; height: 28px; }
-  #modal-stars-vault .sv-payout { height: 30px; }
-  #modal-stars-vault .vm-foot-btn { height: 34px; }
-}
 
 /* ==========================================================================
    PROFILE HERO — THE INLINE ACCORDION

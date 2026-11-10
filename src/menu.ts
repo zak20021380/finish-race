@@ -1998,11 +1998,6 @@ export function createMenu(api: MenuApi): Menu {
   let vaultPoll = 0;
   let svCopyTimer = 0;
 
-  /* The programme itself lives in one modal sheet, not in the Profile rhythm: the preview tile
-     opens it, and the same reading paints both surfaces. That sheet is sized to the viewport and
-     never scrolls, so the friends feed and the full explanation are child sheets its footer opens.
-     The controller owns the scrim, the close key, Escape, the scroll lock and the focus hand-back,
-     so a closed vault leaves nothing behind. */
   const vaultModalEl = document.getElementById('modal-stars-vault');
   const vaultPreviewEl = document.getElementById('vault-preview') as HTMLButtonElement | null;
   const vaultModal = vaultModalEl ? createModal(vaultModalEl) : null;
@@ -2220,19 +2215,19 @@ export function createMenu(api: MenuApi): Menu {
       : svFill('vaultGift', {
         gift: en(vault.starterBonus),
         more: en(Math.max(0, target - balance)),
-        target: en(target),
       }));
 
     svText('sv-pending', en(vault.pendingFriendsCount));
     svText('sv-earned', `+${en(vault.earnedStars)}`);
     svText('sv-paid', en(vault.paidOutStars));
 
-    svText('sv-step2-n', `+${en(C.STAGE1_REWARD_STARS)}`);
-    svText('sv-step3-n', `+${en(C.STAGE2_REWARD_STARS)}`);
-    svText('sv-step2-r', svFill('vaultStep2Rule', {
+    svText('sv-quest-title', svFill('vaultQuestTitle', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
+    svText('sv-stage1-reward', `+${en(C.STAGE1_REWARD_STARS)}`);
+    svText('sv-stage2-reward', `+${en(C.STAGE2_REWARD_STARS)}`);
+    svText('sv-stage1-rule', svFill('vaultQuestStage1Rule', {
       m: en(C.STAGE1_MIN_MATCHES), d: en(C.STAGE1_MIN_DAYS),
     }));
-    svText('sv-step3-r', svFill('vaultStep3Rule', {
+    svText('sv-stage2-rule', svFill('vaultQuestStage2Rule', {
       w: en(C.STAGE2_MIN_RANKED_PVP_WINS),
     }));
 
@@ -2241,9 +2236,15 @@ export function createMenu(api: MenuApi): Menu {
     if (shareT) {
       const shareTemplate = t('vaultShare').split('{n}');
       shareT.textContent = '';
+      const reward = document.createElement('span');
+      reward.className = 'sv-cta-reward';
+      reward.dir = 'ltr';
+      const amount = document.createElement('b');
+      amount.textContent = en(C.TOTAL_PER_FRIEND_STARS);
+      reward.append(amount, starAssetEl(18, 'sv-cta-star'));
       shareT.append(
-        document.createTextNode(`${shareTemplate[0]}${en(C.TOTAL_PER_FRIEND_STARS)}`),
-        starAssetEl(18, 'sv-cta-star'),
+        document.createTextNode(shareTemplate[0]),
+        reward,
         document.createTextNode(shareTemplate[1] ?? ''),
       );
     }
@@ -2254,29 +2255,15 @@ export function createMenu(api: MenuApi): Menu {
     if (svCopyBtn) svCopyBtn.disabled = !link;
 
     if (svPayoutBtn) {
-      const locked = !vault.waiting && !vault.canPayout;
       const label = vault.waiting
         ? t('vaultPayoutWaiting')
         : vault.canPayout
           ? svFill('vaultPayoutReady', { n: en(balance) })
           : svFill('vaultPayoutLocked', { n: en(target) });
-      const payoutT = document.getElementById('sv-payout-t');
-      if (payoutT) {
-        payoutT.textContent = '';
-        if (locked) {
-          const lockTemplate = t('vaultPayoutLocked').split('{n}');
-          payoutT.append(
-            document.createTextNode(`${lockTemplate[0]}${en(target)}`),
-            starAssetEl(16),
-            document.createTextNode(lockTemplate[1] ?? ''),
-          );
-        } else {
-          payoutT.textContent = label;
-        }
-      }
+      svText('sv-payout-t', label);
       svPayoutBtn.disabled = vaultBusy || !vault.canPayout;
       svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
-      svPayoutBtn.setAttribute('aria-label', locked ? `${label} ${t('vaultStarsUnit')}` : label);
+      svPayoutBtn.setAttribute('aria-label', label);
       const payoutGlyph = document.getElementById('sv-payout-glyph');
       const payoutStar = document.getElementById('sv-payout-star');
       const showStar = vault.canPayout && !vault.waiting;
