@@ -38931,18 +38931,154 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
 #modal-stars-vault .sv-live { margin-top: 9px; width: 5px; height: 5px; }
 #modal-stars-vault .sv-vault { flex: none; gap: 12px; }
 #modal-stars-vault .sv-vault > * { flex-shrink: 0; }
-#modal-stars-vault .sv-vault .sv-meter {
-  gap: 12px;
-  padding: 14px;
-  margin: 0;
-  border-radius: 16px;
-  background: #0C1018;
-  box-shadow: inset 0 1px 6px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
+.vault-vip-card {
+  position: relative;
+  width: 100%;
+  min-height: 158px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 100% at 100% 0%, rgba(245, 158, 11, 0.18) 0%, transparent 55%),
+    radial-gradient(100% 100% at 0% 100%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+    linear-gradient(135deg, #161E2E 0%, #0B0F19 55%, #070A12 100%);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.65),
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 -1px 1px rgba(245, 158, 11, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  isolation: isolate;
+  min-width: 0;
+  text-align: start;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
-#modal-stars-vault .sv-bal { gap: 7px; line-height: 1.3; }
-#modal-stars-vault .sv-bal :is(b, span) { font-size: 26px; font-weight: 800; text-shadow: none; }
-#modal-stars-vault .sv-bal-of { color: #626D7F; }
-#modal-stars-vault .sv-bal-star { width: 26px; height: 26px; }
+.vault-vip-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 65%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+  transform: skewX(-25deg);
+  animation: vipCardSheen 6s infinite ease-in-out;
+  pointer-events: none;
+}
+@keyframes vipCardSheen {
+  0%, 70% { left: -120%; }
+  100% { left: 160%; }
+}
+.vault-vip-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 4px);
+  box-shadow: inset 1px 1px 0 rgba(253, 230, 138, .12), inset -1px -1px 0 rgba(245, 158, 11, .1);
+  pointer-events: none;
+}
+.vault-card-watermark {
+  position: absolute;
+  right: 6px;
+  bottom: -10px;
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  opacity: .045;
+  transform: rotate(-14deg);
+  pointer-events: none;
+}
+.vault-card-top, .vault-card-center, .vault-card-footer { position: relative; z-index: 1; min-width: 0; }
+.vault-card-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: 8px; }
+.vault-card-brand { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: #D8C499; font-size: 8px; font-weight: 700; line-height: 1.4; letter-spacing: .09em; }
+.vault-card-hardware { display: flex; align-items: center; gap: 6px; direction: ltr; }
+.vault-emv-chip {
+  width: 34px;
+  height: 24px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #FDE68A 0%, #D97706 50%, #F59E0B 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.4);
+  position: relative;
+  flex-shrink: 0;
+}
+.vault-emv-chip svg { display: block; width: 100%; height: 100%; stroke: #785019; stroke-width: .8; }
+.vault-card-contactless { width: 14px; height: 22px; flex: none; stroke: #C2AB7B; stroke-width: 1.2; stroke-linecap: round; opacity: .7; }
+.vault-card-edition { color: #998B70; font-size: 7px; letter-spacing: .17em; }
+.vault-card-payout {
+  display: flex;
+  flex-direction: column;
+  justify-self: end;
+  gap: 3px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgba(232, 201, 133, .16);
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .015));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  backdrop-filter: blur(8px);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: end;
+}
+.vault-card-payout-time { color: #F1D594; text-shadow: 0 0 8px rgba(245, 158, 11, .2); }
+.vault-card-cycle { color: #A8A8A5; font-size: 8px; }
+.vault-card-label { display: block; color: #B7A780; font-size: 9px; font-weight: 500; line-height: 1.4; letter-spacing: .12em; }
+.vault-card-balance {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 4px 0 10px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.vault-card-balance b {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -.04em;
+  color: #F9DE9D;
+  background: linear-gradient(175deg, #FFF8DE 10%, #EED39A 36%, #AD7D36 52%, #FBE6B5 72%, #CEAD6F 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 #03060B);
+}
+.vault-card-balance[data-compact="true"] b { font-size: 26px; }
+.vault-card-target { color: #8C8E94; font-size: 18px; letter-spacing: -.03em; }
+.vault-card-star { display: block; width: 28px; height: 28px; object-fit: contain; flex: none; filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .4)); }
+.vault-card-track { height: 3px; width: 100%; direction: ltr; border-radius: 999px; background: #070B12; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, .08); }
+.vault-card-fill { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #A76B15, #F5B632 65%, #FFF0B9); box-shadow: 0 0 6px rgba(245, 158, 11, .4); transition: width .4s ease; }
+.vault-card-fill::after { content: ""; position: absolute; right: 0; top: -1px; width: 5px; height: 5px; border-radius: 50%; background: #FFF2CA; box-shadow: 0 0 7px 1px rgba(245, 158, 11, .65); }
+.vault-card-fill[data-empty="true"]::after { display: none; }
+.vault-card-footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; }
+.vault-card-holder, .vault-card-settlement { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.vault-card-footer .vault-card-label { font-size: 7px; letter-spacing: .09em; }
+.vault-card-name { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; line-height: 1.4; color: #E0DDD3; text-align: match-parent; unicode-bidi: plaintext; }
+.vault-card-gift { font-size: 9px; font-weight: 500; line-height: 1.4; color: #C4AD7C; }
+.vault-card-gift[hidden] { display: none; }
+.vault-card-settlement { text-align: end; }
+.vault-card-unlock { font-size: 10px; font-weight: 600; line-height: 1.5; color: #E8C981; overflow-wrap: anywhere; }
+html:lang(fa) .vault-vip-card, html:lang(ar) .vault-vip-card { font-family: 'Vazirmatn', system-ui, sans-serif; }
+html:lang(fa) :is(.vault-card-label, .vault-card-brand), html:lang(ar) :is(.vault-card-label, .vault-card-brand) { letter-spacing: 0; }
+html:lang(fa) .vault-card-hardware, html:lang(ar) .vault-card-hardware { align-self: flex-start; }
+html:lang(fa) .vault-card-balance, html:lang(ar) .vault-card-balance { justify-content: flex-end; }
+html.reduced-motion .vault-vip-card::before { animation: none; }
+html.reduced-motion .vault-card-fill { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .vault-vip-card::before { animation: none; }
+  .vault-card-fill { transition: none; }
+}
 #modal-stars-vault .ico-star-img {
   display: inline-block;
   object-fit: contain;
@@ -38950,32 +39086,7 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
   vertical-align: -.18em;
   filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .18));
 }
-#modal-stars-vault :is(.sv-bal, .sv-pill-v, .sv-quest-reward, .sv-cta-reward) > .ico-star-img { transform: translateY(-1px); }
-#modal-stars-vault .sv-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .08);
-  box-shadow: none;
-}
-#modal-stars-vault .sv-bar-fill {
-  min-width: 0;
-  background: linear-gradient(180deg, #FFE298 0%, #F5B632 45%, #D68A13 100%);
-  box-shadow: 0 0 8px rgba(245, 158, 11, .35), inset 0 1px 0 rgba(255, 255, 255, .4);
-}
-#modal-stars-vault .sv-gift {
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid rgba(245, 158, 11, .25);
-  border-radius: 10px;
-  background: rgba(245, 158, 11, .1);
-  box-shadow: none;
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.55;
-  color: #E6C779;
-}
-#modal-stars-vault .sv-gift-pod { width: 16px; height: 16px; background: none; box-shadow: none; }
-#modal-stars-vault .sv-gift-pod .ico { width: 16px; height: 16px; }
+#modal-stars-vault :is(.sv-pill-v, .sv-quest-reward, .sv-cta-reward) > .ico-star-img { transform: translateY(-1px); }
 #modal-stars-vault .sv-pills {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 8px 6px;
@@ -39058,10 +39169,63 @@ html:lang(fa) #modal-stars-vault .vault-modal-body,
 html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
 html:lang(fa) .sv-quest-title, html:lang(ar) .sv-quest-title { letter-spacing: 0; text-transform: none; }
 @media (max-width: 360px) {
+  #modal-stars-vault .vault-modal-sheet { padding-inline: 12px !important; }
+  .vault-vip-card { padding-inline: 12px; }
+  .vault-card-top { gap: 6px; }
+  .vault-card-brand { font-size: 7px; }
+  .vault-card-payout { padding: 5px 6px; font-size: 8.5px; }
+  .vault-card-footer { gap: 8px; }
+  .vault-card-footer .vault-card-label { font-size: 6.5px; letter-spacing: .05em; }
   #modal-stars-vault .sv-quest-stage { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 8px; padding: 10px; }
   #modal-stars-vault .sv-quest-icon { width: 32px; height: 32px; }
   #modal-stars-vault .sv-quest-reward { padding-inline: 5px; }
   #modal-stars-vault .sv-cta > .ico { display: none; }
+}
+
+@media (max-height: 740px) {
+  #modal-stars-vault .vault-modal-sheet { padding-block: 18px 12px !important; }
+  #modal-stars-vault .vault-modal-body, #modal-stars-vault .sv-vault { gap: 8px; }
+  #modal-stars-vault .vm-head-t { gap: 2px; }
+  #modal-stars-vault .vm-title { font-size: 16px; }
+  #modal-stars-vault .vm-sub { font-size: 9px; }
+  .vault-vip-card { padding-block: 12px; gap: 8px; }
+  #modal-stars-vault .sv-pills { padding-block: 5px; }
+  #modal-stars-vault .sv-quest, #modal-stars-vault .sv-quest-track { gap: 6px; }
+  #modal-stars-vault .sv-quest-stage { min-height: 52px; padding-block: 7px; }
+  #modal-stars-vault .sv-quest-copy { gap: 1px; }
+  #modal-stars-vault .sv-quest-name { font-size: 11px; }
+  #modal-stars-vault .sv-quest-icon { width: 30px; height: 30px; }
+  #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 40px; }
+  #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 34px; }
+  #modal-stars-vault .sv-notice { font-size: 9px; }
+}
+
+@media (max-height: 680px) {
+  #modal-stars-vault .vault-modal-sheet { padding-block: 16px 8px !important; }
+  #modal-stars-vault .vault-modal-body, #modal-stars-vault .sv-vault { gap: 5px; }
+  .vault-vip-card { padding-block: 8px; gap: 6px; }
+  .vault-card-brand { gap: 4px; }
+  .vault-card-balance { margin-block: 2px 6px; }
+  .vault-card-balance b { font-size: 30px; }
+  .vault-card-holder, .vault-card-settlement { gap: 2px; }
+  .vault-card-name { font-size: 10px; line-height: 1.3; }
+  .vault-card-gift { line-height: 1.25; }
+  #modal-stars-vault .sv-pills { padding-block: 4px; }
+  #modal-stars-vault .sv-pill { gap: 2px; }
+  #modal-stars-vault .sv-pill-k { font-size: 8px; line-height: 1.3; }
+  #modal-stars-vault .sv-pill-v { font-size: 13px; line-height: 1.2; }
+  #modal-stars-vault .sv-quest, #modal-stars-vault .sv-quest-track { gap: 4px; }
+  #modal-stars-vault .sv-quest-title { font-size: 9px; line-height: 1.3; }
+  #modal-stars-vault .sv-quest-stage { min-height: 42px; padding: 5px 8px; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 7px; }
+  #modal-stars-vault .sv-quest-icon { width: 26px; height: 26px; border-radius: 8px; }
+  #modal-stars-vault .sv-quest-icon .ico { width: 16px; height: 16px; }
+  #modal-stars-vault .sv-quest-name { line-height: 1.3; }
+  #modal-stars-vault .sv-quest-rule { font-size: 9.5px; line-height: 1.3; }
+  #modal-stars-vault .sv-quest-reward { padding-block: 3px; font-size: 13px; }
+  #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 38px; }
+  #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 32px; }
+  #modal-stars-vault .vm-foot-btn { line-height: 1.3; }
+  #modal-stars-vault .sv-notice { padding: 2px 4px; line-height: 1.35; }
 }
 
 /* ---- the tracker's empty state: obsidian icon well + promise + one direct share key ---- */

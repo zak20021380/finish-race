@@ -2202,6 +2202,8 @@ export function createMenu(api: MenuApi): Menu {
 
     svText('sv-bal', en(balance));
     svText('sv-target', en(target));
+    const cardBalance = document.querySelector<HTMLElement>('.vault-card-balance');
+    if (cardBalance) cardBalance.dataset.compact = String(balance >= 100_000);
     const bar = document.getElementById('sv-bar');
     const fill = document.getElementById('sv-bar-fill');
     if (fill) fill.style.width = `${pct.toFixed(1)}%`;
@@ -2210,12 +2212,24 @@ export function createMenu(api: MenuApi): Menu {
       bar.setAttribute('aria-valuenow', String(Math.min(balance, target)));
       bar.setAttribute('aria-valuetext', `${en(balance)} / ${en(target)}`);
     }
-    svText('sv-gift', balance >= target
-      ? svFill('vaultGiftDone', { gift: en(vault.starterBonus) })
-      : svFill('vaultGift', {
-        gift: en(vault.starterBonus),
-        more: en(Math.max(0, target - balance)),
-      }));
+    if (fill) fill.dataset.empty = String(balance <= 0);
+    const cardholder = tgUser()?.username;
+    const holderName = cardholder ? `@${cardholder}` : playerName();
+    svText('sv-card-holder', holderName);
+    const holder = document.getElementById('sv-card-holder');
+    if (holder) holder.title = holderName;
+    svText('sv-card-gift', svFill('vault_card_starter_tag', { gift: en(vault.starterBonus) }));
+    const giftTag = document.getElementById('sv-card-gift');
+    if (giftTag) giftTag.hidden = vault.starterBonus <= 0;
+    svText('sv-card-unlock', !vault.live
+      ? t('vault_card_syncing')
+      : vault.waiting
+        ? t('vault_card_waiting')
+        : vault.canPayout
+          ? t('vault_card_ready')
+          : balance >= target
+            ? t('vault_card_unavailable')
+            : svFill('vault_card_remaining_unlock', { remaining: en(target - balance) }));
 
     svText('sv-pending', en(vault.pendingFriendsCount));
     svText('sv-earned', `+${en(vault.earnedStars)}`);

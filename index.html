@@ -2651,20 +2651,47 @@
             </header>
 
             <div class="sv sv-vault">
-              <div class="sv-meter">
-                <p class="sv-bal" dir="ltr">
-                  <b id="sv-bal">5</b><span class="sv-bal-of" aria-hidden="true">/</span><span id="sv-target">50</span>
-                  <img class="ico-star-img sv-bal-star" src="./src/assets/images/telegram_stars.png" width="26" height="26" alt="Stars" loading="eager" draggable="false" />
-                </p>
-                <div class="sv-bar" id="sv-bar" role="progressbar" aria-labelledby="vm-title"
-                  aria-valuemin="0" aria-valuemax="50" aria-valuenow="5" aria-valuetext="5 / 50">
-                  <span class="sv-bar-fill" id="sv-bar-fill" style="width:10%"></span>
+              <section class="vault-vip-card" aria-labelledby="sv-card-brand">
+                <img class="vault-card-watermark" src="./src/assets/images/telegram_stars.png" width="100" height="100" alt="" aria-hidden="true" draggable="false" />
+                <div class="vault-card-top">
+                  <div class="vault-card-brand">
+                    <div class="vault-card-hardware" aria-hidden="true">
+                      <span class="vault-emv-chip">
+                        <svg viewBox="0 0 34 24" fill="none"><rect x="11" y="6" width="12" height="12" rx="3" /><path d="M0 8h11M0 16h11M23 8h11M23 16h11M17 0v6M17 18v6M5 0l6 6M29 0l-6 6M5 24l6-6M29 24l-6-6" /></svg>
+                      </span>
+                      <svg class="vault-card-contactless" viewBox="0 0 16 24" fill="none"><path d="M3 9a5 5 0 0 1 0 6M6 6a9 9 0 0 1 0 12M9 3a13 13 0 0 1 0 18" /></svg>
+                      <span class="vault-card-edition" dir="ltr">BLACK</span>
+                    </div>
+                    <span id="sv-card-brand" data-i18n="vault_card_brand">STARS VAULT VIP</span>
+                  </div>
+                  <div class="vault-card-payout">
+                    <span class="vault-card-payout-time" data-i18n="vault_card_payout_time">⚡ Payout: &lt; 24h</span>
+                    <span class="vault-card-cycle" data-i18n="vault_card_cycle">30d Cycle</span>
+                  </div>
                 </div>
-                <p class="sv-gift">
-                  <span class="sv-gift-pod" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-                  <span class="sv-gift-t" id="sv-gift">Includes 5 Starter Gift! 45 Stars remaining to unlock payout.</span>
-                </p>
-              </div>
+                <div class="vault-card-center">
+                  <span class="vault-card-label" id="sv-card-balance-label" data-i18n="vault_card_balance_label">AVAILABLE VAULT BALANCE</span>
+                  <p class="vault-card-balance" dir="ltr">
+                    <b id="sv-bal">5</b><span class="vault-card-target">/ <span id="sv-target">50</span></span>
+                    <img class="vault-card-star" src="./src/assets/images/telegram_stars.png" width="28" height="28" alt="Stars" loading="eager" draggable="false" />
+                  </p>
+                  <div class="vault-card-track" id="sv-bar" role="progressbar" aria-labelledby="sv-card-balance-label"
+                    aria-valuemin="0" aria-valuemax="50" aria-valuenow="5" aria-valuetext="5 / 50">
+                    <span class="vault-card-fill" id="sv-bar-fill" style="width:10%"></span>
+                  </div>
+                </div>
+                <div class="vault-card-footer">
+                  <div class="vault-card-holder">
+                    <span class="vault-card-label" data-i18n="vault_card_holder">CARDHOLDER</span>
+                    <b class="vault-card-name" id="sv-card-holder" dir="auto">Player</b>
+                    <span class="vault-card-gift" id="sv-card-gift">🎁 +5 Starter Gift</span>
+                  </div>
+                  <div class="vault-card-settlement">
+                    <span class="vault-card-label" data-i18n="vault_card_status">WITHDRAWAL STATUS</span>
+                    <span class="vault-card-unlock" id="sv-card-unlock">45 Stars to unlock payout</span>
+                  </div>
+                </div>
+              </section>
 
               <div class="sv-pills">
                 <span class="sv-pill">
