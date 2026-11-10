@@ -762,11 +762,28 @@ export function recordGame(
     mode?: 'bot' | 'pvp' | 'arena';
     /** Did this seat still hold at least half its defense when the race was decided? */
     defenseHeld?: boolean;
+    /**
+     * Ranked-only: true when the board came out of the matchmaker — the duel queue or an Arena
+     * cup — with a person on the far side. A friends room, even one full of people, is a friendly
+     * duel; a board with no live seat is practice. Both are `false`.
+     */
+    ranked?: boolean;
+    /**
+     * The race ended without a finish line (resign, drop, abandonment). A ranked run does not
+     * survive one: the match is void, so the streak goes back to zero rather than banking a win
+     * the board never earned.
+     */
+    forfeit?: boolean;
   },
   mult = 1,
 ): number {
   const s = profile.stats;
   const live = r.mode === 'pvp' || r.mode === 'arena';
+  /* THE STREAK IS A RANKED INSTRUMENT. A friendly duel and a bot board are invisible to it: they
+     can neither extend a run nor break one, so a friendly loss never wipes a ranked streak and a
+     farmed AI seat never inflates one. Only the two run counters below are gated; the lifetime
+     tally above still records every race that was actually played. */
+  const ranked = live && r.ranked === true;
   s.games++;
   const mode: Mode = live ? 'online' : 'bot';
   s.modes[mode] = (s.modes[mode] ?? 0) + 1;
@@ -783,19 +800,25 @@ export function recordGame(
        `bot` for a solo practice race and for a friends room the machine backfilled, so a farmed
        AI seat can never move a number the competitive profile prints. */
     s.pvpGames++;
-    if (r.won) {
-      s.pvpWins++;
+    if (r.won) s.pvpWins++;
+  }
+  if (ranked) {
+    /* The run the profile prints: ranked wins only. A voided race — a resignation, a drop, an
+       abandoned board — is a defeat here whichever seat walked, and a loss of any kind is zero. */
+    if (r.won && r.forfeit !== true) {
       s.pvpRun++;
       s.pvpRunBest = Math.max(s.pvpRunBest, s.pvpRun);
+      /* A ranked win extends the defense-gated run only while the seat still held half its
+         walls; a low-integrity win breaks it exactly like a loss, so the badge cannot be farmed
+         by trading walls. */
+      if (r.defenseHeld === true) {
+        s.pvpStreak++;
+        s.pvpBest = Math.max(s.pvpBest, s.pvpStreak);
+      } else {
+        s.pvpStreak = 0;
+      }
     } else {
       s.pvpRun = 0;
-    }
-    /* A live win extends the run only while the seat's defense held; a low-integrity
-       win breaks it exactly like a loss, so the badge cannot be farmed by trading walls. */
-    if (r.won && r.defenseHeld === true) {
-      s.pvpStreak++;
-      s.pvpBest = Math.max(s.pvpBest, s.pvpStreak);
-    } else {
       s.pvpStreak = 0;
     }
   }

@@ -806,6 +806,16 @@ function quitKind(): QuitKind {
 }
 /** The two sides this screen actually paints: the player's chosen colour, the rival in the other. */
 const currentPerspective = (): Perspective => ({ local: localSide, rival: rivalSide(), color: pieceColor() });
+/**
+ * The win streak's own gate: ranked PvP only. A matchmaker seat — the duel queue or an Arena cup —
+ * with a person on the far side is ranked; a friends room (an invite link or a private code) and a
+ * practice board are not, so neither a friendly win nor a friendly loss may touch the run.
+ */
+const rankedPvp = (): boolean => {
+  if (!active || room || 'seats' in active) return false;
+  return matchMode() !== 'bot';
+};
+
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
 const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
 
@@ -1820,7 +1830,12 @@ function showOverlay() {
   const defenseHeld = wallCap > 0
     && state.wallsLeft[localSide] / wallCap >= BADGE_REQUIREMENTS.churchill_bastion.minDefenseHealth;
   const earned = mine
-    ? recordGame({ difficulty, won, mode: matchMode(), defenseHeld }, runtime.coinMult)
+    ? recordGame({
+      difficulty, won, mode: matchMode(), defenseHeld,
+      ranked: rankedPvp(),
+      /* the race ended without a finish line: a ranked run never survives a void board */
+      forfeit: forfeit !== null,
+    }, runtime.coinMult)
     : 0;
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
   /* FIRST-DUEL WELCOME CUSHION. The debut is the likeliest churn moment — and a new invitee
@@ -3215,8 +3230,9 @@ function quitToMenu() {
          Practice is exempt — `matchMode()` already counts a bot-backfilled room as practice, so
          walking out of one costs no rating and no stake. */
       const mode = matchMode();
+      const ranked = rankedPvp();
       if (mode !== 'bot' && (!room || rewardEligible(room, localSide))) {
-        recordGame({ difficulty, won: false, mode }, runtime.coinMult);
+        recordGame({ difficulty, won: false, mode, ranked, forfeit: true }, runtime.coinMult);
       }
     }
     active.close();

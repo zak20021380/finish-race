@@ -7432,6 +7432,24 @@ html.reduced-motion .hex-photo { transition: none; }
 }
 .pf-tile.row + .row { box-shadow: var(--clay), var(--clay-ring); }
 .pf-rows.rows.tight { border-radius: 20px; overflow: visible; background: none; box-shadow: none; gap: var(--s2); }
+/* ---- the win-streak row: an explicit rule under a Latin, tabular counter ----
+   The hint names the eligible lane, so it is longer than a tag: it wraps inside the text column
+   on a 320px phone (two or three lines) while the number keeps its own nowrap slot, so the two
+   can never overlap or clip each other. */
+#pf-streak-row .row-txt { flex: 1 1 auto; min-width: 0; }
+#pf-streak-row .row-s {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+#pf-streak-row #pf-streak {
+  flex: none;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
 .pf-rows .pf-tile.row { cursor: default; }
 .pf-rows .pf-tile.row.edit { cursor: pointer; }
 .pf-tile.row.edit:active { transform: translateY(var(--press-y)); }
