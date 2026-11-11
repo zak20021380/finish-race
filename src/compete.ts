@@ -638,6 +638,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (dock) dock.hidden = board !== 'guilds';
     if (board === 'guilds') paintSquadDock();
     paintGuildHero();
+    /* The podium is board data: repaint it from the shown board's cached top three
+       on every show. A cached board keeps its ladder DOM and its load may early-return,
+       so without this the podium selectBoard blanked would never come back. */
+    paintPodiumFromCache(board);
   }
 
   /**
@@ -665,9 +669,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       return;
     }
     board = next;
-    // The podium is board data: blank it here so the incoming ladder never inherits
-    // the previous board's top three while its rows are still loading.
-    if (podiumEl) podiumEl.hidden = true;
     paintRanks();
     impact('light');
     void loadBoard(next);
@@ -1070,6 +1071,51 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     host.hidden = false;
   }
 
+  /* Podium entries built from one cached field, so a tab re-entry can restore the
+     podium without rebuilding the ladder that is already mounted. */
+  function mindsPodiumEntries(rows: PlayerRow[]): PodiumEntry[] {
+    return rows.slice(0, 3).map((p, i) => ({
+      rank: i + 1,
+      name: p.name,
+      score: p.points.toLocaleString('en-US'),
+      code: p.countryCode,
+      person: true,
+      photo: p.avatar,
+      medal: holderEdition(p.name) ?? undefined,
+      onTap: () => openMind(p, i + 1),
+    }));
+  }
+
+  function nationsPodiumEntries(rows: NationRow[]): PodiumEntry[] {
+    return rows.slice(0, 3).map((c) => ({
+      rank: c.rank,
+      name: c.name || nameOf(c.code),
+      score: c.avg.toLocaleString('en-US'),
+      code: c.code,
+      onTap: () => openNation(c),
+      tapHint: 'open the nation roster',
+    }));
+  }
+
+  function guildsPodiumEntries(rows: RankedSquad[]): PodiumEntry[] {
+    return rows.slice(0, 3).map((s) => ({
+      rank: s.rank,
+      name: s.name || s.handle.replace(/^@/, ''),
+      score: s.trophies.toLocaleString('en-US'),
+      letter: squadMark(s),
+      photo: squadAvatarUrl(s),
+      members: s.members,
+    }));
+  }
+
+  /** A cached board keeps its ladder DOM on re-entry, so the podium selectBoard
+      blanked must be repainted from the cache here rather than by a reload. */
+  function paintPodiumFromCache(which: Board): void {
+    if (which === 'minds') paintPodium(mindsPodiumEntries(mindsField));
+    else if (which === 'guilds') paintPodium(guildsPodiumEntries(guildField));
+    else paintPodium(nationsPodiumEntries(nationRows ?? []));
+  }
+
   /** Extruded clay rank key. */
   function rankCrest(rank: number): HTMLElement {
     const rk = document.createElement('span');
@@ -1220,17 +1266,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const field = rows?.length ?? 0;
     const ahead = rows ? rows.filter((p) => p.points > tiq).length : 0;
     const onBoard = profile.stats.games > 0 && field > 0;
-    /* the podium owns #1-3 outright, so the strip that follows it can never claim
-       one of those places — its standing starts at #4 and counts up from there */
-    const myRank = Math.max(4, ahead + 1);
-    const pct = onBoard ? Math.max(1, Math.round((myRank / (field + 1)) * 100)) : 100;
+    /* Rank from the same sorted field the podium and ladder read: your own row's
+       place when it is in the field, else one past everyone ahead. Never clamped
+       to #4 — a leader on the podium is #1 on the standing strip too. */
+    const myIndex = rows ? rows.findIndex((p) => p.id === 'you') : -1;
+    const myRank = myIndex >= 0 ? myIndex + 1 : ahead + 1;
+    const total = myIndex >= 0 ? field : field + 1;
+    const pct = onBoard ? Math.max(1, Math.round((myRank / Math.max(1, total)) * 100)) : 100;
 
     /* the standing as a number: the podium owns 1-3 and the rows carry 4+, so
        until now the one place that names you was the only place that hid it */
     const badge = document.createElement('span');
     badge.className = 'mh-rank';
     badge.textContent = `#${myRank}`;
-    badge.title = `Rank ${myRank} of ${field + 1} on Top Minds`;
+    badge.title = `Rank ${myRank} of ${total} on Top Minds`;
 
     /* the same portrait hierarchy as the ladder: your face, with your nation pinned
        to the corner — the strip never demotes you to a bare flag or letter */
@@ -1274,7 +1323,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (onBoard) host.append(badge);
     host.append(avWrap, idWrap, score);
 
-    const where = onBoard ? `Rank ${myRank} of ${field + 1}` : 'Unranked';
+    const where = onBoard ? `Rank ${myRank} of ${total}` : 'Unranked';
     const honor = own
       ? ` · ${own.def.name}${own.serial !== null ? ` edition ${own.serial} of ${own.def.cap}` : ''}`
       : '';
@@ -2216,10 +2265,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       globe.append(svgIcon('#i-globe', 'nh-globe-ico'));
       const copy = document.createElement('span');
       copy.className = 'nh-copy';
-      copy.textContent = 'No nation selected • Tap to represent your flag';
+      copy.textContent = t('nationHudUnset');
       const pill = document.createElement('span');
       pill.className = 'nh-pill';
-      pill.textContent = 'Select Flag';
+      pill.textContent = t('nationHudSelectFlag');
       hud.append(globe, copy, pill);
       hud.addEventListener('click', openPicker);
       return hud;
@@ -2301,18 +2350,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       + boardSignature(rows.flatMap((c) => [c.rank, c.code, c.name, c.avg, c.players, c.trend, c.delta]));
     if (!force && key === nationsKey) return;
     nationsKey = key;
-    paintPodium(rows.slice(0, 3).map((c) => ({
-      rank: c.rank,
-      name: c.name || nameOf(c.code),
-      score: c.avg.toLocaleString('en-US'),
-      code: c.code,
-      onTap: () => openNation(c),
-      tapHint: 'open the nation roster',
-    })));
+    paintPodium(nationsPodiumEntries(rows));
     el.textContent = '';
     el.append(nationsHud(rows));
     if (!rows.length) {
-      el.insertAdjacentHTML('beforeend', empty('No nations on the board yet — pick your flag to put yours on it.'));
+      el.insertAdjacentHTML('beforeend', empty(t('ranksEmptyNations')));
       return;
     }
     const ol = document.createElement('ol');
@@ -2323,7 +2365,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       code: c.code,
       name: c.name || nameOf(c.code),
       /* The census is real: a nation with no rated warrior still has registered seats. */
-      sub: `${c.players.toLocaleString('en-US')} players`,
+      sub: t('nationPlayers').replace('{n}', c.players.toLocaleString('en-US')),
       subClass: 'nd-count',
       points: c.avg.toLocaleString('en-US'),
       me: (profile.country ?? '').trim().toUpperCase() === c.code,
@@ -2338,7 +2380,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
     const feed = await fetchNationBoard(myTrophyScore());
     if (!feed.live) {
-      if (!nationRows) el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+      if (!nationRows) el.innerHTML = empty(t('ranksUnavailable'));
       return;
     }
     nationFeed = feed;
@@ -2355,16 +2397,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       + boardSignature(rows.flatMap((p) => [p.id, p.name, p.countryCode, p.avatar, p.points, p.wins, p.trend]));
     if (!force && key === mindsKey) return;
     mindsKey = key;
-    paintPodium(rows.slice(0, 3).map((p, i) => ({
-      rank: i + 1,
-      name: p.name,
-      score: p.points.toLocaleString('en-US'),
-      code: p.countryCode,
-      person: true,
-      photo: p.avatar,
-      medal: holderEdition(p.name) ?? undefined,
-      onTap: () => openMind(p, i + 1),
-    })));
+    paintPodium(mindsPodiumEntries(rows));
     const el = panes.minds;
     if (!el) return;
     el.textContent = '';
@@ -2375,7 +2408,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       rank: i + 4,
       code: p.countryCode,
       name: p.name,
-      sub: `${p.wins} wins`,
+      sub: p.wins === 1 ? t('msWinOne') : t('msWins').replace('{n}', p.wins.toLocaleString('en-US')),
       points: p.points.toLocaleString('en-US'),
       me: p.id === 'you',
       person: true,
@@ -2416,7 +2449,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (!feed?.live) {
       /* a quiet Worker keeps the last real board; a first read says why it is blank */
       if (!mindsField.length) {
-        el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+        el.innerHTML = empty(t('ranksUnavailable'));
         paintMindsStanding(null);
       }
       return;
@@ -2432,7 +2465,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     }));
     if (!rows.length) {
       mindsField = [];
-      el.innerHTML = empty('No players ranked yet.');
+      el.innerHTML = empty(t('ranksEmptyMinds'));
       paintMindsStanding(null);
       return;
     }
@@ -2445,10 +2478,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   /** Bind a guild (or copy an invite for your own) — one spec, used by the row and the podium. */
   function squadAction(s: RankedSquad, mine: boolean): { label: string; mine: boolean; hint: string; run: () => void } {
     if (mine) {
-      return { label: 'Invite', mine: true, hint: `Invite to ${s.handle}: copy squad invite`, run: () => inviteSquad(s) };
+      return { label: t('squadInviteShort'), mine: true, hint: `Invite to ${s.handle}: copy squad invite`, run: () => inviteSquad(s) };
     }
     return {
-      label: 'Join',
+      label: t('squadJoinShort'),
       mine: false,
       hint: `Join ${s.handle}`,
       run: () => {
@@ -2521,7 +2554,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
   /** "809 members" / "1.2k members" — the one line under a squad name. */
   const membersLine = (members: number): string =>
-    `${compactCount(members)} ${members === 1 ? 'member' : 'members'}`;
+    members === 1 ? t('memberOne') : t('membersMany').replace('{n}', compactCount(members));
 
 
   const guildHeroEl = (): HTMLElement | null => {
@@ -2561,7 +2594,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     top.className = 'gh-top';
     const kick = document.createElement('small');
     kick.className = 'gh-kick';
-    kick.textContent = 'My squad';
+    kick.textContent = t('mySquadKick');
     const rank = document.createElement('b');
     rank.className = 'gh-rank';
     rank.textContent = `#${me.rank}`;
@@ -2635,7 +2668,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (mine) {
       const joined = document.createElement('span');
       joined.className = 'lb-btn is-joined';
-      joined.textContent = 'Joined';
+      joined.textContent = t('squadJoinedStamp');
       joined.setAttribute('aria-hidden', 'true');
       act.append(joined);
     } else {
@@ -2679,18 +2712,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
       const txt = document.createElement('span');
       txt.className = 'dock-txt';
-      const t = document.createElement('b');
-      t.className = 'dock-name';
-      t.textContent = 'Join a squad to earn Tactical IQ';
+      const nameEl = document.createElement('b');
+      nameEl.className = 'dock-name';
+      nameEl.textContent = t('dockJoinTitle');
       const s = document.createElement('small');
       s.className = 'dock-sub';
-      s.textContent = 'Race points count for your channel or group';
-      txt.append(t, s);
+      s.textContent = t('dockJoinSub');
+      txt.append(nameEl, s);
 
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'dock-btn is-primary';
-      btn.textContent = 'Find Squad';
+      btn.textContent = t('dockFindSquad');
       btn.setAttribute('aria-label', 'Find Squad: open squad picker');
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2719,7 +2752,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     top.className = 'dock-top';
     const kick = document.createElement('small');
     kick.className = 'dock-kicker';
-    kick.textContent = 'My Squad';
+    kick.textContent = t('mySquadKick');
     const rank = document.createElement('span');
     rank.className = 'dock-rank';
     rank.textContent = `#${me.rank}`;
@@ -2759,20 +2792,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     guildsKey = key;
     if (!loadedBoard.guilds) el.innerHTML = skel(5);
     if (!rows.length) {
-      el.innerHTML = empty('No squads ranked yet.');
+      el.innerHTML = empty(t('ranksEmptySquads'));
       paintPodium([]);
       paintSquadDock();
       return;
     }
     guildField = rows;
-    paintPodium(rows.slice(0, 3).map((s) => ({
-      rank: s.rank,
-      name: s.name || s.handle.replace(/^@/, ''),
-      score: s.trophies.toLocaleString('en-US'),
-      letter: squadMark(s),
-      photo: squadAvatarUrl(s),
-      members: s.members,
-    })));
+    paintPodium(guildsPodiumEntries(rows));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'squad-list';
