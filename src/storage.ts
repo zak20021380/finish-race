@@ -339,6 +339,14 @@ export interface Save {
    */
   firstDuelBonusClaimed: boolean;
   /**
+   * The FTUE "guaranteed first-match victory" has been consumed. False on a fresh install and on
+   * a profile that has only ever played the standalone scripted lesson; it flips to true the
+   * instant the first match the onboarding controller governed settles (`recordGame`'s own flush).
+   * Once true, every later race uses standard matchmaking and standard bot difficulty — the assist
+   * is strictly one-shot and can never be re-armed by a stale cloud hydrate.
+   */
+  firstMatchWon: boolean;
+  /**
    * The colour this screen paints its own pieces in. Local presentation only: the opponent takes
    * the opposite family on this device, and the rules never read this field.
    */
@@ -389,6 +397,7 @@ function fresh(): Save {
     tutorialCompleted: false,
     langChosen: false,
     firstDuelBonusClaimed: false,
+    firstMatchWon: false,
     pieceColor: 'red',
   };
 }
@@ -558,6 +567,15 @@ function migrate(raw: Partial<Save> | null): Save {
      returning, not first-boot, so the gate must never nag them on their next launch. */
   else if (s.tutorialCompleted || s.stats.games > 0 || s.stats.pvpGames > 0) s.langChosen = true;
   if (raw.firstDuelBonusClaimed === true) s.firstDuelBonusClaimed = true;
+  /* The debut assist is monotonic. A pre-field save that already recorded a race belongs to a
+     RETURNING player, so it starts consumed; a save that explicitly carries `false` is a current
+     build (fresh install, or a profile that has only run the scripted lesson) and stays eligible.
+     That distinction is why the standalone FTUE lesson does not spend the debut: the first race a
+     new player could actually lose is the one the controller has to govern. */
+  if (raw.firstMatchWon === true) s.firstMatchWon = true;
+  else if (raw.firstMatchWon === undefined && (s.stats.games > 0 || s.stats.pvpGames > 0)) {
+    s.firstMatchWon = true;
+  }
   if (raw.pieceColor === 'blue' || raw.pieceColor === 'red') s.pieceColor = raw.pieceColor;
   const ref = raw.referral as Partial<ReferralState> | undefined;
   if (ref) {
@@ -694,6 +712,8 @@ export function hydrate(raw: string | null) {
   const wasCompleted = sameOwner && profile.tutorialCompleted === true;
   const wasBonusClaimed = sameOwner && profile.firstDuelBonusClaimed === true;
   const wasLangChosen = sameOwner && profile.langChosen === true;
+  /* An older cloud blob cannot re-arm the debut assist on a device that already spent it. */
+  const wasFirstMatchWon = sameOwner && profile.firstMatchWon === true;
   /* National allegiance is settled once per account: a stale cloud blob may never repaint it. */
   const settledCountry = sameOwner ? profile.country : null;
   const next = migrate(parsed);
@@ -707,6 +727,7 @@ export function hydrate(raw: string | null) {
   /* The locale lock is monotonic too: a cloud blob predating the gate must never reopen it for a
      player who already chose their language on this device. */
   if (wasLangChosen) profile.langChosen = true;
+  if (wasFirstMatchWon) profile.firstMatchWon = true;
   /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
      player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
      must never leave a returning profile eligible for first-open onboarding. */
@@ -985,6 +1006,31 @@ export function claimFirstDuelBonus(): number {
   profile.coins += FIRST_DUEL_BONUS;
   flush();
   return FIRST_DUEL_BONUS;
+}
+
+/* ---------- the one-shot first-match onboarding assist ---------- */
+
+/** STRICT, like every other one-time flag: only the literal `true` counts as "already spent". */
+export const hasWonFirstOnboardingMatch = (): boolean => profile.firstMatchWon === true;
+
+/**
+ * Is this seat still owed its guaranteed debut? The dedicated flag is the authority, not
+ * `stats.games`: the standalone first-boot lesson already settles a race (and increments `games`)
+ * but is a scripted tutorial that cannot be lost, so it must NOT consume the debut. The first real
+ * race — direct entry, the matchmaker queue or solo practice — is the one the controller governs.
+ * Friendly invite rooms and server-verified Referral Hard Bot quests are excluded at the launch
+ * door in `main.ts`, never here.
+ */
+export const isFirstOnboardingEligible = (): boolean => !hasWonFirstOnboardingMatch();
+
+/**
+ * Spend the debut in ONE flush. Called when the governed match settles (a win by construction), so
+ * a reload mid-celebration cannot re-arm the assist, and no later hydrate can undo it.
+ */
+export function markFirstOnboardingWin(): void {
+  if (profile.firstMatchWon) return;
+  profile.firstMatchWon = true;
+  flush();
 }
 
 /** Tournament prizes, event grants and the Admin Command Center move TIQ the same way. */

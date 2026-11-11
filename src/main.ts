@@ -46,10 +46,15 @@ import {
 } from './premium';
 import {
   accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasChosenLanguage,
-  hasClaimedFirstDuelBonus, hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
-  peekPendingDuelRoom, reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom,
-  resetTutorialState, takePendingDuelRoom, theme,
+  hasClaimedFirstDuelBonus, hasCompletedTutorial, isFirstOnboardingEligible, isFirstTimePlayer,
+  markFirstOnboardingWin, onChange, pieceColor, profile, peekPendingDuelRoom,
+  reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom, resetTutorialState,
+  takePendingDuelRoom, theme,
 } from './storage';
+import {
+  activateOnboarding, bestSafeStep, deactivateOnboarding, guardPlayerAction,
+  ONBOARDING_TURN_GRACE, onboardingActive, onboardingRivalAction, playerIsStuck,
+} from './onboarding';
 import {
   createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
@@ -691,6 +696,18 @@ const matchmaking = createMatchmaking({
  * `matchmaking.open()` is never called directly.
  */
 function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
+  /* MATCH #1 OVERRIDE. A debut seat never enters the live queue: a veteran on the far side of the
+     matchmaker is the one outcome this first race cannot underwrite. Route straight to the local
+     AI controller instead, through the very same `startGame()` door the practice fallback uses, so
+     nothing about the board, the HUD or the ceremony looks different. The searching stage is never
+     opened at all, which is what makes the swap seamless. A server-verified Referral Hard Bot quest
+     keeps its strict Hard AI and its own launch path — the assist never touches it. */
+  if (isFirstOnboardingEligible() && !isReferralQuestActive(referralQuestUser())) {
+    setQueueMode(mode);
+    setGameMode('bot');
+    startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+    return;
+  }
   setQueueMode(mode);
   /* the arena lock is mirrored from the server: new entries stop, live races play out */
   const board = arena();
@@ -846,21 +863,41 @@ const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
  */
 let room: Room | null = null;
 
-/** Swap this for a network-backed implementation to go multiplayer. */
-interface Opponent { think(s: GameState): Promise<Action> }
+/**
+ * `null` is not a move: it is the debut controller's forced-resignation signal, answered by
+ * `concedeOnboarding()` below. `full` is the unfogged board the gates read; `s` stays the fogged
+ * projection the ordinary brain has always reasoned from.
+ */
+interface Opponent {
+  think(s: GameState, full: GameState, hold: boolean): Promise<Action | null>;
+}
 /**
  * A bot brain. The level can be fixed (a practice race plays the drawer's pick) or resolved per
  * seat (a room ladders its machine seats), so a four-seat room can field Hard, Normal and Easy at
  * once and the dispatcher never has to know which seat it is thinking for.
+ *
+ * On the ONE debut match the ordinary decision is merely the `preferred` suggestion: the
+ * onboarding gates dry-run it on the full board and may replace it with a held step, a harmless
+ * edge wall, or `null`. Every later match takes the untouched `botAction()` path.
  */
 const makeBot = (d: Difficulty | ((seat: Player) => Difficulty)): Opponent => ({
-  think: (s) => {
+  think: (s, full, hold) => {
     const level = typeof d === 'function' ? d(s.turn) : d;
-    return new Promise((res) => setTimeout(() => res(botAction(s, level)), botThinkMs(level)));
+    const debut = onboardingActive();
+    return new Promise<Action | null>((res) => setTimeout(() => {
+      const natural = botAction(s, level);
+      res(debut ? onboardingRivalAction(full, localSide, natural, hold) : natural);
+    }, botThinkMs(level)));
   },
 });
 
 let difficulty: Difficulty = menuState.difficulty;
+/**
+ * Does the match on screen SPEND the debut when it settles? The standalone first-boot lesson is a
+ * scripted, unwinnable-to-lose tutorial: it is guarded but does not consume the flag, so the first
+ * race the player could actually lose is the one the controller is owed to govern.
+ */
+let onboardingConsumesDebut = false;
 /** The seats this race fields, one entry per ball count: `[1, 1]` for a duel, `[1, 1, 1, 1]` for a
  *  four-way. It used to be a fixed pair; `MAX_TEAMS` is what the board can hold. */
 let sizes: number[] = [...menuState.sizes];
@@ -1930,6 +1967,16 @@ function showOverlay() {
       forfeit: forfeit !== null,
     }, runtime.coinMult)
     : 0;
+  /* CLEAN COMPLETION & PERSISTENCE. The governed debut has settled and `recordGame()` has flushed
+     the tally (`games >= 1`). Spend the one-shot flag in the very same result beat and disarm the
+     controller, so Play again (which calls `restart()` directly, without `startGame()`) and every
+     later match use the standard AI and real matchmaking. `hydrate()` keeps the flag monotonic, so
+     a stale cloud blob can never re-arm the assist. */
+  if (onboardingConsumesDebut) {
+    markFirstOnboardingWin();
+    onboardingConsumesDebut = false;
+  }
+  if (onboardingActive()) deactivateOnboarding();
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
   /* FIRST-DUEL WELCOME CUSHION. The debut is the likeliest churn moment — and a new invitee
      usually loses to the experienced friend who sent the link — so the +200 lands on a defeat as
@@ -2233,9 +2280,19 @@ async function runOpponent() {
   if (token !== gen) return;
   if (paused) await new Promise<void>((res) => waiting.push(res));   // parked until Resume
   if (token !== gen) return;
-  const a = await opponent.think(fogOfWar(state, state.turn));
+  /* The brain reasons on the fog it has always been fed; the debut gates read the FULL board.
+     `hold` is dropped during the lesson's live-play intermission, whose two-row rival stride is
+     part of the tutorial's choreography and must still be allowed to happen. */
+  const a = await opponent.think(fogOfWar(state, state.turn), state, !waitingForMineTrigger);
   if (token !== gen) return;
+  /* ULTIMATE FALLBACK: no safe, non-winning action is left for the rival. Award the resignation
+     instead of letting it play a move that would end the race against the player. */
+  if (a === null) { concedeOnboarding(); return; }
   if (play(a)) return;
+  /* On the debut board a rejected action is already a deadlock: the gates validated it on this
+     exact state, so a refusal means the turn cannot be spent safely. Do not fall through to a raw
+     step that could cross FINISH — concede instead. */
+  if (onboardingActive()) { concedeOnboarding(); return; }
   /* a bot only sees its own side of the fog, so it can pick a square the human already mined —
      which the rules now settle as a dual detonation rather than refusing. A pick the board still
      rejects (a budget already spent, a pawn in the way) falls back to a plain step, so the turn is
@@ -2275,6 +2332,14 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
  */
 function play(a: Action, remote = false): boolean {
   const prev = state;
+  /* PLAYER FAIL-SAFES (debut only). A tap that would seal the player in, walk their pawn onto a
+     live charge, hand the rival a win, or trip the anti-oscillation adjudication is rewritten into
+     the best safe FORWARD step. The scripted lesson is deliberately exempt: its stages own the
+     board and expect the exact action they just asked for. Rival turns and relayed moves are left
+     alone — `guardPlayerAction` is a no-op for any seat other than the local one. */
+  if (!remote && onboardingActive() && !tutorialActive) {
+    a = guardPlayerAction(state, a, localSide);
+  }
   const by = state.turn;
   /* A charge committed onto a rival's buried charge. Read BEFORE the action is applied, because
      afterwards the two craters are indistinguishable from a trigger a ball walked into — and this
@@ -2410,6 +2475,14 @@ function play(a: Action, remote = false): boolean {
   }
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
+  /* ULTIMATE FALLBACK, player side: if the debut seat has somehow boxed itself in (no route to
+     FINISH, eliminated, or no legal step on its own turn), the rival resigns immediately rather
+     than the board grinding to a halt with no winner. */
+  if (onboardingActive() && !tutorialActive && state.winner === null
+    && playerIsStuck(state, localSide)) {
+    concedeOnboarding();
+    return true;
+  }
   if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
   else if (wantsOpponent() && !tutorialActive) void runOpponent();
   return true;
@@ -2435,7 +2508,11 @@ let turnTimerId: number | null = null;
 /** The live allowance in whole seconds; a malformed one falls back to the engine's limit. */
 const turnLimit = (): number => {
   const n = Math.round(runtime.blitz);
-  return Number.isFinite(n) && n > 0 ? n : CONFIG.TURN_TIME_LIMIT;
+  const base = Number.isFinite(n) && n > 0 ? n : CONFIG.TURN_TIME_LIMIT;
+  /* TURN TIMER GRACE. The debut seat gets double the allowance, so a first-time player reading the
+     board never loses a turn to the clock. The ring, the interval and the first paint all read this
+     one function, so the HUD can never advertise a length the clock is not counting down. */
+  return onboardingActive() ? base * ONBOARDING_TURN_GRACE : base;
 };
 /** The seconds left on the live turn, painted from the wall clock rather than decremented. */
 let turnSecondsLeft: number = turnLimit();
@@ -2585,9 +2662,15 @@ function timeoutMove() {
   mineGhost = null;
   setMode(BOARD_IDLE);
   notify('warning');
-  play(getAutoMove(state, state.turn));
+  /* TIMEOUT GRACE. The engine never forfeits a turn — it auto-plays — but the debut takes the
+     extra step of choosing the best FORWARD move that cannot detonate a charge or seal the pawn.
+     `play()`'s own fail-safe would rewrite it anyway; picking it here keeps the toast honest. */
+  const auto = onboardingActive()
+    ? (bestSafeStep(state, localSide) ?? getAutoMove(state, state.turn))
+    : getAutoMove(state, state.turn);
+  play(auto);
   /* after play(), which clears the toast itself to make room for the next prompt */
-  showNote('Auto-move', false, 1800, true);
+  showNote(onboardingActive() ? 'Extra time — auto-move' : 'Auto-move', false, 1800, true);
 }
 
 function restart() {
@@ -3064,17 +3147,43 @@ function startGame(setup: StartSetup) {
       completed,
     });
   const wantsTutorial = requested || autoLesson;
+  /* ---- GUARANTEED FIRST-MATCH VICTORY ----
+     Eligibility is the one-shot persistent flag, NOT `stats.games`: the standalone first-boot
+     lesson already settles a race but is a scripted win, so it must not spend the debut. Three
+     exclusions keep the assist out of boards that are not ours to script:
+       · a friendly invite room with a person on the far side (invite launch, room code, or a
+         second human seat) — a friend must be allowed to win honestly;
+       · an ad-verified Referral Hard Bot quest, whose server-side verification demands strict
+         Hard AI (and which launches straight into its own match);
+       · the standalone / auto / manually replayed LESSON. It is already a scripted, guaranteed
+         finish with its own choreography (including the rival's two-row live-play stride), so it
+         is left untouched — and it does NOT spend the debut. The first race a player could
+         actually lose is the one the controller is owed to govern. */
+  const invitedRoom = INVITE_DUEL_LAUNCH || !!INVITE_ROOM_CODE || !!peekPendingDuelRoom()
+    || humansIn(setup.room) > 1 || hasHumanRival(setup.room ?? null, setup.online?.side ?? 0);
+  const questPending = setup.isQuestMatch === true || isReferralQuestActive(referralQuestUser());
+  const debut = isFirstOnboardingEligible() && !invitedRoom && !questPending && !wantsTutorial;
+  onboardingConsumesDebut = debut;
+  if (debut) activateOnboarding(); else deactivateOnboarding();
   /* A lesson that replaces the launch is the whole match: its end returns to Home. Pause →
      Replay is the one lesson that runs inside a real match and hands the board straight back. */
   tutorialStandalone = wantsTutorial;
   difficulty = setup.difficulty;
+  /* MATCHMAKING OVERRIDE FOR MATCH #1. Any live seat that still reached this door — a late
+     MATCH_FOUND, a relic challenge accepted in-session — is dropped BEFORE a single socket
+     callback is wired. The board becomes a local AI-controlled duel, so the outcome is 100% under
+     client control. `close()` is the no-forfeit release, never `resign()`. */
+  const droppedLive = debut && !!setup.online;
+  let live = setup.online ?? null;
+  if (droppedLive && live) { live.close(); live = null; }
   /* An online seat brings its own board and side; a local race is always seat 0 against the rest. */
-  active = setup.online ?? null;
+  active = live;
   forfeit = null;
   resultLocked = false;
   localSide = active ? active.side : 0;
-  /* A room's seats are its own — one ball per seat, however many it filled with bots. */
-  room = setup.room ?? null;
+  /* A room's seats are its own — one ball per seat, however many it filled with bots. A room that
+     arrived with a live socket is discarded with it; a local practice room keeps its bot roster. */
+  room = droppedLive ? null : (setup.room ?? null);
   sizes = active ? [...active.sizes]
     : room ? sizesOf(room)
     : setup.sizes.slice(0, MAX_TEAMS);
@@ -3091,7 +3200,9 @@ function startGame(setup: StartSetup) {
   /* One brain per seat: a room ladders its machine seats, a plain race plays one level throughout. */
   const lobby = room;
   opponent = makeBot(lobby ? (seat) => difficultyFor(lobby, seat) : difficulty);
-  hardBotDuel = !active && (!room || setup.mode === 'vs_bot') && difficulty === 'hard'
+  /* The debut never arms a server-verified Hard Bot quest: that ladder's strict AI is the one
+     thing the onboarding controller must not soften. */
+  hardBotDuel = !active && !debut && (!room || setup.mode === 'vs_bot') && difficulty === 'hard'
     && sizes.length === 2 && sizes.every((n) => n === 1) && !wantsTutorial;
   paused = false;
   restart();
@@ -3224,6 +3335,24 @@ function endOnline(end: RaceEnd): void {
   !end.win, 3000);
 }
 
+/**
+ * ULTIMATE DEADLOCK / FORCED-WIN FALLBACK. The rival has no safe non-winning action left, or the
+ * debut player has somehow boxed themselves in. Award the race as an opponent resignation in the
+ * same shape `endOnline()` uses — set the winner and let `ui()` arm the ordinary finisher — so the
+ * result card, the tally and the one-shot flag all settle through the one existing door. There is
+ * no parallel settlement path and nothing to pay out twice.
+ */
+function concedeOnboarding(): void {
+  if (!onboardingActive() || state.winner !== null) return;
+  /* A lesson card must not sit on top of the result capsule. */
+  if (tutorialActive || waitingForMineTrigger) cancelTutorial();
+  stopClock();
+  state = { ...state, winner: localSide };
+  showNote('Opponent resigned — you win', false, 3200);
+  notify('success');
+  ui();                  // winner !== null -> armGoalBeat() -> finishSettled() -> showOverlay()
+}
+
 /** The rival is gone: raise the badge, dead the taunt keys and lock the rematch in one beat. */
 function lockResultForLeft(): void {
   resultLocked = true;
@@ -3303,6 +3432,9 @@ function quitToMenu() {
      player who already left the board, and a later race is never a cold boot. */
   firstRunBoot = false;
   firstRunSprint = false;
+  /* An abandoned board is not a settled match: disarm the assist without spending the flag, so the
+     next `startGame()` re-arms it for a debut that has still never been won. */
+  deactivateOnboarding();
   cancelTutorial();                 // leaving mid-lesson does not count as having read it
   /* A board abandoned before its verdict is not a match: drop the open clock without reporting. */
   setIdle();
@@ -3912,7 +4044,15 @@ async function tutorialReply(): Promise<void> {
     const seat = state.turn;
     await new Promise<void>((res) => window.setTimeout(res, 50));
     if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
-    if (!play(getAutoMove(state, seat)) && !play({ kind: 'pass' })) return;
+    /* A lesson replayed from the Pause sheet inside a governed debut still answers to the gates:
+       a deterministic forward step may never become the move that wins the race or seals the
+       player. `hold` is false here, because these two rows are the lesson's own choreography. */
+    const auto = getAutoMove(state, seat);
+    const guarded = onboardingActive()
+      ? onboardingRivalAction(state, localSide, auto, false)
+      : auto;
+    if (onboardingActive() && guarded === null) { concedeOnboarding(); return; }
+    if (!play(guarded ?? auto) && !play({ kind: 'pass' })) return;
   }
 }
 
