@@ -7839,7 +7839,6 @@ html.reduced-motion .hex-photo { transition: none; }
   min-height: 0;
 }
 .sv :is(button, input) { font: inherit; }
-.sv-star { flex: none; filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .35)); }
 .sv-check { flex: none; width: 10px; height: 10px; }
 
 /* the quiet ember beside the title: it only lights on a live server read */
