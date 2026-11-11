@@ -36734,11 +36734,18 @@ html.reduced-motion .btn-hero:active::before { display: none !important; }
    CHECKMATE — the board's own verdict
    ----------------------------------------------------------------------------
    A sealed pawn is resolved by the rules, never left to stall a race. This is
-   the announcement that lands over the grid: an obsidian wash with crimson and
-   gold type, one scale-down entrance and one fade-out. Only transform/opacity
-   animate (compositor-only, no continuous blur) and the physical blast belongs
-   to the canvas. It never takes a tap, never widens the board, and hides
-   itself; the in-board copy is painted by main.ts from settings.ts.
+   the announcement that lands over the grid: a compact obsidian banner with
+   crimson and gold type, one scale-down entrance and one fade-out. Only
+   transform/opacity animate (compositor-only, no continuous blur) and the
+   physical blast belongs to the canvas. It never takes a tap, never widens the
+   board, and hides itself; the in-board copy is painted by main.ts from
+   settings.ts.
+
+   IT MUST NOT BLACK OUT THE BOARD. The wash used to cover the whole grid at
+   .66 opacity for 1.9s, which buried the canvas flare it was announcing and
+   the first two bursts of the endgame finisher. The backdrop is now a halo
+   that hugs the banner and reaches zero well before the board's edge, so the
+   tiles, the pawns and the explosions stay visible under it.
    ============================================================================ */
 .cm-splash {
   position: absolute;
@@ -36754,24 +36761,36 @@ html.reduced-motion .btn-hero:active::before { display: none !important; }
   pointer-events: none;          /* never eats a tap aimed at the board */
   opacity: 0;
   visibility: hidden;
+  /* a localized halo: warm gold inside the badge, a dark pool that is gone by 100% — the board's
+     centre is covered by the banner itself, never by a full-board veil */
   background:
-    radial-gradient(58% 46% at 50% 50%, rgba(255, 196, 84, .16), rgba(255, 196, 84, 0) 72%),
-    radial-gradient(120% 104% at 50% 50%, rgba(9, 7, 11, .66), rgba(9, 7, 11, .38) 58%, rgba(9, 7, 11, 0) 100%);
+    radial-gradient(42% 30% at 50% 50%, rgba(255, 196, 84, .16), rgba(255, 196, 84, 0) 76%),
+    radial-gradient(54% 40% at 50% 50%, rgba(9, 7, 11, .66), rgba(9, 7, 11, .28) 60%, rgba(9, 7, 11, 0) 100%);
 }
 .cm-splash[hidden] { display: none !important; }
-.cm-splash.is-on { visibility: visible; animation: cm-veil 1.9s ease both; }
+.cm-splash.is-on { visibility: visible; animation: cm-veil 1.1s ease both; }
 .cm-in {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  width: 100%;
-  max-width: 100%;
+  box-sizing: border-box;
+  /* a floating badge, not a bar: it shrinks to its copy so the grid around it stays readable */
+  width: auto;
+  max-width: min(100%, 320px);
   min-width: 0;
+  padding: 11px 18px 12px;
+  border-radius: 16px;
   text-align: center;
   transform: scale(.78);
+  background: linear-gradient(180deg, rgba(26, 17, 24, .88) 0%, rgba(12, 9, 14, .92) 100%);
+  box-shadow:
+    0 12px 26px -10px rgba(6, 3, 8, .66),
+    inset 0 0 0 1px rgba(255, 214, 140, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .07);
 }
-.cm-splash.is-on .cm-in { animation: cm-strike 1.9s cubic-bezier(.2, .9, .22, 1) both; }
+.cm-splash.is-on .cm-in { animation: cm-strike 1.1s cubic-bezier(.2, .9, .22, 1) both; }
 .cm-title {
   display: block;
   max-width: 100%;

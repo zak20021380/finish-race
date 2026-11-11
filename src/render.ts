@@ -213,13 +213,28 @@ const RING_PAD = 1.62;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
 /**
+ * The flash's window inside a blast, and the radius it opens at, in cells. The window is 28% of
+ * 700ms — 196ms, four frames even at 20fps — because the old 18% (126ms) was gone before a cold
+ * phone had painted it twice. The radius starts at 0.42c, clear of the 0.34c pawn that stood on
+ * the charge, so the core is never the smaller disc in the same spot.
+ */
+const BLAST_FLASH = 0.28;
+const BLAST_FLASH_R = 0.42;
+/**
  * The CHECKMATE flare that plays where a pawn was sealed off. It is a one-shot transition, not a
  * loop: a white core, a gold ring and a crimson shockwave, gone inside a second. The board's own
  * title is DOM chrome (`main.ts` / `style.css`); this is only the physical blast under it.
  */
 const CM_FX_MS = 1000;
-/** How long the scorched tile's fracture knots keep smouldering before they are cold carbon. */
-const EMBER_MS = 2600;
+/** The verdict's own flash window and opening radius: wider and later than a mine's. */
+const CM_FLASH = 0.30;
+const CM_FLASH_R = 0.42;
+/**
+ * How long the scorched tile's fracture knots keep smouldering before they are cold carbon. It is
+ * deliberately short of two seconds: `fxPending()` holds the whole render loop awake for it, and a
+ * chain of eight beats used to keep a settled board painting for 2.6s after the last flash.
+ */
+const EMBER_MS = 1400;
 /** Tooth marks behind a wounded ball: recent, previous, third gait, then the tile is clean again. */
 const TRAIL_STEPS = 3;
 /** The march onto the charge: the ball is visibly standing on the mine before anything goes off. */
@@ -293,6 +308,8 @@ for (let i = 0; i < EMBER_N; i++) EMBER_SZ[i] = 3 + ((i * 7) % 5) * 0.5;
 
 /** 14 sparks, on fixed unit vectors: a burst costs no randomness and allocates nothing. */
 const SPARK_N = 14;
+/** The fan a reduced-motion blast keeps: eight sparks, evenly spaced, still deterministic. */
+const SPARK_REDUCED = 8;
 const SPARK_C = new Float32Array(SPARK_N);
 const SPARK_S = new Float32Array(SPARK_N);
 const SPARK_L = new Float32Array(SPARK_N);
@@ -320,6 +337,39 @@ const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * One finite effect's own clock. Nothing here is a wall-clock timestamp: `delay` is a countdown and
+ * `elapsed` only ever advances by a frame's clamped step, so a stalled main thread lengthens the
+ * sequence instead of skipping it — and a blast can never be spliced before it was ever painted.
+ */
+interface FxClock {
+  /** ms painted so far; 0 until the first active frame */
+  elapsed: number;
+  /** ms still to wait before the first active frame (the walk onto the charge, a chain stagger) */
+  delay: number;
+  /** the first ACTIVE frame has already been painted, so `t = 0` is on screen */
+  drawn: boolean;
+}
+
+/**
+ * Advance one effect by this frame's clamped step and report the millisecond it paints at.
+ *
+ * `-1` means "still waiting out its delay, do not paint". The first ACTIVE frame always paints
+ * `t = 0`: a charge released on this very frame shows its flash at full strength instead of a step
+ * into the fade, and an effect that is already running advances by at most `dt`.
+ */
+function fxTime(f: FxClock, dt: number): number {
+  if (f.delay > 0) {
+    f.delay = Math.max(0, f.delay - dt);
+    if (f.delay > 0) return -1;
+    f.drawn = true;
+    return 0;
+  }
+  if (!f.drawn) { f.drawn = true; return 0; }
+  f.elapsed += dt;
+  return f.elapsed;
+}
 
 /**
  * An `rgba()` copy of a hex token at alpha `a`. The crest palette is authored as hex (a metal ramp
@@ -1004,6 +1054,14 @@ function buildDecalArt(cell: number, dpr: number): DecalArt {
   glow.addColorStop(1, 'rgba(124,45,18,0)');
   eg.fillStyle = glow;
   eg.fillRect(0, 0, ebox, ebox);
+  /* PRE-MASKED TO A DISC, once per layout. A smouldering knot is painted by blitting this sprite,
+     so a frame never opens a circular clip per ember — six clip changes per burning tile per frame
+     was the most expensive thing a chain left behind. The mask edge sits in the gradient's already
+     transparent zone, so the disc has no visible rim. */
+  eg.globalCompositeOperation = 'destination-in';
+  eg.fillStyle = '#fff';
+  eg.beginPath(); eg.arc(ebox / 2, ebox / 2, ebox / 2 - 0.5, 0, TAU); eg.fill();
+  eg.globalCompositeOperation = 'source-over';
 
   const smoke = document.createElement('canvas');
   const sbox = Math.max(8, cell * 0.95);
@@ -1110,10 +1168,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
-  /** mine triggers, queued by blast(); `t0` is the detonation, after the step onto the charge */
-  const blasts: { x: number; y: number; t0: number; c: number; r: number }[] = [];
+  /** mine triggers; `delay` is the walk onto the charge, then the blast runs on its own clock */
+  const blasts: (FxClock & { x: number; y: number; c: number; r: number })[] = [];
   /** checkmate flares: the gold/crimson burst left where a sealed pawn was taken off the board */
-  const checkmates: { x: number; y: number; t0: number }[] = [];
+  const checkmates: (FxClock & { x: number; y: number })[] = [];
   /**
    * One throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
    * the wall it was buried under, and the landing. A CHAIN queues one of these per beat, with
@@ -1134,8 +1192,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const prevPos = new Map<number, Vec>();                    // ball id → where it was last frame
   /** Tile-surface art, struck once per layout; every scar and droplet blits from here. */
   let decal: DecalArt | null = null;
-  /** Mine bursts still smouldering at their fracture intersections. */
-  const embers: { c: number; r: number; t0: number; v: number }[] = [];
+  /** Mine bursts still smouldering at their fracture intersections, on the same clamped clock. */
+  const embers: (FxClock & { c: number; r: number; v: number })[] = [];
   /** ball id → its logical steps, whether the blast wounded it, and the cell it last stood on. */
   const stride = new Map<number, number>();
   const wounds = new Set<number>();
@@ -2823,7 +2881,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /** Past scars, newest embers: tile furniture, so it sits under walls, dots and balls. */
-  function drawScars(v: View, now: number, still: boolean) {
+  function drawScars(v: View, now: number, still: boolean, dt: number) {
     const art = decal;
     if (!art) return;
     const { cell: c, ox, oy } = L;
@@ -2832,36 +2890,40 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const m of v.state.mines) {
       if (!m.triggered) continue;
       /* the rules flip the mine the moment the move is judged, but the charge only goes off when
-         the ball has stepped onto it: while its blast is queued with a future `t0`, hold the
-         crater back so the square is still intact under the approaching ball. */
+         the ball has stepped onto it: while its blast is still waiting out that walk, hold the
+         crater back so the square is intact under the approaching ball. */
       let pending = false;
       for (const f of blasts) {
-        if (f.c === m.cell.c && f.r === m.cell.r && now < f.t0) { pending = true; break; }
+        if (f.c === m.cell.c && f.r === m.cell.r && f.delay > 0) { pending = true; break; }
       }
       if (pending) continue;
       ctx.drawImage(art.scorch[decalVariant(m.cell.c, m.cell.r)],
         ox + m.cell.c * c + gap / 2, oy + m.cell.r * c + gap / 2, tw, tw);
     }
+    if (!embers.length) return;
+    const size = c * 0.36;
+    ctx.save();
     for (let i = embers.length - 1; i >= 0; i--) {
       const e = embers[i];
-      const t = (now - e.t0) / EMBER_MS;
+      const el = fxTime(e, dt);
+      if (el < 0) continue;                      // the blast has not gone off yet
+      const t = el / EMBER_MS;
       if (t >= 1) { embers.splice(i, 1); continue; }
-      if (t < 0) continue;                       // the blast has not gone off yet
       const anchors = art.embers[e.v];
       const x0 = ox + e.c * c + gap / 2, y0 = oy + e.r * c + gap / 2;
       const cool = (1 - t) * (1 - t);
-      const size = c * 0.36;
-      ctx.save();
-      /* the smoulder stays inside the crater: no warmth is allowed to reach the tile's edge */
-      ctx.beginPath(); ctx.arc(x0 + tw / 2, y0 + tw / 2, tw * 0.39, 0, TAU); ctx.clip();
+      /* `art.ember` is pre-masked to a disc at build time, so a knot is one plain blit: no arc,
+         no clip and no save/restore per ember. The old per-knot circular clip was six clip
+         changes per tile per frame — the single most expensive thing on a chain's smoulder. */
       for (let k = 0; k < anchors.length; k++) {
         const flicker = still ? 1 : 0.78 + 0.22 * Math.sin(now / 90 + k * 2.3 + i);
         ctx.globalAlpha = 0.8 * cool * flicker;
         ctx.drawImage(art.ember, x0 + anchors[k].x * tw - size / 2,
           y0 + anchors[k].y * tw - size / 2, size, size);
       }
-      ctx.restore();
     }
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
   /** The blood trail: glossy fresh, dried and 60% on the previous gait, a faint third, then gone. */
@@ -2943,6 +3005,159 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /**
+   * THE IMPACT LAYER: the mine's trigger and the CHECKMATE flare, in one pass, painted ABOVE the
+   * pawns. Both are the loudest thing the board ever says and both used to be painted under the
+   * ball loop — the pawn that stepped on the charge covered the impact core, which is the exact
+   * frame the player is watching.
+   *
+   * Their clocks are `fxTime`'s: a countdown for the walk onto the charge (or a chain's stagger),
+   * then at most 33ms per painted frame. A stalled main thread therefore LENGTHENS a blast instead
+   * of skipping its flash, and the first active frame always paints `t = 0`.
+   *
+   * `pearl` is the light arena. Additive light is invisible on ivory, so the whole pass flips to
+   * normal blending and ink-dark amber / crimson / gold — the same call `drawLamp` and `drawGlow`
+   * make for a halo — instead of a wash the light board simply swallows.
+   */
+  function drawBlastFx(c: number, still: boolean, pearl: boolean, dt: number) {
+    for (let i = blasts.length - 1; i >= 0; i--) {
+      const f = blasts[i];
+      const el = fxTime(f, dt);
+      if (el < 0) continue;                      // the ball is still walking onto the charge
+      const t = el / BLAST_MS;
+      if (t >= 1) { blasts.splice(i, 1); continue; }
+      const ease = 1 - Math.pow(1 - t, 3);
+      ctx.save();
+      /* THE CORE. It opens at 0.42c — clear of the 0.34c pawn standing on it — and owns 28% of
+         the blast (196ms), so even a cold phone at 20fps paints it four times. White on the dark
+         arena, deep amber on pearl, where a white disc would be invisible. */
+      if (t < BLAST_FLASH) {
+        const ft = t / BLAST_FLASH;
+        ctx.globalAlpha = (1 - ft) * (pearl ? 0.95 : 0.9);
+        ctx.fillStyle = pearl ? '#7c2d12' : '#fff';
+        ctx.beginPath(); ctx.arc(f.x, f.y, c * (BLAST_FLASH_R + 0.7 * ease), 0, TAU); ctx.fill();
+      }
+      /* the burst's own light: a wide radial wash. Both gradients are built around the origin,
+         like every other paint server here, so the context has to move onto the square first. */
+      if (blastGlow) {
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        /* additive warmth on the dark arena — the same pass the finisher runs; on pearl the same
+           gradient is an orange haze over ivory, so it is held back to a quiet normal-blended pool */
+        if (!pearl) ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (pearl ? 0.4 : 0.9) * (1 - t);
+        ctx.fillStyle = blastGlow;
+        ctx.beginPath(); ctx.arc(0, 0, c * 1.4, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+      /* the shockwave ring, in the mine's own warning red — never a team colour */
+      ctx.globalAlpha = 0.85 * (1 - t);
+      ctx.strokeStyle = pearl ? '#b45309' : MINE_RAMP.mid;
+      ctx.lineWidth = Math.max(1.5, c * (pearl ? 0.13 : 0.11) * (1 - t));
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.4 + 1.9 * ease), 0, TAU); ctx.stroke();
+      ctx.lineCap = 'round';
+      if (!still) {
+        /* the smoke ring, thrown with the sparks and thinning into the clay */
+        if (decal) {
+          const sw = c * 0.95;
+          for (let n = 0; n < 6; n++) {
+            const a = (n / 6) * TAU + 0.5;
+            const d = c * (0.32 + 1.05 * ease);
+            ctx.globalAlpha = 0.17 * (1 - t) * (1 - t);
+            ctx.drawImage(decal.smoke, f.x + Math.cos(a) * d - sw / 2,
+              f.y + Math.sin(a) * d * 0.72 - c * 0.4 * ease - sw / 2, sw, sw);
+          }
+        }
+        ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
+        const fan = (warm: boolean) => {
+          ctx.beginPath();
+          for (let n = 0; n < SPARK_N; n++) {
+            if ((n % 3 === 0) !== warm) continue;
+            const r0 = c * (0.3 + 1.2 * ease) * SPARK_L[n];
+            const r1 = r0 + c * 0.45 * (1 - t) * SPARK_L[n];
+            ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0);
+            ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1);
+          }
+          ctx.stroke();
+        };
+        ctx.globalAlpha = 0.85 * (1 - t);
+        ctx.strokeStyle = pearl ? '#b45309' : MINE_RAMP.light;
+        fan(false);
+        ctx.strokeStyle = pearl ? '#9f1239' : '#f59e0b';
+        fan(true);
+      } else {
+        /* REDUCED MOTION still gets an explosion. The old branch dropped the flash to a ring and
+           the sparks to nothing, so a phone whose battery saver flips the OS flag showed a faint
+           hoop where a mine went off. The core above, this ring and an eight-spark fan stay. */
+        ctx.globalAlpha = 0.9 * (1 - t);
+        ctx.strokeStyle = pearl ? '#b45309' : MINE_RAMP.light;
+        ctx.lineWidth = Math.max(1, c * 0.055 * (1 - t));
+        ctx.beginPath();
+        for (let n = 0; n < SPARK_REDUCED; n++) {
+          const a = (n / SPARK_REDUCED) * TAU + 0.24;
+          const len = 0.6 + 0.6 * (((n * 5) % SPARK_REDUCED) / SPARK_REDUCED);
+          const r0 = c * (0.34 + 1.15 * ease) * len;
+          const r1 = r0 + c * 0.42 * (1 - t) * len;
+          ctx.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0);
+          ctx.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /*
+     * CHECKMATE: the pawn is gone and this is what takes it off the board — a hot core, a gold ring
+     * running out first and a crimson shockwave on its heels. Same discipline as every other cue:
+     * one finite clamped clock, no blur and no allocation per frame.
+     */
+    for (let i = checkmates.length - 1; i >= 0; i--) {
+      const f = checkmates[i];
+      const el = fxTime(f, dt);
+      if (el < 0) continue;
+      const t = el / CM_FX_MS;
+      if (t >= 1) { checkmates.splice(i, 1); continue; }
+      const ease = 1 - Math.pow(1 - t, 3);
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      /* gold light on the dark arena; ink on pearl, where 'lighter' has nothing to add */
+      ctx.globalCompositeOperation = pearl ? 'source-over' : 'lighter';
+      if (t < CM_FLASH) {
+        const ft = t / CM_FLASH;
+        ctx.globalAlpha = (1 - ft) * 0.95;
+        ctx.fillStyle = pearl ? '#881337' : '#fff9e8';
+        ctx.beginPath(); ctx.arc(0, 0, c * (CM_FLASH_R + 0.5 * ft), 0, TAU); ctx.fill();
+      }
+      if (blastGlow && !pearl) {
+        ctx.globalAlpha = 0.7 * (1 - t) * (1 - t);
+        ctx.fillStyle = blastGlow;
+        ctx.beginPath(); ctx.arc(0, 0, c * 1.9, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 0.9 * (1 - t);
+      ctx.strokeStyle = pearl ? '#b45309' : '#ffd76e';
+      ctx.lineWidth = Math.max(1.5, c * 0.09 * (1 - t));
+      ctx.beginPath(); ctx.arc(0, 0, c * (0.45 + 2 * ease), 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 0.72 * (1 - t);
+      ctx.strokeStyle = pearl ? '#9f1239' : '#d11f3c';
+      ctx.lineWidth = Math.max(1, c * 0.06 * (1 - t));
+      ctx.beginPath(); ctx.arc(0, 0, c * (0.32 + 1.5 * ease), 0, TAU); ctx.stroke();
+      /* four gold rays, on the same clock, so the verdict reads even under reduced motion */
+      ctx.globalAlpha = 0.55 * (1 - t);
+      ctx.strokeStyle = pearl ? '#92400e' : '#ffe6a3';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1, c * 0.045 * (1 - t));
+      ctx.beginPath();
+      for (let n = 0; n < 4; n++) {
+        const a = Math.PI / 4 + (n * Math.PI) / 2;
+        const r0 = c * (0.5 + 0.9 * ease), r1 = r0 + c * 0.5 * (1 - t);
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /**
    * Every losing pawn's burst, plus the scorch it leaves. Scorch marks are painted first so the
    * debris sits on top of its own damage; each burst is a white-hot core inside a gold halo →
    * two expanding shock rings → obsidian shards and amber embers with drag and gravity, all inside
@@ -3018,56 +3233,70 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.arc(0, 0, br * (0.25 + 2.55 * re) * (k === 0 ? 1 : 0.82), 0, TAU);
         ctx.stroke();
       }
-      /* the debris: eighteen tumbling shards and six embers, all on fixed vectors */
+      /*
+       * The debris: eighteen tumbling shards and six embers, all on fixed vectors.
+       *
+       * Two passes, one composite state each. The old loop flipped between 'lighter' (embers) and
+       * 'source-over' (shards) INSIDE every iteration — twelve state changes per burst, and each
+       * one costs the GPU a pipeline flush on a phone. Embers are additive and shards are opaque,
+       * so the split is free: every ember first, then every shard.
+       */
       const ca = Math.cos(p.rot), sa = Math.sin(p.rot);
-      for (let i = 0; i < SHARD_N; i++) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < SHARD_N; i += 3) {
         const q = clamp(el / (FINISH_BURST_MS * SHARD_LIFE[i]), 0, 1);
         if (q >= 1) continue;
         const dx = SHARD_C[i] * ca - SHARD_S[i] * sa;
         const dy = SHARD_C[i] * sa + SHARD_S[i] * ca;
-        const ember = i % 3 === 0;
         /* embers are thrown hardest: they cross onto the neighbouring tiles, the shards stay near */
-        const reach = c * (0.5 + (ember ? 0.95 : 0.7) * SHARD_V[i] * (1 - Math.pow(1 - q, 2.2)));
+        const reach = c * (0.5 + 0.95 * SHARD_V[i] * (1 - Math.pow(1 - q, 2.2)));
         const px = dx * reach;
         /* drag flattens the outward run; gravity takes over as the fleck cools */
         const py = dy * reach * 0.8 + c * 0.62 * q * q;
-        if (ember) {
-          const sz = EMBER_SZ[i / 3];
-          const fade = 1 - q * q;
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = 0.95 * (1 - q);
-          ctx.strokeStyle = i % 2 === 0 ? '#ffe08a' : '#ff9448';
-          ctx.lineCap = 'round';
-          ctx.lineWidth = Math.max(1.4, sz * (1 - q * 0.55) * 0.8);
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(px - dx * c * 0.95 * fade, py - dy * c * 0.95 * fade - c * 0.16);
-          ctx.stroke();
-          ctx.fillStyle = '#fff0c2';
-          ctx.beginPath(); ctx.arc(px, py, sz * (1 - q * 0.35), 0, TAU); ctx.fill();
-        } else {
-          /* obsidian: an angular sliver tumbling along its own outward line, edge still burning */
-          const len = SHARD_SZ[i];
-          const wid = len * 0.36;
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = 0.96 * (1 - q * q);
-          ctx.fillStyle = '#141013';
-          ctx.save();
-          ctx.translate(px, py);
-          ctx.rotate(p.rot + SHARD_SPIN[i] * q + Math.atan2(dy, dx));
-          ctx.beginPath();
-          ctx.moveTo(len, 0);
-          ctx.lineTo(len * 0.12, wid);
-          ctx.lineTo(-len * 0.55, wid * 0.35);
-          ctx.lineTo(-len * 0.55, -wid * 0.35);
-          ctx.lineTo(len * 0.12, -wid);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,158,74,.95)';
-          ctx.lineWidth = Math.max(1, len * 0.14);
-          ctx.stroke();
-          ctx.restore();
-        }
+        const sz = EMBER_SZ[i / 3];
+        const fade = 1 - q * q;
+        ctx.globalAlpha = 0.95 * (1 - q);
+        ctx.strokeStyle = i % 2 === 0 ? '#ffe08a' : '#ff9448';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1.4, sz * (1 - q * 0.55) * 0.8);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - dx * c * 0.95 * fade, py - dy * c * 0.95 * fade - c * 0.16);
+        ctx.stroke();
+        ctx.fillStyle = '#fff0c2';
+        ctx.beginPath(); ctx.arc(px, py, sz * (1 - q * 0.35), 0, TAU); ctx.fill();
+      }
+      /* the obsidian, in one opaque pass: an angular sliver tumbling along its own outward line,
+         edge still burning */
+      ctx.globalCompositeOperation = 'source-over';
+      for (let i = 1; i < SHARD_N; i++) {
+        if (i % 3 === 0) continue;                 // the ember slots already painted
+        const q = clamp(el / (FINISH_BURST_MS * SHARD_LIFE[i]), 0, 1);
+        if (q >= 1) continue;
+        const dx = SHARD_C[i] * ca - SHARD_S[i] * sa;
+        const dy = SHARD_C[i] * sa + SHARD_S[i] * ca;
+        const reach = c * (0.5 + 0.7 * SHARD_V[i] * (1 - Math.pow(1 - q, 2.2)));
+        const px = dx * reach;
+        const py = dy * reach * 0.8 + c * 0.62 * q * q;
+        const len = SHARD_SZ[i];
+        const wid = len * 0.36;
+        ctx.globalAlpha = 0.96 * (1 - q * q);
+        ctx.fillStyle = '#141013';
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(p.rot + SHARD_SPIN[i] * q + Math.atan2(dy, dx));
+        ctx.beginPath();
+        ctx.moveTo(len, 0);
+        ctx.lineTo(len * 0.12, wid);
+        ctx.lineTo(-len * 0.55, wid * 0.35);
+        ctx.lineTo(-len * 0.55, -wid * 0.35);
+        ctx.lineTo(len * 0.12, -wid);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,158,74,.95)';
+        ctx.lineWidth = Math.max(1, len * 0.14);
+        ctx.stroke();
+        ctx.restore();
       }
       ctx.restore();
     }
@@ -3087,14 +3316,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   function fxPending(now: number): boolean {
     for (const f of ripples) if (now < f.t0 + RIPPLE_MS) return true;
     for (const f of pulses) if (now < f.t0 + 460) return true;
-    /* `t0` is the detonation, AFTER the ball's walk onto the charge: a future t0 must keep the
-       loop alive through that walk or the blast would never be painted. */
-    for (const f of blasts) if (now < f.t0 + BLAST_MS) return true;
-    for (const f of checkmates) if (now < f.t0 + CM_FX_MS) return true;
+    /* A queued detonation is a COUNTDOWN, not a timestamp: a blast still waiting out the ball's
+       walk onto the charge, or one whose clamped clock has not reached its end, owes frames. */
+    for (const f of blasts) if (f.delay > 0 || f.elapsed < BLAST_MS) return true;
+    for (const f of checkmates) if (f.delay > 0 || f.elapsed < CM_FX_MS) return true;
     for (const k of knocks) if (now < k.t0 + k.stepMs + k.flyMs) return true;
     for (const f of dust) if (now < f.t0 + DUST_MS) return true;
     for (const f of streaks) if (now < f.t0 + STREAK_MS) return true;
-    for (const f of embers) if (now < f.t0 + EMBER_MS) return true;
+    for (const f of embers) if (f.delay > 0 || f.elapsed < EMBER_MS) return true;
     for (const [, t] of thump) if (now < t + THUMP_MS) return true;
     for (const [, w] of pendingWounds) if (now < w.when) return true;
     for (const [, t] of born) if (now < t + 220) return true;     // wall pop-in
@@ -3111,6 +3340,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** Ambient pulses ride this clock, which only advances while a transition is running. */
   let ambientT = 0;
   let ambientLast = -1;
+  /**
+   * The last painted frame's timestamp, for the finite-effect clock. `-1` before the first frame
+   * (and after a reset), so the frame that boots the board never advances an effect by a delta it
+   * cannot justify. It is a wall-clock reading only to derive one CLAMPED step per frame; nothing
+   * downstream stores it.
+   */
+  let fxLast = -1;
 
   /**
    * Paint one frame and report whether another is needed. `active` is the caller's own motion
@@ -3141,6 +3377,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (!ballFx.length) buildStatic();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
+    /* The board's light mode. Additive light is invisible on ivory, so every blast pass below has
+       a pearl branch that paints high-contrast ink instead of glow (see `drawBlastFx`). */
+    const pearl = !!th.board.pearl;
+    /*
+     * ONE clamped step for every finite effect clock this frame — mine blasts, chain beats,
+     * checkmate flares, smouldering embers. The same discipline the endgame finisher has always
+     * used: a detonation lands exactly when the main thread spikes, and a raw 300ms delta would
+     * jump the flash, the rings and half the sparks straight past the splice. 33ms is the ceiling,
+     * so after a stall the sequence runs LONGER, never faster, and every beat is painted.
+     */
+    const fxDt = fxLast < 0 ? 0 : Math.min(Math.max(0, now - fxLast), FINISH_DT_CAP);
+    fxLast = now;
     /* A finisher can only belong to a settled board. If a cue ever survived a restart, its
        "burst" would `continue` past a live pawn and drop it from the render queue entirely — the
        exact symptom of a board that shows its grid but no tokens on frame zero. It would also
@@ -3276,7 +3524,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     /* the surface the race has already marked: cold craters under the live traps, then the trail */
-    drawScars(v, now, still);
+    drawScars(v, now, still, fxDt);
     drawBloodTrail();
 
     /* a tap just landed: a quick ripple in the colour of the seat that plays it */
@@ -3396,11 +3644,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(clock / 520);
     for (const m of v.state.mines) {
       if (m.owner !== v.human) continue;
-      /* a triggered mine stays in the ground until its blast's own `t0`, so the ball walks onto a
-         live charge and the charge is what disappears under the flash */
+      /* a triggered mine stays in the ground until its blast's countdown runs out, so the ball
+         walks onto a live charge and the charge is what disappears under the flash */
       let pending = false;
       if (m.triggered) {
-        for (const f of blasts) if (f.c === m.cell.c && f.r === m.cell.r && now < f.t0) { pending = true; break; }
+        for (const f of blasts) if (f.c === m.cell.c && f.r === m.cell.r && f.delay > 0) { pending = true; break; }
         if (!pending) continue;
       }
       drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, 'buried', mineK, 1, clock, still);
@@ -3417,122 +3665,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.5 + 1.5 * t), 0, TAU); ctx.stroke();
       ctx.restore();
     }
-
-    /*
-     * The trigger: a white flash, a warm core, one expanding shockwave, amber sparks and a ring of
-     * smoke, all inside BLAST_MS. The ring stays in the mine's own warning red — the board surface
-     * may be pale, and a mine must never read as a team colour. Reduced motion keeps the flash and
-     * the ring, drops the sparks and the smoke.
-     */
-    for (let i = blasts.length - 1; i >= 0; i--) {
-      const f = blasts[i];
-      const t = (now - f.t0) / BLAST_MS;
-      if (t >= 1) { blasts.splice(i, 1); continue; }
-      if (t < 0) continue;                       // Stage 1 still owns the board: the ball is walking on
-      const ease = 1 - Math.pow(1 - t, 3);
-      ctx.save();
-      if (t < 0.18) {                                  // the flash, gone before the ring lands
-        const ft = t / 0.18;
-        ctx.globalAlpha = (1 - ft) * 0.85;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.32 + 0.7 * ease), 0, TAU); ctx.fill();
-      }
-      /* the burst's own light: a wide linear fade. Both gradients are built around the origin,
-         like every other paint server here, so the context has to move onto the square first. */
-      if (blastGlow) {
-        ctx.save();
-        ctx.translate(f.x, f.y);
-        ctx.globalAlpha = 0.9 * (1 - t);
-        ctx.fillStyle = blastGlow;
-        ctx.beginPath(); ctx.arc(0, 0, c * 1.4, 0, TAU); ctx.fill();
-        ctx.restore();
-      }
-      ctx.globalAlpha = 0.85 * (1 - t);
-      ctx.strokeStyle = MINE_RAMP.mid;
-      ctx.lineWidth = Math.max(1.5, c * 0.11 * (1 - t));
-      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.4 + 1.9 * ease), 0, TAU); ctx.stroke();
-      if (!still) {
-        /* the smoke ring, thrown with the sparks and thinning into the clay */
-        if (decal) {
-          const sw = c * 0.95;
-          for (let n = 0; n < 6; n++) {
-            const a = (n / 6) * TAU + 0.5;
-            const d = c * (0.32 + 1.05 * ease);
-            ctx.globalAlpha = 0.17 * (1 - t) * (1 - t);
-            ctx.drawImage(decal.smoke, f.x + Math.cos(a) * d - sw / 2,
-              f.y + Math.sin(a) * d * 0.72 - c * 0.4 * ease - sw / 2, sw, sw);
-          }
-        }
-        ctx.lineCap = 'round';
-        ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
-        const fan = (warm: boolean) => {
-          ctx.beginPath();
-          for (let n = 0; n < SPARK_N; n++) {
-            if ((n % 3 === 0) !== warm) continue;
-            const r0 = c * (0.3 + 1.2 * ease) * SPARK_L[n];
-            const r1 = r0 + c * 0.45 * (1 - t) * SPARK_L[n];
-            ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0);
-            ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1);
-          }
-          ctx.stroke();
-        };
-        ctx.globalAlpha = 0.85 * (1 - t);
-        ctx.strokeStyle = MINE_RAMP.light;
-        fan(false);
-        ctx.strokeStyle = '#f59e0b';
-        fan(true);
-      }
-      ctx.restore();
-    }
-
-    /*
-     * CHECKMATE: the pawn is gone and this is what takes it off the board — a white-hot core, a
-     * gold ring running out first and a crimson shockwave on its heels. Same discipline as every
-     * other cue: one finite clock, additive light, no blur and no allocation per frame.
-     */
-    for (let i = checkmates.length - 1; i >= 0; i--) {
-      const f = checkmates[i];
-      const t = (now - f.t0) / CM_FX_MS;
-      if (t >= 1) { checkmates.splice(i, 1); continue; }
-      if (t < 0) continue;
-      const ease = 1 - Math.pow(1 - t, 3);
-      ctx.save();
-      ctx.translate(f.x, f.y);
-      ctx.globalCompositeOperation = 'lighter';
-      if (t < 0.2) {
-        const ft = t / 0.2;
-        ctx.globalAlpha = (1 - ft) * 0.95;
-        ctx.fillStyle = '#fff9e8';
-        ctx.beginPath(); ctx.arc(0, 0, c * (0.3 + 0.5 * ft), 0, TAU); ctx.fill();
-      }
-      if (blastGlow) {
-        ctx.globalAlpha = 0.7 * (1 - t) * (1 - t);
-        ctx.fillStyle = blastGlow;
-        ctx.beginPath(); ctx.arc(0, 0, c * 1.9, 0, TAU); ctx.fill();
-      }
-      ctx.globalAlpha = 0.9 * (1 - t);
-      ctx.strokeStyle = '#ffd76e';
-      ctx.lineWidth = Math.max(1.5, c * 0.09 * (1 - t));
-      ctx.beginPath(); ctx.arc(0, 0, c * (0.45 + 2 * ease), 0, TAU); ctx.stroke();
-      ctx.globalAlpha = 0.72 * (1 - t);
-      ctx.strokeStyle = '#d11f3c';
-      ctx.lineWidth = Math.max(1, c * 0.06 * (1 - t));
-      ctx.beginPath(); ctx.arc(0, 0, c * (0.32 + 1.5 * ease), 0, TAU); ctx.stroke();
-      /* four gold rays, on the same clock, so the verdict reads even under reduced motion */
-      ctx.globalAlpha = 0.55 * (1 - t);
-      ctx.strokeStyle = '#ffe6a3';
-      ctx.lineCap = 'round';
-      ctx.lineWidth = Math.max(1, c * 0.045 * (1 - t));
-      ctx.beginPath();
-      for (let n = 0; n < 4; n++) {
-        const a = Math.PI / 4 + (n * Math.PI) / 2;
-        const r0 = c * (0.5 + 0.9 * ease), r1 = r0 + c * 0.5 * (1 - t);
-        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
-        ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
+    /* The mine's trigger and the CHECKMATE flare used to be painted HERE, under the pawns — and
+       the pawn that stepped on the charge (0.34c) sat on top of the impact core (0.32c) and hid
+       it. They are the frame's topmost board pass now, next to the finisher: see `drawBlastFx`
+       at the end of the furniture clip. */
 
     /* short comet tails: a sliding ball drags a fading streak of its own colour behind it */
     for (let i = streaks.length - 1; i >= 0; i--) {
@@ -3771,11 +3907,16 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     /*
-     * The losers' bursts and the charred tiles they leave are the LAST board pass, above the dust
-     * and the thinking pips: a detonation must never read as though it happened behind a pawn. It
-     * stays inside the slab clip, so the bloom and the debris can spill over the neighbouring tiles
-     * but never off the board.
+     * THE IMPACT LAYER — the last board passes, above the pawns, the dust and the thinking pips.
+     *
+     * A mine's flash and a checkmate flare are the two moments the board is shouting about, and
+     * they used to be painted BEFORE the ball loop: the pawn that stepped on the charge sat on top
+     * of the impact core, and a 0.34c token covered the one thing the eye was looking for. They are
+     * painted here now, still inside the slab clip, so the bloom and the sparks can spill over the
+     * neighbouring tiles but never off the board.
      */
+    drawBlastFx(c, still, pearl, fxDt);
+    /* the losers' bursts and the charred tiles they leave close the sequence */
     if (fin) drawFinishFx(fin, finNow, c, ox, oy);
 
     ctx.restore();                     // the slab clip opened at the top of this frame
@@ -3859,6 +4000,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       embers.length = 0; stride.clear(); wounds.clear(); pendingWounds.clear(); stood.clear(); blood.length = 0;
       goalAt = -1; goalWait = -1; goalSeat = null;
       finish = null;
+      /* The next frame is the first frame of a new race: it may not advance an effect clock by a
+         delta measured across the gap. */
+      fxLast = -1;
     },
     /**
      * Start the endgame finisher: crown the winning pawn, then shake and shatter every losing pawn
@@ -3922,23 +4066,31 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const now = performance.now();
       const thrown = !!knock && (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r);
       const delay = thrown && !motionReduced() ? KNOCK_STEP_MS : 0;
-      const t0 = now + delay;
-      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0, c: at.c, r: at.r });
-      embers.push({ c: at.c, r: at.r, t0, v: decalVariant(at.c, at.r) });
+      /* The effect owns a COUNTDOWN, never a timestamp: the frame loop decrements it by its own
+         clamped step, so the flash is painted on the frame the ball finishes walking — however
+         late that frame actually arrives. */
+      blasts.push({
+        x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, c: at.c, r: at.r,
+        elapsed: 0, delay, drawn: false,
+      });
+      embers.push({ c: at.c, r: at.r, v: decalVariant(at.c, at.r), elapsed: 0, delay, drawn: false });
       if (knock) {
         /* the ball that set the charge off is the one the rules threw — it takes its wound when
            the charge goes off. The state jumps from its last square straight to the landing, so
            the wound's first footprint is planted on the charge itself, not on the square it
            stepped from before the blast. */
-        pendingWounds.set(knock.id, { at: { c: at.c, r: at.r }, when: t0 });
+        pendingWounds.set(knock.id, { at: { c: at.c, r: at.r }, when: now + delay });
         if (thrown) {
           for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
           knocks.push({
             id: knock.id, from: knock.from, mine: at, to: knock.to, t0: now,
             stepMs: KNOCK_STEP_MS, flyMs: KNOCK_FLY_MS,
           });
-          dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_FLY_MS });
-          thump.set(knock.id, t0 + KNOCK_FLY_MS);
+          dust.push({
+            x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c,
+            t0: now + delay + KNOCK_FLY_MS,
+          });
+          thump.set(knock.id, now + delay + KNOCK_FLY_MS);
         }
       }
       return delay;
@@ -3952,9 +4104,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     checkmate(cells: readonly Cell[]) {
       if (!cells.length) return;
       const { cell: c, ox, oy } = L;
-      const t0 = performance.now();
       for (const at of cells) {
-        checkmates.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0 });
+        checkmates.push({
+          x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c,
+          elapsed: 0, delay: 0, drawn: false,
+        });
       }
     },
     /**
@@ -3995,11 +4149,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         const arcStart = i === 0 ? now : boomAt;
         const stepMs = i === 0 ? lead : 0;
         const flyMs = last ? (still ? 0 : KNOCK_FLY_MS) : stagger;
+        /* `boomAt` is only for the CALLER (its sound and haptics ride the wall clock). The board's
+           own flash waits on a countdown, so a stalled frame delays the beat instead of skipping it
+           and a chain still detonates in order, one clamped step at a time. */
+        const wait = lead + i * stagger;
         blasts.push({
           x: ox + (beat.at.c + 0.5) * c, y: oy + (beat.at.r + 0.5) * c,
-          t0: boomAt, c: beat.at.c, r: beat.at.r,
+          c: beat.at.c, r: beat.at.r, elapsed: 0, delay: wait, drawn: false,
         });
-        embers.push({ c: beat.at.c, r: beat.at.r, t0: boomAt, v: decalVariant(beat.at.c, beat.at.r) });
+        embers.push({
+          c: beat.at.c, r: beat.at.r, v: decalVariant(beat.at.c, beat.at.r),
+          elapsed: 0, delay: wait, drawn: false,
+        });
         /* The first charge wounds the pawn; the rest keep throwing an already-wounded ball, so the
            trail's first footprint stays on the square where the chain began. */
         if (i === 0 && knock) {

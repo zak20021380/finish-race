@@ -7,10 +7,10 @@
  * unaware of it: it watches the DOM the HUD already writes — the "Mine!" note and each chip's
  * wall count.
  *
- * NEVER OVER A BALL. The overlay has no model of the board, and the board is a canvas. So before a
- * callout is placed it samples the painted canvas under each candidate slot and takes the first
- * patch with no saturated team body in it. Balls are the only strong red/blue discs on the grid —
- * a wall can also read as one, which only ever costs the callout a slot.
+ * NEVER OVER A BALL, and never by looking at one. The board is a canvas, and reading it back
+ * (`getImageData`) flushed the GPU pipeline on the frame the explosion was queued — the single
+ * worst thing this overlay did. The board publishes its pawns' boxes instead (`boardpieces.ts`),
+ * exactly as `staging.ts` publishes the staged mine's pair, so a slot is chosen with arithmetic.
  *
  * NEVER OVER THE MINE PAIR EITHER. A staged mine draws its ✓/✕ discs beside the armed square, and
  * those two are the only thing the player is being asked to tap. `staging.ts` publishes that pair's
@@ -19,14 +19,20 @@
  * simply does not paint. A hint is never worth the turn it would cost.
  */
 import './arena.css';
+import { pieceOverlaps } from './boardpieces';
 import { stageOverlaps } from './staging';
 
 /** Each callout lives for this long, then fades out. */
 const SHOW_MS = 1200;
 /** One more callout of the same kind inside this window is the same event repainting. */
 const REPEAT_MS = 250;
-/** Pixel stride when sampling a slot. */
-const SAMPLE_STEP = 4;
+/** Daylight a callout keeps from a pawn's own footprint, in css px. */
+const BALL_CLEAR = 4;
+/**
+ * How late a placement may still paint. A backgrounded WebView throttles animation frames, so a
+ * beat that missed its own frame must be dropped rather than raised over a board that has moved on.
+ */
+const PLACE_MAX_LATE_MS = 600;
 
 type Kind = 'mine' | 'wall';
 
@@ -62,8 +68,6 @@ function boot(): void {
   const layer = document.getElementById('callouts');
   if (!wrap || !layer) return;
   const boardWrap: HTMLElement = wrap;
-  const found = document.getElementById('board');
-  const canvas = found instanceof HTMLCanvasElement ? found : null;
 
   const box = document.createElement('span');
   box.className = 'callout';
@@ -73,96 +77,67 @@ function boot(): void {
   const lastAt: Record<Kind, number> = { mine: 0, wall: 0 };
 
   /**
-   * How much of a board patch reads as a ball body: saturated red or blue, the two team hues.
-   * The board itself is near-neutral lavender, and the finish crown is green/gold, so neither
-   * scores. A wall scores — and simply pushes the callout to the next slot.
-   */
-  function crowd(cx: number, cy: number, w: number, h: number): number {
-    if (!canvas) return 0;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1 || canvas.width < 1 || canvas.height < 1) return 0;
-    const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
-    const x0 = Math.max(0, Math.floor((cx - w / 2) * sx));
-    const y0 = Math.max(0, Math.floor((cy - h / 2) * sy));
-    const x1 = Math.min(canvas.width, Math.ceil((cx + w / 2) * sx));
-    const y1 = Math.min(canvas.height, Math.ceil((cy + h / 2) * sy));
-    const bw = x1 - x0;
-    const bh = y1 - y0;
-    if (bw < 2 || bh < 2) return 0;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return 0;
-    let data: Uint8ClampedArray;
-    try {
-      data = ctx.getImageData(x0, y0, bw, bh).data;
-    } catch {
-      return 0;                       // a tainted canvas must not break the HUD
-    }
-    let hits = 0;
-    for (let y = 0; y < bh; y += SAMPLE_STEP) {
-      for (let x = 0; x < bw; x += SAMPLE_STEP) {
-        const i = (y * bw + x) * 4;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const red = r > 120 && r - g > 45 && r - b > 30;
-        const blue = b > 100 && b - r > 45 && b - g > 20;
-        if (red || blue) hits++;
-      }
-    }
-    return hits;
-  }
-
-  /**
-   * The first slot with no ball under it and no staged mine beside it; failing that, the emptiest
-   * one — or no slot at all.
+   * The first slot with no pawn under it and no staged mine beside it.
    *
-   * A staged mine outranks the beat. Its ✓/✕ pair stands one reach either side of the armed square,
-   * so a slot that would land on those discs is not a candidate: the mirrored slot on the other
-   * half of the board is tried in its place, which is the flip an upper-row staging asks for. If
-   * the pair has claimed both halves, the beat is skipped — a missed "MINE!" costs nothing, a hint
-   * standing on the confirm key costs the turn.
+   * Both answers are arithmetic: the board publishes every pawn's footprint (`boardpieces.ts`) and
+   * the staged pair publishes its own (`staging.ts`). No pixel is ever read back, and no canvas
+   * context is even held here — the old sampling loop asked for one with `willReadFrequently` and
+   * pulled up to twelve patches out of the live board on the detonation tick.
    */
   function pick(): Spot | null {
     const rect = boardWrap.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) return SPOTS[0];
     const w = Math.max(80, box.offsetWidth);
     const h = Math.max(30, box.offsetHeight);
-    let best: Spot | null = null;
-    let bestScore = Number.POSITIVE_INFINITY;
     for (const spot of [...SPOTS, ...SPOTS.map(flip)]) {
       const cx = clamp(spot.x * rect.width, w / 2 + 4, rect.width - w / 2 - 4);
       const cy = clamp(spot.y * rect.height, h / 2 + 4, rect.height - h / 2 - 4);
-      /* the pair's own box is in viewport px; the slot's is built the same way, so one test covers
-         the 20px of daylight the two must keep between them */
-      if (stageOverlaps({
-        left: rect.left + cx - w / 2,
-        top: rect.top + cy - h / 2,
-        width: w,
-        height: h,
-      })) continue;
-      const score = crowd(cx, cy, w, h);
-      if (score === 0) return { x: cx / rect.width, y: cy / rect.height };
-      if (score < bestScore) {
-        bestScore = score;
-        best = { x: cx / rect.width, y: cy / rect.height };
-      }
+      /* the pair's box and the pawns' boxes are both in viewport px, so one test each covers it */
+      const at = { left: rect.left + cx - w / 2, top: rect.top + cy - h / 2, width: w, height: h };
+      if (stageOverlaps(at)) continue;
+      if (pieceOverlaps(at, BALL_CLEAR)) continue;
+      return { x: cx / rect.width, y: cy / rect.height };
     }
-    return best;
+    /* the staged pair (or a full board) owns every slot: this beat does not paint at all */
+    return null;
   }
 
+  let placeRaf = 0;
+  let queued: Kind | null = null;
+  let queuedAt = 0;
+
+  /**
+   * Raise a callout — the WRITE half only: the class and the copy, nothing measured.
+   *
+   * This runs inside a MutationObserver microtask, i.e. on the tick the detonation was queued. A
+   * `getBoundingClientRect()` or an `offsetWidth` here would force the style and layout work that
+   * the first explosion frame is waiting behind, so placement is a separate pass on the next
+   * animation frame — the same split `placeNote()` makes for the board's toast.
+   */
   function show(kind: Kind): void {
     const now = Date.now();
     if (now - lastAt[kind] < REPEAT_MS) return;
+    lastAt[kind] = now;
     window.clearTimeout(hideTimer);
     box.className = `callout is-${kind}`;
     box.innerHTML = MARKUP[kind];
-    /* placed on the spot: the sample reads the board as it is painted, and no animation frame
-       is asked for — a backgrounded WebView throttles rAF and would swallow the callout */
+    queued = kind;
+    queuedAt = now;
+    if (!placeRaf) placeRaf = requestAnimationFrame(place);
+  }
+
+  /**
+   * The READ half, on a frame of its own: measure the board and the pill, choose a clear slot,
+   * then write the position. Reads happen first, writes last — never the other way round.
+   */
+  function place(): void {
+    placeRaf = 0;
+    const kind = queued;
+    queued = null;
+    if (!kind) return;
+    if (Date.now() - queuedAt > PLACE_MAX_LATE_MS) return;   // the beat is stale: drop it
     const spot = pick();
-    /* no clear slot: the staged pair owns the board, so this beat does not paint at all */
     if (!spot) return;
-    lastAt[kind] = now;
     box.style.left = `${(spot.x * 100).toFixed(2)}%`;
     box.style.top = `${(spot.y * 100).toFixed(2)}%`;
     box.classList.add('show');

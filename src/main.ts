@@ -57,6 +57,7 @@ import {
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
+import { setPieceBoxes, type PieceBox } from './boardpieces';
 import {
   detonation, impact, initTelegram, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
   onBackPress, shatterImpact, startParam, tgUser,
@@ -456,8 +457,14 @@ checkmateSplash.innerHTML = '<span class="cm-in">'
 wrap.appendChild(checkmateSplash);
 const cmTitle = $<HTMLElement>('cm-title');
 const cmSub = $<HTMLElement>('cm-sub');
-/** How long the announcement owns the board — the CSS clock is the same length. */
-const CHECKMATE_SPLASH_MS = 1900;
+/** How long the announcement holds the board once it lands — the CSS clock is the same length. */
+const CHECKMATE_SPLASH_MS = 1100;
+/**
+ * The board's own blast gets the first beat. The flare runs for a second and the endgame finisher
+ * fires its first burst 630ms after the cue, so a banner raised on the same frame used to land on
+ * top of both. It arrives a beat late, and short enough to clear the second burst.
+ */
+const CHECKMATE_SPLASH_DELAY_MS = 380;
 let cmTimer = 0;
 let cmVisible = false;
 
@@ -466,15 +473,23 @@ function paintCheckmateSplash(): void {
   setText(cmSub, t('checkmateSubtitle'));
 }
 
-/** Raise the announcement over the board. It never takes a tap and it hides itself on its clock. */
+/**
+ * Raise the announcement over the board. It never takes a tap and it hides itself on its clock.
+ *
+ * The live region is populated IMMEDIATELY — a screen reader must not wait for a visual cue — but
+ * the banner itself only enters after `CHECKMATE_SPLASH_DELAY_MS`, so the canvas flare and the
+ * first finisher burst are seen before the verdict covers them.
+ */
 function showCheckmateSplash(): void {
+  window.clearTimeout(cmTimer);
   cmVisible = true;
   checkmateSplash.hidden = false;
-  /* the live region is visible before its copy lands, so the verdict is actually announced */
   paintCheckmateSplash();
-  restartClass(checkmateSplash, 'is-on');
-  clearTimeout(cmTimer);
-  cmTimer = window.setTimeout(hideCheckmateSplash, CHECKMATE_SPLASH_MS);
+  cmTimer = window.setTimeout(() => {
+    if (!cmVisible) return;
+    restartClass(checkmateSplash, 'is-on');
+    cmTimer = window.setTimeout(hideCheckmateSplash, CHECKMATE_SPLASH_MS);
+  }, CHECKMATE_SPLASH_DELAY_MS);
 }
 
 function hideCheckmateSplash(): void {
@@ -1153,6 +1168,33 @@ function syncStage() {
     setMineStage(lay ? boardRect(lay.box.left, lay.box.top, lay.box.width, lay.box.height) : null);
   } else setMineStage(null);
   placeNote();
+}
+
+/**
+ * Publish every live pawn's footprint to the guidance layers (`boardpieces.ts`).
+ *
+ * The event callouts must never stand over a ball, and they cannot look: the pieces are canvas
+ * pixels, and sampling them was a `getImageData()` readback on the detonation tick. The board knows
+ * where its pawns are, so it hands the overlay boxes instead of pixels — one arithmetic test per
+ * candidate slot, no GPU sync, no layout read.
+ *
+ * A box is the ball's own footprint (~0.7 of its cell), not the whole square: a callout sharing the
+ * edge of a piece's tile is still clear of the piece.
+ */
+function syncPieces() {
+  const out: PieceBox[] = [];
+  for (const b of state.balls) {
+    if (b.isCheckmated) continue;
+    const tile = boardRect(b.pos.c, b.pos.r);
+    const w = tile.width * 0.7, h = tile.height * 0.7;
+    out.push({
+      left: tile.left + (tile.width - w) / 2,
+      top: tile.top + (tile.height - h) / 2,
+      width: w,
+      height: h,
+    });
+  }
+  setPieceBoxes(out);
 }
 
 /* ---------- the post-match stage ---------- */
@@ -2129,6 +2171,8 @@ function ui() {
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   armCapsules();
+  /* the pawns moved: the event callouts' slots are resolved against them, not against pixels */
+  syncPieces();
   /* the rival's dots tick for a bot's think time and for a person's just the same */
   const thinking = rivalTurn() && !paused && !tutorialActive;
 
@@ -4306,6 +4350,7 @@ function refitBoard() {
   confetti.resize();
   dropBoardBox();         // the canvas box moved: re-prime it before anything maps board cells
   syncStage();
+  syncPieces();           // the boxes the callouts avoid are viewport px: they move with the box
   /* resizing a canvas clears it. With the loop parked between transitions, a rotation or a
      WebView chrome collapse must explicitly ask for one repaint or the board stays blank. */
   invalidate();
@@ -4333,6 +4378,7 @@ function settleBoard() {
       confetti.resize();
       dropBoardBox();
       syncStage();
+      syncPieces();
     }
     syncLoop();       // a degenerate first pass must not leave the loop asleep
   });
