@@ -639,6 +639,33 @@ const sheets = createSheets($('scrim'), { onClose: resumeAfterSheetClose });
 const sheetById = (id: string) => document.getElementById(id);
 
 /**
+ * The Channel War pass is a TAP door, never a boot surface. A WebView can resume a page from a
+ * bfcache snapshot with the pass still raised, so every launch — and every restored page — starts
+ * by putting it away and dropping the scrim with it. No other screen state is touched.
+ */
+function keepChannelPassClosed(): void {
+  const pass = sheetById('sheet-stars');
+  if (!pass || pass.hidden) return;
+  pass.classList.remove('open', 'closing');
+  pass.style.pointerEvents = '';
+  pass.hidden = true;
+  if (sheets.isOpen) {
+    sheets.closeNow();                    // keep the sheet controller's panel/scrim in sync
+    return;
+  }
+  const scrim = sheetById('scrim');
+  if (scrim) {
+    scrim.classList.remove('open');
+    scrim.hidden = true;
+  }
+}
+keepChannelPassClosed();
+window.addEventListener('pageshow', (event) => { if (event.persisted) keepChannelPassClosed(); });
+/* A bfcache/session snapshot is taken on pagehide: the pass must be gone before it is captured, so
+   the next launch resumes on the screen it left, never on a raised tournament drawer. */
+window.addEventListener('pagehide', () => { keepChannelPassClosed(); });
+
+/**
  * The 1v1 searching stage. Quick match queues here instead of dropping straight onto the
  * board; the race itself still starts through the single `startGame()` door, and cancelling
  * hands the player back to the mode drawer they came from.

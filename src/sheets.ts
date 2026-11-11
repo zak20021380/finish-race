@@ -9,6 +9,12 @@ import { impact } from './telegram';
 export interface Sheets {
   open(el: HTMLElement): void;
   close(): void;
+  /**
+   * Put the raised sheet away at once — no slide-out, no pending timer. Boot and page-restore
+   * cleanup only: a WebView that resumes a bfcache snapshot must never wake with a sheet over
+   * the first screen.
+   */
+  closeNow(): void;
   readonly isOpen: boolean;
 }
 
@@ -70,6 +76,12 @@ export function createSheets(scrim: HTMLElement, opts: SheetsOptions = {}): Shee
         settle(true);
         opts.onClose?.(closing);
       }, motionReduced() ? 0 : MS);
+    },
+    closeNow() {
+      if (!panel) return;
+      const closing = panel;
+      settle(true);
+      opts.onClose?.(closing);
     },
     get isOpen() { return panel !== null; },
   };

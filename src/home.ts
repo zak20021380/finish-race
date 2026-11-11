@@ -934,7 +934,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (el) el.textContent = text;
   }
 
-  document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
+  document.getElementById('home-tournament-cta')?.addEventListener('click', (event) => {
+    /* A scripted click is NOT a tap. The pass may only ever be raised by a real gesture on this
+       banner, so no boot path, restore or synthetic trigger can cover someone's first screen. */
+    if (!event.isTrusted) return;
     impact('medium');
     if (channelCup && channelSeatFor(channelCup.id)) {
       api.queue('arena');
