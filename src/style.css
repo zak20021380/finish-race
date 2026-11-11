@@ -39190,7 +39190,8 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   font-weight: 800;
   line-height: 1.3;
   color: var(--ink);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .vg-n {
   flex: none;
@@ -39219,7 +39220,8 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   font-weight: 500;
   line-height: 1.5;
   color: var(--ink-soft);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .vg-fine {
   margin: 6px 0 10px;
