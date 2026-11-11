@@ -41416,7 +41416,11 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
 #home-carousel-track {
   display: flex !important;
   width: 100% !important;
-  height: var(--slide-h) !important;
+  /* `--slide-h` is a vh clamp, but the home column is sized by Telegram's stable
+     height (`--app-h`). When the stable height is the shorter of the two the nominal
+     box no longer fits, and a centred fixed-height track inside this overflow:hidden
+     viewport gets sliced top and bottom. The cap takes the smaller of the two, never more. */
+  height: min(var(--slide-h), 100%) !important;
   transform: translate3d(0, 0, 0);
   /* Deliberately not !important: carousel.ts sets `transition: none` inline while a
      finger is down so the layer tracks the touch 1:1, then clears it on release. */
@@ -41428,9 +41432,9 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
 #home-carousel-track > .car-card {
   flex: 0 0 100% !important;
   width: 100% !important;
-  height: var(--slide-h) !important;
-  min-height: var(--slide-h) !important;
-  max-height: var(--slide-h) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   box-sizing: border-box !important;
   flex-shrink: 0 !important;
   align-self: auto !important;
@@ -41467,4 +41471,317 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
 #s-home .carousel-track > .car-card.mind-ladder .mind-podium {
   flex: 1 1 auto !important;
   min-height: 0 !important;
+}
+
+/* ============================================================================================
+   COUNTRY RANKINGS — EDGE CLEARANCE & PODIUM FIT (final word on the Nations Cup slide)
+   ============================================================================================
+   Two defects, both measured rather than guessed:
+     · the score lockup ended 10px from the row border inside a `contain: paint` box, which
+       clips ink at the padding edge — only 4px of air outside the brain's 6px glow. The row
+       now holds a 16px inline-end gutter and clips nothing at all; the country name owns its
+       own overflow instead.
+     · the composition was tuned by viewport media queries while the card is height-locked,
+       so a short Telegram column pushed rank #3 under the standing bar. The card is now its
+       own size container: every tier reads the height the card actually has, and the rows
+       shrink before anything is ever dropped.
+   ============================================================================================ */
+
+/* 1 — THE CARD IS ITS OWN RULER. Block padding lives on the inner column so the height
+   tiers below can retune it; the 34px tail is the pager lane the absolute dots sit in. */
+#s-home .carousel-track > .car-card.nations-cup {
+  container-type: size;
+  container-name: nations;
+  padding: 0 14px !important;
+}
+#s-home .carousel-track > .car-card.nations-cup > .slide-inner {
+  gap: 8px !important;
+  padding: 14px 0 34px;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-head { padding: 0; }
+
+/* 2 — THE ROWS. Three shrinkable 44px slabs on a badge / identity / score grid. `flex-shrink`
+   is the safety net: a short column shortens the rows instead of hiding the bronze one. */
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center !important;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+  flex: 0 1 44px;
+  height: auto;
+  min-height: 38px;
+  max-height: 48px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 4px 12px;
+  padding-inline-end: 16px;
+  overflow: visible;
+  contain: none;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank > li.is-error {
+  flex: 0 1 44px;
+  height: auto;
+  min-height: 38px;
+  max-height: 48px;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: 4px 12px;
+}
+
+/* 3 — THE MEDAL. Sized from the row's own content box, so a shrinking row scales its badge
+   with it and the disc is never sliced by the slab. */
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .rk {
+  justify-self: center;
+  align-self: center;
+  width: auto;
+  height: 100%;
+  min-height: 0;
+  max-height: 30px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  direction: ltr;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* 4 — IDENTITY. The name is the only thing on this row allowed to clip. The flag is sized
+   from the row's content box, so a shrinking slab scales its disc instead of cropping it. */
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .nation-id {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  height: 100%;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .fl {
+  flex: 0 0 auto;
+  width: auto;
+  height: 100%;
+  max-height: 28px;
+  aspect-ratio: 1 / 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .nm {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 5 — THE SCORE LOCKUP. A rigid trailing group with its own air: it never shrinks, never
+   wraps and is never clipped, so the brain always paints whole. */
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .nation-score-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+  height: 100%;
+  gap: 6px;
+  flex: none;
+  flex-shrink: 0;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  direction: ltr;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .score-val {
+  flex: none;
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .score-tiq {
+  flex: none;
+  font-size: 8px;
+}
+#s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon {
+  flex: none;
+  flex-shrink: 0;
+  display: inline-block;
+  width: auto;
+  height: 16px;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+/* 6 — THE STANDING PEDESTAL. Same trailing clearance as a row, so its brain is whole too. */
+#s-home .carousel-track > .car-card.nations-cup .hud-mine.nations-mine {
+  min-height: 44px;
+  padding: 8px 12px;
+  padding-inline-end: 14px;
+  gap: 10px;
+  overflow: visible;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-l {
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-id { gap: 2px; min-width: 0; }
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-name {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-meta {
+  gap: 5px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine :is(.hm-rank, .hm-pill) {
+  padding: 2px 6px;
+  font-size: 8.5px;
+  line-height: 1.15;
+}
+/* the rank tag is Persian in fa and Latin in en: let the string pick its own direction,
+   while the figure inside it stays a tabular Latin digit either way */
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-rank {
+  unicode-bidi: plaintext;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-pill b {
+  font-size: 8.5px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-r {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+  direction: ltr;
+  white-space: nowrap;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-v {
+  flex: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-u { flex: none; font-size: 8px; }
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .mind-brain {
+  flex: none;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+}
+#s-home .carousel-track > .car-card.nations-cup .nations-mine .mind-brain-ico { width: 10px; height: 10px; }
+
+/* 7 — THE FOOT. Hairline → pedestal → one compact command, 8px apart. */
+#s-home .carousel-track > .car-card.nations-cup .slide-foot {
+  display: flex;
+  flex-direction: column;
+  flex: none !important;
+  margin-top: auto !important;
+  padding: 0;
+  gap: 8px;
+}
+#s-home .carousel-track > .car-card.nations-cup .slide-cta {
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+}
+
+/* 8 — NARROW PHONES. The badge track and the badge shrink together; the trailing gutter
+   stays at 16px so the brain keeps its clearance on a 320px card. */
+@media (max-width: 360px) {
+  #s-home .carousel-track > .car-card.nations-cup { padding: 0 12px !important; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding: 4px 10px;
+    padding-inline-end: 16px;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .rk { max-height: 28px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .fl { max-height: 26px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 13.5px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { height: 15px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-name { font-size: 11.5px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-mine :is(.hm-rank, .hm-pill) { font-size: 8px; padding: 2px 5px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-pill b { font-size: 8px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-v { font-size: 13px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-mine .hm-r { gap: 4px; }
+}
+
+/* 9 — HEIGHT TIERS, keyed to the card itself. Chrome gives way first; the three medals,
+   the pedestal and the command are the last things standing. */
+@container nations (max-height: 379px) {
+  #s-home .carousel-track > .car-card.nations-cup > .slide-inner {
+    gap: 7px !important;
+    padding-block: 12px 34px;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .nations-cup-subtitle { display: none; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-foot { gap: 7px; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-foot::before { display: none; }
+  #s-home .carousel-track > .car-card.nations-cup .hud-mine.nations-mine { padding-block: 6px; }
+}
+@container nations (max-height: 329px) {
+  #s-home .carousel-track > .car-card.nations-cup > .slide-inner {
+    gap: 6px !important;
+    padding-block: 10px 32px;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .nations-ico { width: 20px; height: 20px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank { gap: 5px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    flex-basis: 42px;
+    min-height: 36px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .rk { max-height: 28px; font-size: 12.5px; }
+  #s-home .carousel-track > .car-card.nations-cup .hud-mine.nations-mine { min-height: 40px; padding-block: 5px; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-foot { gap: 6px; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-cta { height: 36px; min-height: 36px; max-height: 36px; }
+}
+@container nations (max-height: 289px) {
+  #s-home .carousel-track > .car-card.nations-cup > .slide-inner {
+    gap: 5px !important;
+    padding-block: 8px 30px;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .nations-kicker { font-size: 12px; }
+  #s-home .carousel-track > .car-card.nations-cup .nations-ico { width: 18px; height: 18px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank { gap: 4px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    flex-basis: 40px;
+    min-height: 24px;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+  }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .rk { max-height: 26px; font-size: 12px; }
+  #s-home .carousel-track > .car-card.nations-cup .mini-rank.nations-rank .fl { max-height: 24px; }
+  #s-home .carousel-track > .car-card.nations-cup .hud-mine.nations-mine { min-height: 38px; padding-block: 4px; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-foot { gap: 5px; }
+  #s-home .carousel-track > .car-card.nations-cup .slide-cta { height: 34px; min-height: 34px; max-height: 34px; }
 }
