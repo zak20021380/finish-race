@@ -8013,24 +8013,13 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012));
 }
+/* the header names WHO acts: the invited friend, on the start side, and the reward on the end */
 .sv-quest-head {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-.sv-quest-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  color: #7DD3FC;
-  background: #0C1720;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(125, 211, 252, .16);
-}
-.sv-quest-icon .ico { width: 19px; height: 19px; }
 .sv-quest-headcopy {
   display: flex;
   flex-direction: column;
@@ -8057,76 +8046,89 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   align-items: center;
   gap: 4px;
   flex: none;
-  padding: 6px 9px;
-  border: 1px solid rgba(245, 158, 11, .22);
-  border-radius: 9px;
-  background: rgba(245, 158, 11, .09);
+  padding: 7px 10px;
+  border: 1px solid rgba(245, 158, 11, .3);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(245, 158, 11, .16), rgba(245, 158, 11, .07));
   color: #FCD34D;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
 }
 .sv-quest-reward .ico-star-img { width: 16px; height: 16px; }
+/* the two ways to unlock the Stars, side by side: equal mini-cards split by one OR pill.
+   The grid mirrors itself under RTL, so the first path always leads the reading order. */
 .sv-quest-paths {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .sv-quest-path {
   display: flex;
-  align-items: center;
-  gap: 9px;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+  gap: 3px;
   min-width: 0;
-  padding: 3px 0;
+  padding: 8px 9px;
+  border-radius: 11px;
+  background: rgba(125, 211, 252, .06);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .16);
+  text-align: start;
 }
+.sv-quest-path[data-tone="rivals"] {
+  background: rgba(245, 158, 11, .07);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .18);
+}
+.sv-quest-path-t {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #EAF1FA;
+}
+.sv-quest-path-ico { flex: none; font-size: 12px; line-height: 1; }
 .sv-quest-path-n {
-  display: grid;
-  place-items: center;
   flex: none;
-  min-width: 30px;
-  height: 26px;
-  padding: 0 7px;
-  border-radius: 8px;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 900;
-  line-height: 1;
   color: #7DD3FC;
-  background: rgba(125, 211, 252, .1);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .2);
 }
-.sv-quest-path[data-tone="rivals"] .sv-quest-path-n {
-  color: #FCD34D;
-  background: rgba(245, 158, 11, .1);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .22);
-}
+.sv-quest-path[data-tone="rivals"] .sv-quest-path-t { color: #FCD34D; }
+.sv-quest-path[data-tone="rivals"] .sv-quest-path-n { color: #FDE68A; }
+.sv-quest-path-w { min-width: 0; overflow-wrap: anywhere; }
 .sv-quest-path-l {
   min-width: 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   line-height: 1.3;
-  color: var(--ink);
+  color: #93A0B2;
   overflow-wrap: anywhere;
 }
 .sv-quest-or {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 8.5px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: .12em;
-  color: #8A93A3;
-}
-.sv-quest-or::before, .sv-quest-or::after {
-  content: "";
-  flex: 1 1 auto;
-  height: 1px;
-  background: rgba(255, 255, 255, .09);
+  letter-spacing: .06em;
+  line-height: 1;
+  color: #A3AEBE;
 }
 html:lang(fa) .sv-quest-or, html:lang(ar) .sv-quest-or { letter-spacing: 0; }
 
@@ -39498,12 +39500,24 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
   text-align: end;
   white-space: nowrap;
 }
-/* Row 2 — the focal balance, centred, with the gold meter directly beneath it */
-.vault-card-center { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+/* Row 2 — a micro-label, the focal balance and the gold meter, all hung on the start axis.
+   The figure is pinned to the very same column as the chip icon above it, so the card reads
+   as one grid instead of a centred number floating over a left-aligned bar. */
+.vault-card-center { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+.vault-card-balance-label {
+  display: block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  line-height: 1.2;
+  color: #8C8E94;
+  text-align: start;
+}
+html:lang(fa) .vault-card-balance-label, html:lang(ar) .vault-card-balance-label { letter-spacing: 0; }
 .vault-card-balance {
   display: flex;
   align-items: center;
-  justify-content: center;
+  align-self: flex-start;
   gap: 8px;
   margin: 0;
   direction: ltr;
@@ -39642,7 +39656,9 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   .vault-card-footer { gap: 8px; }
   .vault-card-unlock { font-size: 9.5px; }
   #modal-stars-vault .sv-quest-card { padding: 10px; }
-  #modal-stars-vault .sv-quest-icon { width: 32px; height: 32px; }
+  #modal-stars-vault .sv-quest-path { padding: 7px 8px; }
+  #modal-stars-vault .sv-quest-path-t { font-size: 12px; }
+  #modal-stars-vault .sv-quest-path-l { font-size: 9.5px; }
   #modal-stars-vault .sv-quest-reward { padding-inline: 7px; }
   #modal-stars-vault .sv-cta > .ico { display: none; }
 }
@@ -39657,8 +39673,7 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   .vault-card-balance b { font-size: 36px; }
   #modal-stars-vault .sv-pills { padding-block: 4px; }
   #modal-stars-vault .sv-quest-card { gap: 7px; padding: 10px 11px; }
-  #modal-stars-vault .sv-quest-icon { width: 30px; height: 30px; }
-  #modal-stars-vault .sv-quest-path { padding: 2px 0; }
+  #modal-stars-vault .sv-quest-path { padding: 7px 8px; }
   #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 40px; }
   #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 34px; }
   #modal-stars-vault .sv-notice { font-size: 9px; }
@@ -39681,13 +39696,12 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   #modal-stars-vault .sv-quest-card { gap: 6px; padding: 9px 10px; }
   #modal-stars-vault .sv-quest-title { font-size: 12px; line-height: 1.25; }
   #modal-stars-vault .sv-quest-meta { font-size: 9px; }
-  #modal-stars-vault .sv-quest-icon { width: 28px; height: 28px; border-radius: 9px; }
-  #modal-stars-vault .sv-quest-icon .ico { width: 16px; height: 16px; }
-  #modal-stars-vault .sv-quest-path { padding: 2px 0; }
-  #modal-stars-vault .sv-quest-path-n { height: 24px; min-width: 28px; font-size: 13px; }
-  #modal-stars-vault .sv-quest-path-l { font-size: 11.5px; }
-  #modal-stars-vault .sv-quest-or { padding: 2px 0; }
-  #modal-stars-vault .sv-quest-reward { padding-block: 4px; font-size: 14px; }
+  #modal-stars-vault .sv-quest-path { padding: 6px 7px; }
+  #modal-stars-vault .sv-quest-path-t { font-size: 11.5px; }
+  #modal-stars-vault .sv-quest-path-n { font-size: 12.5px; }
+  #modal-stars-vault .sv-quest-path-l { font-size: 9.5px; }
+  #modal-stars-vault .sv-quest-or { width: 22px; height: 22px; font-size: 8px; }
+  #modal-stars-vault .sv-quest-reward { padding-block: 5px; font-size: 14px; }
   #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 38px; }
   #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 32px; }
   #modal-stars-vault .vm-foot-btn { line-height: 1.3; }

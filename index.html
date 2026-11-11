@@ -2684,6 +2684,7 @@
                   <span class="vault-card-payout" data-i18n="vault_card_payout_badge">⚡ Payout: &lt; 24h · 30d Cycle</span>
                 </div>
                 <div class="vault-card-center">
+                  <span class="vault-card-balance-label" data-i18n="vault_card_balance_label">VAULT BALANCE</span>
                   <p class="vault-card-balance" dir="ltr">
                     <b id="sv-bal">5</b><span class="vault-card-target">/ <span id="sv-target">50</span></span>
                     <img class="vault-card-star" src="./src/assets/images/telegram_stars.png" width="28" height="28" alt="Stars" loading="eager" draggable="false" />
@@ -2720,22 +2721,30 @@
               <section class="sv-quest" aria-labelledby="sv-quest-title">
                 <div class="sv-quest-card">
                   <div class="sv-quest-head">
-                    <span class="sv-quest-icon" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
                     <span class="sv-quest-headcopy">
-                      <b class="sv-quest-title" id="sv-quest-title" data-i18n="quest_card_title">Friend Quest</b>
-                      <span class="sv-quest-meta" data-i18n="quest_card_meta">72h limit · ad-verified</span>
+                      <b class="sv-quest-title" id="sv-quest-title" data-i18n="quest_card_title">How Friends Unlock Stars for You</b>
+                      <span class="sv-quest-meta" data-i18n="quest_card_meta">Within 72h · Ad-verified after each match</span>
                     </span>
                     <b class="sv-quest-reward" dir="ltr"><span id="sv-quest-reward-n">+5</span><img class="ico-star-img" src="./src/assets/images/telegram_stars.png" width="16" height="16" alt="Stars" loading="eager" draggable="false" /></b>
                   </div>
+                  <!-- the two ways to unlock the Stars, side by side, split by one OR pill -->
                   <div class="sv-quest-paths">
                     <div class="sv-quest-path" data-tone="plays">
-                      <span class="sv-quest-path-n" dir="ltr" id="sv-path-matches-n">10</span>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_matches_short">Hard Bot Duels</span>
+                      <b class="sv-quest-path-t">
+                        <span class="sv-quest-path-ico" aria-hidden="true">🎮</span>
+                        <span class="sv-quest-path-n" dir="ltr" id="sv-path-matches-n">10</span>
+                        <span class="sv-quest-path-w" data-i18n="quest_path_matches_word">Matches</span>
+                      </b>
+                      <span class="sv-quest-path-l" data-i18n="quest_path_matches_sub">Friend plays Hard Bot</span>
                     </div>
                     <span class="sv-quest-or" data-i18n="quest_or">OR</span>
                     <div class="sv-quest-path" data-tone="rivals">
-                      <span class="sv-quest-path-n" dir="ltr" id="sv-path-wins-n">5</span>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_wins_short">Hard Bot Wins</span>
+                      <b class="sv-quest-path-t">
+                        <span class="sv-quest-path-ico" aria-hidden="true">⚔️</span>
+                        <span class="sv-quest-path-n" dir="ltr" id="sv-path-wins-n">5</span>
+                        <span class="sv-quest-path-w" data-i18n="quest_path_wins_word">Wins</span>
+                      </b>
+                      <span class="sv-quest-path-l" data-i18n="quest_path_wins_sub">Friend beats Hard Bot</span>
                     </div>
                   </div>
                 </div>
