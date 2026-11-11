@@ -2231,11 +2231,9 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-earned', `+${en(vault.earnedStars)}`);
     svText('sv-paid', en(vault.paidOutStars));
 
-    svText('sv-quest-title', svFill('quest_rules_title', { n: en(C.TOTAL_PER_FRIEND_STARS) }));
-    svText('sv-stage1-reward', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
-    svText('sv-stage2-reward', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
-    svText('sv-stage1-rule', t('quest_rule_matches'));
-    svText('sv-stage2-rule', t('quest_rule_wins'));
+    svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
+    svText('sv-path-matches-n', en(C.STAGE1_MIN_MATCHES));
+    svText('sv-path-wins-n', en(C.STAGE2_MIN_RANKED_PVP_WINS));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');

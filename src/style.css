@@ -8001,78 +8001,135 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
 .sv-quest {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-width: 0;
 }
-.sv-quest-title {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.5;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: #B9A578;
-}
-.sv-quest-track {
-  display: grid;
-  gap: 10px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.sv-quest-stage {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 72px;
-  padding: 12px;
+/* one unified quest: a single card, a single reward badge, two paths split by an OR rule */
+.sv-quest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 12px;
   border: 1px solid rgba(255, 255, 255, .07);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01));
-  text-align: start;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012));
+}
+.sv-quest-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 .sv-quest-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
   color: #7DD3FC;
   background: #0C1720;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(125, 211, 252, .16), 0 0 14px rgba(34, 211, 238, .08);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(125, 211, 252, .16);
 }
-.sv-quest-icon .ico { width: 20px; height: 20px; }
-.sv-quest-stage[data-tone="rivals"] .sv-quest-icon {
-  color: #FCD34D;
-  background: #1B160D;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(245, 158, 11, .18), 0 0 14px rgba(245, 158, 11, .08);
-}
-.sv-quest-copy {
+.sv-quest-icon .ico { width: 19px; height: 19px; }
+.sv-quest-headcopy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  flex: 1 1 auto;
   min-width: 0;
 }
-.sv-quest-name { font-size: 12px; font-weight: 800; line-height: 1.5; color: var(--ink); }
-.sv-quest-rule { font-size: 10.5px; font-weight: 500; line-height: 1.5; color: #A5AFBE; }
+.sv-quest-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.sv-quest-meta {
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #9AA5B5;
+  overflow-wrap: anywhere;
+}
 .sv-quest-reward {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px;
-  border: 1px solid rgba(245, 158, 11, .17);
-  border-radius: 8px;
-  background: rgba(245, 158, 11, .07);
+  flex: none;
+  padding: 6px 9px;
+  border: 1px solid rgba(245, 158, 11, .22);
+  border-radius: 9px;
+  background: rgba(245, 158, 11, .09);
   color: #FCD34D;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 15px;
   font-weight: 800;
-  line-height: 1.4;
+  line-height: 1.2;
   white-space: nowrap;
 }
 .sv-quest-reward .ico-star-img { width: 16px; height: 16px; }
+.sv-quest-paths {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sv-quest-path {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 3px 0;
+}
+.sv-quest-path-n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 8px;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  color: #7DD3FC;
+  background: rgba(125, 211, 252, .1);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .2);
+}
+.sv-quest-path[data-tone="rivals"] .sv-quest-path-n {
+  color: #FCD34D;
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .22);
+}
+.sv-quest-path-l {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.sv-quest-or {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: #8A93A3;
+}
+.sv-quest-or::before, .sv-quest-or::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(255, 255, 255, .09);
+}
+html:lang(fa) .sv-quest-or, html:lang(ar) .sv-quest-or { letter-spacing: 0; }
 
 /* one primary decision: an obsidian-gold glass bar with the copy key socketed into its flank,
    instead of a bright block and a second equal-looking button beside it */
@@ -39410,56 +39467,52 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
   pointer-events: none;
 }
 .vault-card-top, .vault-card-center, .vault-card-footer { position: relative; z-index: 1; min-width: 0; }
-.vault-card-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: 8px; }
-.vault-card-brand { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: #D8C499; font-size: 8px; font-weight: 700; line-height: 1.4; letter-spacing: .09em; }
-.vault-card-hardware { display: flex; align-items: center; gap: 6px; direction: ltr; }
+/* Row 1 — the brand mark on one side, one compact payout badge on the other */
+.vault-card-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 8px; }
+.vault-card-brand { display: flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; color: #E4D2A6; font-size: 10px; font-weight: 800; line-height: 1.3; letter-spacing: .08em; }
+.vault-card-brand > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vault-emv-chip {
-  width: 34px;
-  height: 24px;
-  border-radius: 5px;
+  width: 26px;
+  height: 18px;
+  border-radius: 4px;
   background: linear-gradient(135deg, #FDE68A 0%, #D97706 50%, #F59E0B 100%);
   border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.4);
-  position: relative;
-  flex-shrink: 0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 5px rgba(0, 0, 0, 0.4);
+  flex: none;
 }
 .vault-emv-chip svg { display: block; width: 100%; height: 100%; stroke: #785019; stroke-width: .8; }
-.vault-card-contactless { width: 14px; height: 22px; flex: none; stroke: #C2AB7B; stroke-width: 1.2; stroke-linecap: round; opacity: .7; }
-.vault-card-edition { color: #998B70; font-size: 7px; letter-spacing: .17em; }
 .vault-card-payout {
-  display: flex;
-  flex-direction: column;
-  justify-self: end;
-  gap: 3px;
+  flex: 0 0 auto;
+  margin-inline-start: auto;
   max-width: 100%;
-  padding: 6px 8px;
-  border: 1px solid rgba(232, 201, 133, .16);
-  border-radius: 11px;
+  padding: 5px 9px;
+  border: 1px solid rgba(232, 201, 133, .18);
+  border-radius: 999px;
   background: linear-gradient(135deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .015));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
-  backdrop-filter: blur(8px);
-  font-size: 9px;
-  font-weight: 500;
-  line-height: 1.45;
+  color: #F1D594;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.3;
   text-align: end;
+  white-space: nowrap;
 }
-.vault-card-payout-time { color: #F1D594; text-shadow: 0 0 8px rgba(245, 158, 11, .2); }
-.vault-card-cycle { color: #A8A8A5; font-size: 8px; }
-.vault-card-label { display: block; color: #B7A780; font-size: 9px; font-weight: 500; line-height: 1.4; letter-spacing: .12em; }
+/* Row 2 — the focal balance, centred, with the gold meter directly beneath it */
+.vault-card-center { display: flex; flex-direction: column; align-items: center; gap: 9px; }
 .vault-card-balance {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
-  margin: 4px 0 10px;
+  margin: 0;
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-numeric);
-  line-height: 1.1;
+  line-height: 1;
   white-space: nowrap;
 }
 .vault-card-balance b {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 800;
   letter-spacing: -.04em;
   color: #F9DE9D;
@@ -39469,25 +39522,22 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 1px 0 #03060B);
 }
-.vault-card-balance[data-compact="true"] b { font-size: 26px; }
-.vault-card-target { color: #8C8E94; font-size: 18px; letter-spacing: -.03em; }
+.vault-card-balance[data-compact="true"] b { font-size: 28px; }
+.vault-card-target { color: #8C8E94; font-size: 19px; letter-spacing: -.03em; }
 .vault-card-star { display: block; width: 28px; height: 28px; object-fit: contain; flex: none; filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .4)); }
-.vault-card-track { height: 3px; width: 100%; direction: ltr; border-radius: 999px; background: #070B12; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, .08); }
+.vault-card-track { height: 4px; width: 100%; direction: ltr; border-radius: 999px; background: #070B12; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, .08); }
 .vault-card-fill { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #A76B15, #F5B632 65%, #FFF0B9); box-shadow: 0 0 6px rgba(245, 158, 11, .4); transition: width .4s ease; }
-.vault-card-fill::after { content: ""; position: absolute; right: 0; top: -1px; width: 5px; height: 5px; border-radius: 50%; background: #FFF2CA; box-shadow: 0 0 7px 1px rgba(245, 158, 11, .65); }
+.vault-card-fill::after { content: ""; position: absolute; right: 0; top: -1px; width: 6px; height: 6px; border-radius: 50%; background: #FFF2CA; box-shadow: 0 0 7px 1px rgba(245, 158, 11, .65); }
 .vault-card-fill[data-empty="true"]::after { display: none; }
-.vault-card-footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; }
-.vault-card-holder, .vault-card-settlement { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-.vault-card-footer .vault-card-label { font-size: 7px; letter-spacing: .09em; }
-.vault-card-name { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; line-height: 1.4; color: #E0DDD3; text-align: match-parent; unicode-bidi: plaintext; }
-.vault-card-gift { font-size: 9px; font-weight: 500; line-height: 1.4; color: #C4AD7C; }
+/* Row 3 — identity + starter gift on one side, the concise unlock line on the other */
+.vault-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vault-card-holder { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.vault-card-name { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 1.3; color: #E6E3D9; text-align: match-parent; unicode-bidi: plaintext; }
+.vault-card-gift { font-size: 9.5px; font-weight: 600; line-height: 1.3; color: #C4AD7C; }
 .vault-card-gift[hidden] { display: none; }
-.vault-card-settlement { text-align: end; }
-.vault-card-unlock { font-size: 10px; font-weight: 600; line-height: 1.5; color: #E8C981; overflow-wrap: anywhere; }
+.vault-card-unlock { flex: none; max-width: 46%; font-size: 10px; font-weight: 700; line-height: 1.35; color: #E8C981; text-align: end; overflow-wrap: anywhere; }
 html:lang(fa) .vault-vip-card, html:lang(ar) .vault-vip-card { font-family: 'Vazirmatn', system-ui, sans-serif; }
-html:lang(fa) :is(.vault-card-label, .vault-card-brand), html:lang(ar) :is(.vault-card-label, .vault-card-brand) { letter-spacing: 0; }
-html:lang(fa) .vault-card-hardware, html:lang(ar) .vault-card-hardware { align-self: flex-start; }
-html:lang(fa) .vault-card-balance, html:lang(ar) .vault-card-balance { justify-content: flex-end; }
+html:lang(fa) :is(.vault-card-brand, .vault-card-payout), html:lang(ar) :is(.vault-card-brand, .vault-card-payout) { letter-spacing: 0; }
 html.reduced-motion .vault-vip-card::before { animation: none; }
 html.reduced-motion .vault-card-fill { transition: none; }
 @media (prefers-reduced-motion: reduce) {
@@ -39504,17 +39554,17 @@ html.reduced-motion .vault-card-fill { transition: none; }
 #modal-stars-vault :is(.sv-pill-v, .sv-quest-reward, .sv-cta-reward) > .ico-star-img { transform: translateY(-1px); }
 #modal-stars-vault .sv-pills {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 8px 6px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .03);
-  border: 1px solid rgba(255, 255, 255, .06);
+  padding: 4px 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .022);
+  border: 1px solid rgba(255, 255, 255, .045);
   box-shadow: none;
 }
-#modal-stars-vault .sv-pill { gap: 4px; }
-#modal-stars-vault .sv-pill + .sv-pill { border-inline-start-color: rgba(255, 255, 255, .04); }
-#modal-stars-vault .sv-pill-k { font-size: 9px; line-height: 1.5; color: #9AA5B5; }
-#modal-stars-vault .sv-pill-v { font-size: 15px; line-height: 1.4; gap: 4px; }
-#modal-stars-vault .sv-pill-v .ico-star-img { width: 14px; height: 14px; }
+#modal-stars-vault .sv-pill { gap: 1px; padding: 1px 6px; }
+#modal-stars-vault .sv-pill + .sv-pill { border-inline-start-color: rgba(255, 255, 255, .05); }
+#modal-stars-vault .sv-pill-k { font-size: 8px; line-height: 1.25; letter-spacing: .05em; color: #8A93A3; }
+#modal-stars-vault .sv-pill-v { font-size: 12.5px; line-height: 1.2; gap: 3px; }
+#modal-stars-vault .sv-pill-v .ico-star-img { width: 12px; height: 12px; }
 #modal-stars-vault .sv-acts {
   height: 46px;
   border-radius: 12px;
@@ -39551,7 +39601,7 @@ html.reduced-motion .vault-card-fill { transition: none; }
 #modal-stars-vault .sv-copy:hover:not(:active):not(:disabled) { background: rgba(255, 255, 255, .14); box-shadow: none; }
 #modal-stars-vault .sv-copy.copied { background: rgba(6, 78, 59, .14); color: #064E3B; }
 #modal-stars-vault .sv-copy:focus-visible { outline-color: #0F172A; outline-offset: -3px; }
-#modal-stars-vault .sv-payout { height: 38px; font-size: 11px; line-height: 1.5; }
+#modal-stars-vault .sv-payout { height: 36px; border-radius: 10px; font-size: 11px; line-height: 1.4; }
 #modal-stars-vault .sv-payout-t { display: block; }
 #modal-stars-vault .sv-payout[data-state="locked"] { background: rgba(255, 255, 255, .025); color: #A5AFBE; }
 #modal-stars-vault .sv-payout[data-state="ready"] {
@@ -39563,15 +39613,15 @@ html.reduced-motion .vault-card-fill { transition: none; }
 #modal-stars-vault .sv-payout[data-state="ready"]:active { transform: scale(.985); }
 #modal-stars-vault .vm-foot { gap: 8px; }
 #modal-stars-vault .vm-foot-btn {
-  height: 38px;
+  height: 36px;
   gap: 5px;
-  padding: 0 8px;
+  padding: 0 10px;
   border-radius: 10px;
   background: rgba(255, 255, 255, .04);
   border: 1px solid rgba(255, 255, 255, .07);
   color: #B4BDCA;
   font-size: 10.5px;
-  line-height: 1.5;
+  line-height: 1.4;
   font-weight: 600;
   box-shadow: none;
 }
@@ -39582,18 +39632,17 @@ html.reduced-motion .vault-card-fill { transition: none; }
 #modal-stars-vault .sv-notice { font-size: 10.5px; line-height: 1.5; }
 html:lang(fa) #modal-stars-vault .vault-modal-body,
 html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
-html:lang(fa) .sv-quest-title, html:lang(ar) .sv-quest-title { letter-spacing: 0; text-transform: none; }
 @media (max-width: 360px) {
   #modal-stars-vault .vault-modal-sheet { padding-inline: 12px !important; }
   .vault-vip-card { padding-inline: 12px; }
-  .vault-card-top { gap: 6px; }
-  .vault-card-brand { font-size: 7px; }
-  .vault-card-payout { padding: 5px 6px; font-size: 8.5px; }
+  .vault-card-top { gap: 5px 6px; }
+  .vault-card-brand { font-size: 9px; gap: 6px; }
+  .vault-card-payout { padding: 4px 7px; font-size: 7.5px; }
   .vault-card-footer { gap: 8px; }
-  .vault-card-footer .vault-card-label { font-size: 6.5px; letter-spacing: .05em; }
-  #modal-stars-vault .sv-quest-stage { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 8px; padding: 10px; }
+  .vault-card-unlock { font-size: 9.5px; }
+  #modal-stars-vault .sv-quest-card { padding: 10px; }
   #modal-stars-vault .sv-quest-icon { width: 32px; height: 32px; }
-  #modal-stars-vault .sv-quest-reward { padding-inline: 5px; }
+  #modal-stars-vault .sv-quest-reward { padding-inline: 7px; }
   #modal-stars-vault .sv-cta > .ico { display: none; }
 }
 
@@ -39603,13 +39652,12 @@ html:lang(fa) .sv-quest-title, html:lang(ar) .sv-quest-title { letter-spacing: 0
   #modal-stars-vault .vm-head-t { gap: 2px; }
   #modal-stars-vault .vm-title { font-size: 16px; }
   #modal-stars-vault .vm-sub { font-size: 9px; }
-  .vault-vip-card { padding-block: 12px; gap: 8px; }
-  #modal-stars-vault .sv-pills { padding-block: 5px; }
-  #modal-stars-vault .sv-quest, #modal-stars-vault .sv-quest-track { gap: 6px; }
-  #modal-stars-vault .sv-quest-stage { min-height: 52px; padding-block: 7px; }
-  #modal-stars-vault .sv-quest-copy { gap: 1px; }
-  #modal-stars-vault .sv-quest-name { font-size: 11px; }
+  .vault-vip-card { padding-block: 12px; gap: 8px; min-height: 140px; }
+  .vault-card-balance b { font-size: 36px; }
+  #modal-stars-vault .sv-pills { padding-block: 4px; }
+  #modal-stars-vault .sv-quest-card { gap: 7px; padding: 10px 11px; }
   #modal-stars-vault .sv-quest-icon { width: 30px; height: 30px; }
+  #modal-stars-vault .sv-quest-path { padding: 2px 0; }
   #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 40px; }
   #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 34px; }
   #modal-stars-vault .sv-notice { font-size: 9px; }
@@ -39618,25 +39666,27 @@ html:lang(fa) .sv-quest-title, html:lang(ar) .sv-quest-title { letter-spacing: 0
 @media (max-height: 680px) {
   #modal-stars-vault .vault-modal-sheet { padding-block: 16px 8px !important; }
   #modal-stars-vault .vault-modal-body, #modal-stars-vault .sv-vault { gap: 5px; }
-  .vault-vip-card { padding-block: 8px; gap: 6px; }
-  .vault-card-brand { gap: 4px; }
-  .vault-card-balance { margin-block: 2px 6px; }
-  .vault-card-balance b { font-size: 30px; }
-  .vault-card-holder, .vault-card-settlement { gap: 2px; }
+  .vault-vip-card { padding-block: 9px; gap: 6px; min-height: 128px; }
+  .vault-card-brand { gap: 6px; }
+  .vault-card-center { gap: 6px; }
+  .vault-card-balance b { font-size: 32px; }
+  .vault-card-holder { gap: 2px; }
   .vault-card-name { font-size: 10px; line-height: 1.3; }
   .vault-card-gift { line-height: 1.25; }
-  #modal-stars-vault .sv-pills { padding-block: 4px; }
-  #modal-stars-vault .sv-pill { gap: 2px; }
-  #modal-stars-vault .sv-pill-k { font-size: 8px; line-height: 1.3; }
-  #modal-stars-vault .sv-pill-v { font-size: 13px; line-height: 1.2; }
-  #modal-stars-vault .sv-quest, #modal-stars-vault .sv-quest-track { gap: 4px; }
-  #modal-stars-vault .sv-quest-title { font-size: 9px; line-height: 1.3; }
-  #modal-stars-vault .sv-quest-stage { min-height: 42px; padding: 5px 8px; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 7px; }
-  #modal-stars-vault .sv-quest-icon { width: 26px; height: 26px; border-radius: 8px; }
+  #modal-stars-vault .sv-pills { padding-block: 3px; }
+  #modal-stars-vault .sv-pill { gap: 1px; }
+  #modal-stars-vault .sv-pill-k { font-size: 7.5px; line-height: 1.2; }
+  #modal-stars-vault .sv-pill-v { font-size: 12px; line-height: 1.2; }
+  #modal-stars-vault .sv-quest-card { gap: 6px; padding: 9px 10px; }
+  #modal-stars-vault .sv-quest-title { font-size: 12px; line-height: 1.25; }
+  #modal-stars-vault .sv-quest-meta { font-size: 9px; }
+  #modal-stars-vault .sv-quest-icon { width: 28px; height: 28px; border-radius: 9px; }
   #modal-stars-vault .sv-quest-icon .ico { width: 16px; height: 16px; }
-  #modal-stars-vault .sv-quest-name { line-height: 1.3; }
-  #modal-stars-vault .sv-quest-rule { font-size: 9.5px; line-height: 1.3; }
-  #modal-stars-vault .sv-quest-reward { padding-block: 3px; font-size: 13px; }
+  #modal-stars-vault .sv-quest-path { padding: 2px 0; }
+  #modal-stars-vault .sv-quest-path-n { height: 24px; min-width: 28px; font-size: 13px; }
+  #modal-stars-vault .sv-quest-path-l { font-size: 11.5px; }
+  #modal-stars-vault .sv-quest-or { padding: 2px 0; }
+  #modal-stars-vault .sv-quest-reward { padding-block: 4px; font-size: 14px; }
   #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 38px; }
   #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 32px; }
   #modal-stars-vault .vm-foot-btn { line-height: 1.3; }
