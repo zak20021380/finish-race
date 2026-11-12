@@ -41,7 +41,7 @@ import {
 import { isPremiumUser } from './premium';
 import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
-import { payout, profile } from './storage';
+import { guestId, payout, profile } from './storage';
 import { getMySquad } from './squads';
 import { paintFlag } from './flags';
 import { runtime, tiqFrom } from './admin';
@@ -346,6 +346,10 @@ function socketParams(wide: boolean): string {
   const params = new URLSearchParams();
   const init = tgInitData();
   if (init) params.set('initData', init);
+  /* The device's persistent guest seat. It keys an unsigned session to one registry row across
+     reloads and reconnects, and lets the room fold a guest history into the signed account the
+     first time this device signs in. */
+  params.set('guestId', guestId);
   params.set('tiq', String(tiq));
   params.set('tier', myTier());
   params.set('flag', profile.country ?? '');

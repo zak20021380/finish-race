@@ -1088,7 +1088,10 @@ function pruneGrowth(growth: GrowthSeries, now: number): void {
  * judged the moves; the economy figures are the client's own telemetry, clamped on arrival.
  */
 export interface PlayerRecord {
-  /** The stable seat id: `tg-<user id>` for a verified Mini App player, `guest-<hex>` on the dev door. */
+  /**
+   * The stable seat id: `tg-<user id>` for a verified Mini App player, and the device's
+   * persistent `guest-<hex>` seat on the guest door (random only when the client named none).
+   */
   id: string;
   /** The numeric Telegram user id, or '' for a guest seat. */
   tgId: string;
@@ -1208,6 +1211,27 @@ const chatIdOf = (id: string): string => {
 };
 
 const zeroModeSeen = (): Record<MatchMode, number> => ({ bot: 0, pvp: 0, arena: 0 });
+
+/** The identity two registry rows share: a Telegram id outranks the seat id. */
+const playerIdentityOf = (p: PlayerRecord): string => (p.tgId ? `tg:${p.tgId}` : `id:${p.id}`);
+
+/**
+ * A zero-game guest row with no standing: the shape a random seat per launch left behind. Two
+ * guest rows carrying the same profile fingerprint are the same person's ghosts, so the
+ * directory shows the freshest one and the prune forgets the rest.
+ */
+function ghostKeyOf(p: PlayerRecord): string {
+  if (p.tgId || p.matches > 0 || p.lastPlayed > 0 || p.stars > 0 || p.vipUntil > 0) return '';
+  if (p.banned || p.muted || p.inMatch) return '';
+  return [p.name.trim().toLowerCase(), p.username.trim().toLowerCase(), p.country, p.age].join('|');
+}
+
+/** How long a zero-game guest row may sit unseen before the prune forgets it. */
+const GHOST_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** When the room last heard from a row: the freshest of a sighting, a race, and its signup. */
+const activityOf = (p: PlayerRecord): number =>
+  Math.max(p.lastSeen, p.lastPlayed, p.firstSeen);
 
 /** A seat's first registry entry. */
 function freshPlayer(identity: Identity, now: number): PlayerRecord {
@@ -3846,6 +3870,7 @@ export class MatchmakerDO {
       flag: '',
       age: 0,
       guest: who.guest,
+      guestId: '',
       premium: false,
       vipUntil: 0,
       coins: 0,
@@ -3916,6 +3941,13 @@ export class MatchmakerDO {
     }
     if (url.pathname === '/admin/players') {
       return json(this.playersPage(url.searchParams), 200, { 'cache-control': 'no-store' });
+    }
+    /* The Users tab's prune key: forget the duplicate zero-game guest ghosts a random-seat build
+       left behind. Signed seats are never touched, so only a SuperAdmin may fire it. */
+    if (url.pathname === '/admin/players/prune') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      return json(this.prunePlayers(), 200, { 'cache-control': 'no-store' });
     }
     if (url.pathname === '/api/admin/roles') return json(this.rolesView(me));
     if (url.pathname === '/api/admin/broadcasts') return json(this.broadcastsView());
@@ -4548,6 +4580,7 @@ export class MatchmakerDO {
       flag: cc,
       age: 0,
       guest: who.guest,
+      guestId: '',
       /* a directory row built from a nickname has no entitlement to inherit */
       premium: false,
       vipUntil: 0,
@@ -5080,6 +5113,81 @@ export class MatchmakerDO {
   }
 
   /**
+   * The registry row a connection owns. The canonical seat id wins; a legacy row already carrying
+   * this Telegram id is re-keyed onto it; and a device that queued as a guest before it signed in
+   * hands that row over the first time its account authenticates. A row's race history follows the
+   * person — the stale key is removed, so no record is counted twice and no duplicate appears in
+   * the directory.
+   */
+  private claimRecord(identity: Identity): { player: PlayerRecord; isNew: boolean } {
+    const id = identity.player.id;
+    const tgId = tgIdOf(id);
+    let player = this.players.get(id) ?? null;
+    if (!player && tgId) {
+      for (const row of this.players.values()) {
+        /* Only a real `tg-…` row owns a Telegram id; an `tg-anon-…` row never does. */
+        if (row.tgId === tgId && row.id.startsWith('tg-') && !row.id.startsWith('tg-anon-')) {
+          player = row;
+          break;
+        }
+      }
+    }
+    if (!player && !identity.guest && identity.guestId) {
+      const guest = this.players.get(identity.guestId) ?? null;
+      /* A guest mid-race keeps its row: the board will settle against that key. */
+      player = guest && !guest.inMatch ? guest : null;
+    }
+    if (!player) return { player: freshPlayer(identity, Date.now()), isNew: true };
+
+    if (player.id !== id) player = this.rekey(player, id, tgId);
+    /* A guest row with no Telegram id is this same device's earlier seat: fold it in once. */
+    if (!identity.guest && identity.guestId && identity.guestId !== player.id) {
+      const guest = this.players.get(identity.guestId);
+      if (guest && !guest.tgId && !guest.inMatch) this.foldGuest(player, guest);
+    }
+    return { player, isNew: false };
+  }
+
+  /** Move one adopted row onto its canonical seat id, carrying its moderation state. */
+  private rekey(row: PlayerRecord, id: string, tgId: string): PlayerRecord {
+    this.players.delete(row.id);
+    if (this.banned.delete(row.id)) this.banned.add(id);
+    row.id = id;
+    if (tgId) row.tgId = tgId;
+    if (row.banned) this.banned.add(id);
+    this.players.set(id, row);
+    return row;
+  }
+
+  /** Fold a guest row's history into the signed seat that just claimed it, then forget the guest. */
+  private foldGuest(target: PlayerRecord, guest: PlayerRecord): void {
+    if (guest.firstSeen > 0) {
+      target.firstSeen = target.firstSeen > 0 ? Math.min(target.firstSeen, guest.firstSeen) : guest.firstSeen;
+    }
+    target.lastSeen = Math.max(target.lastSeen, guest.lastSeen);
+    target.lastPlayed = Math.max(target.lastPlayed, guest.lastPlayed);
+    target.matches += guest.matches;
+    target.wins += guest.wins;
+    target.losses += guest.losses;
+    target.best = Math.max(target.best, guest.best);
+    target.streak = Math.max(target.streak, guest.streak);
+    target.coins = Math.max(target.coins, guest.coins);
+    target.stars = Math.max(target.stars, guest.stars);
+    target.referrals = Math.max(target.referrals, guest.referrals);
+    target.tiq = Math.max(target.tiq, guest.tiq);
+    target.country = target.country || guest.country;
+    target.squad = target.squad || guest.squad;
+    target.banned = target.banned || guest.banned;
+    target.muted = target.muted || guest.muted;
+    for (const mode of MATCH_MODES) {
+      target.modeSeen[mode] = Math.max(target.modeSeen[mode] ?? 0, guest.modeSeen[mode] ?? 0);
+    }
+    if (target.banned || target.muted) this.banned.add(target.id);
+    this.banned.delete(guest.id);
+    this.players.delete(guest.id);
+  }
+
+  /**
    * Fold a connection into the registry. The room is the authority for race telemetry, but the
    * profile and economy figures come from the seat's own client — the same query string that
    * seeded the queue. Figures only ever climb here: a stale client reporting a spent wallet must
@@ -5087,9 +5195,7 @@ export class MatchmakerDO {
    */
   private touch(identity: Identity): void {
     const now = Date.now();
-    const id = identity.player.id;
-    const isNew = !this.players.has(id);
-    const p = this.players.get(id) ?? freshPlayer(identity, now);
+    const { player: p, isNew } = this.claimRecord(identity);
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
     p.country = normalizeCountry(identity.flag) || p.country;
@@ -5108,11 +5214,12 @@ export class MatchmakerDO {
     p.stars = Math.max(p.stars, identity.stars);
     p.referrals = Math.max(p.referrals, identity.referrals);
     p.squad = identity.squad || p.squad;
-    p.banned = p.banned || this.banned.has(id);
+    p.banned = p.banned || this.banned.has(p.id);
     p.muted = p.muted || p.banned;
-    if (!this.players.has(id)) {
+    if (p.banned) this.banned.add(p.id);
+    if (isNew) {
       this.trim();
-      this.players.set(id, p);
+      this.players.set(p.id, p);
     }
     this.persist();
   }
@@ -5563,6 +5670,27 @@ export class MatchmakerDO {
     this.setInMatch(id, false);
   }
 
+  /**
+   * The registry as the directory reads it: one row per person. A Telegram id is the canonical
+   * key; a zero-game guest row is folded into the freshest row carrying its profile fingerprint,
+   * which hides the legacy ghosts a random-seat build left behind. Newer rows win.
+   */
+  private directoryRows(): PlayerRecord[] {
+    const rows = [...this.players.values()]
+      .sort((a, b) => activityOf(b) - activityOf(a) || a.id.localeCompare(b.id));
+    const seen = new Set<string>();
+    const out: PlayerRecord[] = [];
+    for (const p of rows) {
+      const keys = [playerIdentityOf(p)];
+      const ghost = ghostKeyOf(p);
+      if (ghost) keys.push(`ghost:${ghost}`);
+      if (keys.some((key) => seen.has(key))) continue;
+      for (const key of keys) seen.add(key);
+      out.push(p);
+    }
+    return out;
+  }
+
   /** One page of the directory: filtered, sorted, and windowed. */
   private playersPage(params: URLSearchParams): PlayersPage {
     const q = (params.get('q') ?? '').trim().toLowerCase().slice(0, 64);
@@ -5576,7 +5704,7 @@ export class MatchmakerDO {
     const limit = Math.min(PLAYERS_LIMIT, Math.max(1, Math.floor(Number(params.get('limit')) || 40)));
     const now = Date.now();
     const tokens = q.split(/\s+/).filter(Boolean);
-    let rows = [...this.players.values()];
+    let rows = this.directoryRows();
     if (tokens.length) {
       rows = rows.filter((p) => {
         const hay = `${p.name} ${p.username} ${p.tgId} ${p.id}`.toLowerCase();
@@ -5604,6 +5732,34 @@ export class MatchmakerDO {
     else rows.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
     const total = rows.length;
     return { ok: true, total, offset, limit, players: rows.slice(offset, offset + limit) };
+  }
+
+  /**
+   * Forget the duplicate ghosts a random-seat build left in the directory: zero-game guest rows
+   * whose profile is already represented by a fresher row, and zero-game guests nobody has seen
+   * for a month. Signed accounts and anything with a race behind it are never touched.
+   */
+  private prunePlayers(): { ok: true; pruned: number; remaining: number } {
+    const now = Date.now();
+    const ordered = [...this.players.values()].sort((a, b) => activityOf(b) - activityOf(a));
+    const claimed = new Set<string>();
+    const victims: string[] = [];
+    for (const p of ordered) {
+      const ghost = ghostKeyOf(p);
+      if (!ghost) continue;
+      const key = `ghost:${ghost}`;
+      if (claimed.has(key) || now - activityOf(p) > GHOST_STALE_MS) {
+        victims.push(p.id);
+        continue;
+      }
+      claimed.add(key);
+    }
+    for (const id of victims) {
+      this.players.delete(id);
+      this.banned.delete(id);
+    }
+    if (victims.length) this.persist();
+    return { ok: true, pruned: victims.length, remaining: this.directoryRows().length };
   }
 
   /** BAN / UNBAN / GRANT_COINS on one seat, answering with the record as it now stands. */

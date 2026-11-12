@@ -16,7 +16,9 @@
  *
  * Guest fallback: a caller that offers no `initData` at all — a plain browser tab, Telegram Web
  * without a Mini App session, Telegram Desktop before the SDK hands one over — is seated as a
- * guest with a random id, so the same build can queue outside a Mini App. A caller that *does*
+ * guest under the device's persistent `guestId` (or a random id when the client names none), so
+ * the same build can queue outside a Mini App without minting a new directory row per connection.
+ * A caller that *does*
  * offer `initData` must prove it: a forged or stale signature is refused rather than demoted to
  * a guest, because a silent demotion would hide the breakage. `DEV_AUTH = "true"` and loopback
  * hosts additionally let an unverifiable signature through, for local work. A valid signature
@@ -39,7 +41,10 @@ const isTier = (value: string): value is MindTier =>
   value === 'rookie' || value === 'tactician' || value === 'strategist' || value === 'grandmaster';
 
 export interface Player {
-  /** `tg-<user id>` for a verified Mini App player, `guest-<random>` on the dev fallback. */
+  /**
+   * `tg-<user id>` for a verified Mini App player, and the device's persistent `guest-<hex>` seat
+   * on the guest door (a random seat only when the client named none).
+   */
   id: string;
   name: string;
   username: string;
@@ -62,6 +67,12 @@ export interface Identity {
   age: number;
   /** True only when the guest door was used. */
   guest: boolean;
+  /**
+   * The persistent guest seat the client named (`guest-<hex>`), or ''. It keys an unsigned
+   * session to one directory row per device, and tags a signed seat with the guest row it may
+   * inherit the first time this device signs in.
+   */
+  guestId: string;
   /**
    * The VIP entitlement behind this socket, decided here and nowhere else.
    *
@@ -93,6 +104,11 @@ export interface AuthRequest {
   initData: string;
   /** Hostname of the incoming request, so the guest fallback can be scoped to loopback. */
   hostname: string;
+  /**
+   * The device's persistent guest seat (`guest-<hex>`), minted once by the client and reused on
+   * every launch. It is not a credential — the guest door trusts it only as a stable row key.
+   */
+  guestId: string;
   /** Client-supplied starting TIQ, tier, country and display name. */
   tiq: number | null;
   tier: string;
@@ -147,12 +163,21 @@ function avatarOf(raw: string | undefined): string {
 /** A telemetry figure, clamped to its sane ceiling — a query string can say anything. */
 const capped = (value: string | null, hi: number): number => Math.min(hi, whole(value) ?? 0);
 
+/** The persistent guest seat a client names: `guest-<hex>`, never a free-form id. */
+const GUEST_ID_RE = /^guest-[0-9a-f]{8,32}$/;
+
+const guestIdOf = (raw: string | null): string => {
+  const value = (raw ?? '').trim().toLowerCase();
+  return GUEST_ID_RE.test(value) ? value : '';
+};
+
 /** Everything the socket put in the query string, read once. */
 export function authRequestFrom(url: URL): AuthRequest {
   const p = url.searchParams;
   return {
     initData: p.get('initData') ?? '',
     hostname: url.hostname,
+    guestId: guestIdOf(p.get('guestId')),
     tiq: whole(p.get('tiq')),
     tier: p.get('tier') ?? '',
     flag: flagOf(p.get('flag') ?? ''),
@@ -244,16 +269,23 @@ function randomHex(bytes: number): string {
   return hex(a.buffer as ArrayBuffer);
 }
 
-/** The development door: a distinct, throwaway seat per connection. */
+/** The development door: the client's persistent seat when it named one, else a throwaway seat. */
 function guestSeat(req: AuthRequest, tier: MindTier): Identity {
   return {
     /* a guest has no signed user object, so it has no face: the client paints its monogram */
-    player: { id: `guest-${randomHex(4)}`, name: req.name || 'Guest', username: '', flag: req.flag, avatar: '' },
+    player: {
+      id: req.guestId || `guest-${randomHex(4)}`,
+      name: req.name || 'Guest',
+      username: '',
+      flag: req.flag,
+      avatar: '',
+    },
     tiq: req.tiq ?? 0,
     tier,
     flag: req.flag,
     age: req.age,
     guest: true,
+    guestId: req.guestId,
     /* the demo's own door: a guest has nothing to forge, so its claim is the answer */
     premium: req.vip,
     vipUntil: 0,
@@ -293,6 +325,7 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         flag: req.flag,
         age: req.age,
         guest: false,
+        guestId: req.guestId,
         /* inside the signature, so it is a fact rather than a claim — a flag cannot upgrade it */
         premium: user?.is_premium === true,
         vipUntil: 0,

@@ -89,6 +89,40 @@ export const activeTgId: string = telegramUserId() || (hasLaunchPayload() ? 'tg_
 export const userScopedKey = (base: string): string => `${base}_u_${activeTgId}`;
 const scopedFor = (base: string, uid: string): string => `${base}_u_${uid}`;
 
+/* ---------- the device's own guest seat ----------
+ * A browser tab has no signed Telegram account, so the Worker seats it as a guest under whatever
+ * id the client names. A random id per launch made every reload mint a new directory row — the
+ * duplicate "users" the Command Center showed. The id is therefore minted once, kept on the
+ * device, and reused for every later launch. A signed session still outranks it: the Worker keys
+ * a Telegram account `tg-<user id>`, and this id then only tags the device.
+ */
+const GUEST_ID_KEY = 'tactix_guest_id';
+const GUEST_ID_RE = /^guest-[0-9a-f]{8,32}$/;
+
+function persistGuestId(id: string): string {
+  backend.set(GUEST_ID_KEY, id);
+  return id;
+}
+
+/** The stored guest id, or a freshly minted one that is written before it is handed out. */
+function persistentGuestId(): string {
+  const stored = backend.get(GUEST_ID_KEY)?.trim().toLowerCase() ?? '';
+  if (GUEST_ID_RE.test(stored)) return stored;
+  const bytes = new Uint8Array(8);
+  try {
+    crypto.getRandomValues(bytes);
+  } catch {
+    /* a webview without a CSPRNG still needs a stable seat: the clock is unique enough here */
+    return persistGuestId(`guest-${Date.now().toString(16).padStart(16, '0')}`);
+  }
+  let hex = '';
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+  return persistGuestId(`guest-${hex}`);
+}
+
+/** The persistent guest seat this device queues under; never regenerated once stored. */
+export const guestId: string = persistentGuestId();
+
 /** A well-formed account id: Telegram's numeric id, or one of the two local buckets. */
 const cleanUid = (value: string): string =>
   /^\d{1,20}$/.test(value) || value === 'guest' || value === 'tg_unknown' ? value : '';

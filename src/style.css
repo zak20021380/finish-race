@@ -22021,6 +22021,7 @@ html[data-lang="ar"] :is(.event-title, .event-tier, .event-k, .admin-events-live
 .adm-users-refresh .ico { width: 14px; height: 14px; }
 .adm-users-refresh:active { transform: translateY(var(--press-y)); --lip: 1px; }
 .adm-users-refresh:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-users-refresh:disabled { opacity: .45; cursor: not-allowed; }
 .adm-users-refresh[data-busy="true"] { cursor: progress; color: var(--mint-ink); }
 .adm-users-refresh[data-busy="true"] .ico { animation: adm-live-spin .75s linear infinite; }
 html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-duration: 1.8s; }

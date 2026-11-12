@@ -931,6 +931,17 @@ async function pushPlayerAction(
   }
 }
 
+/**
+ * The directory prune: forget zero-game guest ghosts a random-seat build left behind. The
+ * Worker answers the number it removed; null means no live registry answered the call.
+ */
+async function pruneGhostPlayers(): Promise<number | null> {
+  const data = await parseJson<{ ok?: boolean; pruned?: number }>(
+    await adminFetch('/admin/players/prune', { method: 'POST' }),
+  );
+  return data?.ok === true && typeof data.pruned === 'number' ? data.pruned : null;
+}
+
 /* ---------- the squad registry, over `/api/admin/squads` ---------- */
 
 export type SquadChatKind = 'channel' | 'group';
@@ -1989,6 +2000,7 @@ export function createAdmin(api: AdminApi): Admin {
   const usersTotalEl = $<HTMLElement>('users-total');
   const usersSourceEl = $<HTMLElement>('users-source');
   const usersRefresh = $<HTMLButtonElement>('users-refresh');
+  const usersPrune = $<HTMLButtonElement>('users-prune');
   const usersMore = $<HTMLButtonElement>('users-more');
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
@@ -4112,6 +4124,10 @@ export function createAdmin(api: AdminApi): Admin {
     usersRefresh.setAttribute('aria-busy', String(busy));
     usersRefresh.setAttribute('aria-label', busy ? 'Refreshing player directory' : 'Refresh player directory');
     usersRefresh.title = busy ? 'Refreshing player directory…' : 'Refresh player directory';
+    if (usersPrune) {
+      usersPrune.disabled = busy || !usersOn;
+      usersPrune.title = usersOn ? 'Prune duplicate zero-game guest records' : 'Prune needs a live registry';
+    }
   }
 
   /**
@@ -4205,8 +4221,38 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
-  /* ---------- Squads: the registered channels & groups at war (worker/matchmaker.ts) ---------- */
+  /** The prune key: forget the directory's zero-game guest ghosts, then repaint from the registry. */
+  async function pruneGhosts(): Promise<void> {
+    if (usersPending > 0) return;
+    impact('medium');
+    usersPending++;
+    syncUsersRefresh();
+    try {
+      const pruned = await pruneGhostPlayers();
+      if (pruned === null) {
+        usersOn = false;
+        usersProbed = true;
+        paintUsers();
+        notify('error');
+        api.note('The Worker is not answering — there is no live registry to prune.', true, 2600);
+        return;
+      }
+      notify('success');
+      api.note(
+        pruned > 0
+          ? `Pruned ${pruned} duplicate guest ${pruned === 1 ? 'record' : 'records'}.`
+          : 'No duplicate guest records to prune.',
+        false,
+        2600,
+      );
+      await refreshUsers(true, true);
+    } finally {
+      usersPending = Math.max(0, usersPending - 1);
+      syncUsersRefresh();
+    }
+  }
 
+  /* ---------- Squads: the registered channels & groups at war (worker/matchmaker.ts) ---------- */
   const SQUAD_ACTION_ERROR: Record<string, string> = {
     no_such_squad: 'That squad is no longer on the registry.',
     invalid_action: 'The Worker did not recognise that command.',
@@ -6755,6 +6801,9 @@ export function createAdmin(api: AdminApi): Admin {
     window.clearTimeout(usersAdvTimer);
     impact('light');
     void refreshUsers(true, true);
+  });
+  usersPrune?.addEventListener('click', () => {
+    void pruneGhosts();
   });
   syncUsersRefresh();
 
