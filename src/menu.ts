@@ -2388,8 +2388,12 @@ export function createMenu(api: MenuApi): Menu {
   });
 
   /* The vault's own CTA and the empty tracker's share key take the same door: one Telegram
-     share, gated on the link the room has already issued. */
-  const shareVaultLink = (): void => {
+     share, gated on the link the room has already issued. The tap is swallowed here so no
+     ancestor, hash navigation or default button action can race the native share sheet — the
+     vault must stay mounted underneath it. */
+  const shareVaultLink = (event: Event): void => {
+    event.preventDefault();
+    event.stopPropagation();
     impact('medium');
     const share = referralShareUrl();
     if (!share) { showPfToast(t('vaultLinkPending')); return; }
@@ -4667,6 +4671,60 @@ export function createMenu(api: MenuApi): Menu {
       activate();
     });
   }
+
+  /* ---- return-from-native-overlay guard ----
+     Android hands the WebView back from Telegram's share sheet without a route event: the dock
+     still highlights Profile, but a transient layout collapse or a panel left hidden behind the
+     native sheet can leave the content area empty. The router stays the source of truth — this
+     only re-asserts the panel it already names, then repaints the active tab from the save it is
+     already holding. A hidden document is left alone: the share sheet still owns the viewport. */
+  const screensRoot = document.getElementById('screens');
+  let healTimer = 0;
+
+  const healActiveTab = (): void => {
+    healTimer = 0;
+    if (document.hidden || !screensRoot) return;
+    const route = api.router.current;
+    if (!route || route === 'game') return;
+    const panels = [...screensRoot.querySelectorAll<HTMLElement>('.screen')];
+    const panel = panels.find((el) => el.dataset.screen === route);
+    if (!panel) return;
+    let repaired = false;
+    if (panel.hidden || window.getComputedStyle(panel).display === 'none') {
+      for (const el of panels) el.hidden = el !== panel;
+      panel.hidden = false;
+      panel.style.display = '';
+      panel.classList.remove('in-fwd', 'in-back', 'out-fwd', 'out-back');
+      panel.style.pointerEvents = '';
+      repaired = true;
+      try { panel.focus({ preventScroll: true }); } catch { /* not focusable */ }
+    }
+    /* The highlighted dock key and the painted panel are one promise, so the key is re-asserted
+       from the router's route rather than trusted from the DOM. */
+    const key = route === 'compete' ? 'arena'
+      : route === 'home' || route === 'modes' || route === 'custom' ? 'home' : route;
+    const dock = document.getElementById('tabs');
+    if (dock) {
+      dock.hidden = false;
+      for (const tab of dock.querySelectorAll<HTMLElement>('.tab[data-tab]')) {
+        if (tab.dataset.tab === key) tab.setAttribute('aria-current', 'page');
+        else tab.removeAttribute('aria-current');
+      }
+    }
+    if (route === 'profile') {
+      paintProfile(repaired);
+      paintVault();
+    }
+  };
+
+  /* The WebView restores a beat after focus returns, so heal on the next task, not synchronously. */
+  const scheduleHeal = (): void => {
+    window.clearTimeout(healTimer);
+    healTimer = window.setTimeout(healActiveTab, 90);
+  };
+  window.addEventListener('focus', scheduleHeal);
+  window.addEventListener('pageshow', scheduleHeal);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleHeal(); });
 
   paintDiff();
   paintSettings();

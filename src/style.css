@@ -305,6 +305,11 @@ html.game-live .screen.game .card {
 #app {
   position: relative;                 /* anchor for the overlay, sheets + confetti */
   height: var(--app-h);
+  /* A floor the viewport can never undercut: even a transient 0 `--app-h` from a native
+     overlay leaves the column at its real height, so the bottom dock can never ride up to
+     the top of the screen. */
+  min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   max-width: var(--app-w);
   margin: 0 auto;

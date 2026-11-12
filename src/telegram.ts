@@ -350,6 +350,51 @@ export function applyTheme() {
   } catch { /* no head */ }
 }
 
+/**
+ * No phone column is shorter than this, and no reading below it is a real viewport: Android's
+ * WebView reports a collapsed (or zero) height around the native share sheet, the keyboard and an
+ * app switch. Publishing that reading to `--app-h` pulls the whole shell to zero, which is what
+ * piles the bottom dock at the top of the screen.
+ */
+const MIN_APP_HEIGHT = 320;
+const MAX_APP_HEIGHT = 4000;
+
+/** The last plausible column height; a rejected reading never overwrites it. */
+let appHeight = 0;
+
+/**
+ * Re-measure the app column and republish `--app-h` when the reading is believable.
+ *
+ * `viewportStableHeight` is the contract, but after a native overlay it can be the stale, short
+ * value while the WebView is already back at full height — so the tallest plausible reading wins.
+ * A hidden document is never measured: the share sheet has already taken the viewport offline.
+ */
+function syncAppHeight(): void {
+  if (document.hidden) return;
+  const stable = Number(tg?.viewportStableHeight) || 0;
+  const visual = Number(window.visualViewport?.height) || 0;
+  const inner = Number(window.innerHeight) || 0;
+  const h = Math.round(Math.max(stable, visual, inner));
+  if (!Number.isFinite(h) || h < MIN_APP_HEIGHT || h > MAX_APP_HEIGHT) {
+    /* Keep the last good column instead of the transient reading. */
+    if (appHeight) document.documentElement.style.setProperty('--app-h', `${appHeight}px`);
+    return;
+  }
+  appHeight = h;
+  document.documentElement.style.setProperty('--app-h', `${h}px`);
+}
+
+/**
+ * Hand the column back its real height after a native overlay. Android restores the WebView a tick
+ * after it hands focus back, so the measurement is taken now and once more on the next frame and
+ * after a short settle. The layout reflows off `--app-h`, which repaints the active view.
+ */
+function recoverAppHeight(): void {
+  syncAppHeight();
+  window.requestAnimationFrame(syncAppHeight);
+  window.setTimeout(syncAppHeight, 260);
+}
+
 export function initTelegram() {
   try {
     tg?.ready();
@@ -360,16 +405,20 @@ export function initTelegram() {
 
   applyTheme();
 
-  const setViewport = () => {
-    const h = tg?.viewportStableHeight;
-    if (h) document.documentElement.style.setProperty('--app-h', `${h}px`);
-  };
-  setViewport();
+  syncAppHeight();
   /* Both events are 6.1 additions and warn one line each on every call below that. */
   if (atLeast('6.1')) {
-    tg?.onEvent?.('viewportChanged', setViewport);
+    tg?.onEvent?.('viewportChanged', syncAppHeight);
     tg?.onEvent?.('themeChanged', applyTheme);
   }
+  /* A native sheet can swallow the viewport events entirely; focus, page restore and rotation
+     are the doors the WebView always hands back, so the height is re-asserted there too. */
+  window.addEventListener('focus', recoverAppHeight);
+  window.addEventListener('pageshow', recoverAppHeight);
+  window.addEventListener('orientationchange', recoverAppHeight);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) recoverAppHeight();
+  });
 }
 
 /**
@@ -409,13 +458,21 @@ export function openLink(url: string): void {
 
 /**
  * Hand a `t.me/share/url` page to Telegram's own link handler, which answers with the native
- * recipient picker on mobile and desktop. Outside Telegram the browser takes the same URL.
+ * recipient picker on mobile and desktop.
+ *
+ * Inside Telegram this is the ONLY door: the native handler owns the document lifecycle, so a
+ * simultaneous `window.open`/`location.href` would fight it and can leave the WebView on a blank
+ * frame when the sheet closes. The fallback exists for a plain browser tab alone.
  */
 export function openTelegramShare(shareUrl: string): void {
-  try {
-    if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
-  } catch { /* outside Telegram */ }
-  try { window.open(shareUrl, '_blank'); } catch { /* webview blocked */ }
+  if (!shareUrl) return;
+  const app = window.Telegram?.WebApp ?? tg;
+  const native = app?.openTelegramLink;
+  if (typeof native === 'function') {
+    try { native.call(app, shareUrl); } catch { /* the client declined: stay in the app, never bounce the tab */ }
+    return;
+  }
+  try { window.open(shareUrl, '_blank', 'noopener'); } catch { /* webview blocked */ }
 }
 
 /**
