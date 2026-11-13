@@ -291,6 +291,11 @@ export interface LobbyOptions {
    * reconnecting, and decides for itself when to try again (and when to give up).
    */
   onDrop?: () => void;
+  /**
+   * The crown removed this seat from the room. The membership is over — no reconnect may walk
+   * back into it — so the screen closes the lobby and puts the player back Home with the reason.
+   */
+  onKicked?: () => void;
 }
 
 export interface LobbyHandle {
@@ -301,6 +306,12 @@ export interface LobbyHandle {
   setFormat(format: LobbyFormat): boolean;
   /** The host may move any seat; a player may move their own. Team formats only. */
   setTeam(seat: number, team: 0 | 1): void;
+  /**
+   * Host only: remove a non-host seat from the room. Online the room is asked (the worker is the
+   * one that enforces the crown); offline only a bot's chair can be cleared. False when the pick
+   * is not the host's to make, or the frame never left the device.
+   */
+  kick(seat: number): boolean;
   /** Tell the room this seat is in another board, so its countdown holds. */
   setBusy(busy: boolean): void;
   /** Host only. False while the format's minimum player count is not met (two players). */
@@ -608,6 +619,30 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     switch (msg.type) {
       case 'PONG':
         return;
+      case 'KICKED': {
+        /* The crown removed this seat: the room is not ours any more, and a reconnect must never
+           walk back into it. Drop the socket here so its close is not mistaken for a network drop
+           worth retrying, then hand the screen the news it has to say out loud. */
+        left = true;
+        solo = true;
+        raceDead = true;
+        if (raceTimer) {
+          globalThis.clearTimeout(raceTimer);
+          raceTimer = 0;
+        }
+        if (raceOpenTimer) {
+          globalThis.clearTimeout(raceOpenTimer);
+          raceOpenTimer = 0;
+        }
+        teardown();
+        outbox.length = 0;
+        try { sock?.close(); } catch { /* already gone */ }
+        sock = null;
+        link = null;
+        push({ ...lobby, status: 'closed', online: false, you: -1 });
+        opts.onKicked?.();
+        return;
+      }
       case 'LOBBY':
         settled = true;
         push(readLobby(lobby, msg));
@@ -987,6 +1022,19 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       if (next === lobby) return;
       push(next);
       send({ type: 'SET_TEAM', side: seat, team });
+    },
+    kick(seat) {
+      if (!isHost(lobby)) return false;
+      if (!Number.isInteger(seat) || seat < 0 || seat >= lobby.seats.length) return false;
+      /* the crown's own chair is not the host's to remove: leaving it is `leave()` */
+      if (seat === lobby.you || seat === lobby.hostSeat) return false;
+      const target = lobby.seats[seat];
+      if (!target) return false;
+      if (lobby.online) return send({ type: 'KICK', side: seat });
+      /* offline, the only removable chair is a bot the host seated: clear it locally */
+      if (!target.bot) return false;
+      push({ ...lobby, seats: lobby.seats.map((s, i) => (i === seat ? null : s)) });
+      return true;
     },
     setBusy(busy) {
       if (!lobby.online) return;

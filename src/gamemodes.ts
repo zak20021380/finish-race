@@ -26,7 +26,7 @@ import {
   adoptUserStorageKey, computeMatchRewards, hasCompletedTutorial, readJson, rewardFamilyOf,
   userScopedKey, writeJson,
 } from './storage';
-import { menuState, onLang, onMenuChange, saveMenu, t } from './settings';
+import { menuState, lang, onLang, onMenuChange, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
@@ -185,16 +185,30 @@ export function setLobbyHint(text: string): void {
   if (handle && view === 'lobby') paintLobbyPane(handle.lobby);
 }
 
-/** The plain-language line under the roster, in the player's language. */
+/** The name the room knows its host by, or null while the chair is still reserved. */
+function hostNameOf(l: Lobby): string | null {
+  const host = l.hostSeat >= 0 ? l.seats[l.hostSeat] : null;
+  return host?.name?.trim() || null;
+}
+
+/**
+ * The dynamic line above the CTA. It is room context only — never the CTA's own label — so the
+ * same sentence can never appear twice. A host reads what the room still needs; a guest reads
+ * who owns the launch.
+ */
 function hintText(l: Lobby): string {
   /* An armed duel owns this caption until the challenged seat is filled: the room is not short
      "one more player", it is waiting for somebody to accept a challenge. */
   if (armedDuelHint && !canStart(l)) return armedDuelHint;
-  if (hostAway(l)) return t('hintWaitingHost');
+  /* A reserved chair is its own line: the guest is told what happened, not just that time passes. */
+  if (hostAway(l)) return l.pendingHost ? t('lobbyHostPendingSub') : t('lobbyHostAwaySub');
   /* A friend whose socket dropped is not "ready": the room says so before the host taps Start. */
   if (l.seats.some((s) => !!s && !s.bot && !s.connected)) return t('errStartOffline');
-  if (canStart(l)) return isHost(l) ? t('hintReadyHost') : t('hintWaitingHost');
-  return t('hintInviteMore');
+  if (isHost(l)) return canStart(l) ? t('hintHostReady') : t('hintHostWaitingPlayers');
+  const hostName = hostNameOf(l);
+  return hostName
+    ? t('hintGuestHostStarts').replace('{name}', hostName)
+    : t('lobbyHostPendingSub');
 }
 
 /**
@@ -641,6 +655,120 @@ function plannedTeam(l: Lobby, index: number): 0 | 1 {
   return 0;
 }
 
+/* ---- the host's remove control ----
+   One armed seat at a time. The × is a two-step control on purpose: the first tap arms an inline
+   confirmation, the second confirms, and anything untouched disarms itself after a short beat. */
+const KICK_ARM_MS = 3500;
+/** The seat whose remove control is armed, or -1. */
+let kickSeat = -1;
+/** The one pending auto-revert. */
+let kickTimer = 0;
+
+/** May the viewer remove this seat? The host, never their own chair. */
+const canKick = (l: Lobby, seat: number): boolean =>
+  isHost(l) && seat !== l.you && seat !== l.hostSeat && !!l.seats[seat];
+
+/** The × and its inline confirmation pill, as the card's corner control. */
+function kickControlsMarkup(seat: number, name: string): string {
+  if (kickSeat === seat) {
+    return `<span class="lb-kick-q">${esc(t('kickRemove'))}</span>`
+      + `<button class="lb-kick-b is-yes" type="button" data-kick-act="yes" data-seat="${seat}"`
+      + ` aria-label="${esc(t('kickConfirm'))}">`
+      + '<svg class="lb-kick-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+      + '<path d="M5 12.6l4.4 4.4L19 6.9" /></svg></button>'
+      + `<button class="lb-kick-b is-no" type="button" data-kick-act="no" data-seat="${seat}"`
+      + ` aria-label="${esc(t('kickCancel'))}">`
+      + '<svg class="lb-kick-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+      + '<path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8" /></svg></button>';
+  }
+  return `<button class="lb-kick-b is-x" type="button" data-kick-act="arm" data-seat="${seat}"`
+    + ` aria-label="${esc(t('kickRemoveAria').replace('{name}', name))}">`
+    + '<svg class="lb-kick-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+    + '<path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8" /></svg></button>';
+}
+
+const kickMarkup = (seat: number, name: string): string =>
+  `<span class="lb-kick${kickSeat === seat ? ' is-armed' : ''}">${kickControlsMarkup(seat, name)}</span>`;
+
+/**
+ * A held card plus, when the host may remove it, the corner control. The control is a *sibling*
+ * of the card: a button inside a button is not a thing HTML can express.
+ */
+function kickableCard(card: string, l: Lobby, seat: number): string {
+  if (!canKick(l, seat)) return card;
+  const s = l.seats[seat] as LobbySeat;
+  return `<div class="lb-cell has-kick${kickSeat === seat ? ' is-kicking' : ''}"`
+    + ` role="listitem" data-seat="${seat}">`
+    + card.replace(' role="listitem"', '')
+    + kickMarkup(seat, s.name)
+    + '</div>';
+}
+
+/** Re-draw the one open remove control in place, so arming never rebuilds the roster. */
+function paintKick(l: Lobby | null = handle?.lobby ?? null): void {
+  if (!l) return;
+  const grid = document.getElementById('lb-slots');
+  if (!grid) return;
+  for (const cell of grid.querySelectorAll<HTMLElement>('.lb-cell[data-seat]')) {
+    const seat = Number(cell.dataset.seat);
+    const s = l.seats[seat];
+    const mount = cell.querySelector<HTMLElement>('.lb-kick');
+    if (!mount || !s) continue;
+    const armed = kickSeat === seat;
+    cell.classList.toggle('is-kicking', armed);
+    mount.classList.toggle('is-armed', armed);
+    mount.innerHTML = kickControlsMarkup(seat, s.name);
+  }
+}
+
+/** Take the armed control back to its ×, cancelling the pending revert. */
+function disarmKick(l?: Lobby): void {
+  if (kickSeat < 0 && !kickTimer) return;
+  resetKick();
+  paintKick(l);
+}
+
+/** Forget the armed control without touching the DOM: the screen it belongs to is going away. */
+function resetKick(): void {
+  window.clearTimeout(kickTimer);
+  kickTimer = 0;
+  kickSeat = -1;
+}
+
+/** First tap: morph the × into the inline confirmation and start its auto-revert clock. */
+function armKick(seat: number): void {
+  const l = handle?.lobby;
+  if (!l || !canKick(l, seat)) return;
+  impact('light');
+  window.clearTimeout(kickTimer);
+  kickSeat = seat;
+  paintKick(l);
+  /* the × the player tapped is gone: focus belongs to the confirm key that replaced it */
+  document
+    .querySelector<HTMLElement>(`#lb-slots .lb-cell[data-seat="${seat}"] [data-kick-act="yes"]`)
+    ?.focus({ preventScroll: true });
+  kickTimer = window.setTimeout(() => {
+    kickTimer = 0;
+    if (kickSeat !== seat) return;
+    kickSeat = -1;
+    paintKick();
+  }, KICK_ARM_MS);
+}
+
+/** Second tap: the real kick. The room answers with a roster that no longer holds the seat. */
+function confirmKick(seat: number): void {
+  const l = handle?.lobby;
+  if (!l || kickSeat !== seat) return;
+  if (!canKick(l, seat)) { disarmKick(l); return; }
+  disarmKick(l);
+  if (!handle?.kick(seat)) {
+    notify('warning');
+    return;
+  }
+  impact('medium');
+  notify('success');
+}
+
 /** One seat, as the compact roster paints it (3P, 4P, 2v2). Empty wells are the invite door. */
 function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   const s = l.seats[seat];
@@ -657,7 +785,10 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   /* the host may move any seat between the teams; a player may move their own */
   const canMove = team !== null && (isHost(l) || s.seat === l.you);
   const tags = [
-    s.host ? `<span class="lb-crown" role="img" aria-label="${t('host')}">👑</span>` : '',
+    s.host
+      ? `<span class="lb-crown" role="img" aria-label="${esc(t('host'))}">`
+        + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
+      : '',
     team === null ? `<span class="lb-color" data-color="${color}">${t(FFA_COLOR[color])}</span>` : '',
     !s.bot && !s.connected
       ? `<span class="lb-badge lb-badge-away" role="status">`
@@ -676,13 +807,14 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   const label = team === null
     ? `${s.name}, ${role}, ${t(FFA_COLOR[color])}`
     : `${s.name}, ${role}, ${s.team === 0 ? t('teamBlue') : t('teamOrange')}`;
-  return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+  const card = `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + (team === null ? ` data-color="${color}"` : ` data-team="${s.team}"`)
     + ` aria-label="${esc(label)}"${hint}>`
     + avatarMarkup(s)
     + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
     + `<span class="lb-role">${role}</span></span>`
     + `<span class="lb-tags">${tags}</span></button>`;
+  return kickableCard(card, l, seat);
 }
 
 /**
@@ -777,7 +909,7 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
         ? `<span class="lb-badge lb-badge-away" role="status">`
           + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('seatReconnecting'))}</span>`
         : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
-  return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+  return kickableCard(`<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + ` aria-label="${esc(label)}">`
     + `<span class="lb-plate-halo" aria-hidden="true"></span>`
     + badge
@@ -785,7 +917,7 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
     + avatarMarkup(s)
     + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
     + `<span class="lb-role">${role}</span></span>`
-    + '</button>';
+    + '</button>', l, seat);
 }
 
 /** The duel: one prominent plate a side, the crest between them. Two seats, nothing to count. */
@@ -813,7 +945,7 @@ function teamMarkup(l: Lobby): string {
 function paintSlots(l: Lobby): void {
   /* the face is part of the signature: a frame that swaps a monogram for a relayed photo has to
      rebuild the plate it belongs to, even when every other field on the seat is unchanged */
-  const sig = `${l.you}|${l.hostSeat}|${l.format}|${l.pendingHost}|`
+  const sig = `${l.you}|${l.hostSeat}|${l.format}|${l.pendingHost}|${lang}|`
     + l.seats.map((s) => (s
       ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}:${s.busy}`
       : '-')).join(',');
@@ -838,6 +970,8 @@ function paintSlots(l: Lobby): void {
 
 /** Everything the lobby screen shows, from the value alone. */
 function paintLobbyPane(l: Lobby): void {
+  /* A closed room has no screen: the caller is already walking this client out of it. */
+  if (l.status === 'closed') return;
   /* The room on screen *is* the active room: every invite door below reads this one code, and
      the badge prints it beside the link it would copy. */
   if (l.code) activeCode = l.code;
@@ -868,6 +1002,9 @@ function paintLobbyPane(l: Lobby): void {
   if (sub) sub.textContent = formatLine(l.format);
 
   paintSlots(l);
+  /* A seat that left, or a crown that moved, ends any armed confirmation: the control it
+     belonged to is not on screen any more. */
+  if (kickSeat >= 0 && !canKick(l, kickSeat)) disarmKick(l);
 
   const away = hostAway(l);
   /* The drawer's subtitle names the room's actual state. While the host's chair is reserved the
@@ -887,13 +1024,22 @@ function paintLobbyPane(l: Lobby): void {
   const botKey = document.getElementById('lb-pick-bot');
   if (botKey) botKey.hidden = l.online;
 
+  /* A host still short of players is told where the next one comes from: the Invite key warms up
+     for as long as the room has not reached its own minimum. */
+  const inviteKey = document.getElementById('lb-invite');
+  if (inviteKey) inviteKey.classList.toggle('is-attn', host && !canStart(l));
+
   const start = document.getElementById('gm-start') as HTMLButtonElement | null;
   if (start) {
     /* a room that is reconnecting cannot start: the frame would go nowhere; neither can one
        holding a seat whose friend is reconnecting — there is nobody to launch yet */
     const awaySeat = l.seats.some((s) => !!s && !s.bot && s.connected === false);
     const ready = host && canStart(l) && l.status !== 'connecting' && !awaySeat;
-    start.textContent = host ? t('startMatch') : t('waitingHost');
+    /* The CTA is the action/state label and nothing else: the context lives in the hint above.
+       A guest's key never pretends to be an action — it is one clean status pill. */
+    start.textContent = host
+      ? (canStart(l) ? t('startMatch') : t('ctaWaitingPlayers'))
+      : t('ctaWaitingHost');
     start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
       start.setAttribute('title', t('hintInviteMore'));
@@ -1166,6 +1312,8 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
   if (!resume) handle?.leave();
   handle = null;
   slotSig = '';
+  /* a fresh room starts with no remove control armed on it */
+  if (!resume) resetKick();
   /* a resumed room keeps the roster it already knew: the guest who joined while the socket was
      away is an arrival, not part of the scenery */
   if (!resume) seenHumans = new Set();
@@ -1298,6 +1446,12 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       handle = null;
       abortCountdown();
       scheduleResume();
+    },
+    /* The crown removed this seat: the membership ends here — nothing may be reconnected — so the
+       room surfaces close and the player lands back Home with the reason. */
+    onKicked: () => {
+      if (token !== roomToken) return;
+      ejectedFromRoom();
     },
   });
 }
@@ -1742,6 +1896,7 @@ function leaveRoom(): void {
   handle?.leave();
   handle = null;
   slotSig = '';
+  resetKick();
   seenHumans = new Set();
   pendingReveal = false;
   pickSeat = -1;
@@ -1757,6 +1912,48 @@ function leaveRoom(): void {
   friendDuelLast = null;
   /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
   setGameMode('room', { roomCode: null });
+}
+
+/**
+ * The crown removed this seat from the room. The server has already freed the chair, so this is
+ * not a drop and nothing may be reconnected: forget the membership, close every room surface and
+ * say why from Home.
+ */
+function ejectedFromRoom(): void {
+  roomToken++;
+  armedDuelHint = '';
+  window.clearTimeout(resumeTimer);
+  resumeTimer = 0;
+  resumeTries = 0;
+  abortCountdown();
+  countdownSpent = '';
+  hideLobbyBanner();
+  resetKick();
+  handle = null;
+  slotSig = '';
+  seenHumans = new Set();
+  pendingReveal = false;
+  pickSeat = -1;
+  const pick = document.getElementById('lb-pick');
+  if (pick) pick.hidden = true;
+  /* the server already freed the chair: the code must not resurrect it from this device */
+  saveSession(null);
+  /* the career tile's sheet is the same room's second surface: it closes too */
+  if (friendDuelActive) {
+    friendDuelActive = false;
+    friendDuelLaunching = false;
+    friendDuelRacing = false;
+    friendDuelError = null;
+    friendDuelLast = null;
+    document.getElementById('fd-close')?.click();
+  }
+  /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
+  setGameMode('room', { roomCode: null });
+  showView('modes');
+  sheetHost?.close();
+  showToast(t('kickedByHost'), 'warning');
+  notify('warning');
+  impact('medium');
 }
 
 /** Hide the drawer without ending the room. The socket, the code and every seat stay live. */
@@ -1791,6 +1988,11 @@ function showView(next: SheetView): void {
   if (next === 'modes') previewMode = null;
   /* the countdown belongs to the roster it is counting: leaving that pane stops it */
   if (next !== 'lobby' && countdown) abortCountdown();
+  /* the remove control belongs to the roster too: leaving the lobby disarms it */
+  if (next !== 'lobby') {
+    resetKick();
+    document.getElementById('lb-invite')?.classList.remove('is-attn');
+  }
   const modes = document.getElementById('gm-view-modes');
   if (modes) modes.hidden = next !== 'modes';
   const room = document.getElementById('gm-view-room');
@@ -2127,6 +2329,18 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
 
   /* ---- lobby: seats. An open well invites; a held one flips teams (2v2 only) ---- */
   document.getElementById('lb-slots')?.addEventListener('click', (e) => {
+    /* the host's corner control owns its own taps: arming, confirming and cancelling never
+       reach the card underneath */
+    const control = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-kick-act]');
+    if (control) {
+      const seat = Number(control.dataset.seat);
+      if (!Number.isInteger(seat)) return;
+      const action = control.dataset.kickAct;
+      if (action === 'arm') armKick(seat);
+      else if (action === 'yes') confirmKick(seat);
+      else disarmKick();
+      return;
+    }
     const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lb-slot');
     const l = handle?.lobby;
     if (!btn || !l) return;

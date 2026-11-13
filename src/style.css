@@ -14582,6 +14582,13 @@ html.reduced-motion .stars-av-photo { transition: none; }
 .lb-invite .ico { width: 15px; height: 15px; }
 .lb-invite:active { transform: scale(.97); }
 .lb-invite:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+/* the host is short of players: Invite is the next action, so the key breathes until it is full */
+.lb-invite.is-attn { animation: lb-invite-attn 2.4s ease-in-out infinite; }
+@keyframes lb-invite-attn {
+  0%, 100% { background: rgba(252, 211, 77, .12); box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .26); }
+  50% { background: rgba(252, 211, 77, .19); box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .7), 0 0 18px -4px rgba(252, 211, 77, .8); }
+}
+html.reduced-motion .lb-invite.is-attn { animation: none; }
 
 .lb-count {
   margin-left: auto;
@@ -14746,7 +14753,105 @@ html.reduced-motion .stars-av-photo { transition: none; }
 }
 .lb-slot.is-host .lb-role { color: var(--honey-ink); }
 .lb-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
-.lb-crown { font-size: 13px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+/* the host's mark: a struck-gold vector crown, never the cartoon emoji */
+.lb-crown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFD54A;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+}
+.lb-crown .ico { width: 14px; height: 14px; }
+
+/* ---- the host's remove control ----
+   The × rides the card's inline-end shoulder; arming it morphs the button into a compact
+   confirmation pill (Remove? · ✓ · ✕) without rebuilding the roster underneath it. */
+.lb-cell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.lb-cell > .lb-slot { flex: 1 1 auto; min-width: 0; }
+.lb-kick {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+}
+.lb-kick-b {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, .12);
+  color: #fca5a5;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .28);
+  transition: background-color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.lb-kick-b:hover { background: rgba(239, 68, 68, .2); }
+.lb-kick-b:active { transform: scale(.92); }
+.lb-kick-b:focus-visible { outline: 2px solid #fca5a5; outline-offset: 2px; }
+.lb-kick-ico {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.lb-kick.is-armed {
+  padding-inline-start: 8px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(38, 24, 32, .97) 0%, rgba(22, 15, 20, .97) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(239, 68, 68, .34),
+    0 8px 20px -10px rgba(0, 0, 0, .95);
+  animation: lb-kick-in 180ms cubic-bezier(.2, .9, .25, 1) both;
+}
+.lb-kick-q {
+  padding-inline-end: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  line-height: 1;
+  color: #FECACA;
+  white-space: nowrap;
+}
+.lb-kick-b.is-yes {
+  background: rgba(239, 68, 68, .22);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .5);
+}
+.lb-kick-b.is-no {
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+@keyframes lb-kick-in {
+  0% { opacity: 0; transform: scale(.88); }
+  100% { opacity: 1; transform: scale(1); }
+}
+/* the card is furniture while its confirmation is up: no second tap can flip a team by accident */
+.lb-cell.is-kicking .lb-slot { pointer-events: none; filter: brightness(.72) saturate(.82); }
+/* the badges step below the control instead of beside it: the name keeps every pixel it had */
+.lb-cell.has-kick .lb-tags { align-self: flex-end; margin-block-end: -2px; }
+.lb-cell.has-kick .lb-slot.is-away .lb-tags { margin-inline-end: 32px; }
+/* in a 2v2 the column header already names the team, so the seat chip yields the corner */
+.lb-team .lb-cell.has-kick .lb-color { display: none; }
+/* the duel plate's shoulder badge yields the same corner the chip does on a compact card */
+.lb-cell.has-kick .lb-slot.lb-plate .lb-badge { right: auto; inset-inline-end: 40px; }
+.lb-slots.is-3p .lb-cell.has-kick .lb-tags,
+.lb-slots.is-duel .lb-cell.has-kick .lb-tags { right: auto; inset-inline-end: 40px; }
+html.reduced-motion .lb-kick.is-armed { animation: none; }
 .lb-color {
   font-size: 8px;
   font-weight: 900;
@@ -15584,6 +15689,19 @@ html.reduced-motion .stars-av-photo { transition: none; }
   color: var(--honey-ink);
   animation: lb-breathe 2.4s ease-in-out infinite;
 }
+/* A guest's key is a status pill, not an action: one pulsing beacon, one clean label — the
+   room context already rides the hint above it, so the two never repeat each other. */
+.gm-start.is-waiting::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #FBBF24;
+  box-shadow: 0 0 8px #FBBF24;
+  animation: lb-away-blink 1.2s ease-in-out infinite;
+}
+html.reduced-motion .gm-start.is-waiting::before { animation: none; }
 @keyframes lb-breathe {
   0%, 100% { box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 0 0 1px rgba(252, 211, 77, .18); }
   50% { box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 0 0 1px rgba(252, 211, 77, .5); }
@@ -33410,6 +33528,16 @@ html[data-lang="fa"] .gm-name {
 html[data-lang="fa"] .gm-desc { line-height: 1.5; }
 html[data-lang="fa"] .lb-mode-sub { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .lb-hint { line-height: 1.45; }
+/* ---- Arabic lobby copy: only the line that actually carries Arabic text gets the RTL base;
+   the rest of this pane is still an English fallback and must keep its LTR reading order ---- */
+html[data-lang="ar"] .lb-hint { direction: rtl; line-height: 1.45; }
+/* room codes and the seat counter are Latin by construction: they keep their own direction */
+html[data-lang="fa"] :is(#lb-code, #lb-count),
+html[data-lang="ar"] :is(#lb-code, #lb-count) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
 /* the reserved host's status and the in-match banner read from the right too */
 html[data-lang="fa"] .lb-badge-away { letter-spacing: 0; font-size: 8.5px; }
 html[data-lang="fa"] .lb-slot.lb-plate .lb-badge-away { white-space: nowrap; }

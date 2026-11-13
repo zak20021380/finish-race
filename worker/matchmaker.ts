@@ -126,6 +126,9 @@ type ClientMessage =
   | { type: 'SET_FORMAT'; format: LobbyFormat }
   | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
   | { type: 'SET_TEAM'; side: number; team: 0 | 1 }
+  /* The host removing a guest from a room that has not launched. The seat goes back to the open
+     wells on the same beat, and the removed socket is told `KICKED` before it is let go. */
+  | { type: 'KICK'; side: number }
   /* Keepalive: a lobby seat that is still there says so, and the room answers `PONG`. The reply is
      also what lets a client notice a half-open socket before the browser does. */
   | { type: 'PING' }
@@ -1753,6 +1756,11 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       const side = Number(msg.side);
       if (!Number.isInteger(side) || side < 0 || side >= MAX_TEAMS) return null;
       return { type: 'SET_TEAM', side, team: Number(msg.team) === 1 ? 1 : 0 };
+    }
+    if (msg.type === 'KICK') {
+      const side = Number(msg.side);
+      if (!Number.isInteger(side) || side < 0 || side >= MAX_TEAMS) return null;
+      return { type: 'KICK', side };
     }
     if (msg.type === 'MOVE') {
       const action = readAction(msg.action, side, cols, rows);
@@ -6976,6 +6984,29 @@ export class MatchmakerDO {
   }
 
   /**
+   * The host removed a guest's chair. The player is told (`KICKED`) before the socket is let go —
+   * so their screen can close the lobby and say why, instead of reading the close as a network
+   * hiccup and walking straight back into the room it was just ejected from. The seat is freed,
+   * not held: the well is open again on the very next `LOBBY` frame.
+   */
+  private kickPlayer(live: LiveRoom, seat: number): void {
+    if (seat === live.hostSeat) return;
+    const target = live.members[seat];
+    if (!target) return;
+    this.refs.delete(target.ws);
+    this.postTo(target.ws, JSON.stringify({ type: 'KICKED', code: live.room.code, reason: 'host_kicked' }));
+    try {
+      target.ws.close(1000, 'kicked');
+    } catch {
+      /* the socket is already gone */
+    }
+    live.members[seat] = null;
+    /* the room's own model has to let the chair go too, or the next arrival finds it taken */
+    live.room = unseat(live.room, seat);
+    this.lobbyDepart(live, seat);
+  }
+
+  /**
    * A lobby seat walked out on purpose (`LEAVE`, or a legacy `CANCEL`): let the socket go, free
    * the chair, then settle the room. A host's exit disbands the code for everybody; a guest's
    * only gives their own seat back.
@@ -7560,6 +7591,14 @@ export class MatchmakerDO {
         if (!next) return;
         live.teams = next;
         this.broadcastLobby(live);
+        return;
+      }
+      if (msg.type === 'KICK') {
+        /* Only the crown may remove a chair, and only before launch: a live board's leaver is the
+           machine's to finish (`takeSeatOver`), never a host's to delete from the race. */
+        if (ref.seat !== live.hostSeat) return;
+        this.kickPlayer(live, msg.side);
+        return;
       }
       return;
     }
