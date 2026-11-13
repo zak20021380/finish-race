@@ -8033,28 +8033,28 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
 /* the header names WHO acts: the invited friend, on the start side, and the reward on the end */
 .sv-quest-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-width: 0;
 }
 .sv-quest-headcopy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   flex: 1 1 auto;
   min-width: 0;
 }
 .sv-quest-title {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--ink);
 }
 .sv-quest-meta {
-  font-size: 9.5px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.45;
   color: #9AA5B5;
   overflow-wrap: anywhere;
 }
@@ -8063,19 +8063,20 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   align-items: center;
   gap: 4px;
   flex: none;
-  padding: 7px 10px;
+  align-self: flex-start;
+  padding: 6px 10px;
   border: 1px solid rgba(245, 158, 11, .3);
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(245, 158, 11, .16), rgba(245, 158, 11, .07));
+  background: linear-gradient(180deg, rgba(245, 158, 11, .14), rgba(245, 158, 11, .05));
   color: #FCD34D;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
 }
-.sv-quest-reward .ico-star-img { width: 16px; height: 16px; }
+.sv-quest-reward .ico { width: 14px; height: 14px; }
 /* the two ways to unlock the Stars, side by side: equal mini-cards split by one OR pill.
    The grid mirrors itself under RTL, so the first path always leads the reading order. */
 .sv-quest-paths {
@@ -8090,45 +8091,43 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   flex-direction: column;
   justify-content: center;
   align-self: stretch;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  padding: 8px 9px;
-  border-radius: 11px;
-  background: rgba(125, 211, 252, .06);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .16);
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(125, 211, 252, .07);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .18);
   text-align: start;
 }
 .sv-quest-path[data-tone="rivals"] {
-  background: rgba(245, 158, 11, .07);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .18);
+  background: rgba(245, 158, 11, .08);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .2);
 }
 .sv-quest-path-t {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
   min-width: 0;
   font-size: 12.5px;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.3;
   color: #EAF1FA;
 }
-.sv-quest-path-ico { flex: none; font-size: 12px; line-height: 1; }
-.sv-quest-path-n {
+.sv-quest-path-t > span { min-width: 0; overflow-wrap: anywhere; }
+.sv-quest-path-ico {
   flex: none;
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
-  font-size: 13.5px;
-  font-weight: 900;
+  width: 15px;
+  height: 15px;
   color: #7DD3FC;
 }
 .sv-quest-path[data-tone="rivals"] .sv-quest-path-t { color: #FCD34D; }
-.sv-quest-path[data-tone="rivals"] .sv-quest-path-n { color: #FDE68A; }
-.sv-quest-path-w { min-width: 0; overflow-wrap: anywhere; }
+.sv-quest-path[data-tone="rivals"] .sv-quest-path-ico { color: #FCD34D; }
 .sv-quest-path-l {
   min-width: 0;
   font-size: 10px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 500;
+  line-height: 1.4;
   color: #93A0B2;
   overflow-wrap: anywhere;
 }
@@ -8207,7 +8206,6 @@ html:lang(fa) .sv-quest-or, html:lang(ar) .sv-quest-or { letter-spacing: 0; }
   gap: 5px;
   min-width: 0;
 }
-.sv-cta-t b { font: inherit; }
 .sv-cta span { min-width: 0; overflow-wrap: anywhere; }
 .sv-cta:hover:not(:active):not(:disabled) { background: rgba(245, 158, 11, .07); color: #FEF3C7; }
 .sv-cta:active:not(:disabled) { background: rgba(0, 0, 0, .16); }
@@ -8298,7 +8296,6 @@ html:lang(fa) .sv-quest-or, html:lang(ar) .sv-quest-or { letter-spacing: 0; }
   color: rgba(148, 163, 184, .8);
 }
 .sv-payout-i .ico { width: 11px; height: 11px; }
-.sv-payout-ic-star { width: 14px; height: 14px; }
 .sv-payout span { min-width: 0; overflow-wrap: anywhere; }
 .sv-payout-t {
   display: inline-flex;
@@ -39221,7 +39218,6 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(var(--vg-tone), .14), 0 0 10px rgba(var(--vg-tone), .05);
 }
 .vg-ico .ico { width: 16px; height: 16px; }
-.vg-ico .ico-star-img { width: 18px; height: 18px; }
 .vg-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
 .vg-t {
   min-width: 0;
@@ -39252,7 +39248,7 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   unicode-bidi: isolate;
   box-shadow: inset 0 0 0 1px rgba(var(--vg-tone), .18);
 }
-.vg-n .vg-star { flex: none; width: 16px; height: 16px; filter: none; }
+.vg-n .vg-star { flex: none; width: 14px; height: 14px; }
 .vg-card[data-tone="cash"] .vg-n { color: var(--mint-ink); }
 .vg-b {
   font-size: 10px;
@@ -39263,8 +39259,11 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   overflow-wrap: anywhere;
 }
 .vg-fine {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   margin: 6px 0 10px;
-  padding: 6px 12px;
+  padding: 7px 12px;
   border: 1px solid rgba(255, 255, 255, .05);
   border-radius: 8px;
   background: rgba(255, 255, 255, .02);
@@ -39272,12 +39271,11 @@ html:lang(ar) .vm-title, html:lang(ar) .vm-sub {
   font-weight: 400;
   line-height: 1.5;
   color: var(--ink-soft);
-  text-align: center;
-  white-space: nowrap;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
-.vg-fine:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
+.vg-fine-ico { flex: none; width: 13px; height: 13px; margin-top: 1px; color: #8FA0B6; }
 .vg-done {
   --d: 3px;
   appearance: none;
@@ -39446,23 +39444,18 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
 .vault-vip-card {
   position: relative;
   width: 100%;
-  min-height: 158px;
   padding: 16px 18px;
   border-radius: 20px;
   background:
-    radial-gradient(120% 100% at 100% 0%, rgba(245, 158, 11, 0.18) 0%, transparent 55%),
-    radial-gradient(100% 100% at 0% 100%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
-    linear-gradient(135deg, #161E2E 0%, #0B0F19 55%, #070A12 100%);
-  border: 1px solid rgba(245, 158, 11, 0.32);
+    radial-gradient(120% 100% at 100% 0%, rgba(245, 158, 11, 0.12) 0%, transparent 55%),
+    linear-gradient(135deg, #151C29 0%, #0B0F19 58%, #080B12 100%);
+  border: 1px solid rgba(245, 158, 11, 0.26);
   box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.65),
-    inset 0 1px 1px rgba(255, 255, 255, 0.18),
-    inset 0 -1px 1px rgba(245, 158, 11, 0.15);
+    0 14px 34px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1px rgba(255, 255, 255, 0.12);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
   box-sizing: border-box;
   isolation: isolate;
   min-width: 0;
@@ -39470,77 +39463,29 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
-.vault-vip-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -120%;
-  width: 65%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
-  transform: skewX(-25deg);
-  animation: vipCardSheen 6s infinite ease-in-out;
-  pointer-events: none;
-}
-@keyframes vipCardSheen {
-  0%, 70% { left: -120%; }
-  100% { left: 160%; }
-}
-.vault-vip-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 4px);
-  box-shadow: inset 1px 1px 0 rgba(253, 230, 138, .12), inset -1px -1px 0 rgba(245, 158, 11, .1);
-  pointer-events: none;
-}
-.vault-card-watermark {
-  position: absolute;
-  right: 6px;
-  bottom: -10px;
-  width: 100px;
-  height: 100px;
-  object-fit: contain;
-  opacity: .045;
-  transform: rotate(-14deg);
-  pointer-events: none;
-}
 .vault-card-top, .vault-card-center, .vault-card-footer { position: relative; z-index: 1; min-width: 0; }
 /* Row 1 — the brand mark on one side, one compact payout badge on the other */
-.vault-card-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 8px; }
-.vault-card-brand { display: flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; color: #E4D2A6; font-size: 10px; font-weight: 800; line-height: 1.3; letter-spacing: .08em; }
+.vault-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vault-card-brand { display: flex; align-items: center; gap: 7px; flex: 1 1 auto; min-width: 0; color: #E4D2A6; font-size: 10px; font-weight: 800; line-height: 1.3; letter-spacing: .08em; }
 .vault-card-brand > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vault-emv-chip {
-  width: 26px;
-  height: 18px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, #FDE68A 0%, #D97706 50%, #F59E0B 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 5px rgba(0, 0, 0, 0.4);
-  flex: none;
-}
-.vault-emv-chip svg { display: block; width: 100%; height: 100%; stroke: #785019; stroke-width: .8; }
+.vault-card-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #F5B632; box-shadow: 0 0 0 3px rgba(245, 158, 11, .12); }
 .vault-card-payout {
   flex: 0 0 auto;
-  margin-inline-start: auto;
   max-width: 100%;
-  padding: 5px 9px;
+  padding: 4px 9px;
   border: 1px solid rgba(232, 201, 133, .18);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .015));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  background: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .015));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
   color: #F1D594;
   font-size: 8px;
   font-weight: 600;
   line-height: 1.3;
-  text-align: end;
   white-space: nowrap;
 }
-/* Row 2 — a micro-label, the focal balance and the gold meter, all hung on the start axis.
-   The figure is pinned to the very same column as the chip icon above it, so the card reads
-   as one grid instead of a centred number floating over a left-aligned bar. */
-.vault-card-center { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+/* Row 2 — a micro-label and the focal figure hung on the start axis. The fraction is an LTR
+   island in both locales, so 5 always sits beside the bar's left-to-right fill. */
+.vault-card-center { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .vault-card-balance-label {
   display: block;
   font-size: 8px;
@@ -39563,6 +39508,11 @@ html:lang(fa) .vault-card-balance-label, html:lang(ar) .vault-card-balance-label
   line-height: 1;
   white-space: nowrap;
 }
+html:lang(fa) .vault-card-balance, html:lang(ar) .vault-card-balance {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
 .vault-card-balance b {
   font-size: 40px;
   font-weight: 800;
@@ -39576,34 +39526,24 @@ html:lang(fa) .vault-card-balance-label, html:lang(ar) .vault-card-balance-label
 }
 .vault-card-balance[data-compact="true"] b { font-size: 28px; }
 .vault-card-target { color: #8C8E94; font-size: 19px; letter-spacing: -.03em; }
-.vault-card-star { display: block; width: 28px; height: 28px; object-fit: contain; flex: none; filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .4)); }
-.vault-card-track { height: 4px; width: 100%; direction: ltr; border-radius: 999px; background: #070B12; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, .08); }
+.vault-card-star { flex: none; width: 22px; height: 22px; color: #F5B632; }
+.vault-card-track { height: 5px; width: 100%; margin: 12px 0; direction: ltr; border-radius: 999px; background: #070B12; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, .08); }
 .vault-card-fill { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #A76B15, #F5B632 65%, #FFF0B9); box-shadow: 0 0 6px rgba(245, 158, 11, .4); transition: width .4s ease; }
 .vault-card-fill::after { content: ""; position: absolute; right: 0; top: -1px; width: 6px; height: 6px; border-radius: 50%; background: #FFF2CA; box-shadow: 0 0 7px 1px rgba(245, 158, 11, .65); }
 .vault-card-fill[data-empty="true"]::after { display: none; }
-/* Row 3 — identity + starter gift on one side, the concise unlock line on the other */
+/* Row 3 — identity and the starter tag on one side, the concise unlock line on the other */
 .vault-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.vault-card-holder { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.vault-card-holder { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .vault-card-name { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 1.3; color: #E6E3D9; text-align: match-parent; unicode-bidi: plaintext; }
-.vault-card-gift { font-size: 9.5px; font-weight: 600; line-height: 1.3; color: #C4AD7C; }
+.vault-card-gift { padding: 2px 7px; border: 1px solid rgba(245, 158, 11, .16); border-radius: 999px; background: rgba(245, 158, 11, .08); font-size: 9px; font-weight: 700; line-height: 1.35; color: #D8BC84; white-space: nowrap; }
 .vault-card-gift[hidden] { display: none; }
 .vault-card-unlock { flex: none; max-width: 46%; font-size: 10px; font-weight: 700; line-height: 1.35; color: #E8C981; text-align: end; overflow-wrap: anywhere; }
 html:lang(fa) .vault-vip-card, html:lang(ar) .vault-vip-card { font-family: 'Vazirmatn', system-ui, sans-serif; }
 html:lang(fa) :is(.vault-card-brand, .vault-card-payout), html:lang(ar) :is(.vault-card-brand, .vault-card-payout) { letter-spacing: 0; }
-html.reduced-motion .vault-vip-card::before { animation: none; }
 html.reduced-motion .vault-card-fill { transition: none; }
 @media (prefers-reduced-motion: reduce) {
-  .vault-vip-card::before { animation: none; }
   .vault-card-fill { transition: none; }
 }
-#modal-stars-vault .ico-star-img {
-  display: inline-block;
-  object-fit: contain;
-  flex: none;
-  vertical-align: -.18em;
-  filter: drop-shadow(0 1px 2px rgba(245, 158, 11, .18));
-}
-#modal-stars-vault :is(.sv-pill-v, .sv-quest-reward, .sv-cta-reward) > .ico-star-img { transform: translateY(-1px); }
 #modal-stars-vault .sv-pills {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 4px 4px;
@@ -39616,7 +39556,6 @@ html.reduced-motion .vault-card-fill { transition: none; }
 #modal-stars-vault .sv-pill + .sv-pill { border-inline-start-color: rgba(255, 255, 255, .05); }
 #modal-stars-vault .sv-pill-k { font-size: 8px; line-height: 1.25; letter-spacing: .05em; color: #8A93A3; }
 #modal-stars-vault .sv-pill-v { font-size: 12.5px; line-height: 1.2; gap: 3px; }
-#modal-stars-vault .sv-pill-v .ico-star-img { width: 12px; height: 12px; }
 #modal-stars-vault .sv-acts {
   height: 46px;
   border-radius: 12px;
@@ -39633,10 +39572,7 @@ html.reduced-motion .vault-card-fill { transition: none; }
   text-shadow: none;
 }
 #modal-stars-vault .sv-cta > .ico { width: 15px; height: 15px; color: #59360B; filter: none; }
-#modal-stars-vault .sv-cta-t { display: block; }
-#modal-stars-vault .sv-cta-reward { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; vertical-align: middle; }
-#modal-stars-vault .sv-cta-reward b { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; }
-#modal-stars-vault .sv-cta-star { width: 18px; height: 18px; }
+#modal-stars-vault .sv-cta-t { display: block; line-height: 1.4; }
 #modal-stars-vault .sv-cta:hover:not(:active):not(:disabled) { background: rgba(255, 255, 255, .12); }
 #modal-stars-vault .sv-copy {
   width: 42px;
@@ -39687,17 +39623,17 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
 @media (max-width: 360px) {
   #modal-stars-vault .vault-modal-sheet { padding-inline: 12px !important; }
   .vault-vip-card { padding-inline: 12px; }
-  .vault-card-top { gap: 5px 6px; }
+  .vault-card-top { gap: 6px; }
   .vault-card-brand { font-size: 9px; gap: 6px; }
   .vault-card-payout { padding: 4px 7px; font-size: 7.5px; }
   .vault-card-footer { gap: 8px; }
   .vault-card-unlock { font-size: 9.5px; }
   #modal-stars-vault .sv-quest-card { padding: 10px; }
-  #modal-stars-vault .sv-quest-path { padding: 7px 8px; }
-  #modal-stars-vault .sv-quest-path-t { font-size: 12px; }
+  #modal-stars-vault .sv-quest-path { padding: 8px; }
+  #modal-stars-vault .sv-quest-path-t { font-size: 12px; gap: 4px; }
   #modal-stars-vault .sv-quest-path-l { font-size: 9.5px; }
   #modal-stars-vault .sv-quest-reward { padding-inline: 7px; }
-  #modal-stars-vault .sv-cta > .ico { display: none; }
+  #modal-stars-vault .vm-foot-btn { gap: 4px; padding-inline: 7px; font-size: 9.5px; }
 }
 
 @media (max-height: 740px) {
@@ -39706,7 +39642,9 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   #modal-stars-vault .vm-head-t { gap: 2px; }
   #modal-stars-vault .vm-title { font-size: 16px; }
   #modal-stars-vault .vm-sub { font-size: 9px; }
-  .vault-vip-card { padding-block: 12px; gap: 8px; min-height: 140px; }
+  .vault-vip-card { padding-block: 12px; }
+  .vault-card-center { margin-top: 10px; }
+  .vault-card-track { margin-block: 10px; }
   .vault-card-balance b { font-size: 36px; }
   #modal-stars-vault .sv-pills { padding-block: 4px; }
   #modal-stars-vault .sv-quest-card { gap: 7px; padding: 10px 11px; }
@@ -39719,11 +39657,12 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
 @media (max-height: 680px) {
   #modal-stars-vault .vault-modal-sheet { padding-block: 16px 8px !important; }
   #modal-stars-vault .vault-modal-body, #modal-stars-vault .sv-vault { gap: 5px; }
-  .vault-vip-card { padding-block: 9px; gap: 6px; min-height: 128px; }
+  .vault-vip-card { padding-block: 9px; }
   .vault-card-brand { gap: 6px; }
-  .vault-card-center { gap: 6px; }
+  .vault-card-center { gap: 5px; margin-top: 8px; }
+  .vault-card-track { margin-block: 8px; }
   .vault-card-balance b { font-size: 32px; }
-  .vault-card-holder { gap: 2px; }
+  .vault-card-holder { gap: 5px; }
   .vault-card-name { font-size: 10px; line-height: 1.3; }
   .vault-card-gift { line-height: 1.25; }
   #modal-stars-vault .sv-pills { padding-block: 3px; }
@@ -39735,7 +39674,6 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   #modal-stars-vault .sv-quest-meta { font-size: 9px; }
   #modal-stars-vault .sv-quest-path { padding: 6px 7px; }
   #modal-stars-vault .sv-quest-path-t { font-size: 11.5px; }
-  #modal-stars-vault .sv-quest-path-n { font-size: 12.5px; }
   #modal-stars-vault .sv-quest-path-l { font-size: 9.5px; }
   #modal-stars-vault .sv-quest-or { width: 22px; height: 22px; font-size: 8px; }
   #modal-stars-vault .sv-quest-reward { padding-block: 5px; font-size: 14px; }

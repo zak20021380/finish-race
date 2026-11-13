@@ -76,13 +76,6 @@ export function renderStarAsset(size: number = 20, extraClass: string = ''): str
   return `<img src="${telegramStarsImg}" class="ico-star-img ${extraClass}" width="${size}" height="${size}" alt="Stars" loading="eager" draggable="false" />`;
 }
 
-/** The same asset as a live node, for labels that are rebuilt around a translated figure. */
-function starAssetEl(size: number, extraClass: string = ''): HTMLImageElement {
-  const tpl = document.createElement('template');
-  tpl.innerHTML = renderStarAsset(size, extraClass);
-  return tpl.content.firstElementChild as HTMLImageElement;
-}
-
 export interface MenuApi {
   router: Router;
   sheets: Sheets;
@@ -2232,26 +2225,12 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-paid', en(vault.paidOutStars));
 
     svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
-    svText('sv-path-matches-n', en(C.STAGE1_MIN_MATCHES));
-    svText('sv-path-wins-n', en(C.STAGE2_MIN_RANKED_PVP_WINS));
+    svText('sv-path-matches', svFill('quest_option_matches', { n: en(C.STAGE1_MIN_MATCHES) }));
+    svText('sv-path-wins', svFill('quest_option_wins', { n: en(C.STAGE2_MIN_RANKED_PVP_WINS) }));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');
-    if (shareT) {
-      const shareTemplate = t('vaultShare').split('{n}');
-      shareT.textContent = '';
-      const reward = document.createElement('span');
-      reward.className = 'sv-cta-reward';
-      reward.dir = 'ltr';
-      const amount = document.createElement('b');
-      amount.textContent = en(C.TOTAL_PER_FRIEND_STARS);
-      reward.append(amount, starAssetEl(18, 'sv-cta-star'));
-      shareT.append(
-        document.createTextNode(shareTemplate[0]),
-        reward,
-        document.createTextNode(shareTemplate[1] ?? ''),
-      );
-    }
+    if (shareT) shareT.textContent = svFill('vaultShare', { n: en(C.TOTAL_PER_FRIEND_STARS) });
     if (svShareBtn) {
       svShareBtn.disabled = !link;
       svShareBtn.setAttribute('aria-label', link ? t('vaultShareAria') : t('vaultLinkPending'));
@@ -2268,14 +2247,10 @@ export function createMenu(api: MenuApi): Menu {
       svPayoutBtn.disabled = vaultBusy || !vault.canPayout;
       svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
       svPayoutBtn.setAttribute('aria-label', label);
-      const payoutGlyph = document.getElementById('sv-payout-glyph');
-      const payoutStar = document.getElementById('sv-payout-star');
       const showStar = vault.canPayout && !vault.waiting;
-      if (payoutGlyph) payoutGlyph.style.display = showStar ? 'none' : '';
-      if (payoutStar) (payoutStar as HTMLImageElement).hidden = !showStar;
       document.getElementById('sv-payout-ic')?.setAttribute(
         'href',
-        vault.waiting ? '#i-clock' : '#i-lock',
+        vault.waiting ? '#i-clock' : showStar ? '#i-star' : '#i-lock',
       );
     }
 
