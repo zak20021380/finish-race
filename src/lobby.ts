@@ -201,6 +201,8 @@ export interface LobbyRaceSeat {
   team: 0 | 1;
   /** The room's verdict on this seat's VIP entitlement. */
   vip: boolean;
+  /** The chair was struck from the race after its player disconnected. */
+  left?: boolean;
 }
 
 /**
@@ -235,7 +237,12 @@ export interface LobbyRace {
   /** A post-match line another seat sent from the result capsule, plus the room's VIP verdict. */
   onPostChat(cb: (line: PostChatLine, side: number, vip: boolean) => void): void;
   /** A peer's socket entered or left its reconnect grace window, or was taken over by a bot. */
-  onPeerStatus(cb: (side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number) => void): void;
+  onPeerStatus(cb: (side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number, name: string) => void): void;
+  /**
+   * A seat was struck from the race: its player disconnected and the machine's two substitute
+   * turns ran out. `name` is the full display name the banner has to print.
+   */
+  onSeatLeft(cb: (side: number, name: string) => void): void;
   /** The room's authoritative board, sent after a resume, a refusal or an explicit sync request. */
   onSync(cb: (state: GameState, turnLeftMs: number) => void): void;
   /** Ask the room to re-send its authoritative board. */
@@ -248,6 +255,8 @@ export interface LobbyRace {
    * rematch already locked instead of talking into an empty room.
    */
   goneSides(): number[];
+  /** Seats struck from the race after a disconnect. Their pawns are inert and their card is dim. */
+  leftSides(): number[];
   onEnd(cb: (end: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void): void;
   onReject(cb: (reason: string) => void): void;
 }
@@ -296,6 +305,12 @@ export interface LobbyOptions {
    * back into it — so the screen closes the lobby and puts the player back Home with the reason.
    */
   onKicked?: () => void;
+  /**
+   * This seat was struck from the race while it was disconnected, and the room refused to hand it
+   * back. The membership is over: the board must not mount, and the player lands Home with the
+   * reason on screen.
+   */
+  onEliminated?: () => void;
 }
 
 export interface LobbyHandle {
@@ -514,6 +529,9 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const racePosts: Array<(line: PostChatLine, side: number, vip: boolean) => void> = [];
   /** Seats a person walked out of; `SEAT_BOT` is the machine taking the chair over. */
   const raceGone = new Set<number>();
+  /** Seats struck from the race for good; `SEAT_LEFT` is the disconnect allowance running out. */
+  const raceLeft = new Set<number>();
+  const raceSeatLefts: Array<(side: number, name: string) => void> = [];
   const raceLefts: Array<() => void> = [];
   let racePostGone = false;
   const markPostGone = (): void => {
@@ -523,7 +541,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   };
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
-  const racePeers: Array<(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number) => void> = [];
+  const racePeers: Array<(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number, name: string) => void> = [];
   const raceSyncs: Array<(state: GameState, turnLeftMs: number) => void> = [];
   /** Moves made while the socket is away: flushed on the authoritative snapshot, never before. */
   const outbox: Array<Record<string, unknown>> = [];
@@ -643,6 +661,30 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         opts.onKicked?.();
         return;
       }
+      case 'SEAT_ELIMINATED': {
+        /* The room refused this seat: it was struck while we were away, and there is no board to
+           walk back into. Kill the socket here so its close is not read as a drop worth retrying,
+           and hand the screen the news — it must not mount the race. */
+        left = true;
+        solo = true;
+        raceDead = true;
+        if (raceTimer) {
+          globalThis.clearTimeout(raceTimer);
+          raceTimer = 0;
+        }
+        if (raceOpenTimer) {
+          globalThis.clearTimeout(raceOpenTimer);
+          raceOpenTimer = 0;
+        }
+        teardown();
+        outbox.length = 0;
+        try { sock?.close(); } catch { /* already gone */ }
+        sock = null;
+        link = null;
+        push({ ...lobby, status: 'closed', online: false, you: -1 });
+        opts.onEliminated?.();
+        return;
+      }
       case 'LOBBY':
         settled = true;
         push(readLobby(lobby, msg));
@@ -669,6 +711,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         raceTries = 0;
         racePostGone = false;
         raceGone.clear();
+        raceLeft.clear();
         const seats = Array.isArray(msg.seats) ? msg.seats : [];
         const roster: LobbyRaceSeat[] = seats.map((r, i) => {
           const s = r as Record<string, unknown>;
@@ -679,8 +722,10 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             bot: s.bot === true,
             team: s.team === 1 ? 1 : 0,
             vip: s.vip === true,
+            left: s.left === true,
           };
         });
+        for (const s of roster) if (s.left) raceLeft.add(s.side);
         const mine = typeof msg.side === 'number' ? msg.side : lobby.you;
         const rival = roster.find((s) => s.side !== mine) ?? roster[0];
         const sizes = Array.isArray(msg.sizes) ? msg.sizes.map((n) => Number(n) || 1) : roster.map(() => 1);
@@ -731,10 +776,12 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           onPhrase: (cb) => { racePhrases.push(cb); },
           onPostChat: (cb) => { racePosts.push(cb); },
           onPeerStatus: (cb) => { racePeers.push(cb); },
+          onSeatLeft: (cb) => { raceSeatLefts.push(cb); },
           onSync: (cb) => { raceSyncs.push(cb); },
           requestSync: () => { send({ type: 'SYNC_REQ' }); },
           onPostLeft: (cb) => { raceLefts.push(cb); },
           goneSides: () => [...raceGone],
+          leftSides: () => [...raceLeft],
           onEnd: (cb) => { raceEnds.push(cb); },
           onReject: (cb) => { raceRejects.push(cb); },
         };
@@ -746,6 +793,13 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         if (!next || typeof next !== 'object' || !Array.isArray(next.balls)) return;
         raceTries = 0;
         raceDroppedAt = 0;
+        /* The snapshot is the authority on who is still in the race: a chair struck while this
+           socket was away never delivered its own SEAT_LEFT, so the board rebuilds the list. */
+        raceLeft.clear();
+        for (const side of next.left ?? []) {
+          raceLeft.add(side);
+          raceGone.add(side);
+        }
         const leftMs = Number(msg.turnLeftMs);
         for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0);
         flushOutbox();
@@ -757,7 +811,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         const status = msg.status === 'reconnecting' ? 'reconnecting' : msg.status === 'online' ? 'online' : null;
         if (!status) return;
         const graceMs = Number(msg.graceMs);
-        for (const cb of racePeers) cb(side, status, Number.isFinite(graceMs) ? Math.max(0, graceMs) : 0);
+        const name = typeof msg.name === 'string' ? msg.name : '';
+        for (const cb of racePeers) cb(side, status, Number.isFinite(graceMs) ? Math.max(0, graceMs) : 0, name);
         return;
       }
       case 'MOVE':
@@ -804,13 +859,24 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         for (const cb of raceRejects) cb(typeof msg.reason === 'string' ? msg.reason : 'refused');
         return;
       }
+      case 'SEAT_LEFT': {
+        /* The disconnect allowance ran out: this chair is struck from the race for good. Its pawns
+           go inert, its card dims, and the banner names the player who is gone. */
+        const side = Number(msg.side);
+        if (!Number.isInteger(side) || side < 0) return;
+        const name = typeof msg.name === 'string' ? msg.name : '';
+        raceLeft.add(side);
+        raceGone.add(side);
+        for (const cb of raceSeatLefts) cb(side, name);
+        return;
+      }
       case 'SEAT_BOT': {
         /* a seat's person left mid-race: the machine finished it, and the board already knows.
            Remember it so the result capsule can open with its rival-facing keys locked. */
         const side = Number(msg.side) || 0;
         raceGone.add(side);
         /* The grace ran out: the pill must not keep promising a reconnect that is not coming. */
-        for (const cb of racePeers) cb(side, 'bot', 0);
+        for (const cb of racePeers) cb(side, 'bot', 0, typeof msg.name === 'string' ? msg.name : '');
         return;
       }
       case 'ERROR': {

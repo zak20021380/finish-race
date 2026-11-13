@@ -35786,7 +35786,7 @@ html[data-lang="ar"] .ranks-tabs .seg-t {
   translate: -50% 0;
   z-index: 13;
   box-sizing: border-box;
-  max-width: calc(100% - 24px);
+  max-width: min(92vw, 380px);
   margin: 0;
   padding: 7px 14px 7px 12px;
   display: inline-flex;
@@ -35806,12 +35806,23 @@ html[data-lang="ar"] .ranks-tabs .seg-t {
   letter-spacing: .02em;
   line-height: 1.4;
   text-align: center;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;      /* NON-BLOCKING: never eats a tap aimed at the board */
   opacity: 0;
   transform: translateY(-6px);
   transition: opacity .2s ease, transform .2s ease;
 }
+/* the copy is the only shrinkable item: a long full name ellipsises instead of widening the pill */
+.peer-pill-t {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* a player's name keeps its own direction inside the sentence, whatever the UI language is */
+.peer-pill bdi { unicode-bidi: isolate; font-weight: 800; }
 .peer-pill:not([hidden]) { opacity: 1; transform: none; }
 .peer-pill[hidden] { display: none !important; }
 .peer-pill::before {
@@ -35828,6 +35839,13 @@ html[data-lang="ar"] .ranks-tabs .seg-t {
 .peer-pill.is-ok::before {
   background: #7FD6A3;
   box-shadow: 0 0 0 3px rgba(127, 214, 163, .12);
+  animation: none;
+}
+/* a struck chair is a verdict: the pulse stops, the dot goes ash, the copy stays readable */
+.peer-pill.is-left { border-color: rgba(148, 163, 184, .34); }
+.peer-pill.is-left::before {
+  background: #94A3B8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, .12);
   animation: none;
 }
 html[data-lang="fa"] .peer-pill,
@@ -36885,6 +36903,27 @@ html[data-lang="ar"] .cm-title { font-size: clamp(1.4rem, 7.8vw, 2rem); }
 /* a checkmated seat's strip is a struck record, not a live player */
 .chip.is-out { opacity: .5; }
 .chip.is-out :is(.timer, .dots) { visibility: hidden; }
+/* a seat whose player disconnected is struck for good: ash, inert, and never wearing the turn.
+   It wins over `.is-out` — the same chair is both eliminated and LEFT, and LEFT is the reason. */
+.chip.is-left {
+  opacity: .42;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.chip.is-left::after { opacity: 0 !important; animation: none !important; }
+.chip.is-left :is(.timer, .dots, .mine-pod) { visibility: hidden; }
+.chip.is-left .seat-left {
+  display: block;
+  overflow: hidden;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 9.5px;
+  line-height: 24px;
+  letter-spacing: .04em;
+  text-align: center;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
 /* reduced motion keeps the verdict on screen, minus the entrance and the exit */
 @media (prefers-reduced-motion: reduce) {
   .cm-splash.is-on { opacity: 1; animation: none; }

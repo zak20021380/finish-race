@@ -43,7 +43,8 @@
  * `room_1909` are one room — and a code is only ever refused when it was genuinely spent.
  */
 import {
-  CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, steps, type Action, type GameState,
+  CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, isEliminated, isLeft, newGame, steps,
+  type Action, type GameState,
 } from '../src/rules';
 import {
   FORMAT_CAPACITY, FORMAT_MODE, ROOM_IDLE_TTL_MS, ROOM_SEAT_HOLD_MS, ROOM_WAIT_MS, assignTeam,
@@ -347,6 +348,12 @@ interface LiveRoom {
    * arrives with `host=1`, and nobody else may sit in it. Cleared the moment the host lands.
    */
   hostPending: boolean;
+  /**
+   * Indexed by seat: how many turns the machine has played for a player who is away. Reset to 0
+   * the moment they come back, so a second drop is judged on its own and not on the first one's
+   * tally. At `DISCONNECT_BOT_MOVES` the seat is struck from the race instead of played further.
+   */
+  disconnectBotMoves: number[];
 }
 
 /** Where a socket sits: which room, and which seat in it. */
@@ -391,6 +398,8 @@ interface StoredLobbyState {
   rooms: StoredLobby[];
   /** The tombstones: a spent code must still read as spent after an eviction. */
   retired: Array<[string, number]>;
+  /** Seats struck from a finished race, by code: a late re-entry is still refused after an eviction. */
+  forfeited?: Array<[string, Array<[string, string]>]>;
 }
 
 /** The storage key the lobby state survives an eviction under. */
@@ -454,6 +463,12 @@ const SEAT_SILENCE_MS = 70_000;
  * player gets their exact seat, their board and their turn back.
  */
 const RECONNECT_GRACE_MS = 25_000;
+/**
+ * How many turns the machine may play for a seat whose player is away. Two is a courtesy — long
+ * enough that a phone hand-off does not cost anybody their race — and then the chair is struck
+ * from the board rather than played by a bot for the rest of the match.
+ */
+const DISCONNECT_BOT_MOVES = 2;
 /** The server's own turn allowance, plus the network slack a move's last hop may need. */
 const TURN_LIMIT_MS = CONFIG.TURN_TIME_LIMIT * 1000;
 const TURN_GRACE_MS = 1_500;
@@ -2465,6 +2480,13 @@ export class MatchmakerDO {
    * be refused with a reason the client can say out loud, never quietly minted again.
    */
   private retired = new Map<string, number>();
+  /**
+   * Seats struck from a race, by the code it ran under: player id → the name the verdict prints.
+   * A duel ends the moment its last chair falls, so the room is gone before the away player's app
+   * ever opens again — this is what still lets their late re-entry be refused by name instead of
+   * reading as a generically expired invite. Swept with the tombstone it belongs to.
+   */
+  private forfeited = new Map<string, Map<string, string>>();
   /** Rooms that have launched, by match id. */
   private rooms = new Map<string, LiveRoom>();
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
@@ -6583,6 +6605,7 @@ export class MatchmakerDO {
         code: false,
         lastSeenAt: now,
         hostPending: false,
+        disconnectBotMoves: Array.from({ length: size }, () => 0),
       };
       this.openRooms.push(live);
     }
@@ -6638,6 +6661,21 @@ export class MatchmakerDO {
        the exact board they left — until the reconnect grace expires and the machine takes it. */
     const running = this.launchedRoomByCode(key);
     if (running) { this.resumeLaunchedRoom(ws, identity, running); return; }
+    /* The race this code opened is over, and this seat was struck from it while it was away. The
+       board is gone but the verdict is not: refuse by name, so a returning player reads why they
+       were removed rather than a generically expired invite. */
+    const struck = this.forfeited.get(key)?.get(identity.player.id);
+    if (struck !== undefined) {
+      this.postTo(ws, JSON.stringify({
+        type: 'SEAT_ELIMINATED', name: struck, reason: 'MATCH_FORFEITED_DISCONNECT',
+      }));
+      try {
+        ws.close(1000, 'seat_eliminated');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
     if (live?.driver || (!live && this.retired.has(key))) {
       /* the match this code opened is under way, or its host is done with it */
       this.rejectSocket(ws, 'room_consumed');
@@ -6666,6 +6704,7 @@ export class MatchmakerDO {
         lastSeenAt: now,
         /* a guest opened it: the crown waits for the host, not for the next arrival */
         hostPending: !host,
+        disconnectBotMoves: Array.from({ length: size }, () => 0),
       };
       this.lobbies.set(key, room);
     }
@@ -6823,6 +6862,20 @@ export class MatchmakerDO {
     if (seat < 0) { this.rejectSocket(ws, 'room_consumed'); return; }
     const member = live.members[seat];
     if (!member) { this.rejectSocket(ws, 'room_consumed'); return; }
+    /* The chair was struck while this player was away. There is no seat to hand back and no board
+       to sync: say so once, cleanly, and let the client put them Home instead of mounting a race
+       they are no longer in. */
+    if (live.driver && isLeft(live.driver.state, seat)) {
+      this.postTo(ws, JSON.stringify({
+        type: 'SEAT_ELIMINATED', side: seat, name: member.name, reason: 'MATCH_FORFEITED_DISCONNECT',
+      }));
+      try {
+        ws.close(1000, 'seat_eliminated');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
     /* The chair's previous socket, if it is still around, is this same player's ghost. Forget it
        before its close handler can settle the seat the new socket is about to hold. */
     if (member.ws !== ws) {
@@ -6837,6 +6890,8 @@ export class MatchmakerDO {
     member.connected = true;
     member.droppedAt = 0;
     member.lastPingAt = 0;
+    /* Back inside the allowance: a second drop is judged on its own two turns, not on the first. */
+    live.disconnectBotMoves[seat] = 0;
     live.lastSeenAt = Date.now();
     this.refs.set(ws, { live, seat });
     live.driver?.resume(seat);
@@ -6868,7 +6923,11 @@ export class MatchmakerDO {
     status: 'reconnecting' | 'online',
     graceMs = 0,
   ): void {
-    const frame = JSON.stringify({ type: 'PEER_STATUS', seat, status, graceMs });
+    /* The banner names the player, not "the opponent": a party of four has three rivals, and a
+       pill that cannot say WHICH one is away is a pill nobody can act on. The full display name
+       travels — the client's HUD abbreviation is its own business. */
+    const name = live.members[seat]?.name ?? live.driver?.room.seats[seat]?.name ?? '';
+    const frame = JSON.stringify({ type: 'PEER_STATUS', seat, status, graceMs, name });
     for (const m of live.members) {
       if (m && m.connected) this.postTo(m.ws, frame);
     }
@@ -7069,7 +7128,11 @@ export class MatchmakerDO {
 
   private sweepRetired(): void {
     const now = Date.now();
-    for (const [code, at] of this.retired) if (now - at >= RETIRED_TTL_MS) this.retired.delete(code);
+    for (const [code, at] of this.retired) {
+      if (now - at < RETIRED_TTL_MS) continue;
+      this.retired.delete(code);
+      this.forfeited.delete(code);
+    }
   }
 
   /**
@@ -7155,6 +7218,7 @@ export class MatchmakerDO {
         }] : [])),
       })),
       retired: [...this.retired],
+      forfeited: [...this.forfeited].map(([key, ids]) => [key, [...ids]] as [string, Array<[string, string]>]),
     };
     try {
       const write = storage.put(ROOM_STATE_KEY, state);
@@ -7181,6 +7245,21 @@ export class MatchmakerDO {
         const key = lobbyKey(row[0]);
         if (!key || now - row[1] >= RETIRED_TTL_MS) continue;
         this.retired.set(key, row[1]);
+      }
+    }
+    if (Array.isArray(stored.forfeited)) {
+      for (const row of stored.forfeited) {
+        if (!Array.isArray(row) || typeof row[0] !== 'string' || !Array.isArray(row[1])) continue;
+        const key = lobbyKey(row[0]);
+        /* a verdict only outlives the tombstone it belongs to: a reused code is a different room */
+        if (!key || !this.retired.has(key)) continue;
+        const ids = new Map<string, string>();
+        for (const pair of row[1]) {
+          if (Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'string') {
+            ids.set(pair[0], pair[1]);
+          }
+        }
+        if (ids.size) this.forfeited.set(key, ids);
       }
     }
     if (!Array.isArray(stored.rooms)) return;
@@ -7255,6 +7334,7 @@ export class MatchmakerDO {
         code: true,
         lastSeenAt,
         hostPending: row.hostPending === true && !members[hostSeat],
+        disconnectBotMoves: Array.from({ length: size }, () => 0),
       });
     }
   }
@@ -7303,7 +7383,7 @@ export class MatchmakerDO {
     if (driver.state.winner !== null) { live.turnDeadlineMs = 0; return; }
     if (driver.botTurn) {
       const before = driver.state;
-      this.pushRoomEvents(live, driver.runBots());
+      this.pushRoomEvents(live, driver.runBots(this.substituteBudget(live)));
       this.countBoard(before, driver.state);
       this.armRoomTurn(live);
       if (driver.state.winner !== null) {
@@ -7317,7 +7397,7 @@ export class MatchmakerDO {
     const seat = driver.state.turn;
     const action = this.roomFallbackAction(driver.state, seat);
     const before = driver.state;
-    const result = driver.submit(seat, action);
+    const result = driver.submit(seat, action, this.substituteBudget(live));
     if (!result.ok) return;
     this.countBoard(before, driver.state);
     this.pushRoomEvents(live, result.events, seat);
@@ -7366,8 +7446,10 @@ export class MatchmakerDO {
         const m = live.members[i];
         if (!m || m.connected) continue;
         if (m.droppedAt <= 0 || now - m.droppedAt < RECONNECT_GRACE_MS) continue;
-        /* the grace is over: the machine finishes the seat and the drop is recorded */
-        this.takeSeatOver({ live, seat: i });
+        /* The grace is over and the player never came back: the chair is struck from the race,
+           not handed to a bot for the rest of the match. */
+        this.eliminateSeat({ live, seat: i });
+        if (live.driver.state.winner !== null) break;
       }
     }
   }
@@ -7423,6 +7505,7 @@ export class MatchmakerDO {
         if (m.connected && m.lastPingAt > 0) {
           soonest = Math.min(soonest, m.lastPingAt + SEAT_SILENCE_MS);
         }
+        /* A struck chair has no grace left to run: `droppedAt` is 0, so it arms nothing. */
         if (!m.connected && m.droppedAt > 0) {
           soonest = Math.min(soonest, m.droppedAt + RECONNECT_GRACE_MS);
         }
@@ -7467,7 +7550,7 @@ export class MatchmakerDO {
     /* Seat 0 is the host, so a person normally opens — but a takeover or an odd roster can put the
        machine on turn before anybody has moved, and the room must not wait for a human to start it. */
     const opening = live.driver.state;
-    this.pushRoomEvents(live, live.driver.runBots());
+    this.pushRoomEvents(live, live.driver.runBots(this.substituteBudget(live)));
     this.countBoard(opening, live.driver.state);
     this.armRoomTurn(live);
     this.rearm();
@@ -7493,6 +7576,8 @@ export class MatchmakerDO {
         bot: isAutomated(roster, i),
         team: live.teams[i] ?? 0,
         difficulty: difficultyFor(roster, i),
+        /* a chair already struck from the race: a returning spectator paints it inert at once */
+        left: !!live.driver && isLeft(live.driver.state, i),
         /* the seat's entitlement, as the room judged it — bots and empty chairs are never VIP */
         vip: !!live.members[i] && (live.members[i]!.premium || this.vipActive(live.members[i]!.id)),
       })),
@@ -7510,6 +7595,7 @@ export class MatchmakerDO {
     if (member && !member.connected) {
       member.connected = true;
       member.droppedAt = 0;
+      live.disconnectBotMoves[ref.seat] = 0;
       live.lastSeenAt = Date.now();
       /* Any frame proves the heartbeat is flowing again: without this a revived seat would be
          marked away by the very next sweep on its old ping timestamp. */
@@ -7623,7 +7709,7 @@ export class MatchmakerDO {
     if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
     if (msg.type !== 'MOVE') return;
     const before = live.driver.state;
-    const result = live.driver.submit(ref.seat, msg.action);
+    const result = live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
     if (!result.ok) {
       const member = live.members[ref.seat];
       if (member) {
@@ -7657,6 +7743,9 @@ export class MatchmakerDO {
    * registry and claims nothing — the same rule the dock's standings already play by.
    */
   private finishRoom(live: LiveRoom, winner: number): void {
+    /* One race is paid once. A seat struck mid-batch settles the room inside `pushRoomEvents`,
+       and the caller that batch belongs to still reaches its own finish line afterwards. */
+    if (!this.rooms.has(live.matchId)) return;
     this.completeRoom(live);
     const humans: RoomMember[] = [];
     for (let i = 0; i < live.members.length; i++) {
@@ -7689,6 +7778,128 @@ export class MatchmakerDO {
         this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
       }
     }
+    /* Every batch the driver played lands here, so this is the one place the substitute allowance
+       is counted. It runs AFTER the relay: a client must apply the moves before the verdict that
+       follows from them. */
+    this.tallySubstitutes(live, events);
+    this.enforceDisconnectLimit(live);
+  }
+
+  /**
+   * The machine's remaining substitute allowance per away seat, for one batch. The room owns the
+   * tally; this is the cap the driver spends against, so a chair can never be played past two
+   * turns even when every seat around it is the machine's too.
+   */
+  private substituteBudget(live: LiveRoom): Map<number, number> {
+    const out = new Map<number, number>();
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m || m.connected) continue;
+      out.set(i, Math.max(0, DISCONNECT_BOT_MOVES - (live.disconnectBotMoves[i] ?? 0)));
+    }
+    return out;
+  }
+
+  /**
+   * Count the turns the machine played for seats whose player is away. A seat's own human move
+   * never counts, and neither does a backfilled bot's: only a chair held for a disconnected
+   * person spends the allowance.
+   */
+  private tallySubstitutes(live: LiveRoom, events: readonly RoomEvent[]): void {
+    const driver = live.driver;
+    if (!driver) return;
+    for (const ev of events) {
+      const m = live.members[ev.seat];
+      if (!m || m.connected) continue;
+      if (isLeft(driver.state, ev.seat)) continue;
+      live.disconnectBotMoves[ev.seat] = (live.disconnectBotMoves[ev.seat] ?? 0) + 1;
+    }
+  }
+
+  /** Strike every away seat that has spent its substitute allowance. */
+  private enforceDisconnectLimit(live: LiveRoom): void {
+    const driver = live.driver;
+    if (!driver) return;
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m || m.connected) continue;
+      if ((live.disconnectBotMoves[i] ?? 0) < DISCONNECT_BOT_MOVES) continue;
+      this.eliminateSeat({ live, seat: i });
+      if (driver.state.winner !== null) return;
+    }
+  }
+
+  /**
+   * A seat's player is gone for good: the reconnect grace ran out, or the machine spent the two
+   * substitute turns it was allowed. The chair is struck from the race — its pawns go inert, the
+   * turn rotation skips it, and a returning socket is refused rather than handed the board back.
+   * A duel ends here with the surviving player taking the win; a party plays on until one
+   * contender (or, in a 2v2, one team) is left standing.
+   */
+  private eliminateSeat(ref: RoomRef): void {
+    const live = ref.live;
+    const driver = live.driver;
+    if (!driver || driver.state.winner !== null || isLeft(driver.state, ref.seat)) return;
+    const member = live.members[ref.seat];
+    const name = member?.name ?? driver.room.seats[ref.seat]?.name ?? `Seat ${ref.seat}`;
+    if (member && live.code) {
+      const key = lobbyKey(live.room.code);
+      let gone = this.forfeited.get(key);
+      if (!gone) { gone = new Map(); this.forfeited.set(key, gone); }
+      gone.set(member.id, name);
+      /* The duel this chair fell in may end on the same beat, so the verdict has to outlive the
+         room: an app that was killed reads it from storage when it next opens the code. */
+      this.persistLobbies();
+    }
+    if (member) {
+      this.dropPostChat(member.ws, true);
+      /* The verdict travels BEFORE the socket goes: a client that is merely away must still read
+         why it was removed when it next opens the room. */
+      this.postTo(member.ws, JSON.stringify({
+        type: 'SEAT_ELIMINATED', side: ref.seat, name, reason: 'MATCH_FORFEITED_DISCONNECT',
+      }));
+      this.refs.delete(member.ws);
+      try {
+        member.ws.close(1000, 'seat_eliminated');
+      } catch {
+        /* the socket is already gone */
+      }
+      /* The record stays — it is what lets a late re-entry be refused by name — but the chair is
+         no longer held: `droppedAt` 0 keeps every grace clock from arming for it again. */
+      member.connected = false;
+      member.droppedAt = 0;
+      this.setInMatch(member.id, false);
+      this.verdict(member.id, false);
+    }
+    driver.leave(ref.seat);
+    /* A 2v2 is won by a team, not by a seat: once every chair still in the race wears one colour,
+       the match is over even though two contenders remain. */
+    if (driver.state.winner === null && live.mode === 'team') {
+      const alive: number[] = [];
+      for (let i = 0; i < driver.state.teams.length; i++) {
+        if (!isEliminated(driver.state, i)) alive.push(i);
+      }
+      if (alive.length && alive.every((i) => live.teams[i] === live.teams[alive[0]])) {
+        driver.award(alive[0]);
+      }
+    }
+    for (const m of live.members) {
+      if (m && m.connected) {
+        this.postTo(m.ws, JSON.stringify({ type: 'SEAT_LEFT', side: ref.seat, name }));
+      }
+    }
+    this.armRoomTurn(live);
+    if (driver.state.winner !== null) {
+      live.turnDeadlineMs = 0;
+      /* The survivors' own replicas resolve a duel and a last-man-standing party, but a team
+         verdict is the room's alone: the snapshot is what makes every screen agree on it. */
+      for (const m of live.members) {
+        if (m && m.connected) this.postTo(m.ws, this.roomSyncMessage(live));
+      }
+      this.finishRoom(live, driver.state.winner);
+      this.rooms.delete(live.matchId);
+    }
+    this.rearm();
   }
 
   /**
@@ -7722,7 +7933,7 @@ export class MatchmakerDO {
       if (m) this.postTo(m.ws, JSON.stringify({ type: 'SEAT_BOT', side: ref.seat, name }));
     }
     const before = driver.state;
-    this.pushRoomEvents(live, driver.runBots());
+    this.pushRoomEvents(live, driver.runBots(this.substituteBudget(live)));
     this.countBoard(before, driver.state);
     this.armRoomTurn(live);
     if (driver.state.winner !== null) {

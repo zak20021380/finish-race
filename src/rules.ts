@@ -169,6 +169,11 @@ export interface GameState {
   adjudicated?: boolean;
   /** Seats checkmated out of a party race, in the order they fell. Never holds the winner. */
   eliminated?: Player[];
+  /**
+   * Seats whose player disconnected and spent the machine's substitute allowance. A subset of
+   * `eliminated` — it says WHY the chair is empty, so the HUD can read LEFT instead of OUT.
+   */
+  left?: Player[];
   /** The most recent trap, and who set it — the result card's own caption reads it. */
   checkmate?: Checkmate | null;
   /** The anti-oscillation ledger. Public to every seat — it carries no hidden information. */
@@ -340,6 +345,7 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
     turn: 0,
     winner: null,
     eliminated: [],
+    left: [],
     checkmate: null,
   };
   s.repeat = { seen: [boardFingerprint(s)], streak: 0 };
@@ -349,6 +355,31 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
 /** A seat that has been eliminated from a party race by checkmate. */
 export const isEliminated = (s: GameState, team: Player): boolean =>
   s.eliminated?.includes(team) ?? false;
+
+/** A seat whose player disconnected and was removed from the race. Always also `eliminated`. */
+export const isLeft = (s: GameState, team: Player): boolean =>
+  s.left?.includes(team) ?? false;
+
+/**
+ * Remove a seat whose player is gone for good. The chair is skipped by every turn hand-off, its
+ * pawns are sealed so they cast no body and block nobody's lane to FINISH, and the race resolves
+ * if this was the last contender but one. Pure and shared: the worker judges it and every client
+ * replays the same call on the same board, so all replicas agree without another snapshot.
+ */
+export function markLeft(s: GameState, seat: Player): GameState {
+  if (s.winner !== null || isLeft(s, seat)) return s;
+  const left = [...(s.left ?? []), seat];
+  const eliminated = isEliminated(s, seat) ? [...(s.eliminated ?? [])] : [...(s.eliminated ?? []), seat];
+  const balls = s.balls.map((b) => (b.team === seat && !b.isCheckmated ? { ...b, isCheckmated: true } : b));
+  const alive: Player[] = [];
+  for (let t = 0; t < s.teams.length; t++) if (!eliminated.includes(t)) alive.push(t);
+  let winner: Player | null = null;
+  if (s.teams.length === 2) winner = alive[0] ?? null;
+  else if (alive.length === 1) winner = alive[0];
+  const next: GameState = { ...s, left, eliminated, balls, winner };
+  if (winner === null && s.turn === seat) next.turn = nextLiveTeam(next, seat);
+  return next;
+}
 
 export const ballsOf = (s: GameState, team: Player): Ball[] => s.balls.filter((b) => b.team === team);
 export const ballById = (s: GameState, id: number): Ball | null => s.balls.find((b) => b.id === id) ?? null;
@@ -1076,6 +1107,7 @@ function detached(s: GameState): GameState {
     mines: s.mines.slice(),
   };
   if (s.eliminated) base.eliminated = s.eliminated.slice();
+  if (s.left) base.left = s.left.slice();
   if (s.repeat) base.repeat = { seen: s.repeat.seen.slice(), streak: s.repeat.streak };
   return base;
 }

@@ -1453,6 +1453,12 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       if (token !== roomToken) return;
       ejectedFromRoom();
     },
+    /* The room struck this seat while it was disconnected and refused to hand it back. The board
+       must not mount: the player lands Home with the reason, exactly as a host kick does. */
+    onEliminated: () => {
+      if (token !== roomToken) return;
+      ejectedFromRoom(true);
+    },
   });
 }
 
@@ -1917,9 +1923,10 @@ function leaveRoom(): void {
 /**
  * The crown removed this seat from the room. The server has already freed the chair, so this is
  * not a drop and nothing may be reconnected: forget the membership, close every room surface and
- * say why from Home.
+ * say why from Home. `eliminated` is the same ending reached by a disconnect rather than a kick —
+ * the race itself refused the seat, so the board goes too and the drawer does not reopen.
  */
-function ejectedFromRoom(): void {
+function ejectedFromRoom(eliminated = false): void {
   roomToken++;
   armedDuelHint = '';
   window.clearTimeout(resumeTimer);
@@ -1949,8 +1956,17 @@ function ejectedFromRoom(): void {
   }
   /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
   setGameMode('room', { roomCode: null });
-  showView('modes');
   sheetHost?.close();
+  if (eliminated) {
+    /* The board is the surface that has to go: the quit path drops it and lands Home. The drawer
+       must not reopen over a race the player was just removed from. */
+    hooks.onSeatEliminated?.();
+    showToast(t('seatEliminatedToast'), 'warning', 4200);
+    notify('warning');
+    impact('medium');
+    return;
+  }
+  showView('modes');
   showToast(t('kickedByHost'), 'warning');
   notify('warning');
   impact('medium');
@@ -2142,6 +2158,11 @@ export interface GameModeInit {
   maintenance?: () => boolean;
   /** A maintenance lockout: raise the single-key notice instead of opening the room. */
   onMaintenance?: () => void;
+  /**
+   * This seat was struck from a live race after a disconnect. Leave the board through the app's
+   * one quit path and land Home — the room has already said why.
+   */
+  onSeatEliminated?: () => void;
 }
 
 export function initGameModes(sheets: Sheets, init?: GameModeInit): void {

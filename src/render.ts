@@ -221,6 +221,8 @@ const BALL_R = 0.34;
 const BAR_T = 0.13;
 /** Sprite half-extents, in ball radii: the pawn's drop shadow reaches ~1.17r below the sphere. */
 const PAWN_PAD = 1.3;
+/** A struck seat's pawn: still on the board, but ash and barely there. */
+const LEFT_PAWN_ALPHA = 0.35;
 const GLOW_PAD = 1.52;
 const RING_PAD = 1.62;
 const SOLID: number[] = [];
@@ -1234,6 +1236,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let perspective: Perspective | null = null;
   /** Seats wearing the purchased VIP halo. Server-stamped for a rival, live for the local seat. */
   let vipSeats = new Set<Player>();
+  /** Seats struck from the race after a disconnect: their pawns stay on the board, inert and ash. */
+  let leftSeats = new Set<Player>();
   /** seat 0 wears the equipped skin and style; every other seat keeps its fixed family. */
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
@@ -1301,6 +1305,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * `drawImage` each. `draw()` never allocates a gradient for them, which is what keeps a phone's
    * fill-rate budget on the board itself instead of on a fresh radial ramp per pawn per frame. */
   const pawnSprites: HTMLCanvasElement[] = [];
+  /** The same pawn baked in slate: a struck seat's token, desaturated once instead of per frame. */
+  const leftPawnSprites: HTMLCanvasElement[] = [];
   const glowSprites: HTMLCanvasElement[] = [];
   const lampSprites: HTMLCanvasElement[] = [];
   const selSprites: HTMLCanvasElement[] = [];
@@ -2109,6 +2115,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const br = ballR(c);
     const pearl = !!th.board.pearl;
     pawnSprites.length = 0;
+    leftPawnSprites.length = 0;
     glowSprites.length = 0;
     lampSprites.length = 0;
     selSprites.length = 0;
@@ -2132,6 +2139,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       pawn.g.translate(pawnPad, pawnPad);
       paintPawn(pawn.g, s, fx, br, pearl);
       pawnSprites.push(pawn.cv);
+
+      /* A struck seat's token: the same material drained to slate, baked once. The blend pass takes
+         the colour out, `destination-in` puts the pawn's own silhouette back (a blend fill would
+         otherwise paint the transparent margin opaque), and `source-atop` lays the wash inside it. */
+      const ash = spriteOf(pawnPad * 2, pawnPad * 2);
+      ash.g.drawImage(pawn.cv, 0, 0, pawnPad * 2, pawnPad * 2);
+      ash.g.globalCompositeOperation = 'saturation';
+      ash.g.fillStyle = '#808080';
+      ash.g.fillRect(0, 0, pawnPad * 2, pawnPad * 2);
+      ash.g.globalCompositeOperation = 'destination-in';
+      ash.g.drawImage(pawn.cv, 0, 0, pawnPad * 2, pawnPad * 2);
+      ash.g.globalCompositeOperation = 'source-atop';
+      ash.g.fillStyle = 'rgba(100,116,139,.42)';
+      ash.g.fillRect(0, 0, pawnPad * 2, pawnPad * 2);
+      leftPawnSprites.push(ash.cv);
 
       const glow = spriteOf(glowPad * 2, glowPad * 2);
       glow.g.translate(glowPad, glowPad);
@@ -2480,7 +2502,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * `drawImage` instead of five gradient fills, a clip and a specular stack. The badge and the
    * wound are live paint: they are state, not material, and only one or two pawns ever wear one.
    */
-  function drawBall(cx: number, cy: number, r: number, i: number, badge = 0, wounded = false) {
+  function drawBall(cx: number, cy: number, r: number, i: number, badge = 0, wounded = false, dimmed = false) {
     if (!ballFx.length) buildStatic();
     const seat = i >= 0 && i < sides.length ? i : 0;
     const s = sides[seat], fx = ballFx[seat] ?? ballFx[0];
@@ -2495,11 +2517,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /* Each token owns its own context: no aborted spawn tween or leaked pass can strand this
        pawn at alpha 0, at scale 0, or under an additive composite. */
     ctx.save();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = dimmed ? LEFT_PAWN_ALPHA : 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.translate(cx, cy);
 
-    const sprite = pawnSprites[seat];
+    const sprite = dimmed ? leftPawnSprites[seat] ?? pawnSprites[seat] : pawnSprites[seat];
     if (sprite) {
       const side = PAWN_PAD * r;
       ctx.drawImage(sprite, -side, -side, side * 2, side * 2);
@@ -2508,8 +2530,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
          never the steady path. */
       paintPawn(ctx, s, fx, r, !!th.board.pearl);
     }
-    if (wounded) drawWoundMark(r);
-    if (badge > 0) drawBadge(r, badge);
+    if (wounded && !dimmed) drawWoundMark(r);
+    if (badge > 0 && !dimmed) drawBadge(r, badge);
     ctx.restore();
   }
 
@@ -3952,10 +3974,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       /* the finisher's own pawn: once its burst begins, the ball is gone — the debris takes over */
       const pawn = fin ? fin.byId.get(b.id) : undefined;
       if (pawn && finNow >= pawn.burstAt) continue;
-      /* A checkmated pawn is off the board the moment the rules seal it. The one exception is a
-         pawn the endgame finisher is already staging: it keeps its token until its own burst, so a
-         duel that was won by checkmate still ends on the loser's explosion. */
-      if (logical[i]?.isCheckmated && !pawn) continue;
+      /* A checkmated pawn is off the board the moment the rules seal it. Two exceptions keep their
+         token: a pawn the endgame finisher is already staging (so a duel won by checkmate still
+         ends on the loser's explosion), and a struck seat's pawn, which stays as ash — a record of
+         where that player got to, not a piece anybody can move or must route around. */
+      const dimmed = leftSeats.has(seat);
+      if (logical[i]?.isCheckmated && !pawn && !dimmed) continue;
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
       /* A chain keeps one arc per beat in the queue: the FIRST unexpired one is the active throw,
@@ -4036,10 +4060,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         }
         was.x = b.pos.x; was.y = b.pos.y;
       } else prevPos.set(b.id, { x: b.pos.x, y: b.pos.y });
-      const active = v.state.winner === null && v.state.turn === seat;
-      const lit = active || v.state.winner === seat;
+      const active = !dimmed && v.state.winner === null && v.state.turn === seat;
+      const lit = active || (!dimmed && v.state.winner === seat);
       const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(clock / 260);
-      drawLamp(cx, cy, seat, lit ? beat : 0);
+      if (!dimmed) drawLamp(cx, cy, seat, lit ? beat : 0);
       if (crowned && crownG) {
         /* gold light pooled under the winner: the crown's own warmth on the goal tile */
         ctx.save();
@@ -4065,12 +4089,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 0.92, 0, TAU); ctx.fill();
         ctx.restore();
       }
-      if (vipSeats.has(seat)) drawVipAura(cx, cy, r, clock, still);
+      if (!dimmed && vipSeats.has(seat)) drawVipAura(cx, cy, r, clock, still);
       if (lit) drawGlow(cx, cy, r, seat, beat);
       const hurt = wounds.has(b.id);
-      if (hurt) drawWoundedRing(cx, cy, r, clock, still);
+      if (hurt && !dimmed) drawWoundedRing(cx, cy, r, clock, still);
       // the chosen one stands out further than its side's turn halo does
-      if (b.sel) drawSel(cx, cy, r, seat, clock, still);
+      if (b.sel && !dimmed) drawSel(cx, cy, r, seat, clock, still);
       let n = 1;
       for (let j = 0; j < i; j++) {
         if (!logical[j]?.isCheckmated && v.balls[j].team === seat) n++;
@@ -4091,7 +4115,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       /* Full opacity for every token, whatever the furniture painted before it left behind. */
       ctx.globalAlpha = 1;
-      drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt);
+      drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt, dimmed);
       if (sq !== 0) ctx.restore();
       if (crowned && fin) drawFinishCrown(cx, cy, r, finNow, still);
     }
@@ -4109,7 +4133,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     // "<side> is thinking" pips above that side's leading ball
-    if (v.thinking !== null) {
+    if (v.thinking !== null && !leftSeats.has(v.thinking)) {
       let lead: BallView | null = null;
       for (const b of v.balls) {
         if (b.team !== v.thinking) continue;
@@ -4437,6 +4461,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const next = new Set(seatsWithVip);
       if (next.size === vipSeats.size && [...next].every((seat) => vipSeats.has(seat))) return;
       vipSeats = next;
+    },
+    /** The seats struck from the race: slate pawns at rest, no glow, no turn, no thinking pips. */
+    setLeftSeats(seatsGone: readonly Player[]) {
+      const next = new Set(seatsGone);
+      if (next.size === leftSeats.size && [...next].every((seat) => leftSeats.has(seat))) return;
+      leftSeats = next;
     },
   };
 }

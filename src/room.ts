@@ -20,7 +20,7 @@
  * itself, so a human's action and the machine's answer arrive as one atomic batch.
  */
 import {
-  MAX_TEAMS, apply, newGame, steps, view,
+  MAX_TEAMS, apply, isLeft, markLeft, newGame, steps, view,
   type Action, type GameState, type Player,
 } from './rules';
 import { botAction, type Difficulty } from './bot';
@@ -490,11 +490,25 @@ export interface RoomDriver {
   /** Whether the machine owns the seat that is up. */
   readonly botTurn: boolean;
   /** A person's action. Refused unless it is their turn and the machine does not hold the seat. */
-  submit(seat: Player, action: Action): SubmitResult;
-  /** Play every automated seat that is due. Returns the turns it played, in order. */
-  runBots(): RoomEvent[];
+  submit(seat: Player, action: Action, budget?: Map<Player, number>): SubmitResult;
+  /**
+   * Play every automated seat that is due. Returns the turns it played, in order. `budget` caps the
+   * machine's substitute turns per away seat for THIS batch, so a chair whose player is gone can
+   * never be played past its allowance even when every seat around it is the machine's too.
+   */
+  runBots(budget?: Map<Player, number>): RoomEvent[];
   /** A person dropped: the machine takes the seat over and the race carries on. */
   drop(seat: Player): boolean;
+  /**
+   * A person's disconnect allowance ran out: the chair is struck from the race for good. Unlike
+   * `drop`, the machine does NOT keep playing it — the seat is skipped and its pawns go inert.
+   */
+  leave(seat: Player): boolean;
+  /**
+   * Settle the race for a seat without a finish line — the room's own verdict, for a team whose
+   * last chair is the only one still standing. False once the board already has a winner.
+   */
+  award(seat: Player): boolean;
   /** A person came back. */
   resume(seat: Player, id?: string): boolean;
   /** May this seat be paid the win? */
@@ -551,11 +565,18 @@ export function createRoomDriver(room: Room): RoomDriver {
     return true;
   }
 
-  /** Play every automated seat that is due, bounded by `BOT_TURN_BUDGET`. */
-  function runBots(): RoomEvent[] {
+  /** Play every automated seat that is due, bounded by `BOT_TURN_BUDGET` and any substitute cap. */
+  function runBots(budget?: Map<Player, number>): RoomEvent[] {
     const played: RoomEvent[] = [];
     for (let i = 0; i < BOT_TURN_BUDGET && state.winner === null && mineSeat(state.turn); i++) {
       const seat = state.turn;
+      if (budget) {
+        const left = budget.get(seat);
+        if (left !== undefined) {
+          if (left <= 0) break;
+          budget.set(seat, left - 1);
+        }
+      }
       const action = botMove(seat);
       if (!playOne(seat, action)) break;
       played.push({ seat, action });
@@ -568,12 +589,12 @@ export function createRoomDriver(room: Room): RoomDriver {
     get turn() { return state.turn; },
     get botTurn() { return state.winner === null && mineSeat(state.turn); },
     get room() { return current; },
-    submit(seat, action) {
+    submit(seat, action, budget) {
       if (state.winner !== null) return { ok: false, reason: 'over' };
       if (seat !== state.turn) return { ok: false, reason: 'not_your_turn' };
       if (mineSeat(seat)) return { ok: false, reason: 'automated' };
       if (!playOne(seat, action)) return { ok: false, reason: 'illegal' };
-      const events: RoomEvent[] = [{ seat, action }, ...runBots()];
+      const events: RoomEvent[] = [{ seat, action }, ...runBots(budget)];
       return { ok: true, events };
     },
     runBots,
@@ -583,9 +604,26 @@ export function createRoomDriver(room: Room): RoomDriver {
       current = takeover(current, seat);
       return true;
     },
+    leave(seat) {
+      if (state.winner !== null || isLeft(state, seat)) return false;
+      state = markLeft(state, seat);
+      /* The chair keeps its name and id — it is still the seat that player started in — but it is
+         no longer a live seat, so nothing may pay it a win or hand it back to a returning socket. */
+      current = {
+        ...current,
+        seats: current.seats.map((s, i) => (i === seat ? { ...s, connected: false } : s)),
+      };
+      return true;
+    },
     resume(seat, id) {
       if (!current.seats[seat] || current.seats[seat].kind === 'bot') return false;
+      if (isLeft(state, seat)) return false;
       current = reconnect(current, seat, id);
+      return true;
+    },
+    award(seat) {
+      if (state.winner !== null || !current.seats[seat]) return false;
+      state = { ...state, winner: seat };
       return true;
     },
     payable(seat) { return rewardEligible(current, seat); },

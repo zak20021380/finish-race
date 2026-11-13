@@ -2,7 +2,8 @@ import './style.css';
 import './result.css';
 import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, finishRoute, firstBall, getAutoMove, hasPathToFinish,
-  isEliminated, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt, steps as teamSteps,
+  isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
+  steps as teamSteps,
   view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
@@ -322,6 +323,30 @@ function setWalls(p: Player, left: number) {
   restartClass(el, 'pop');         // restarts the pop without a synchronous layout flush
 }
 
+/* A seat struck from the race keeps its card, but the card stops being a player: the ammo readout
+   is replaced by a muted LEFT badge and the whole strip goes ash. One badge per seat, minted on
+   first use and then only toggled, so a repaint costs a comparison. */
+const leftBadges: (HTMLElement | null)[] = [null, null, null, null];
+function paintSeatLeft(p: Player, on: boolean): void {
+  const host = document.getElementById(`res-${p}`);
+  if (!host) return;
+  let badge = leftBadges[p];
+  if (on && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'res-cell seat-left';
+    badge.setAttribute('role', 'img');
+    host.append(badge);
+    leftBadges[p] = badge;
+  }
+  if (!badge) return;
+  badge.hidden = !on;
+  if (wallBadges[p]) wallBadges[p].hidden = on;
+  if (!on) return;
+  const label = t('seatLeftBadge');
+  if (badge.textContent !== label) badge.textContent = label;
+  badge.setAttribute('aria-label', label);
+}
+
 /* a player with no walls taps a groove: the badge pulses in warning and a toast says why */
 let wallWarnTimer = 0;
 function warnNoWalls(p: Player) {
@@ -436,6 +461,11 @@ peerPill.id = 'peer-pill';
 peerPill.setAttribute('role', 'status');
 peerPill.setAttribute('aria-live', 'polite');
 peerPill.hidden = true;
+/* One text child owns the ellipsis: the pill is a flex row (dot + copy), and `text-overflow` only
+   bites on a block that can actually shrink. */
+const peerPillText = document.createElement('span');
+peerPillText.className = 'peer-pill-t';
+peerPill.append(peerPillText);
 gameScreen.appendChild(peerPill);
 
 let peerPillTimer = 0;
@@ -444,10 +474,34 @@ function hidePeerPill(): void {
   window.clearTimeout(peerPillTimer);
   peerPillTimer = 0;
   peerPill.hidden = true;
-  peerPill.classList.remove('is-warn', 'is-ok');
+  peerPill.classList.remove('is-warn', 'is-ok', 'is-left');
 }
+
+/**
+ * Print a pill template around a player's FULL display name. The name goes in a `<bdi>` so a
+ * Latin, Persian, Arabic, Russian or Spanish handle keeps its own direction and never reorders
+ * the sentence around it — and it is a text node, so a name is never parsed as markup.
+ */
+function paintPeerPill(template: string, name: string): void {
+  peerPillText.textContent = '';
+  const at = name ? template.indexOf('{name}') : -1;
+  if (at < 0) { peerPillText.textContent = template; return; }
+  const bdi = document.createElement('bdi');
+  bdi.textContent = name;
+  peerPillText.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
+}
+
+/** The name a banner prints: the room's own roster first, the HUD's seat label as the fallback. */
+function seatFullName(side: Player): string {
+  if (active && 'seats' in active) {
+    const seat = active.seats.find((s) => s.side === side);
+    if (seat?.name) return seat.name;
+  }
+  return TEAM_NAME[side] ?? '';
+}
+
 /** A friend-room seat's socket changed state: the pill says so, the board keeps its turn. */
-function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs = 0): void {
+function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs = 0, name = ''): void {
   if (side === localSide) return;
   if (status === 'bot') { hidePeerPill(); return; }
   window.clearTimeout(peerPillTimer);
@@ -455,7 +509,11 @@ function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', 
   peerPill.hidden = false;
   peerPill.classList.toggle('is-warn', status === 'reconnecting');
   peerPill.classList.toggle('is-ok', status !== 'reconnecting');
-  peerPill.textContent = t(status === 'reconnecting' ? 'peerReconnecting' : 'peerOnline');
+  peerPill.classList.remove('is-left');
+  paintPeerPill(
+    t(status === 'reconnecting' ? 'peerReconnecting' : 'peerOnline'),
+    name || seatFullName(side),
+  );
   if (status === 'reconnecting') {
     /* The server's grace is also the pill's own lease: if the takeover notice is lost, the
        promise still expires instead of sitting over a board that has moved on. */
@@ -463,6 +521,17 @@ function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', 
   } else {
     peerPillTimer = window.setTimeout(hidePeerPill, 1800);
   }
+}
+
+/** The chair was struck from the race: a verdict, not a promise, so it reads in its own tone. */
+function showSeatLeftPill(side: number, name: string): void {
+  if (side === localSide) return;
+  window.clearTimeout(peerPillTimer);
+  peerPill.hidden = false;
+  peerPill.classList.remove('is-warn', 'is-ok');
+  peerPill.classList.add('is-left');
+  paintPeerPill(t('peerLeft'), name || seatFullName(side));
+  peerPillTimer = window.setTimeout(hidePeerPill, 4200);
 }
 
 /* ---------- the CHECKMATE splash ----------
@@ -982,7 +1051,8 @@ const isLocalSeat = (seat: Player): boolean => seat === localSide;
  * plays `localSide`, so that seat is never an opponent, whoever is on the other end.
  */
 const opponentThinking = (seat: Player): boolean =>
-  state.turn === seat && !isLocalSeat(seat) && state.winner === null && !paused && !tutorialActive;
+  state.turn === seat && !isLocalSeat(seat) && state.winner === null && !paused && !tutorialActive
+  && !isLeft(state, seat);
 
 const REASON = {
   dry: 'No walls remaining!',
@@ -1439,6 +1509,11 @@ function vipBoardSeats(): Player[] {
 
 const paintVipSeats = (): void => { renderer.setVipSeats(vipBoardSeats()); invalidate(); };
 
+/** The seats the board paints inert: struck from the race after their player disconnected. */
+function paintLeftSeats(): void {
+  renderer.setLeftSeats(roster().filter((p) => isLeft(state, p)));
+}
+
 /**
  * Where every seat finished, champion first. A race stops the instant a ball takes the line, so
  * the seats that never crossed are ordered by how far their leading ball climbed and then by the
@@ -1493,12 +1568,14 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   const name = seatLabel(seat);
   const local = seat === localSide;
   const out = isEliminated(state, seat);
+  /* a disconnect reads LEFT, a trap reads OUT: both are off the board, but not for the same reason */
+  const placeLabel = t(isLeft(state, seat) ? 'seatLeftBadge' : out ? 'checkmateOut' : placeKey);
 
   const row = document.createElement('li');
   row.className = 'result-row';
   row.dataset.place = String(place);
   row.dataset.seat = String(seat);
-  row.setAttribute('aria-label', `${name}, ${t(out ? 'checkmateOut' : placeKey)}${local ? `, ${t('hudYou')}` : ''}${seatVip(seat) ? `, ${t('vipPillActive')}` : ''}`);
+  row.setAttribute('aria-label', `${name}, ${placeLabel}${local ? `, ${t('hudYou')}` : ''}${seatVip(seat) ? `, ${t('vipPillActive')}` : ''}`);
   if (local) {
     row.classList.add('is-you');
     row.setAttribute('aria-current', 'true');
@@ -1544,7 +1621,7 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   meta.className = 'result-row-meta';
   const placeEl = document.createElement('span');
   placeEl.className = 'result-place';
-  placeEl.textContent = t(out ? 'checkmateOut' : placeKey);
+  placeEl.textContent = placeLabel;
   meta.append(placeEl);
   if (local) {
     const you = document.createElement('span');
@@ -2369,13 +2446,18 @@ function ui() {
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
   for (const p of roster()) {
-    setClass(chips[p], 'active', state.winner === null && state.turn === p && !paused);
+    const gone = isLeft(state, p);
+    setClass(chips[p], 'active', !gone && state.winner === null && state.turn === p && !paused);
     setClass(chips[p], 'thinking', opponentThinking(p));
     /* a checkmated seat is off the board: its strip reads as struck, and it never wears the turn */
     setClass(chips[p], 'is-out', isEliminated(state, p));
+    /* a seat whose player disconnected is struck for good: ash, no timer, no dots, a LEFT badge */
+    setClass(chips[p], 'is-left', gone);
+    paintSeatLeft(p, gone);
     setWalls(p, wallsRemaining(state, p));
     if (p !== localSide) setFog(p);
   }
+  paintLeftSeats();
   /* the flags and the XP pills ride along: both are diffed, so this is a comparison per seat */
   paintSeatIdentity();
   const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === localSide ? '' : 's'}`
@@ -2948,6 +3030,20 @@ function applyRoomSnapshot(next: GameState, turnLeftMs: number): void {
 }
 
 /**
+ * A chair was struck from the race: its player disconnected and the machine's two substitute turns
+ * ran out. `markLeft` is the same pure call the worker made, so this replica seals the same pawns,
+ * skips the same hand-offs and reaches the same verdict without waiting for a snapshot.
+ */
+function strikeSeat(side: number, name: string): void {
+  const seat = side as Player;
+  if (!state.teams[seat]) return;
+  state = markLeft(state, seat);
+  showSeatLeftPill(seat, name);
+  ui();
+  syncLoop();
+}
+
+/**
  * The colour family a seat wears on THIS screen: the local seat gets the player's chosen one, the
  * rival the opposite, then the fixed gold / green order for the extra seats a party adds. The chip's
  * class, the chat bubble's neon and the sphere all read this plan, so the three can never disagree
@@ -3410,8 +3506,13 @@ function startGame(setup: StartSetup) {
     if ('seats' in session) {
       /* Friend-room only: a peer's reconnect grace, and the authoritative snapshot that repairs
          a board after a resume, a refusal or an explicit sync request. */
-      session.onPeerStatus((side, status, graceMs) => setPeerStatus(side, status, graceMs));
+      session.onPeerStatus((side, status, graceMs, name) => setPeerStatus(side, status, graceMs, name));
+      session.onSeatLeft((side, name) => strikeSeat(side, name));
       session.onSync((next, turnLeftMs) => applyRoomSnapshot(next, turnLeftMs));
+      /* A chair already struck before this screen mounted: a reconnect into a race that moved on
+         without us. The roster carries the verdict, so the board opens on it instead of catching
+         up a frame later. */
+      for (const side of session.leftSides()) strikeSeat(side, seatFullName(side));
     }
   }
 
@@ -5209,6 +5310,9 @@ initGameModes(sheets, {
   canPopLobby: () => router.current !== 'game',
   /* JOIN NOW on the in-match arrival banner leaves the board through this same quit path. */
   onAbandonMatch: () => quitToMenu(),
+  /* The room struck this seat while it was away and refused to hand it back. The board must not
+     stay mounted: the one quit path drops it and lands Home, where the room's toast already is. */
+  onSeatEliminated: () => quitToMenu(),
   /* A server-side maintenance refusal still raises the one-key notice. */
   onMaintenance: () => showNote(t('maintenanceBody'), false, 3200),
 });
