@@ -260,6 +260,23 @@ const chips = [
   $<HTMLDivElement>('chip-2'), $<HTMLDivElement>('chip-3'),
 ];
 const dots = $<HTMLSpanElement>('dots');
+/**
+ * The seat whose card wears the thinking dots right now. The dots are ONE element — the rival's own
+ * markup, carried from card to card — so the card that wears them is always the seat the board's
+ * pips are floating over.
+ */
+let dotsSeat: Player | null = null;
+/**
+ * Park the thinking dots on a seat's card. One element, one home: the dots move to whoever is
+ * thinking and to nobody else, so a three- or four-seat race names the person who is actually up
+ * instead of lighting the same card for every rival.
+ */
+function homeThinkingDots(seat: Player | null): void {
+  dotsSeat = seat;
+  if (seat === null) return;
+  const who = chips[seat]?.querySelector<HTMLElement>('.who-line');
+  if (who && dots.parentElement !== who) who.appendChild(dots);
+}
 /** The blitz ring and its seconds: seat 0's markup, carried to whichever seat the local player is. */
 const timerRing = chips[0].querySelector<HTMLElement>('.timer');
 const timerNum = chips[0].querySelector<HTMLElement>('.timer-n');
@@ -948,6 +965,24 @@ let raceSeed = 1;
 /** Is the other seat to move? In an online race that seat is a person, not the machine. */
 const rivalTurn = () => state.turn !== localSide && state.winner === null;
 const wantsOpponent = () => rivalTurn() && !active;
+
+/**
+ * Is this seat played from THIS screen? Seat 0 in a local race, the matchmaker's seat in an online
+ * one. Every "somebody else is thinking" rule asks this one question — never "is this seat a bot?".
+ */
+const isLocalSeat = (seat: Player): boolean => seat === localSide;
+
+/**
+ * Is this seat thinking it over? The ONE condition every turn indicator reads: the seat to move is
+ * somebody else's, the match is still live, and nothing is holding the board.
+ *
+ * A bot working out its move and a PERSON on the far side of the wire answer it identically, which
+ * is what lets the pips floating above a pawn and the dots on a card mean the same thing in a
+ * friendly room and in a ranked duel. The local seat's own pawns never wear them: this screen
+ * plays `localSide`, so that seat is never an opponent, whoever is on the other end.
+ */
+const opponentThinking = (seat: Player): boolean =>
+  state.turn === seat && !isLocalSeat(seat) && state.winner === null && !paused && !tutorialActive;
 
 const REASON = {
   dry: 'No walls remaining!',
@@ -2316,7 +2351,10 @@ function ui() {
   /* the pawns moved: the event callouts' slots are resolved against them, not against pixels */
   syncPieces();
   /* the rival's dots tick for a bot's think time and for a person's just the same */
-  const thinking = rivalTurn() && !paused && !tutorialActive;
+  const thinking = opponentThinking(state.turn);
+  /* the dots are ONE element, so they are homed on the seat that is thinking: the card that wears
+     them names the same seat the board's pips float over, in a duel and in a party alike */
+  if (dotsSeat !== (thinking ? state.turn : null)) homeThinkingDots(thinking ? state.turn : null);
 
   setClass(dots, 'on', thinking);
 
@@ -2332,7 +2370,7 @@ function ui() {
   const seat = state.winner ?? state.turn;
   for (const p of roster()) {
     setClass(chips[p], 'active', state.winner === null && state.turn === p && !paused);
-    setClass(chips[p], 'thinking', thinking && p === state.turn);
+    setClass(chips[p], 'thinking', opponentThinking(p));
     /* a checkmated seat is off the board: its strip reads as struck, and it never wears the turn */
     setClass(chips[p], 'is-out', isEliminated(state, p));
     setWalls(p, wallsRemaining(state, p));
@@ -3140,6 +3178,9 @@ function seatChrome(): void {
   if (!seatBall || !rivalWho || !timerRing || !timerNum) return;
   seatBall.append(timerRing, timerNum);   // this seat's own countdown ring
   rivalWho.appendChild(dots);             // the rival gets the thinking dots
+  /* The dots are homed on whoever is actually thinking (`homeThinkingDots`), so the race starts with
+     them parked on the rival's card and the first repaint moves them to the seat that is up. */
+  dotsSeat = null;
   /* The tactical mine pod follows the seat too. The arm key rides the right end of your own
      strip, and the sealed fog pod it displaces goes back to seat 0 — so every rival strip still
      carries one. Without this an online seat on the right would arm a mine from the strip that
@@ -4829,14 +4870,22 @@ function frame(now: number) {
     view.mineGhost = mineGhost;
     view.capsule = capsule;
     view.last = marks;
-    view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
+    /* The pips above the thinking pawn belong to whoever is up: a bot working out its move AND a
+       person on the far side of the wire. The local seat's own pawns never wear them, and the
+       pips go the moment the turn moves on or the match ends. */
+    const thinkingSeat = opponentThinking(state.turn) ? state.turn : null;
+    view.thinking = thinkingSeat;
     /* Confetti reports whether any particle is still in the air. It is drawn above the result
        scrim, so it keeps ticking even when the board behind it is deliberately not repainted. */
     const confettiLive = confetti.tick(dt, now);
+    /* The board keeps breathing while an opponent thinks. The pips' wave rides the ambient clock,
+       so the loop has to keep ticking through a human rival's turn over the wire exactly as it
+       does through a bot's think time — otherwise the wave would freeze between socket updates. */
+    const thinking = thinkingSeat !== null;
     /* The result capsule lays a full-screen scrim over the board: repainting the canvas behind it
        would re-composite a board nobody can see. Only confetti keeps the loop alive up there. */
-    const fxBusy = overlayOpen ? false : renderer.draw(view, now, settling || confettiLive);
-    animating = fxBusy || settling || confettiLive;
+    const fxBusy = overlayOpen ? false : renderer.draw(view, now, settling || confettiLive || thinking);
+    animating = fxBusy || settling || confettiLive || thinking;
   } finally {
     /* A frame that throws must never strand `raf` at a stale id: re-arm from the flags, not from
        a guess, so `invalidate()` or `syncLoop()` can always restart a parked loop. */
