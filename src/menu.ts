@@ -3603,6 +3603,17 @@ export function createMenu(api: MenuApi): Menu {
     }
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
     $('pf-xp').textContent = `${lv.got} / ${lv.need} XP`;
+    /* The earned pool: every settled win's XP, banked in `profile.xp`. It is a lifetime total, not
+       the level rail's progress, so it gets its own gold pill rather than sharing that figure. */
+    const xpTotal = Math.max(0, Math.floor(profile.xp));
+    const xpMini = document.getElementById('pf-xp-mini');
+    if (xpMini) xpMini.textContent = en(xpTotal);
+    const xpPill = document.getElementById('pf-quick-xp');
+    if (xpPill) {
+      const label = `${en(xpTotal)} XP earned`;
+      xpPill.setAttribute('aria-label', label);
+      xpPill.setAttribute('title', label);
+    }
     /* Home XP ring (r=22 in a 48 viewBox, round caps, cyan→emerald gradient on a dark track):
        the arc replaces the level pill + XP bar. Circumference comes from the node itself, so a
        resize of the orb can never desync the dash math from the painted circle. */
@@ -3910,6 +3921,7 @@ export function createMenu(api: MenuApi): Menu {
       profile.frame ?? '',
       profile.pieceColor,
       profile.coins,
+      profile.xp,
       profile.tiqBonus,
       myTiq(),
       bracket.n, bracket.id,

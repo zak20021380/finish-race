@@ -324,10 +324,11 @@
   text-transform: uppercase;
 }
 
-/* ---- bank: rewards on the left, the TIQ ledger on the right ---- */
+/* ---- bank: the settlement's own strip — coins, xp, the TIQ ledger ----
+   Flex, not a fixed grid template: a column that paid nothing is simply not painted, and the
+   container must never leave an empty track where it used to be. */
 .result-bank {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  display: flex;
   align-items: stretch;
   min-height: 54px;
   margin: 0 0 10px;
@@ -341,27 +342,27 @@
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
-.result-bank.is-solo {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-}
-.result-bank.is-solo .result-bank-div { display: none; }
-.result-bank.is-solo .result-bank-col { width: 100%; justify-content: center; }
+.result-bank[hidden] { display: none; }
+/* fewer than three paid items: the capsule centers them instead of leaving an edge ragged */
+.result-bank.is-centered .result-bank-col { justify-content: center; }
 .result-bank-div {
+  flex: none;
   width: 1px;
   margin-block: 8px;
   background: linear-gradient(transparent, rgba(255, 255, 255, .13) 24%, rgba(255, 255, 255, .13) 76%, transparent);
 }
 .result-bank-col {
   display: flex;
+  flex: 1 1 0;
   align-items: center;
   gap: 7px;
   min-width: 0;
   padding-inline: 4px;
 }
 .result-bank-col.is-coins { justify-content: flex-start; }
+.result-bank-col.is-xp { justify-content: center; }
 .result-bank-col.is-tiq { justify-content: flex-end; }
-.result-bank-col.is-stake { justify-content: flex-start; gap: 4px; }
+.result-bank-col.is-stake { flex: 1.4 1 0; justify-content: flex-start; gap: 4px; }
 #btn-double-coins,
 #btn-recover-tiq { margin-inline-start: auto; }
 .result-bank-ico {
@@ -386,6 +387,23 @@
   height: 17px;
   filter: drop-shadow(0 0 5px rgba(252, 211, 77, .75));
   animation: result-brain 2.6s ease-in-out infinite;
+}
+/* the XP badge: one gold star in the same 26px well, lit by its own halo */
+.result-bank-ico.is-xp {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .3), rgba(252, 211, 77, .16) 48%, transparent 74%);
+  color: #FDE68A;
+}
+.result-bank-ico.is-xp .ico {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 5px rgba(253, 230, 138, .7));
+}
+#result-xp-chip .result-bank-value { color: #FDE68A; }
+#result-xp-n {
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
 }
 .result-bank-body {
   display: flex;
@@ -528,7 +546,10 @@
   to { opacity: 1; transform: none; }
 }
 
+/* every reward column is a flex box, so its `hidden` needs the explicit rule the UA style loses */
 #result-tiq-chip[hidden],
+#result-coin-chip[hidden],
+#result-xp-chip[hidden],
 #result-stake[hidden],
 .result-actions [hidden] { display: none !important; }
 
@@ -880,59 +901,53 @@
 .btn-play-again.is-locked:active,
 .btn-play-again:disabled:active { transform: none; }
 
-/* ---- 2. the duel banner: obsidian glass with a lit crest ---- */
+/* ---- 2. the duel key: dark-gold tactical secondary, not a banner ----
+   The hierarchy is Play Again (hero) → Invite to Duel (secondary) → Main Menu (quiet). That
+   order only reads if the middle key is a restrained gold outline on the same obsidian glass,
+   never a violet gradient with gradient-filled type. */
 .btn-challenge {
   min-height: 50px;
   gap: 11px;
   padding-inline: 16px;
-  color: #EADFC2;
-  background:
-    radial-gradient(92% 170% at 50% 128%, rgba(124, 58, 237, .3), transparent 70%),
-    radial-gradient(64% 120% at 12% -10%, rgba(244, 63, 94, .12), transparent 62%),
-    linear-gradient(168deg, rgba(38, 31, 52, .92) 0%, rgba(18, 15, 27, .96) 56%, rgba(8, 7, 12, .98) 100%);
+  color: #fef3c7;
+  border: 1px solid rgba(245, 184, 65, .38);
+  background: linear-gradient(180deg, rgba(245, 184, 65, .16) 0%, rgba(245, 184, 65, .06) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 -1px 0 rgba(0, 0, 0, .62),
-    inset 0 0 0 1px rgba(167, 139, 250, .14),
-    0 10px 26px -16px rgba(0, 0, 0, .95),
-    0 0 28px -14px rgba(139, 92, 246, .6);
+    inset 0 1px 0 rgba(255, 240, 200, .12),
+    inset 0 -1px 0 rgba(0, 0, 0, .46),
+    0 8px 20px -16px rgba(0, 0, 0, .92);
   font-size: .78rem;
   letter-spacing: .13em;
 }
+/* the same rounded-square icon well the hero key wears, in gold rather than mint */
 .btn-challenge .result-btn-ico {
   width: 32px;
   height: 32px;
-  background: radial-gradient(circle, rgba(243, 212, 131, .22), rgba(139, 92, 246, .14) 54%, transparent 74%);
-  color: #F2D397;
-  filter: drop-shadow(0 0 7px rgba(243, 212, 131, .42));
+  border-radius: 9px;
+  background: rgba(245, 184, 65, .12);
+  box-shadow: inset 0 0 0 1px rgba(245, 184, 65, .32);
+  color: #fef3c7;
+  filter: none;
 }
-.btn-challenge .ico { width: 23px; height: 23px; }
-.btn-challenge .result-btn-label { color: #F4E4BD; text-shadow: 0 1px 0 rgba(0, 0, 0, .7); }
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .btn-challenge .result-btn-label {
-    background: linear-gradient(180deg, #FFF6DC 0%, #F2D397 46%, #C9B79C 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .8));
-  }
+/* a monochrome crossed-swords glyph: currentColor strokes, no crest, no bloom */
+.btn-challenge .ico { width: 20px; height: 20px; }
+.btn-challenge .result-btn-label {
+  color: #fef3c7;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
 }
 @media (hover: hover) {
   .btn-challenge:hover {
     transform: translateY(-1px);
-    filter: brightness(1.09);
+    filter: brightness(1.06);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, .14),
-      inset 0 -1px 0 rgba(0, 0, 0, .62),
-      inset 0 0 0 1px rgba(190, 160, 255, .26),
-      0 12px 30px -16px rgba(0, 0, 0, .95),
-      0 0 32px -12px rgba(139, 92, 246, .8);
+      inset 0 1px 0 rgba(255, 240, 200, .18),
+      inset 0 -1px 0 rgba(0, 0, 0, .46),
+      0 10px 24px -16px rgba(0, 0, 0, .95);
   }
-  .btn-challenge:hover .result-btn-ico { animation: duel-crest-flare .9s ease both; }
 }
-.btn-challenge:active { transform: scale(.98); filter: brightness(1.12); }
-.btn-challenge:focus-visible { outline: 3px solid #F2D397; outline-offset: 3px; }
+.btn-challenge:active { transform: scale(.98); filter: brightness(1.1); }
+.btn-challenge:focus-visible { outline: 3px solid rgba(245, 184, 65, .55); outline-offset: 3px; }
 
 /* ---- 3. the return plate: frosted obsidian, no theatre ---- */
 .btn-main-menu {
@@ -1200,10 +1215,6 @@ html.reduced-motion .ad-toast { transition: none; }
 @keyframes sheen-sweep {
   0%, 14% { transform: translateX(-170%) rotate(9deg); }
   54%, 100% { transform: translateX(430%) rotate(9deg); }
-}
-@keyframes duel-crest-flare {
-  0%, 100% { filter: drop-shadow(0 0 7px rgba(243, 212, 131, .42)); }
-  45% { filter: drop-shadow(0 0 13px rgba(255, 243, 210, .9)); }
 }
 @keyframes ad-chip-spin { to { transform: rotate(360deg); } }
 @keyframes ad-chip-land {

@@ -41,7 +41,7 @@ import {
 import { isPremiumUser } from './premium';
 import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
-import { guestId, payout, profile } from './storage';
+import { guestId, ladderTally, payout, profile } from './storage';
 import { getMySquad } from './squads';
 import { paintFlag } from './flags';
 import { runtime, tiqFrom } from './admin';
@@ -66,7 +66,9 @@ export function tierOf(tiq: number): MindTier {
  * grants folded in. The 140 default still lands exactly the old 120-per-win + 20-per-race.
  */
 export function myTiq(): number {
-  return tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
+  /* the ladder reads the human tally only: a bot board can never move the rating */
+  const tally = ladderTally();
+  return tiqFrom(tally.wins, tally.games, profile.tiqBonus);
 }
 
 /** The TIQ band this seat queues in. Internal: it never reaches a chip or a label. */

@@ -47,7 +47,7 @@ import {
 import {
   accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasChosenLanguage,
   hasClaimedFirstDuelBonus, hasCompletedTutorial, isFirstOnboardingEligible, isFirstTimePlayer,
-  markFirstOnboardingWin, onChange, pieceColor, profile, peekPendingDuelRoom,
+  ladderTally, markFirstOnboardingWin, onChange, pieceColor, profile, peekPendingDuelRoom,
   reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom, resetTutorialState,
   takePendingDuelRoom, theme,
 } from './storage';
@@ -210,6 +210,10 @@ const resultRoster = $<HTMLOListElement>('result-roster');
 const resultBank = $<HTMLElement>('result-bank');
 const resultTiqChip = $<HTMLElement>('result-tiq-chip');
 const resultTiqN = $<HTMLElement>('result-tiq-n');
+const resultXpChip = $<HTMLElement>('result-xp-chip');
+const resultXpN = $<HTMLElement>('result-xp-n');
+const resultBankDivA = $<HTMLElement>('result-bank-div-a');
+const resultBankDivB = $<HTMLElement>('result-bank-div-b');
 const resultCoinChip = $<HTMLElement>('result-coin-chip');
 const resultCoinsN = $<HTMLElement>('result-coins-n');
 const resultStake = $<HTMLElement>('result-stake');
@@ -1266,7 +1270,14 @@ function syncPieces() {
 interface ResultView {
   won: boolean;
   coins: number;
-  /** The TIQ a rewarded win actually paid. */
+  /** XP the race paid: a bot win pays its tier, every other non-win pays nothing. */
+  xp: number;
+  /**
+   * The machine held the far side. A bot board pays no TIQ — win, loss, forfeit or timeout — so
+   * the strip never prints a TIQ pill for it, and the stake band never opens.
+   */
+  bot: boolean;
+  /** The TIQ a rewarded win actually paid; always 0 on a bot board. */
   tiq: number;
   /** The magnitude of the crimson stake loss a defeat wears. */
   stake: number;
@@ -1513,7 +1524,7 @@ function paintResultRoster(): void {
 /** Every word and every state class the current result owns, re-readable after a language flip. */
 function paintResultCopy(): void {
   if (!resultView) return;
-  const { won, stake } = resultView;
+  const { won, coins, xp, bot, tiq, stake } = resultView;
   /* A checkmate that ended the race is the result's own reason, not a generic victory: the card
      says how it was won. A trap that only eliminated a party seat is already history by now. */
   const trapped = state.checkmate?.decided === true && state.winner !== null;
@@ -1524,12 +1535,26 @@ function paintResultCopy(): void {
   shareBtn.setAttribute('aria-label', t('resultShare'));
   toMenu.setAttribute('aria-label', t('resultMenu'));
   paintStakeValue();
-  resultTiqChip.hidden = !won;
-  resultCoinChip.classList.toggle('is-consolation', !won);
+  /* THE REWARDS STRIP IS THE SETTLEMENT, NOT A LEDGER. Only what the race actually paid is
+     painted: a machine-held board never shows TIQ (its delta is zero by rule, win or lose), a
+     race that paid nothing hides the whole capsule instead of printing +0, and a real win shows
+     coins · xp · tiq in that order. */
   const staked = !won && stake > 0;
+  const showCoins = coins > 0;
+  const showXp = xp > 0;
+  const showTiq = !bot && tiq > 0;
+  resultCoinChip.hidden = !showCoins;
+  resultXpChip.hidden = !showXp;
+  resultTiqChip.hidden = !showTiq;
   resultStake.hidden = !staked;
-  /* a machine-held seat pays nothing into either ledger: the capsule becomes one column */
-  resultBank.classList.toggle('is-solo', !won && !staked);
+  resultCoinChip.classList.toggle('is-consolation', !won);
+  const paid = [showCoins, showXp, showTiq].filter(Boolean).length;
+  resultBank.hidden = paid === 0 && !staked;
+  /* a full three-item win keeps its edges; fewer items close up into the middle */
+  resultBank.classList.toggle('is-centered', paid > 0 && paid < 3 && !staked);
+  /* one hairline per shared edge: coin|xp, xp|tiq — or coin|tiq when XP paid nothing */
+  resultBankDivA.hidden = !(showCoins && showXp);
+  resultBankDivB.hidden = !((showXp && showTiq) || (showCoins && showTiq && !showXp));
   shareBtn.hidden = !won;
   again.classList.toggle('is-revenge', !won);
   againIco?.setAttribute('href', won ? '#i-play' : '#i-restart');
@@ -1565,7 +1590,7 @@ function paintResultLock(): void {
  */
 function rollResultValues(): void {
   if (!resultView) return;
-  const { won, coins, tiq, stake } = resultView;
+  const { won, coins, xp, tiq, stake } = resultView;
   const coin = resultCoinChip.querySelector<SVGSVGElement>('.coin');
   if (coin && !motionReduced()) {
     coin.classList.remove('sweep');
@@ -1579,6 +1604,7 @@ function rollResultValues(): void {
     const eased = 1 - Math.pow(1 - k, 3);
     resultTiqN.textContent = resultAbs((won ? tiq : 0) * eased);
     resultCoinsN.textContent = resultAbs(coins * eased);
+    resultXpN.textContent = resultAbs(xp * eased);
     if (!won) resultStakeN.textContent = `−${resultAbs(Math.max(1, stake * eased))} ${t('resultTiqUnit')}`;
     if (k < 1) {
       resultRaf = requestAnimationFrame(paint);
@@ -1586,6 +1612,7 @@ function rollResultValues(): void {
     }
     resultTiqN.textContent = resultAbs(won ? tiq : 0);
     resultCoinsN.textContent = resultAbs(coins);
+    resultXpN.textContent = resultAbs(xp);
     if (!won) resultStakeN.textContent = `−${resultAbs(stake)} ${t('resultTiqUnit')}`;
     resultRaf = 0;
   };
@@ -1980,20 +2007,28 @@ function showOverlay() {
      the one exception: it pays nothing and it touches no ladder, because a bot is not a person and
      neither is a seat somebody walked out of. */
   const mine = !room || rewardEligible(room, localSide);
-  const beforeTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
+  /* the ladder's counters, with machine-held boards already taken back out: a bot race leaves
+     both of these untouched, which is what makes its TIQ delta exactly zero */
+  const beforeTally = ladderTally();
+  const beforeTiq = tiqFrom(beforeTally.wins, beforeTally.games, profile.tiqBonus);
   /* Churchill's integrity gate: the share of this seat's wall budget still in hand at the
      final turn — the same wall count the board's chips carry. */
   const wallCap = wallBudget(sizes.reduce((n, balls) => n + balls, 0));
   const defenseHeld = wallCap > 0
     && state.wallsLeft[localSide] / wallCap >= BADGE_REQUIREMENTS.churchill_bastion.minDefenseHealth;
-  const earned = mine
+  /* One settlement returns the wallet and the XP pool together, and says whether the machine
+     held the far side. A bot board pays coins and XP on a WIN only, and never any TIQ. */
+  const boardMode = matchMode();
+  const settled = mine
     ? recordGame({
-      difficulty, won, mode: matchMode(), defenseHeld,
+      difficulty, won, mode: boardMode, defenseHeld,
       ranked: rankedPvp(),
       /* the race ended without a finish line: a ranked run never survives a void board */
       forfeit: forfeit !== null,
+      seats: sizes.length,
     }, runtime.coinMult)
-    : 0;
+    : { coins: 0, xp: 0, bot: boardMode === 'bot' };
+  const earned = settled.coins;
   /* CLEAN COMPLETION & PERSISTENCE. The governed debut has settled and `recordGame()` has flushed
      the tally (`games >= 1`). Spend the one-shot flag in the very same result beat and disarm the
      controller, so Play again (which calls `restart()` directly, without `startGame()`) and every
@@ -2012,15 +2047,19 @@ function showOverlay() {
      `earned`/`resultView`: the double-coins chip must still multiply only the race payout. */
   const welcomeBonus = claimFirstDuelBonus();
   bonusBadge.hidden = welcomeBonus <= 0;
-  const afterTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
+  const afterTally = ladderTally();
+  const afterTiq = tiqFrom(afterTally.wins, afterTally.games, profile.tiqBonus);
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
   /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
   resultView = {
     won,
     coins: earned,
-    tiq: mine ? Math.max(0, afterTiq - beforeTiq) : 0,
-    stake: mine ? Math.max(5, Math.round(runtime.winTiq * 0.1)) : 0,
+    xp: settled.xp,
+    bot: settled.bot,
+    /* a bot board is TIQ-neutral by rule, so its pill and its stake never exist */
+    tiq: settled.bot || !mine ? 0 : Math.max(0, afterTiq - beforeTiq),
+    stake: settled.bot || !mine ? 0 : Math.max(5, Math.round(runtime.winTiq * 0.1)),
     hardBotDuel: hardBotDuel && !active && forfeit === null,
     questMatch,
     questAdCompleted: false,
@@ -2031,6 +2070,7 @@ function showOverlay() {
   paintResultCopy();
   resultTiqN.textContent = '0';
   resultCoinsN.textContent = '0';
+  resultXpN.textContent = '0';
   resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
   /* the card and its standings ladder are on screen: the one moment the result fanfare belongs to.
@@ -3020,6 +3060,13 @@ const tagDigits = (n: number): string => {
   const s = String(n);
   return lang === 'fa' ? s.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : s;
 };
+/**
+ * The same sentence with Latin figures: the result caption is always "1 به 1 · سخت" and never
+ * "۱ به ۱ · سخت". Persian keeps its own figures where the copy is genuinely Persian prose (the
+ * pause header); a standing, a score and a count on the result card read as 0-9 everywhere.
+ */
+const toLatinDigits = (s: string): string =>
+  s.replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d)));
 const DIFF_TAG: Record<Difficulty, string> = {
   easy: 'pauseDiffEasy', normal: 'pauseDiffNormal', hard: 'pauseDiffHard',
 };
@@ -3043,7 +3090,7 @@ function paintRaceTags(): void {
     : t(kind === 'duel' ? 'pauseTagFriends' : 'pauseTagOnline');
   const mode = `${raceShapeTag()} · ${context}`;
   pauseMode.textContent = ` · ${mode}`;
-  overMode.textContent = mode;
+  overMode.textContent = toLatinDigits(mode);
 }
 
 /**

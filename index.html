@@ -1825,6 +1825,14 @@
                   <b id="pf-coins" dir="ltr">0</b>
                   <span class="sr-only" data-i18n="coins">Coins</span>
                 </span>
+                <!-- the lifetime XP pool, carried by the same star the result strip pays with -->
+                <span class="pf-quick-pill pf-quick-xp" id="pf-quick-xp">
+                  <span class="pf-quick-ico pf-quick-ico-xp" aria-hidden="true">
+                    <svg class="ico"><use href="#i-star" /></svg>
+                  </span>
+                  <b id="pf-xp-mini" dir="ltr">0</b>
+                  <span class="pf-quick-k" aria-hidden="true">XP</span>
+                </span>
                 <span class="pf-quick-pill pf-quick-aff" id="pf-quick-aff">
                   <span class="pf-quick-ico pf-quick-ico-flag" id="pf-quick-nation" aria-hidden="true">
                     <svg class="ico pf-quick-globe"><use href="#i-globe" /></svg>
@@ -2318,7 +2326,19 @@
                     <span class="ad-chip-spin" id="double-coins-spin" aria-hidden="true" hidden></span>
                   </button>
                 </div>
-                <span class="result-bank-div" aria-hidden="true"></span>
+                <span class="result-bank-div" id="result-bank-div-a" aria-hidden="true"></span>
+                <div class="result-bank-col is-xp" id="result-xp-chip" hidden>
+                  <span class="result-bank-ico is-xp" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </span>
+                  <span class="result-bank-body">
+                    <span class="result-bank-value">
+                      <span class="result-sign">+</span><b id="result-xp-n">0</b>
+                      <span class="result-unit" data-i18n="resultXpUnit">XP</span>
+                    </span>
+                  </span>
+                </div>
+                <span class="result-bank-div" id="result-bank-div-b" aria-hidden="true"></span>
                 <div class="result-bank-col is-tiq" id="result-tiq-chip">
                   <span class="result-bank-ico is-tiq" aria-hidden="true">
                     <svg class="ico" viewBox="0 0 24 24"><use href="#i-brain" /></svg>
@@ -2334,7 +2354,7 @@
                   <span class="result-bank-body">
                     <span class="result-stake-k sr-only" id="result-stake-k">STAKES LOST</span>
                     <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
-                    <span class="result-stake-saved" id="result-stake-saved" hidden>🛡️ SAVED (+0 TIQ)</span>
+                    <span class="result-stake-saved" id="result-stake-saved" hidden>SAVED (+0 TIQ)</span>
                   </span>
                   <button class="ad-chip ad-chip--shield" id="btn-recover-tiq" type="button" hidden>
                     <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
@@ -2405,7 +2425,7 @@
                 <button class="result-btn duel btn-challenge" id="share" type="button" hidden
                   aria-label="Challenge to a duel">
                   <span class="result-btn-ico" aria-hidden="true">
-                    <svg class="ico" focusable="false"><use href="#i-duel-crest" /></svg>
+                    <svg class="ico" focusable="false"><use href="#i-swords" /></svg>
                   </span>
                   <span class="result-btn-label" id="share-label" dir="auto">CHALLENGE TO A DUEL</span>
                 </button>

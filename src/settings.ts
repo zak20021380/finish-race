@@ -155,7 +155,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     quest_banner_title: 'Friendship Quest: Defeat Hard Bot',
     quest_banner_cta: 'Battle Hard Bot ⚔️',
     quest_ad_button_standard: '2x Coins + Verify Stars Quest ⚡🎬',
-    quest_ad_button_final: '🏆 Register Final Match & Unlock Stars ⚡',
+    quest_ad_button_final: 'Register Final Match & Unlock Stars',
     quest_wrong_mode_notice: '💡 Match not counted: Only duels against the Hard Bot progress the Stars Quest.',
     quest_match_verified_toast: 'Match verified for Stars Quest! ✓',
     quest_banner_wins: 'Wins: {n}/5',
@@ -872,9 +872,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* the band's own header once the shield lands: the key beside it already says "PROTECTED",
        so the header reports the stake, not the button state — two labels, two jobs */
     resultStakeReturned: 'STAKES BACK',
-    result_stake_saved: '🛡️ SAVED (+0 TIQ)',
+    result_stake_saved: 'SAVED (+0 TIQ)',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'COINS',
+    resultXpUnit: 'XP',
     /* ---- the duel challenge: thrown from the result capsule, answered by the invitee ---- */
     duelArmed: 'Duel armed — send the link and your rival takes the far seat.',
     duelWaitingRival: 'Waiting for your rival to accept the duel…',
@@ -963,8 +964,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ad_confirm_cancel: 'CANCEL',
     /* the SDK closed without completing: no reward, and no recovery was spent */
     ad_failed_incomplete: 'Video closed early! You must watch the complete ad to earn the reward.',
-    ad_success_tiq_saved: '🛡️ TIQ Saved! Match loss penalty successfully waived.',
-    ad_success_coins_doubled: '💰 Coins Doubled! +{coins} Coins added to your vault.',
+    ad_success_tiq_saved: 'TIQ Saved! Match loss penalty successfully waived.',
+    ad_success_coins_doubled: 'Coins Doubled! +{coins} Coins added to your vault.',
     /* ---- badge detail: supply bento, unlock mission ---- */
     badgeTotalSupply: 'TOTAL',
     badgeClaimed: 'CLAIMED',
@@ -1076,7 +1077,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     quest_banner_title: 'مأموریت رفاقت: شکست ربات سخت',
     quest_banner_cta: 'نبرد با ربات سخت ⚔️',
     quest_ad_button_standard: '2 برابر کردن سکه + ثبت مأموریت استارز ⚡🎬',
-    quest_ad_button_final: '🏆 ثبت مچ فینال و باز کردن قفل استارز ⚡',
+    quest_ad_button_final: 'ثبت مچ فینال و باز کردن قفل استارز',
     quest_wrong_mode_notice: '💡 این بازی ثبت نشد! فقط نبرد با ربات سطح سخت در مأموریت استارز محاسبه می‌شود.',
     quest_match_verified_toast: 'مسابقه در مأموریت استارز ثبت شد! ✓',
     quest_banner_wins: 'بردها: \u2066{n}/5\u2069',
@@ -1778,9 +1779,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultMenu: 'منوی اصلی',
     resultStakeLost: 'امتیاز از دست رفته',
     resultStakeReturned: 'امتیاز بازگشت',
-    result_stake_saved: '🛡️ ذخیره شد (+0 TIQ)',
+    result_stake_saved: 'ذخیره شد (+0 TIQ)',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'سکه',
+    resultXpUnit: 'XP',
     /* ---- دعوت به دوئل: از پنجره نتیجه شروع می‌شود، حریف با پذیرش وارد می‌شود ---- */
     duelArmed: 'دوئل آماده شد؛ لینک را بفرست تا حریف صندلی روبه‌رو را بگیرد.',
     duelWaitingRival: 'در انتظار پذیرش حریف برای دوئل...',
@@ -1854,9 +1856,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* ---- ویدیوی جایزه‌دار: بازیابی TIQ و دو برابر سکه ---- */
     adRecoverCta: 'بازیابی',
     adRecoverProtected: 'بازیابی شد ✓',
-    adRecoverLimit: 'سقف ۰/۳',
-    adRecoverLimitVip: 'سقف ۰/۴',
-    adDoubleCta: '۲×',
+    adRecoverLimit: 'سقف 0/3',
+    adRecoverLimitVip: 'سقف 0/4',
+    adDoubleCta: '2×',
     adDoubleClaimed: 'دریافت شد ✓',
     adToastSkipped: 'برای دریافت پاداش، ویدیو را کامل تماشا کنید.',
     adToastUnavailable: 'در حال حاضر تبلیغی موجود نیست. کمی بعد تلاش کنید.',
@@ -1869,8 +1871,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ad_confirm_cancel: 'انصراف',
     /* SDK بدون اتمام بسته شد: پاداشی نیست و سهمیه بازیابی هم خرج نمی‌شود */
     ad_failed_incomplete: 'ویدیو کامل دیده نشد! برای دریافت پاداش باید تا پایان تبلیغ منتظر بمانید.',
-    ad_success_tiq_saved: '🛡️ امتیاز شما حفظ شد! جریمه باخت لغو گردید.',
-    ad_success_coins_doubled: '💰 سکه‌ها دو برابر شد! {coins} سکه به موجودی شما اضافه گردید.',
+    ad_success_tiq_saved: 'امتیاز شما حفظ شد! جریمه باخت لغو گردید.',
+    ad_success_coins_doubled: 'سکه‌ها دو برابر شد! {coins} سکه به موجودی شما اضافه گردید.',
     /* ---- جزئیات مدال: موجودی، مأموریت آزادسازی ---- */
     badgeTotalSupply: 'تعداد کل',
     badgeClaimed: 'تصاحب‌شده',

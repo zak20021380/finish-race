@@ -39942,6 +39942,33 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
 }
 
+/* earned XP: the lifetime pool in one gold pill — the same star the result strip pays with,
+   set in Latin tabular figures so no locale can mirror or re-order the number */
+#s-profile .pf-quick-xp { direction: ltr; flex: none; }
+#s-profile .pf-quick-ico-xp {
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  color: #FDE68A;
+  background: rgba(253, 230, 138, .1);
+  box-shadow: inset 0 0 0 1px rgba(253, 230, 138, .26);
+}
+#s-profile .pf-quick-ico-xp .ico {
+  width: 12px;
+  height: 12px;
+  filter: drop-shadow(0 0 3px rgba(253, 230, 138, .45));
+}
+#s-profile .pf-quick-xp b {
+  font-family: var(--font-numeric);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .01em;
+  color: #FDE68A;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+}
+#s-profile .pf-quick-xp .pf-quick-k { color: #FDE68A; }
+
 /* the affiliation: the flag (or its globe) and the squad shield share one pill */
 #s-profile .pf-quick-aff {
   flex: 1 1 auto;
@@ -40065,7 +40092,9 @@ html[data-lang="ar"] #s-profile .pf-quick-strip { direction: rtl; }
 html[data-lang="fa"] #s-profile .pf-quick-tiq,
 html[data-lang="ar"] #s-profile .pf-quick-tiq,
 html[data-lang="fa"] #s-profile .pf-quick-coins,
-html[data-lang="ar"] #s-profile .pf-quick-coins { direction: ltr; }
+html[data-lang="ar"] #s-profile .pf-quick-coins,
+html[data-lang="fa"] #s-profile .pf-quick-xp,
+html[data-lang="ar"] #s-profile .pf-quick-xp { direction: ltr; }
 html[data-lang="fa"] #s-profile .pf-quick-squad,
 html[data-lang="ar"] #s-profile .pf-quick-squad {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
@@ -40096,7 +40125,8 @@ html[data-lang="ar"] #s-profile .pf-quick-pct { direction: ltr; unicode-bidi: is
   #s-profile .pf-quick-ico { width: 15px; height: 15px; }
   #s-profile .pf-quick-ico-tiq .ico { width: 14px; height: 14px; }
   #s-profile .pf-quick-tiq b,
-  #s-profile .pf-quick-coins b { font-size: 12px; }
+  #s-profile .pf-quick-coins b,
+  #s-profile .pf-quick-xp b { font-size: 12px; }
   #s-profile .pf-quick-k { padding: 2px 3px; font-size: 6.5px; letter-spacing: .1em; }
   #s-profile .pf-quick-pct { padding: 2px 3px; font-size: 7.5px; }
   #s-profile .pf-quick-aff { padding: 0 6px; gap: 4px; }

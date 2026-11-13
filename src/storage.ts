@@ -275,6 +275,14 @@ export interface Stats {
   pvpRun: number;
   pvpRunBest: number;
   modes: Partial<Record<Mode, number>>;
+  /**
+   * Machine-held boards, counted apart from the lifetime tally. A bot race is still a race that
+   * happened, so `games`/`wins` record it — but the rating must never move on one, so
+   * `ladderTally()` subtracts these two before `tiqFrom` reads the counters. Forward-only: a save
+   * written before this pair existed starts at 0, which leaves its rating exactly as it was.
+   */
+  botGames: number;
+  botWins: number;
 }
 
 /**
@@ -351,6 +359,12 @@ export interface Save {
    * events). Added on top of the ladder's own formula — `myTiq()` in matchmaking.ts.
    */
   tiqBonus: number;
+  /**
+   * Experience banked from settled races. A bot board pays only a win, at its difficulty's tier
+   * (15 / 30 / 50); every bot loss, draw and forfeit pays zero. Human boards pay by the room.
+   * Kept apart from `tiqBonus` so experience can never be mistaken for rating.
+   */
+  xp: number;
   /** Referral engine: invited friends, claimable referral coins, welcome-bonus state. */
   referral: ReferralState;
   /** Server-minted badge serials and the last live supply snapshot. */
@@ -415,6 +429,7 @@ function fresh(): Save {
       games: 0, wins: 0, losses: 0, streak: 0, best: 0,
       pvpStreak: 0, pvpBest: 0, pvpGames: 0, pvpWins: 0, pvpRun: 0, pvpRunBest: 0,
       modes: {},
+      botGames: 0, botWins: 0,
     },
     country: null,
     age: null,
@@ -426,6 +441,7 @@ function fresh(): Save {
     frame: null,
     displayName: null,
     tiqBonus: 0,
+    xp: 0,
     referral: { joins: 0, unclaimed: 0, earned: 0, code: null, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
     tutorialCompleted: false,
@@ -537,7 +553,7 @@ function migrate(raw: Partial<Save> | null): Save {
   if (st) {
     for (const key of [
       'games', 'wins', 'losses', 'streak', 'best', 'pvpStreak', 'pvpBest',
-      'pvpGames', 'pvpWins', 'pvpRun', 'pvpRunBest',
+      'pvpGames', 'pvpWins', 'pvpRun', 'pvpRunBest', 'botGames', 'botWins',
     ] as const) {
       if (whole(st[key])) s.stats[key] = Math.max(0, Math.floor(st[key] as number));
     }
@@ -550,6 +566,9 @@ function migrate(raw: Partial<Save> | null): Save {
   /* the public career can never claim more wins than duels, or a longer run than its own best */
   s.stats.pvpWins = Math.min(s.stats.pvpWins, s.stats.pvpGames);
   s.stats.pvpRunBest = Math.max(s.stats.pvpRunBest, s.stats.pvpRun);
+  /* a bot win is always one of its bot games, and never more than the lifetime tally holds */
+  s.stats.botGames = Math.min(s.stats.botGames, s.stats.games);
+  s.stats.botWins = Math.min(s.stats.botWins, s.stats.wins, s.stats.botGames);
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
 
@@ -595,6 +614,7 @@ function migrate(raw: Partial<Save> | null): Save {
     s.displayName = null;
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
+  if (whole(raw.xp)) s.xp = Math.max(0, Math.floor(raw.xp));
   if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
   if (raw.langChosen === true) s.langChosen = true;
   /* A save that already raced or finished the lesson predates the language gate: its player is
@@ -798,9 +818,14 @@ export function buy(kind: CosKind, id: string, price: number): BuyResult {
 
 /* ---------- economy ---------- */
 
-/** A sharper bot is worth more because beating it says more. A loss still pays something. */
+/** A sharper bot is worth more because beating it says more. A human loss still pays a consolation. */
 const WIN: Record<Difficulty, number> = { easy: 40, normal: 65, hard: 100 };
 const LOSS: Record<Difficulty, number> = { easy: 12, normal: 18, hard: 25 };
+
+/** A bot WIN pays its difficulty's XP tier. A bot loss, draw or forfeit pays nothing at all. */
+const BOT_XP: Record<Difficulty, number> = { easy: 15, normal: 30, hard: 50 };
+/** A human win pays by the room it was won in: friendly 25, ranked 60, party 70, arena 80. */
+const PVP_XP = { friendly: 25, ranked: 60, party: 70, arena: 80 } as const;
 
 export function payout(r: { difficulty: Difficulty; won: boolean }, mult = 1): number {
   const base = (r.won ? WIN : LOSS)[r.difficulty];
@@ -808,7 +833,35 @@ export function payout(r: { difficulty: Difficulty; won: boolean }, mult = 1): n
   return Math.max(0, Math.round(base * scale));
 }
 
-/** Settles one finished race: the tally, the streak and the wallet. */
+/** What one settled race paid: the wallet, the XP pool, and who was on the far side. */
+export interface GameSettlement {
+  coins: number;
+  xp: number;
+  /** True when the board was held by the machine, so the ladder owes it nothing. */
+  bot: boolean;
+}
+
+/**
+ * XP for one settled race. ONLY A FINISHED WIN PAYS: a bot win is worth its difficulty tier
+ * (15 / 30 / 50), a human win its room (friendly 25, ranked 60, four-seat 70, arena 80). A loss,
+ * a draw and a forfeit — against a bot or a person — are worth exactly zero.
+ */
+function xpForGame(r: {
+  difficulty: Difficulty;
+  won: boolean;
+  mode?: 'bot' | 'pvp' | 'arena';
+  forfeit?: boolean;
+  seats?: number;
+}, live: boolean, ranked: boolean): number {
+  if (!r.won || r.forfeit === true) return 0;
+  if (!live) return BOT_XP[r.difficulty] ?? 0;
+  if (r.mode === 'arena') return PVP_XP.arena;
+  if (Math.max(2, Math.floor(r.seats ?? 2)) > 2) return PVP_XP.party;
+  if (ranked) return PVP_XP.ranked;
+  return PVP_XP.friendly;
+}
+
+/** Settles one finished race: the tally, the streak, the wallet and the XP pool. */
 export function recordGame(
   r: {
     difficulty: Difficulty;
@@ -829,9 +882,11 @@ export function recordGame(
      * the board never earned.
      */
     forfeit?: boolean;
+    /** Seats on the board: a four-player party pays more XP than a duel. */
+    seats?: number;
   },
   mult = 1,
-): number {
+): GameSettlement {
   const s = profile.stats;
   const live = r.mode === 'pvp' || r.mode === 'arena';
   /* THE STREAK IS A RANKED INSTRUMENT. A friendly duel and a bot board are invisible to it: they
@@ -877,11 +932,33 @@ export function recordGame(
       s.pvpStreak = 0;
     }
   }
-  const coins = payout(r, mult);
+  /* THE MACHINE IS NOT A LADDER OPPONENT. Its boards are counted apart (`botGames`/`botWins`) so
+     `ladderTally()` can keep them out of the rating: a bot win, loss, resignation and timeout all
+     leave TIQ exactly where it was. No bot board can mint a TIQ gain, and none can charge one. */
+  if (!live) {
+    s.botGames++;
+    if (r.won) s.botWins++;
+  }
+  /* A bot board pays coins for a WIN only; a human board keeps its consolation for a loss. */
+  const coins = live || r.won ? payout(r, mult) : 0;
+  const xp = xpForGame(r, live, ranked);
   profile.coins += coins;
+  profile.xp += xp;
   flush();
-  return coins;
+  return { coins, xp, bot: !live };
 }
+
+/**
+ * The counters the rating is built from: the lifetime tally with the machine-held boards taken
+ * back out. A bot race therefore cannot move TIQ — not on a win, and not on a loss, a resignation
+ * or a timeout — while every board with a person on the far side keeps counting as before.
+ */
+export const ladderTally = (): { wins: number; games: number } => {
+  const games = Math.max(0, profile.stats.games - (profile.stats.botGames ?? 0));
+  /* wins can never outnumber the games they were won in, whatever a blob claims */
+  const wins = Math.min(games, Math.max(0, profile.stats.wins - (profile.stats.botWins ?? 0)));
+  return { wins, games };
+};
 
 /**
  * Read the saved lesson flag. STRICT: only the literal `true` counts as "returning player". A

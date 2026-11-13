@@ -37,7 +37,7 @@
  */
 import { motionReduced, onLang, t } from './settings';
 import {
-  adminViewedAt, earnCoins, earnTiq, markAdminViewed, onChange, profile, readJson, writeJson,
+  adminViewedAt, earnCoins, earnTiq, ladderTally, markAdminViewed, onChange, profile, readJson, writeJson,
 } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
 import { CONFIG } from './rules';
@@ -2237,7 +2237,11 @@ export function createAdmin(api: AdminApi): Admin {
 
   function paintSave() {
     if (coinsNow) setBalance(coinsNow, profile.coins);
-    if (tiqNow) tiqNow.textContent = String(tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus));
+    if (tiqNow) {
+      /* the ladder's own counters: machine-held boards are already taken back out */
+      const tally = ladderTally();
+      tiqNow.textContent = String(tiqFrom(tally.wins, tally.games, profile.tiqBonus));
+    }
   }
 
   /* ---------- Arena & tournament ---------- */
@@ -3670,9 +3674,10 @@ export function createAdmin(api: AdminApi): Admin {
   /** The live seat, folded the way the Worker folds a connection: save first, moderation second. */
   function liveSeat(): DirPlayer {
     const u = tgUser();
+    const tally = ladderTally();
     return liveRow({
       name: (u?.first_name ?? u?.username ?? 'You').slice(0, 40),
-      tiq: tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus),
+      tiq: tiqFrom(tally.wins, tally.games, profile.tiqBonus),
       squad: getMySquad()?.handle ?? '',
     });
   }
