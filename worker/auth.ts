@@ -479,6 +479,21 @@ export interface PlayerAuth {
   name: string;
 }
 
+/**
+ * The guest seat an HTTP request names: the `x-guest-id` header the client sets from
+ * `tactix_guest_id`, or a `?guestId=` parameter. It is not a credential — it is only ever used
+ * as a stable row key on the guest door, exactly as the socket handshake treats it.
+ */
+function guestSeatOf(request: AdminRequestLike): string {
+  const header = guestIdOf(request.headers.get('x-guest-id'));
+  if (header) return header;
+  try {
+    return guestIdOf(new URL(request.url).searchParams.get('guestId'));
+  } catch {
+    return '';
+  }
+}
+
 /** The stable seat a local developer gets, optionally named to test two accounts at once. */
 function devPlayer(request: AdminRequestLike): PlayerAuth {
   const raw = request.headers.get('x-detour-dev-player') ?? '';
@@ -503,7 +518,14 @@ export async function identifyPlayerRequest(
     return who ? { playerId: `tg-${who.id}`, tgId: who.id, guest: false, name: who.name } : null;
   }
   const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
-  return dev ? devPlayer(request) : null;
+  if (!dev) return null;
+  /* The device's own persistent seat outranks the anonymous dev row. A guest that queued as
+     `guest-<hex>` over the socket keeps that same registry row on every HTTP call, so a profile
+     sync, a lobby read or a stats report can never mint a second directory entry. No random seat
+     is ever minted here: an unnamed caller falls back to the one stable `guest-dev` row. */
+  const seat = guestSeatOf(request);
+  if (seat) return { playerId: seat, tgId: '', guest: true, name: '' };
+  return devPlayer(request);
 }
 
 /* ---------- the admin doors: operator key, then signature, then allowlist ---------- */

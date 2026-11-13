@@ -10,7 +10,7 @@ import {
 } from './squads';
 import { addNotification } from './notifications';
 import { myTiq } from './matchmaking';
-import { profile } from './storage';
+import { guestId, profile } from './storage';
 import { tgInitData, tgUser } from './telegram';
 
 export interface SquadRegistrationResult {
@@ -195,6 +195,7 @@ function requestHeaders(): Record<string, string> {
   };
   const initData = tgInitData();
   if (initData) headers['x-telegram-init-data'] = initData;
+  headers['x-guest-id'] = guestId;
   return headers;
 }
 
@@ -241,6 +242,7 @@ async function getJson<T>(
   if (withIdentity) {
     const initData = tgInitData();
     if (initData) headers['x-telegram-init-data'] = initData;
+  headers['x-guest-id'] = guestId;
   }
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 12_000);

@@ -7,6 +7,7 @@
  * like a live pairing — the server never had to see the board to know it happened.
  */
 import { workerUrl } from './adminApi';
+import { guestId } from './storage';
 import { tgInitData } from './telegram';
 import { playerCountOf, type MatchMode, type PlayerCount } from '../shared/telemetry';
 
@@ -32,6 +33,9 @@ function headers(): Record<string, string> {
   const out: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
   const init = tgInitData();
   if (init) out['x-telegram-init-data'] = init;
+  /* The device seat rides every report: the room keys an unsigned session to one row, so a
+     heartbeat or a stats report can never mint a second `guest-*` directory entry. */
+  out['x-guest-id'] = guestId;
   return out;
 }
 

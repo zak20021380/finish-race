@@ -22,7 +22,7 @@
  * that ships rendered art paints that medallion instead, on every surface.
  */
 
-import { cacheBadgeClaim, cacheBadgeSupply, profile, type EditionClaim, type EditionSupply } from './storage';
+import { cacheBadgeClaim, cacheBadgeSupply, guestId, profile, type EditionClaim, type EditionSupply } from './storage';
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData, tgUser } from './telegram';
@@ -646,6 +646,7 @@ async function badgeCall(path: string, init: RequestInit): Promise<BadgeReply | 
   if (init.headers) Object.assign(headers, init.headers as Record<string, string>);
   const initData = tgInitData();
   if (initData) headers['x-telegram-init-data'] = initData;
+  headers['x-guest-id'] = guestId;
 
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), BADGE_TIMEOUT);

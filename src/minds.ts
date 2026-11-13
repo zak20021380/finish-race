@@ -9,7 +9,7 @@
  */
 import { workerUrl } from './adminApi';
 import { telegramAvatarUrl } from './squads';
-import { profile, readJson, writeJson } from './storage';
+import { guestId, profile, readJson, writeJson } from './storage';
 import { tgInitData, tgUser } from './telegram';
 
 export type MindTrend = 'up' | 'down' | 'same';
@@ -231,6 +231,7 @@ export async function fetchMindLadder(tiq: number, limit = LIMIT): Promise<MindF
   const headers: Record<string, string> = { accept: 'application/json' };
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
+  headers['x-guest-id'] = guestId;
 
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), WIRE_TIMEOUT);

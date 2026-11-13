@@ -16,6 +16,7 @@ import {
   adoptDuelRace, applyRaceFrame, noteDuelSocketClosed, onlineRace, readRaceFrame,
   sessionSocketUrl, type OnlineSession,
 } from './matchmaking';
+import { guestId } from './storage';
 import { tgInitData } from './telegram';
 
 export interface RelicChallenge {
@@ -270,6 +271,7 @@ export async function fetchRelicMailbox(): Promise<RelicMailboxItem[]> {
   const headers: Record<string, string> = { accept: 'application/json' };
   const initData = tgInitData();
   if (initData) headers['x-telegram-init-data'] = initData;
+  headers['x-guest-id'] = guestId;
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), MAILBOX_TIMEOUT_MS);
   try {

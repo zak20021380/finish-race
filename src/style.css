@@ -6190,10 +6190,19 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   column-gap: 10px;
   min-width: 0;
   max-width: 100%;
-  padding-top: 26px; /* the crown hangs above the leader's crest, and bobs 4px */
+  /* Clearance, not decoration. The crown (22px, hung 16px above #1's crest and bobbing 4px),
+     the challengers' medals and every avatar's aura live OUTSIDE their card's box, so the podium
+     owns real space above the top card and never clips a child: the full circle, crown, medal
+     and nation pin all render, even on the first pixel under the tab bar. */
+  padding-top: 44px;
+  padding-inline: 2px;
+  overflow: visible;
 }
 .podium[hidden] { display: none; }
 .pod-card {
+  /* Nothing on a card is cropped: the crown, the medal pin and the avatar's aura all hang out
+     of its box by design, which is only safe while every card stays overflow-visible. */
+  overflow: visible;
   /* gold — brushed warm metal */
   --pod-metal: #FCD34D;
   --pod-metal-soft: rgba(253, 230, 138, .5);
@@ -6361,6 +6370,9 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   flex: none;
   display: grid;
   place-items: center;
+  /* the ring wrapper never clips its own content: the photo, the nation pin seated on the rim
+     and the gold aura pulse all paint past the 42px well */
+  overflow: visible;
   width: 42px;
   height: 42px;
   border-radius: 50%;

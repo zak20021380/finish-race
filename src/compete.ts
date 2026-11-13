@@ -114,6 +114,57 @@ function rivalForm(key: string, trend: Trend): FormCell[] {
   return out;
 }
 
+/**
+ * The defensive half of the Worker's canonical field. A cached or offline ladder can still carry
+ * one display name twice — a legacy random-seat build wrote a zero-win guest clone per launch —
+ * so a name is claimed by the best row that shows it: any account with a win, else the highest
+ * score. The podium and the rows below it read this same list, so one person can never hold two
+ * ranks (e.g. "sanna" once at #3 with 680 TIQ, never again at #4-#7 with 400).
+ */
+function dedupeMinds(rows: PlayerRow[]): PlayerRow[] {
+  const ordered = [...rows].sort((a, b) => b.points - a.points || b.wins - a.wins);
+  const claimed = new Set<string>();
+  const out: PlayerRow[] = [];
+  for (const p of ordered) {
+    const name = p.name.trim().replace(/\s+/g, ' ').toLowerCase();
+    /* A row with a race behind it is always kept: two real players may share a name. */
+    if (p.wins <= 0) {
+      if (!name || claimed.has(name)) continue;
+      claimed.add(name);
+      out.push(p);
+      continue;
+    }
+    if (name) claimed.add(name);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * The win count as its own bidi island. Persian reads right-to-left, and a bare `{n} برد`
+ * template lets the digits drift to the wrong end of the sentence, so the number is written into
+ * a `<bdi dir="ltr">`: one isolated left-to-right object, always displayed as `0 برد`,
+ * `1 برد`, `12 برد` — never `برد 0` and never glued to the rank that follows it.
+ */
+function winsPhrase(n: number): DocumentFragment {
+  const template = n === 1 ? t('msWinOne') : t('msWins');
+  const frag = document.createDocumentFragment();
+  const at = template.indexOf('{n}');
+  if (at < 0) {
+    frag.append(document.createTextNode(template));
+    return frag;
+  }
+  const count = document.createElement('bdi');
+  count.dir = 'ltr';
+  count.textContent = n.toLocaleString('en-US');
+  frag.append(
+    document.createTextNode(template.slice(0, at)),
+    count,
+    document.createTextNode(template.slice(at + 3)),
+  );
+  return frag;
+}
+
 /** Sprite icon as a real element — the house artwork, never an emoji stand-in. */
 function svgIcon(href: string, cls: string): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -1146,6 +1197,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     code: string;
     name: string;
     sub: string | null;
+    /** A win count built as a bidi island; it takes the sub line when supplied. */
+    subNode?: Node;
     points: string;
     me: boolean;
     /** A player row wears their face; a nation row keeps its flag as the crest. */
@@ -1207,12 +1260,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const serial = r.medal ? serialChip(r.medal, 'lb-serial') : null;
     if (serial) nmLine.append(serial);
     txt.append(nmLine);
-    if (r.sub) {
+    if (r.sub || r.subNode) {
       const s = document.createElement('span');
       s.className = `lb-sub${r.subClass ? ` ${r.subClass}` : ''}`;
       const st = document.createElement('span');
       st.className = 'lb-sub-t';
-      st.textContent = r.sub;
+      if (r.subNode) st.append(r.subNode);
+      else st.textContent = r.sub ?? '';
       s.append(st);
       txt.append(s);
     }
@@ -1469,7 +1523,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     }
   }
 
-  function msHero(points: string, pct: number, sub: string, squad = false): HTMLElement {
+  function msHero(points: string, pct: number, sub: string | Node, squad = false): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = squad ? 'ms-hero is-squad' : 'ms-hero';
     const col = document.createElement('span');
@@ -1485,8 +1539,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     iq.append(num);
     const line = document.createElement('small');
     line.className = 'ms-hero-sub';
-    line.textContent = sub;
-    line.title = sub;
+    if (typeof sub === 'string') {
+      line.textContent = sub;
+      line.title = sub;
+    } else {
+      line.append(sub);
+      line.title = line.textContent ?? '';
+    }
     col.append(kick, iq, line);
     const split = document.createElement('i');
     split.className = 'ms-hero-split';
@@ -1802,7 +1861,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const tiq = p.points.toLocaleString('en-US');
     const squad = squadOfPlayer(p);
     const squadName = squad ? squad.name || squad.handle.replace(/^@/, '') : '';
-    const wins = p.wins === 1 ? t('msWinOne') : t('msWins').replace('{n}', p.wins.toLocaleString('en-US'));
+    const wins = winsPhrase(p.wins);
     /* LRI…PDI keeps "#4" reading as a rank inside the RTL pill */
     const rankTag = `\u2066#${rank}\u2069`;
     /* the sheet wears the same face the ladder row does: their real Telegram photo */
@@ -1826,7 +1885,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       squad,
       seize: seize ? { def: seize.def, serial: seize.serial } : null,
     };
-    const panels = [msHero(tiq, pct, `${wins} · ${rankTag}`)];
+    const subLine = document.createDocumentFragment();
+    subLine.append(wins, document.createTextNode(` · ${rankTag}`));
+    const panels = [msHero(tiq, pct, subLine)];
     if (relics) panels.push(msRelicVault(relics, () => openMind(p, rank), rival));
     panels.push(
       msSection(t('msScorecard'), msStatCapsule(rivalStats(p))),
@@ -2408,7 +2469,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       rank: i + 4,
       code: p.countryCode,
       name: p.name,
-      sub: p.wins === 1 ? t('msWinOne') : t('msWins').replace('{n}', p.wins.toLocaleString('en-US')),
+      sub: null,
+      subNode: winsPhrase(p.wins),
       points: p.points.toLocaleString('en-US'),
       me: p.id === 'you',
       person: true,
@@ -2454,7 +2516,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       }
       return;
     }
-    const rows: PlayerRow[] = feed.rows.map((p) => ({
+    const rows: PlayerRow[] = dedupeMinds(feed.rows.map((p) => ({
       id: p.id,
       name: p.name,
       countryCode: p.countryCode,
@@ -2462,7 +2524,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       points: p.tiq,
       wins: p.wins,
       trend: p.trend,
-    }));
+    })));
     if (!rows.length) {
       mindsField = [];
       el.innerHTML = empty(t('ranksEmptyMinds'));

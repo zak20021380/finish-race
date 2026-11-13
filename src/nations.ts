@@ -18,7 +18,7 @@
  * each nation's previous rank, so a rise or fall is real movement between reads.
  */
 import { workerUrl } from './adminApi';
-import { profile, readJson, writeJson } from './storage';
+import { guestId, profile, readJson, writeJson } from './storage';
 import { tgInitData } from './telegram';
 
 export type NationTrend = 'up' | 'down' | 'same';
@@ -270,6 +270,7 @@ async function readBoard(url: string): Promise<NationFeed | null> {
   const headers: Record<string, string> = { accept: 'application/json' };
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
+  headers['x-guest-id'] = guestId;
 
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), WIRE_TIMEOUT);
@@ -332,6 +333,7 @@ export async function fetchNationRoster(country: string): Promise<NationRoster> 
   const headers: Record<string, string> = { accept: 'application/json' };
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
+  headers['x-guest-id'] = guestId;
 
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), WIRE_TIMEOUT);

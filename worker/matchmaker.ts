@@ -1226,6 +1226,25 @@ function ghostKeyOf(p: PlayerRecord): string {
   return [p.name.trim().toLowerCase(), p.username.trim().toLowerCase(), p.country, p.age].join('|');
 }
 
+/**
+ * A guest seat: an unsigned directory row, keyed `guest-<hex>` by the device that made it. A
+ * `tg-…` row is a verified account and an `tg-anon-…` row is a signed seat Telegram named no id
+ * for — neither is a guest, so neither can ever be cleaned up as one.
+ */
+const isGuestRecord = (p: PlayerRecord): boolean => !p.tgId && p.id.startsWith('guest-');
+
+/**
+ * A ghost: a guest row with no race behind it. A random seat per launch left one behind on every
+ * reload, always under the display name the client had cached — which is how one person ended up
+ * holding five rows at four different ranks. A signed account and any row that has finished a
+ * board are never ghosts, so the cleanup below can never take a real player with it.
+ */
+const isGhostRecord = (p: PlayerRecord): boolean =>
+  isGuestRecord(p) && p.matches === 0 && p.wins === 0 && !p.inMatch && !p.banned && !p.muted;
+
+/** The name two rows must share to be one person's ghosts: trimmed, collapsed, case-folded. */
+const ghostNameOf = (p: PlayerRecord): string => p.name.trim().replace(/\s+/g, ' ').toLowerCase();
+
 /** How long a zero-game guest row may sit unseen before the prune forgets it. */
 const GHOST_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -2581,6 +2600,9 @@ export class MatchmakerDO {
             this.vaultLoaded = true;
           } catch { /* Fail closed: never overwrite balances after a failed vault read. */ }
           this.seedRoles();
+          /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
+             are forgotten and written back before the first directory or leaderboard read. */
+          this.purgeGhosts();
           this.rearm();
         } catch {
           /* a store that refuses the read: the registry simply starts empty */
@@ -2825,6 +2847,7 @@ export class MatchmakerDO {
   /** The wait timer. A room that has run out of patience fills its seats and starts. */
   async alarm(): Promise<void> {
     const now = Date.now();
+    this.purgeGhosts();
     this.expireRelicChallenges(now);
     for (const live of [...this.openRooms]) {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
@@ -4442,8 +4465,16 @@ export class MatchmakerDO {
     const myWins = Math.max(0, Math.floor(mine?.wins ?? 0));
     const selfBanned = mineId ? this.banned.has(mineId) || mine?.banned === true : false;
 
-    const field = [...this.players.values()]
-      .filter((p) => !p.banned && !this.banned.has(p.id))
+    /* A leaderboard read is a cleanup and a dedupe, in that order: the ghosts a random-seat
+       build left behind are forgotten first, then whatever survives is folded to one row per
+       displayed name, highest TIQ first. Ranks are assigned to THAT field, so "sanna" can only
+       ever hold one place at their real score. */
+    this.purgeGhosts();
+    const field = this.canonicalRows(
+      [...this.players.values()]
+        .filter((p) => !p.banned && !this.banned.has(p.id))
+        .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    )
       .map((p) => ({
         id: p.id,
         name: p.name,
@@ -4513,6 +4544,7 @@ export class MatchmakerDO {
   }> {
     /* A board read carries the caller's profile flag, so a nation chosen in Profile is enrolled
        before the standings are cut — a player who has not queued yet still has a country. */
+    this.purgeGhosts();
     const mineId = await this.boardSeat(request, url);
     const seasonNo = this.arena.seasonNo;
     const ledger = this.nations.seasonNo === seasonNo ? this.nations : emptyNationLedger(seasonNo);
@@ -4710,9 +4742,14 @@ export class MatchmakerDO {
     const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
     const mineId = tgId ? `tg-${tgId}` : '';
 
-    const field = [...this.players.values()]
-      .filter((p) => !p.banned && !this.banned.has(p.id) && normalizeCountry(p.country) === country)
-      .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    /* The roster is a public rank list too, so it gets the same pass as the ladder itself: the
+       ghosts are forgotten, then one row per displayed name survives, highest TIQ first. */
+    this.purgeGhosts();
+    const field = this.canonicalRows(
+      [...this.players.values()]
+        .filter((p) => !p.banned && !this.banned.has(p.id) && normalizeCountry(p.country) === country)
+        .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    );
 
     const asRow = (p: PlayerRecord, rank: number) => ({
       rank,
@@ -5676,11 +5713,13 @@ export class MatchmakerDO {
    * which hides the legacy ghosts a random-seat build left behind. Newer rows win.
    */
   private directoryRows(): PlayerRecord[] {
+    /* A read is also a cleanup: the Users tab can never list a ghost the registry still holds. */
+    this.purgeGhosts();
     const rows = [...this.players.values()]
-      .sort((a, b) => activityOf(b) - activityOf(a) || a.id.localeCompare(b.id));
+      .sort((a, b) => activityOf(b) - activityOf(a) || b.tiq - a.tiq || a.id.localeCompare(b.id));
     const seen = new Set<string>();
     const out: PlayerRecord[] = [];
-    for (const p of rows) {
+    for (const p of this.canonicalRows(rows)) {
       const keys = [playerIdentityOf(p)];
       const ghost = ghostKeyOf(p);
       if (ghost) keys.push(`ghost:${ghost}`);
@@ -5689,6 +5728,83 @@ export class MatchmakerDO {
       out.push(p);
     }
     return out;
+  }
+
+  /**
+   * The canonical field: at most one ghost per display name. Every zero-race guest that already
+   * has a survivor — a signed account, a guest that actually raced, or a fresher ghost of the
+   * same name — is folded away, so one person appears once, at their real score and rank. Rows
+   * with a race behind them are always kept: two real players may legitimately share a name.
+   * `rows` must already be ordered best-first (freshest for the directory, highest TIQ for a
+   * leaderboard), because the first ghost of a name is the one that survives.
+   */
+  private canonicalRows(rows: PlayerRecord[]): PlayerRecord[] {
+    const claimed = new Set<string>();
+    for (const p of rows) {
+      if (isGhostRecord(p)) continue;
+      const name = ghostNameOf(p);
+      if (name) claimed.add(name);
+    }
+    const out: PlayerRecord[] = [];
+    for (const p of rows) {
+      if (!isGhostRecord(p)) {
+        out.push(p);
+        continue;
+      }
+      const name = ghostNameOf(p);
+      if (!name || claimed.has(name)) continue;
+      claimed.add(name);
+      out.push(p);
+    }
+    return out;
+  }
+
+  /**
+   * The ghost rows the registry must forget. A zero-race guest is a ghost when a row that already
+   * holds its name survives it — a signed account, a guest that has raced, or the freshest ghost
+   * of that name — when a profile-identical ghost was already kept, or when nobody has seen it
+   * for a month. Signed rows and every row with a race behind it are never listed.
+   */
+  private ghostVictims(now: number): string[] {
+    const ordered = [...this.players.values()]
+      .sort((a, b) => activityOf(b) - activityOf(a) || b.tiq - a.tiq || a.id.localeCompare(b.id));
+    const claimedNames = new Set<string>();
+    for (const p of ordered) {
+      if (isGhostRecord(p)) continue;
+      const name = ghostNameOf(p);
+      if (name) claimedNames.add(name);
+    }
+    const claimedFingerprints = new Set<string>();
+    const victims: string[] = [];
+    for (const p of ordered) {
+      if (!isGhostRecord(p)) continue;
+      const name = ghostNameOf(p);
+      const fingerprint = ghostKeyOf(p);
+      const twin = fingerprint !== '' && claimedFingerprints.has(fingerprint);
+      if (fingerprint) claimedFingerprints.add(fingerprint);
+      if (!name || claimedNames.has(name) || twin || now - activityOf(p) > GHOST_STALE_MS) {
+        victims.push(p.id);
+        continue;
+      }
+      claimedNames.add(name);
+    }
+    return victims;
+  }
+
+  /**
+   * Forget every ghost the registry is still carrying — in storage as much as in memory. It runs
+   * on boot, on the alarm, and before every directory and leaderboard read, so a legacy install
+   * heals itself: the clones are deleted and written back with nobody pressing anything.
+   */
+  private purgeGhosts(): number {
+    const victims = this.ghostVictims(Date.now());
+    if (!victims.length) return 0;
+    for (const id of victims) {
+      this.players.delete(id);
+      this.banned.delete(id);
+    }
+    this.persist();
+    return victims.length;
   }
 
   /** One page of the directory: filtered, sorted, and windowed. */
@@ -5735,31 +5851,13 @@ export class MatchmakerDO {
   }
 
   /**
-   * Forget the duplicate ghosts a random-seat build left in the directory: zero-game guest rows
-   * whose profile is already represented by a fresher row, and zero-game guests nobody has seen
-   * for a month. Signed accounts and anything with a race behind it are never touched.
+   * The Users tab's prune key. The same pass that now runs by itself on boot and on every read,
+   * exposed as an explicit command so an operator can force it and see the count. Signed
+   * accounts and anything with a race behind it are never touched.
    */
   private prunePlayers(): { ok: true; pruned: number; remaining: number } {
-    const now = Date.now();
-    const ordered = [...this.players.values()].sort((a, b) => activityOf(b) - activityOf(a));
-    const claimed = new Set<string>();
-    const victims: string[] = [];
-    for (const p of ordered) {
-      const ghost = ghostKeyOf(p);
-      if (!ghost) continue;
-      const key = `ghost:${ghost}`;
-      if (claimed.has(key) || now - activityOf(p) > GHOST_STALE_MS) {
-        victims.push(p.id);
-        continue;
-      }
-      claimed.add(key);
-    }
-    for (const id of victims) {
-      this.players.delete(id);
-      this.banned.delete(id);
-    }
-    if (victims.length) this.persist();
-    return { ok: true, pruned: victims.length, remaining: this.directoryRows().length };
+    const pruned = this.purgeGhosts();
+    return { ok: true, pruned, remaining: this.directoryRows().length };
   }
 
   /** BAN / UNBAN / GRANT_COINS on one seat, answering with the record as it now stands. */
