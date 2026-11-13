@@ -4312,8 +4312,9 @@ export function createMenu(api: MenuApi): Menu {
      crisp inline-SVG flag (emoji flags degrade to letters on Windows), native script and a gold
      specular rim on hover/active. It is deliberately NOT a sheet — there is nothing behind it to
      browse yet — and it cannot be dismissed without a choice. Every width is capped with
-     minmax(0, …), every label wraps and the grids tighten inside 340px, so a 320px RTL viewport
-     can never gain a horizontal scrollbar. No backdrop-filter: an opaque obsidian wash instead. */
+     minmax(0, …), every language name stays on one line and the grids tighten inside 390px, so
+     a 320px RTL viewport can never gain a horizontal scrollbar. No backdrop-filter: an opaque
+     obsidian wash instead. */
 
   /** A crisp 3:2 flag drawn in SVG, so it renders identically on every OS (emoji flags do not). */
   const flagSvg = (code: LangCode): string => {
