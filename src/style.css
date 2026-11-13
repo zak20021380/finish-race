@@ -1082,6 +1082,11 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+/* The forward step is taught by the pawn's OWN legal-move dots — all three directions off the
+   starting row, sitting outside the cut-out. A .38 veil would mute the two the ring is not on, so
+   here the scrim only whispers: the dots stay luminous across the whole slab while the ring and
+   the ghost hand still name the single tile the gate accepts. */
+.tutorial[data-stage="move"] .tut-scrim { background: rgba(8, 12, 22, .14); }
 
 /* the input guard: present everywhere EXCEPT the cut-out, so the spotlight is a real door */
 .tut-block {

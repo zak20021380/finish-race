@@ -4,8 +4,8 @@
  * ONE card, then light. The opening GOAL card is the only words the lesson ever prints: a title,
  * one line and a Start key, dismissed by that key or by tapping the FINISH band itself. Every
  * stage after it is silent — a spotlight cut into the scrim, a pulsing ghost hand on the exact
- * pixel to tap, the board's own dashed route lines, sound and haptics. Nothing to read, nothing
- * to dismiss.
+ * pixel to tap, the board's own furniture (the pawn's legal-move dots, the rival's dashed threat
+ * run), sound and haptics. Nothing to read, nothing to dismiss.
  *
  * The curriculum is the real game, performed on the real board:
  *   goal → select → move → wall-stage → wall-confirm → [live play] → mine-arm → mine-place →
@@ -127,8 +127,6 @@ export interface TutorialHooks {
   minePlace(): TutorialTargetMine | null;
   /** The staged charge's green ✓, with the whole pair as its door. */
   mineConfirm(): TutorialTargetMine | null;
-  /** The FINISH band, re-pulsed while the movement step is up. */
-  finish(): TutorialSpot | null;
   /** One fast, deterministic reply per bot seat; resolves when the local seat is on turn again. */
   reply(): Promise<void>;
   /**
@@ -413,13 +411,14 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   /**
-   * The secondary highlight under the ring: the FINISH band while the goal and the forward step
-   * are up, the target's own footprint otherwise. A staged pair gets none — the board is already
-   * drawing the ghost bar or the charged square, and a second glow over its keys is only noise.
+   * The secondary highlight under the ring: the FINISH band on the goal card, the target's own
+   * footprint otherwise. The forward step gets none — the board is drawing the pawn's real legal
+   * dots, and a gold band at the far end of the slab only pulls the eye off them. A staged pair
+   * gets none either: the ghost bar or the charged square is already there.
    */
   const aidFor = (s: TutorialStage, target: { spot: TutorialSpot }): TutorialSpot | null => {
     switch (s) {
-      case 'move': return hooks.finish();
+      case 'move':
       case 'wall-confirm':
       case 'mine-confirm': return null;
       default: return target.spot;
@@ -511,7 +510,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const placeAid = (s: TutorialStage, spot: TutorialSpot | null) => {
     aidEl.hidden = !spot;
     if (!spot) return;
-    aidEl.dataset.kind = s === 'goal' || s === 'move' ? 'finish'
+    aidEl.dataset.kind = s === 'goal' ? 'finish'
       : s === 'wall-stage' || s === 'wall-confirm' ? 'wall' : 'tile';
     setBox(aidEl, spot.rect);
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;

@@ -2299,11 +2299,10 @@ function ui() {
   /* the dots belong to the ball in hand and to nothing else: a wall preview or the mine key
      suppresses them outright, so a dashed bar is never drawn under a selection ring */
   hints = dotsFor(mode());
+  /* the pick step is the player's own: no dots until they choose. The forward step keeps every
+     legal dot the rules offer — three directions off the starting row — exactly as a real match
+     draws them. The spotlight and the action gate, not the dots, name the one tile that advances. */
   if (stage === 'select') hints = [];
-  else if (stage === 'move') {
-    const step = tutorialMoveTarget();
-    hints = step ? [step.to] : [];
-  }
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   if (mineArmed && (stage === 'mine-place' || stage === 'mine-confirm')) {
     /* the staged square stays placeable through its own confirmation, so the ✓/✕ pair the lesson
@@ -4217,20 +4216,15 @@ function tutorialMineConfirmTarget(): TutorialTargetMine | null {
 }
 
 /**
- * The lesson's two dashed lines, re-derived from the board every time it changes: the player's own
- * run to FINISH while the movement step is up, and the rival's threat run from the moment the wall
- * step opens until the charge is buried. Both are real routes through the standing walls, so the
- * wall the player commits bends the rival's line around itself in front of them.
+ * The lesson's dashed line, re-derived from the board every time it changes: the rival's threat run
+ * from the moment the wall step opens until the charge is buried. It is a real route through the
+ * standing walls, so the wall the player commits bends the rival's line around itself in front of
+ * them. The forward step draws NO line: the pawn's own legal-move dots are its whole instruction.
  */
 function paintTutorialRoutes() {
   const stage = tutorialStage();
   const routes: RouteCue[] = [];
   if (state.winner === null) {
-    if (stage === 'move') {
-      const ball = selected !== null ? ballById(state, selected) : firstBall(state, localSide);
-      const path = ball ? finishRoute(state, ball.pos) : [];
-      if (path.length > 1) routes.push({ tone: 'guide', path });
-    }
     const threat = waitingForMineTrigger || stage === 'wall-stage' || stage === 'wall-confirm'
       || stage === 'mine-arm' || stage === 'mine-place' || stage === 'mine-confirm';
     if (threat) {
@@ -4601,7 +4595,6 @@ tutorial = createTutorial({
   mineArm: () => elementSpot(mineBtn, 8),
   minePlace: tutorialMineTarget,
   mineConfirm: tutorialMineConfirmTarget,
-  finish: tutorialFinishTarget,
   reply: tutorialReply,
   handoff: beginMineIntermission,
   finishPulse: () => { renderer.pulseFinish(1200); invalidate(); },
