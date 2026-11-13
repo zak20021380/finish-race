@@ -44,25 +44,12 @@ export interface BallView {
   sel: boolean;
 }
 
-/**
- * One route the board draws as a dashed line of cells: the lesson's gold guide from the player's
- * pawn to FINISH, and the rival's amber-to-crimson threat run at the same line. The cells are a
- * real route through the standing walls, so a wall that forces a detour bends the line.
- */
-export interface RouteCue {
-  tone: 'guide' | 'threat';
-  /** cell centres in order, pawn first, FINISH row last */
-  path: Pos[];
-}
-
 export interface View {
   state: GameState;
   /** every ball on the board, in state order */
   balls: BallView[];
   /** legal move cells — the chosen ball's only */
   hints: Pos[];
-  /** routes drawn under the pawns: the hands-on lesson's only board-wide guidance */
-  routes: RouteCue[];
   ghost: Ghost | null;      // wall preview / armed ghost
   /** one entry per seat: what that seat did last */
   last: (Mark | null)[];
@@ -3394,128 +3381,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
   }
 
-  /* ---------- the lesson's route cues ----------
-   * A route is a dashed line of cell centres under the pawns. It is resampled to a fixed number of
-   * points so that a NEW route (the rival rerouting around a wall the player just built) morphs
-   * point-for-point out of the old one: the line visibly bends instead of cutting to a new shape.
+  /* ---------- the lesson's closing cue ----------
+   * No route, no line, no beam: the lesson points with the spotlight, the ghost hand and the
+   * board's own local highlights, and nothing is ever stroked across the slab. The one board-wide
+   * gesture left is this gold wash over the FINISH row, on its own clock.
    */
-  const ROUTE_SAMPLES = 30;
-  const ROUTE_MORPH_MS = 460;
-  const ROUTE_GROW_MS = 340;
-  const routeMorph = new Map<string, { from: Vec[]; to: Vec[]; t0: number; bornAt: number }>();
-  /** Routes on the last painted frame: a marching dash owes frames while one is up. */
-  let routeCount = 0;
-  /** The lesson's closing cue: one gold wash over the FINISH row, on its own clock. */
   let finishPulseAt = -1;
   let finishPulseMs = 1200;
-
-  /** Even arc-length resampling of a polyline, so two routes of different lengths still morph. */
-  function resampleRoute(pts: readonly Vec[], n: number): Vec[] {
-    const out: Vec[] = [];
-    if (!pts.length) return out;
-    const leg: number[] = [0];
-    let total = 0;
-    for (let i = 1; i < pts.length; i++) {
-      total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-      leg.push(total);
-    }
-    if (total <= 0) { for (let i = 0; i < n; i++) out.push({ ...pts[0] }); return out; }
-    let seg = 1;
-    for (let i = 0; i < n; i++) {
-      const want = (total * i) / (n - 1);
-      while (seg < pts.length - 1 && leg[seg] < want) seg++;
-      const span = leg[seg] - leg[seg - 1];
-      const t = span > 0 ? (want - leg[seg - 1]) / span : 0;
-      out.push({
-        x: pts[seg - 1].x + (pts[seg].x - pts[seg - 1].x) * t,
-        y: pts[seg - 1].y + (pts[seg].y - pts[seg - 1].y) * t,
-      });
-    }
-    return out;
-  }
-
-  const mixRoute = (a: readonly Vec[], b: readonly Vec[], t: number): Vec[] =>
-    b.map((p, i) => {
-      const q = a[i] ?? p;
-      return { x: q.x + (p.x - q.x) * t, y: q.y + (p.y - q.y) * t };
-    });
-
-  const sameRoute = (a: readonly Vec[], b: readonly Vec[]): boolean =>
-    a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
-
-  /** Stroke one route: a soft bed, a marching dashed line and a pip running toward FINISH. */
-  function strokeRoute(pts: readonly Vec[], tone: RouteCue['tone'], clock: number, still: boolean, pearl: boolean) {
-    const { cell: c, ox, oy } = L;
-    if (pts.length < 2) return;
-    const px = pts.map((p) => ({ x: ox + p.x * c, y: oy + p.y * c }));
-    const head = px[0], tail = px[px.length - 1];
-    const ramp = tone === 'guide'
-      ? { from: '#fde68a', to: '#f59e0b', glow: 'rgba(245,158,11,.55)' }
-      : { from: '#fbbf24', to: '#f43f5e', glow: 'rgba(244,63,94,.55)' };
-    const line = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
-    line.addColorStop(0, ramp.from);
-    line.addColorStop(1, ramp.to);
-    const trace = () => {
-      ctx.beginPath();
-      ctx.moveTo(px[0].x, px[0].y);
-      for (let i = 1; i < px.length; i++) ctx.lineTo(px[i].x, px[i].y);
-    };
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.globalCompositeOperation = pearl ? 'source-over' : 'lighter';
-    ctx.globalAlpha = pearl ? 0.16 : 0.24;
-    ctx.strokeStyle = ramp.glow;
-    ctx.lineWidth = c * 0.3;
-    trace(); ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = pearl ? 0.95 : 0.88;
-    ctx.strokeStyle = line;
-    ctx.lineWidth = Math.max(2, c * 0.085);
-    ctx.setLineDash([c * 0.2, c * 0.16]);
-    ctx.lineDashOffset = still ? 0 : -(clock / 16) % (c * 0.36);
-    trace(); ctx.stroke();
-    ctx.setLineDash(SOLID);
-    /* the runner: one bright bead travelling the route, so the line reads as a direction */
-    const at = still ? 0.55 : (clock / 1500) % 1;
-    const idx = at * (px.length - 1);
-    const i0 = Math.floor(idx), i1 = Math.min(px.length - 1, i0 + 1), f = idx - i0;
-    const bx = px[i0].x + (px[i1].x - px[i0].x) * f;
-    const by = px[i0].y + (px[i1].y - px[i0].y) * f;
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = ramp.to;
-    ctx.beginPath(); ctx.arc(bx, by, c * 0.13, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.92)';
-    ctx.beginPath(); ctx.arc(bx, by, c * 0.055, 0, TAU); ctx.fill();
-    ctx.restore();
-  }
-
-  function drawRoutes(v: View, now: number, clock: number, still: boolean, pearl: boolean) {
-    const live = new Set<string>();
-    for (const cue of v.routes) {
-      if (cue.path.length < 2) continue;
-      live.add(cue.tone);
-      const target = resampleRoute(cue.path.map((p) => ({ x: p.c + 0.5, y: p.r + 0.5 })), ROUTE_SAMPLES);
-      let morph = routeMorph.get(cue.tone);
-      if (!morph) {
-        morph = { from: target, to: target, t0: now - ROUTE_MORPH_MS, bornAt: now };
-        routeMorph.set(cue.tone, morph);
-      } else if (!sameRoute(morph.to, target)) {
-        /* the route changed under the line: bend from where it is NOW, not from where it started */
-        const held = still ? 1 : Math.min(1, Math.max(0, (now - morph.t0) / ROUTE_MORPH_MS));
-        morph.from = mixRoute(morph.from, morph.to, held);
-        morph.to = target;
-        morph.t0 = now;
-      }
-      const t = still ? 1 : Math.min(1, Math.max(0, (now - morph.t0) / ROUTE_MORPH_MS));
-      const eased = t * t * (3 - 2 * t);
-      let pts = mixRoute(morph.from, morph.to, eased);
-      const grow = still ? 1 : Math.min(1, Math.max(0, (now - morph.bornAt) / ROUTE_GROW_MS));
-      if (grow < 1) pts = resampleRoute(pts.slice(0, Math.max(2, Math.ceil(grow * pts.length))), ROUTE_SAMPLES);
-      strokeRoute(pts, cue.tone, clock, still, pearl);
-    }
-    for (const key of [...routeMorph.keys()]) if (!live.has(key)) routeMorph.delete(key);
-  }
 
   /**
    * Does the board still owe the compositor a frame? Only FINITE transitions count here —
@@ -3549,8 +3421,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
        one frame too early and the crown would never fire. */
     if (goalWait >= 0) return true;
     if (finish && !finish.settled) return true;
-    /* a lesson route marches its dashes and runs a bead along the line */
-    if (routeCount > 0 && !motionReduced()) return true;
     if (finishPulseAt >= 0 && now < finishPulseAt + finishPulseMs) return true;
     return false;
   }
@@ -3572,7 +3442,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * board still breathes during a move, without ever starting a loop on its own.
    */
   function draw(v: View, now: number, active = false): boolean {
-    routeCount = v.routes.length;
     const pending = fxPending(now);
     if (pending || active) {
       if (ambientLast >= 0) ambientT += Math.min(50, Math.max(0, now - ambientLast));
@@ -3807,9 +3676,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         outline(m.spec, ramp.glow, Math.max(1.5, c * 0.035), dash.last);
       }
     }
-
-    /* the lesson's routes: under the dots and the pawns, over the slab and its scars */
-    if (v.routes.length) drawRoutes(v, now, clock, still, pearl);
 
     // legal-move dots: big, high contrast, at least a 44px target, tinted with the chosen ball's side
     const side = sides[v.state.turn];
@@ -4246,7 +4112,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       embers.length = 0; stride.clear(); wounds.clear(); pendingWounds.clear(); stood.clear(); blood.length = 0;
       goalAt = -1; goalWait = -1; goalSeat = null;
       finish = null;
-      routeMorph.clear(); routeCount = 0; finishPulseAt = -1;
+      finishPulseAt = -1;
       /* The next frame is the first frame of a new race: it may not advance an effect clock by a
          delta measured across the gap. */
       fxLast = -1;
@@ -4526,7 +4392,6 @@ const sceneView = (s: Scene): View => {
     },
     balls: s.balls.map((b, i) => ({ pos: b.at, team: b.team, id: i, sel: Boolean(b.sel) })),
     hints: s.hints,
-    routes: [],
     ghost: null,
     last: Array.from({ length: teams }, () => null),
     thinking: null,

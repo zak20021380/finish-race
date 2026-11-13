@@ -1074,8 +1074,9 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   -webkit-backdrop-filter: blur(4px);
   clip-path: url(#tut-clip);
 }
-/* From the first visual stage on, the BOARD is the lesson: the pawns, the ghost bar and the dashed
-   route lines are the whole instruction, so the scrim only quietens the chrome around the slab.
+/* From the first visual stage on, the BOARD is the lesson: the pawns, the ghost bar and the
+   spotlight's local highlights are the whole instruction, so the scrim only quietens the chrome
+   around the slab. Nothing is ever stroked across the board: no route, no threat line, no beam.
    A heavy dim or a live blur here would bury the very things the player is meant to read. */
 .tutorial:not([data-tone="goal"]) .tut-scrim {
   background: rgba(8, 12, 22, .38);

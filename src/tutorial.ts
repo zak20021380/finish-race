@@ -4,8 +4,9 @@
  * ONE card, then light. The opening GOAL card is the only words the lesson ever prints: a title,
  * one line and a Start key, dismissed by that key or by tapping the FINISH band itself. Every
  * stage after it is silent — a spotlight cut into the scrim, a pulsing ghost hand on the exact
- * pixel to tap, the board's own furniture (the pawn's legal-move dots, the rival's dashed threat
- * run), sound and haptics. Nothing to read, nothing to dismiss.
+ * pixel to tap, the board's own local furniture (the pawn's legal-move dots, the staged ghost bar
+ * and its ✓/✕ pair), sound and haptics. NO line is ever drawn across the board: no route, no
+ * threat run, no beam. Nothing to read, nothing to dismiss.
  *
  * The curriculum is the real game, performed on the real board:
  *   goal → select → move → wall-stage → wall-confirm → [live play] → mine-arm → mine-place →
@@ -785,7 +786,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           return;
         case 'move': {
           /* the forward step hands the turn to the machine: one reply through the normal door,
-             then the player is up again with the rival's threat route drawn at the wall step */
+             then the player is up again with the wall groove spotlit */
           const token = ++flow;
           transitionTimer = window.setTimeout(() => {
             transitionTimer = 0;

@@ -1,7 +1,7 @@
 import './style.css';
 import './result.css';
 import {
-  CONFIG, MAX_TEAMS, apply, ballById, distField, finishRoute, firstBall, getAutoMove, hasPathToFinish,
+  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, hasPathToFinish,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
   steps as teamSteps,
   view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
@@ -12,7 +12,7 @@ import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
   capsuleLayout, capsuleSpots, createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
   type BallView, type BlastBeat, type CapsuleAction, type Ghost, type Hit,
-  type Mark, type Perspective, type RouteCue, type Vec, type View,
+  type Mark, type Perspective, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
 import { createChat, type PawnTint } from './chat';
@@ -1150,7 +1150,7 @@ const DRAG_SLOP = 6;                             // css px before a press become
 const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
-  state, balls: ballViews, hints, routes: [], ghost, last: marks, thinking: null,
+  state, balls: ballViews, hints, ghost, last: marks, thinking: null,
   human: localSide, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
@@ -1180,12 +1180,8 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
-/**
- * The lesson's board-wide cues, in cells: the player's gold guide to FINISH and the rival's
- * crimson threat run at the same line. Re-derived on every state change, so the wall the player
- * builds visibly bends the rival's line around itself — the detour IS the lesson, with no caption.
- */
-let tutorialRoutes: RouteCue[] = [];
+/* The lesson draws NO line across the board — no route, no threat run, no reroute. It points with
+   the spotlight, the ghost hand and the board's own local highlights only. */
 
 /* ---- invite-first onboarding: per-match session state ----
    All four are reset by `restart()`, so "first two turns" means the first two turns of THIS
@@ -2487,7 +2483,6 @@ function ui() {
   }
   /* the wall's live-play intermission ends on the board's own terms: two real rival turns, then
      this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
-  paintTutorialRoutes();
   if (waitingForMineTrigger) resumeMineLesson();
   /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
   maybeMicroCoach();
@@ -3999,7 +3994,7 @@ function tutorialTap(p: Vec) {
     case 'wall': {
       const wall: Wall = { ...action.spec, owner: state.turn };
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
-      /* the bar locks in with weight: the rival's dashed route bends around it on this frame */
+      /* the bar locks in with weight: the board is bare behind it, no route is drawn */
       impact('heavy');
       shake(true);
       break;
@@ -4249,7 +4244,8 @@ const tutorialRival = (): Ball | null =>
  * Two rules the lesson adds on top of `wallOk`, which only guards its OWN author's route: every
  * live pawn must still have a way to FINISH (a wall that checkmated the rival would end the race
  * inside the tutorial), and a groove that actually lengthens the rival's run wins over one that
- * does not — the detour the dashed line then draws is the whole point of the step.
+ * does not — the detour it forces is the whole point of the step, even with no line drawn on the
+ * board to show it.
  */
 function tutorialWallTarget(): TutorialTargetWall | null {
   if (state.turn !== localSide || state.winner !== null) return null;
@@ -4357,27 +4353,6 @@ function tutorialMineConfirmTarget(): TutorialTargetMine | null {
   };
 }
 
-/**
- * The lesson's dashed line, re-derived from the board every time it changes: the rival's threat run
- * from the moment the wall step opens until the charge is buried. It is a real route through the
- * standing walls, so the wall the player commits bends the rival's line around itself in front of
- * them. The forward step draws NO line: the pawn's own legal-move dots are its whole instruction.
- */
-function paintTutorialRoutes() {
-  const stage = tutorialStage();
-  const routes: RouteCue[] = [];
-  if (state.winner === null) {
-    const threat = waitingForMineTrigger || stage === 'wall-stage' || stage === 'wall-confirm'
-      || stage === 'mine-arm' || stage === 'mine-place' || stage === 'mine-confirm';
-    if (threat) {
-      const rival = tutorialRival();
-      const path = rival ? finishRoute(state, rival.pos) : [];
-      if (path.length > 1) routes.push({ tone: 'threat', path });
-    }
-  }
-  tutorialRoutes = routes;
-}
-
 /** The lesson's one bot beat: each machine seat steps once, deterministically, and hands back. */
 async function tutorialReply(): Promise<void> {
   for (let guard = 0; guard < 8; guard++) {
@@ -4407,7 +4382,6 @@ async function tutorialReply(): Promise<void> {
 function syncTutorialUI(stage: TutorialStage | null = null) {
   mineBtn.classList.toggle('tut-arm-target', stage === 'mine-arm');
   if (!tutorialActive) {
-    paintTutorialRoutes();
     invalidate();
     return;
   }
@@ -4725,7 +4699,6 @@ function cancelTutorial() {
   mineGateRows = null;
   tutorial?.cancel();
   tutorialActive = false;
-  paintTutorialRoutes();
 }
 
 tutorial = createTutorial({
@@ -4965,7 +4938,6 @@ function frame(now: number) {
     view.state = state;
     view.balls = ballViews;
     view.hints = hints;
-    view.routes = tutorialRoutes;
     view.ghost = ghost;
     view.mineHints = mineHints;
     view.mineGhost = mineGhost;
