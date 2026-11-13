@@ -397,6 +397,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     waitingHost: 'Waiting for host…',
     win: 'Win',
     practiceLead: 'Practice',
+    friendsLead: 'Friends',
+    rankedLead: 'Ranked',
     trophiesUnit: 'trophies',
     coinsUnit: 'coins',
     /* ---- friends drawer & lobby ---- */
@@ -1316,6 +1318,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     waitingHost: 'منتظر میزبان…',
     win: 'برد',
     practiceLead: 'تمرین',
+    friendsLead: 'دوستانه',
+    rankedLead: 'رنکد',
     trophiesUnit: 'جام',
     coinsUnit: 'سکه',
     /* ---- friends drawer & lobby ---- */
@@ -1983,6 +1987,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* ---- главная кнопка PLAY: одно действие, без наград внутри ---- */
     play: 'ИГРАТЬ',
     searching: 'ПОИСК',
+    /* ---- live reward preview in the Select Game Mode sheet ---- */
+    practiceLead: 'Практика',
+    friendsLead: 'Друзья',
+    rankedLead: 'Рейтинг',
     /* ---- управление отрядом: одобрение вступления, заявки, рассылка ---- */
     squadRequireApproval: 'Одобрение вступления лидером',
     squadLockSub: 'По ссылке игроки отправляют заявку, а не вступают сразу.',
@@ -2168,6 +2176,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* ---- زر البدء في الرئيسية: فعل واحد بلا مكافآت داخله ---- */
     play: 'ابدأ اللعب',
     searching: 'جارٍ البحث',
+    /* ---- live reward preview in the Select Game Mode sheet ---- */
+    practiceLead: 'تدريب',
+    friendsLead: 'الأصدقاء',
+    rankedLead: 'تنافسي',
     /* ---- إدارة الفريق: موافقة الانضمام والطلبات والرسائل ---- */
     squadRequireApproval: 'موافقة القائد على الانضمام',
     squadLockSub: 'روابط الدعوة تصبح طلبات إلى أن يوافق عليها القائد.',
@@ -2353,6 +2365,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     /* ---- el botón PLAY de la portada: una sola acción, sin recompensas dentro ---- */
     play: 'JUGAR',
     searching: 'BUSCANDO',
+    /* ---- live reward preview in the Select Game Mode sheet ---- */
+    practiceLead: 'Práctica',
+    friendsLead: 'Amigos',
+    rankedLead: 'Competitivo',
     /* ---- administración del escuadrón: aprobación, solicitudes, difusión ---- */
     squadRequireApproval: 'Aprobación del líder',
     squadLockSub: 'Los enlaces de invitación pasan a ser solicitudes.',
@@ -2692,9 +2708,25 @@ export function toggleAppearance(): Appearance {
 
 export { appearance };
 
+/* Every writer of the menu's difficulty goes through `saveMenu()`. Publishing the change here
+   is what lets the mode sheet's live reward preview follow a level tap made anywhere in the app,
+   without any surface having to know the preview exists. */
+const menuWatchers: (() => void)[] = [];
+
+export function onMenuChange(w: () => void): () => void {
+  menuWatchers.push(w);
+  return () => {
+    const i = menuWatchers.indexOf(w);
+    if (i >= 0) menuWatchers.splice(i, 1);
+  };
+}
+
 export function saveMenu(patch: Partial<MenuState>) {
   Object.assign(menuState, patch);
   writeJson(M_KEY, menuState);
+  for (const w of [...menuWatchers]) {
+    try { w(); } catch { /* one bad listener never blocks the save */ }
+  }
 }
 
 paintLangAttrs();

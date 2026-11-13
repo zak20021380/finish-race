@@ -5538,15 +5538,21 @@
         </div>
 
         <div class="gm-foot" id="gm-foot">
+          <!-- LIVE WIN PREVIEW. Both figures come from `computeMatchRewards()` in storage.ts —
+               the exact pure function `recordGame()` settles on. Vector icons only (no emoji),
+               and every numeral is Latin + tabular so `+110` / `+50 XP` never mirror in FA/AR. -->
           <p class="gm-rewards" id="gm-rewards" aria-live="polite">
-            <span class="gm-lead" id="gm-lead">Win</span>
-            <span class="gm-rw" id="gm-rw-trophy" role="img" aria-label="30 trophies">
-              <b aria-hidden="true" id="gm-rw-trophy-n">+30</b>
-              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
-            </span>
-            <span class="gm-rw" role="img" aria-label="65 coins">
+            <span class="gm-lead" id="gm-lead">Practice</span>
+            <span class="gm-dot" aria-hidden="true">·</span>
+            <span class="gm-rw gm-rw-coin" id="gm-rw-coin" role="img" aria-label="65 coins">
               <b aria-hidden="true" id="gm-rw-coin-n">+65</b>
               <span class="coin" data-coin aria-hidden="true"></span>
+            </span>
+            <span class="gm-dot" aria-hidden="true">·</span>
+            <span class="gm-rw gm-rw-xp" id="gm-rw-xp" role="img" aria-label="30 XP">
+              <b aria-hidden="true" id="gm-rw-xp-n">+30</b>
+              <span class="gm-rw-unit" aria-hidden="true" data-i18n="resultXpUnit">XP</span>
+              <svg class="ico gm-star" aria-hidden="true" focusable="false"><use href="#i-star" /></svg>
             </span>
           </p>
           <div class="gm-foot-row">

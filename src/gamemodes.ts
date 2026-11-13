@@ -22,8 +22,11 @@
  * anything to fill
  * is also a room nobody should have to press anything to start.
  */
-import { adoptUserStorageKey, hasCompletedTutorial, readJson, userScopedKey, writeJson } from './storage';
-import { menuState, onLang, saveMenu, t } from './settings';
+import {
+  adoptUserStorageKey, computeMatchRewards, hasCompletedTutorial, readJson, rewardFamilyOf,
+  userScopedKey, writeJson,
+} from './storage';
+import { menuState, onLang, onMenuChange, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
@@ -93,24 +96,76 @@ const startLabel = (id: GameModeId): string => {
   }
 };
 
-/** The win line, split into its translated lead and the numbers that never change. */
-const rewardLead = (id: GameModeId): string => (id === 'bot' ? t('practiceLead') : t('win'));
-
-interface RewardLine {
-  lead: string;
-  /** `null` when the mode pays no trophies — practice has no ranking to lose. */
-  trophy: string | null;
-  coin: string;
-}
-
-const REWARD_AMOUNT: Record<GameModeId, { trophy: string | null; coin: string }> = {
-  duel_1v1: { trophy: '+30', coin: '+65' },
-  party_2v2: { trophy: '+50', coin: '+100' },
-  bot: { trophy: null, coin: '+65' },
-  room: { trophy: '+30', coin: '+65' },
+/* ---- the live win preview: ONE calculator, shared with `recordGame()` ----
+   The drawer never owns a number. It only owns three inputs — which row, which difficulty, how
+   many seats — and asks `computeMatchRewards()` for the two figures it prints. `recordGame()`
+   asks the very same function with the very same inputs when the race settles. */
+const REWARD_MODE_OF: Record<GameModeId, string> = {
+  duel_1v1: 'ranked',
+  party_2v2: 'ranked',
+  bot: 'practice',
+  room: 'friendly',
 };
 
-const rewardFor = (id: GameModeId): RewardLine => ({ lead: rewardLead(id), ...REWARD_AMOUNT[id] });
+/** The mode string the settlement is told to price. */
+export function rewardModeFor(id: GameModeId): string {
+  return REWARD_MODE_OF[id];
+}
+
+/** The lead word, in the player's language. The numbers beside it are always Latin. */
+const rewardLead = (mode: string): string => {
+  const family = rewardFamilyOf(mode);
+  return family === 'practice' ? t('practiceLead')
+    : family === 'friendly' ? t('friendsLead')
+      : t('rankedLead');
+};
+
+/** Latin numerals by construction: `String()` never emits Persian/Arabic-Indic digits. */
+const latin = (n: number): string => String(Math.round(n));
+
+/** The seat count the Practice card is showing; main.ts owns the pills and publishes it here. */
+let rewardSeats = 2;
+/** A row tap prices that row immediately, even before the saved selection catches up. */
+let previewMode: string | null = null;
+
+/** Publish the seat count (2/3/4). A change repaints the strip with a numeric pulse. */
+export function setRewardSeats(n: number): void {
+  const seats = n >= 4 ? 4 : n >= 3 ? 3 : 2;
+  if (seats === rewardSeats) return;
+  rewardSeats = seats;
+  paintRewardPreview(true);
+}
+
+/** Repaint the two figures. `pulse` restarts the short numeric animation on a direct tap. */
+function paintRewardPreview(pulse = false): void {
+  const mode = previewMode ?? REWARD_MODE_OF[current.id] ?? 'practice';
+  const { coins, xp } = computeMatchRewards({
+    mode,
+    difficulty: menuState.difficulty,
+    seats: rewardSeats,
+  });
+  const lead = document.getElementById('gm-lead');
+  if (lead) lead.textContent = rewardLead(mode);
+
+  const coinN = document.getElementById('gm-rw-coin-n');
+  if (coinN) coinN.textContent = `+${latin(coins)}`;
+  const xpN = document.getElementById('gm-rw-xp-n');
+  if (xpN) xpN.textContent = `+${latin(xp)}`;
+
+  const coinChip = document.getElementById('gm-rw-coin');
+  coinChip?.setAttribute('aria-label', `${latin(coins)} ${t('coinsUnit')}`);
+  const xpChip = document.getElementById('gm-rw-xp');
+  xpChip?.setAttribute('aria-label', `${latin(xp)} ${t('resultXpUnit')}`);
+
+  if (!pulse) return;
+  /* remove -> reflow -> add restarts a CSS animation that is already on the element. A plain
+     (non-pulse) repaint deliberately leaves the class alone, so a watcher firing twice cannot
+     cancel the pulse it just started. */
+  for (const el of [coinChip, xpChip]) el?.classList.remove('is-pulse');
+  const bar = document.getElementById('gm-rewards');
+  if (bar) void bar.offsetWidth;
+  for (const el of [coinChip, xpChip]) el?.classList.add('is-pulse');
+}
 
 const FORMAT_KEY: Record<LobbyFormat, string> = {
   duel: 'fmtDuel', '3p': 'fmt3p', '4p': 'fmt4p', '2v2': 'fmt2v2',
@@ -297,6 +352,8 @@ export function sizesForMode(id: GameModeId): [number, number] {
 }
 
 export function setGameMode(id: GameModeId, opts?: { roomCode?: string | null }): GameModeSelection {
+  /* a real selection always outranks a transient row tap in the reward preview */
+  previewMode = null;
   /* the parked queue can never *become* the selection: every door lands on an open mode */
   const target: GameModeId = QUICK_LOCKED && isQuick(id) ? DEFAULT_SELECTION.id : id;
   const roomCode = target === 'room' ? cleanRoomCode(opts?.roomCode ?? current.roomCode) : null;
@@ -1730,6 +1787,8 @@ function paintSheetHead(next: SheetView): void {
 /** Swap the drawer between the mode list, the friends entry and the live lobby. */
 function showView(next: SheetView): void {
   view = next;
+  /* returning to the list re-prices the saved selection: a transient row tap is not a selection */
+  if (next === 'modes') previewMode = null;
   /* the countdown belongs to the roster it is counting: leaving that pane stops it */
   if (next !== 'lobby' && countdown) abortCountdown();
   const modes = document.getElementById('gm-view-modes');
@@ -1798,24 +1857,10 @@ export function paintSheetState(): void {
     b.setAttribute('aria-pressed', String(b.dataset.diff === menuState.difficulty));
   }
 
-  /* one reward caption above Start, one Start label that names the mode */
-  const reward = rewardFor(current.id);
-  const lead = document.getElementById('gm-lead');
-  if (lead) lead.textContent = reward.lead;
-  const trophy = document.getElementById('gm-rw-trophy');
-  const trophyN = document.getElementById('gm-rw-trophy-n');
-  if (trophy) {
-    trophy.hidden = reward.trophy === null;
-    if (reward.trophy) {
-      if (trophyN) trophyN.textContent = reward.trophy;
-      trophy.setAttribute('aria-label', `${reward.trophy.replace('+', '')} ${t('trophiesUnit')}`);
-    }
-  }
-  const coinN = document.getElementById('gm-rw-coin-n');
-  if (coinN) {
-    coinN.textContent = reward.coin;
-    coinN.closest('.gm-rw')?.setAttribute('aria-label', `${reward.coin.replace('+', '')} ${t('coinsUnit')}`);
-  }
+  /* ONE live reward caption above Start, priced by the settlement's own pure calculator.
+     Mode, difficulty and seat count all flow into this call, so no surface can quote a stale
+     figure after a card, a level pill or a player-count pill was tapped. */
+  paintRewardPreview();
   /* the lobby owns the Start key while it is on screen: it must not be renamed out from under it */
   const start = document.getElementById('gm-start');
   if (start && view === 'modes') {
@@ -1918,10 +1963,14 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
         const held = inLobby() || !!session;
         showView(held ? 'lobby' : 'room');
         if (held && !handle) resumeRoom();
+        /* the selection stays put, but the tapped row is what the strip prices right now */
+        previewMode = REWARD_MODE_OF[raw] ?? null;
+        paintRewardPreview(true);
         return;
       }
       clearRoomError();
-      setGameMode(raw);
+      setGameMode(raw);                 // clears the transient row and prices the real selection
+      paintRewardPreview(true);        // ...then pulse the two freshly computed figures
     });
   }
 
@@ -1944,6 +1993,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
         /* stay in memory */
       }
       paintSheetState();
+      /* the level changed the reward table: repaint both figures and pulse them */
+      paintRewardPreview(true);
     });
   }
 
@@ -2167,6 +2218,11 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     paintLobby();
     paintSheetState();
   });
+
+  /* `saveMenu()` is the one difficulty door: the drawer's pills, the Home preset sheet and the
+     older mode sheet all write through it. Whichever surface moved the level, the win preview
+     follows on the very same beat. */
+  onMenuChange(() => paintRewardPreview(true));
 
   onLang(() => {
     paintLobby();

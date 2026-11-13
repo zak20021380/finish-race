@@ -816,19 +816,121 @@ export function buy(kind: CosKind, id: string, price: number): BuyResult {
   return 'bought';
 }
 
-/* ---------- economy ---------- */
+/* ---------- economy: ONE table, ONE calculator ---------- */
 
-/** A sharper bot is worth more because beating it says more. A human loss still pays a consolation. */
-const WIN: Record<Difficulty, number> = { easy: 40, normal: 65, hard: 100 };
-const LOSS: Record<Difficulty, number> = { easy: 12, normal: 18, hard: 25 };
+/**
+ * `computeMatchRewards` is the only place a win's coins or XP are ever written down. The mode
+ * sheet's live preview, `payout()`, `xpForGame()`, `recordGame()` and the post-match Result
+ * Overlay all read it, so a number shown before a race is the number that race can settle.
+ * TIQ is a ladder instrument, never a reward: it stays outside this table on purpose.
+ */
+export type RewardFamily = 'practice' | 'friendly' | 'ranked';
+export type RewardSeats = 2 | 3 | 4;
 
-/** A bot WIN pays its difficulty's XP tier. A bot loss, draw or forfeit pays nothing at all. */
-const BOT_XP: Record<Difficulty, number> = { easy: 15, normal: 30, hard: 50 };
-/** A human win pays by the room it was won in: friendly 25, ranked 60, party 70, arena 80. */
-const PVP_XP = { friendly: 25, ranked: 60, party: 70, arena: 80 } as const;
+interface RewardAmount { coins: number; xp: number }
 
-export function payout(r: { difficulty: Difficulty; won: boolean }, mult = 1): number {
-  const base = (r.won ? WIN : LOSS)[r.difficulty];
+/** Practice vs Bot scales by BOTH difficulty and the number of one-ball seats. */
+const PRACTICE_REWARDS: Record<'easy' | 'normal' | 'hard', Record<RewardSeats, RewardAmount>> = {
+  easy: {
+    2: { coins: 35, xp: 15 },
+    3: { coins: 45, xp: 20 },
+    4: { coins: 55, xp: 25 },
+  },
+  normal: {
+    2: { coins: 65, xp: 30 },
+    3: { coins: 80, xp: 40 },
+    4: { coins: 100, xp: 45 },
+  },
+  hard: {
+    2: { coins: 110, xp: 50 },
+    3: { coins: 140, xp: 65 },
+    4: { coins: 165, xp: 75 },
+  },
+};
+
+/** Play with Friends / a private room: difficulty is the host's, so only the seat count pays. */
+const FRIENDLY_REWARDS: Record<RewardSeats, RewardAmount> = {
+  2: { coins: 80, xp: 35 },
+  3: { coins: 100, xp: 45 },
+  4: { coins: 120, xp: 55 },
+};
+
+/** Ranked / Quick Match / Arena: the same seat ladder, with TIQ settled separately. */
+const RANKED_REWARDS: Record<RewardSeats, RewardAmount> = {
+  2: { coins: 150, xp: 65 },
+  3: { coins: 200, xp: 85 },
+  4: { coins: 200, xp: 85 },
+};
+
+/** Every mode spelling the app uses collapses into one of the three reward families. */
+export function rewardFamilyOf(mode: unknown): RewardFamily {
+  const m = String(mode ?? '').toLowerCase();
+  if (m === 'ranked' || m === 'arena' || m === 'quick' || m === 'quick_match'
+    || m === 'online' || m === 'matchmaking' || m === 'duel_1v1' || m === 'party_2v2') return 'ranked';
+  if (m === 'friendly' || m === 'friends' || m === 'room' || m === 'private'
+    || m === 'pvp' || m === 'duel' || m === 'party') return 'friendly';
+  return 'practice';
+}
+
+/**
+ * PURE. The single source of truth for a win's coins and XP. `mode` accepts any of the app's
+ * spellings; `difficulty` and `seats` are clamped so a stale save can never mint a wrong payout.
+ */
+export function computeMatchRewards({ mode, difficulty, seats }: {
+  mode: string;
+  difficulty: 'easy' | 'normal' | 'hard';
+  seats: number;
+}): { coins: number; xp: number } {
+  const family = rewardFamilyOf(mode);
+  const tier: 'easy' | 'normal' | 'hard' = difficulty === 'easy' || difficulty === 'hard' ? difficulty : 'normal';
+  const raw = Number.isFinite(seats) ? Math.floor(seats) : 2;
+  const n: RewardSeats = raw >= 4 ? 4 : raw >= 3 ? 3 : 2;
+  const row = family === 'practice' ? PRACTICE_REWARDS[tier][n]
+    : family === 'friendly' ? FRIENDLY_REWARDS[n]
+      : RANKED_REWARDS[n];
+  return { coins: row.coins, xp: row.xp };
+}
+
+/**
+ * The reward family a *settled* board belongs to. `ranked` distinguishes a matchmaker seat from
+ * a friends room — both arrive as `pvp` — and an Arena cup is ranked by definition.
+ */
+function settledRewardMode(
+  r: { mode?: string; rewardMode?: string },
+  live: boolean,
+  ranked: boolean,
+): string {
+  /* The mode sheet's own pick wins: a friends race launched with a bot-backfilled roster still
+     settles as the FRIENDS figure the drawer quoted, not the practice one `matchMode()` infers. */
+  if (r.rewardMode) return r.rewardMode;
+  if (!live) return 'practice';
+  if (ranked || r.mode === 'arena') return 'ranked';
+  return 'friendly';
+}
+
+/**
+ * A human defeat still carries its small consolation. It is deliberately NOT in the win table:
+ * the drawer quotes a WIN, and a loss is never previewed, so these two numbers cannot drift.
+ * A void race (forfeit) pays nothing for either side.
+ */
+const DEFEAT_CONSOLATION: Record<Difficulty, number> = { easy: 12, normal: 18, hard: 25 };
+
+export function payout(r: {
+  difficulty: Difficulty;
+  won: boolean;
+  mode?: string;
+  rewardMode?: string;
+  ranked?: boolean;
+  forfeit?: boolean;
+  seats?: number;
+}, mult = 1, reward?: RewardAmount): number {
+  const live = r.mode === 'pvp' || r.mode === 'arena';
+  const { coins } = reward ?? computeMatchRewards({
+    mode: settledRewardMode(r, live, live && r.ranked === true),
+    difficulty: r.difficulty,
+    seats: r.seats ?? 2,
+  });
+  const base = r.forfeit === true ? 0 : r.won ? coins : DEFEAT_CONSOLATION[r.difficulty];
   const scale = Number.isFinite(mult) && mult > 0 ? mult : 1;
   return Math.max(0, Math.round(base * scale));
 }
@@ -842,23 +944,24 @@ export interface GameSettlement {
 }
 
 /**
- * XP for one settled race. ONLY A FINISHED WIN PAYS: a bot win is worth its difficulty tier
- * (15 / 30 / 50), a human win its room (friendly 25, ranked 60, four-seat 70, arena 80). A loss,
- * a draw and a forfeit — against a bot or a person — are worth exactly zero.
+ * XP for one settled race, read off the SAME pure calculator as the coin payout and the drawer's
+ * preview. ONLY A FINISHED WIN PAYS: a loss, a draw and a forfeit — against a bot or a person —
+ * are worth exactly zero.
  */
 function xpForGame(r: {
   difficulty: Difficulty;
   won: boolean;
   mode?: 'bot' | 'pvp' | 'arena';
+  rewardMode?: string;
   forfeit?: boolean;
   seats?: number;
-}, live: boolean, ranked: boolean): number {
+}, live: boolean, ranked: boolean, reward?: RewardAmount): number {
   if (!r.won || r.forfeit === true) return 0;
-  if (!live) return BOT_XP[r.difficulty] ?? 0;
-  if (r.mode === 'arena') return PVP_XP.arena;
-  if (Math.max(2, Math.floor(r.seats ?? 2)) > 2) return PVP_XP.party;
-  if (ranked) return PVP_XP.ranked;
-  return PVP_XP.friendly;
+  return (reward ?? computeMatchRewards({
+    mode: settledRewardMode(r, live, ranked),
+    difficulty: r.difficulty,
+    seats: r.seats ?? 2,
+  })).xp;
 }
 
 /** Settles one finished race: the tally, the streak, the wallet and the XP pool. */
@@ -868,6 +971,11 @@ export function recordGame(
     won: boolean;
     /** The board's tag; leaving it out keeps the historical practice-race reading. */
     mode?: 'bot' | 'pvp' | 'arena';
+    /**
+     * The reward family the mode sheet previewed (`practice` | `friendly` | `ranked`). When set,
+     * this — not the board's inferred tag — selects the row of `computeMatchRewards()`.
+     */
+    rewardMode?: string;
     /** Did this seat still hold at least half its defense when the race was decided? */
     defenseHeld?: boolean;
     /**
@@ -939,12 +1047,22 @@ export function recordGame(
     s.botGames++;
     if (r.won) s.botWins++;
   }
-  /* A bot board pays coins for a WIN only; a human board keeps its consolation for a loss. */
-  const coins = live || r.won ? payout(r, mult) : 0;
-  const xp = xpForGame(r, live, ranked);
+  /* THE SETTLEMENT IS THE PREVIEW. One call to `computeMatchRewards()` with the exact difficulty,
+     seat count and reward family the drawer quoted; both doors below consume THAT SAME object and
+     `resultView` rolls the numbers it returns. (The Admin coin multiplier scales that one figure,
+     and is 1 for every real player.) A bot board pays coins for a WIN only; a human board keeps
+     its consolation for a loss; a defeat, a draw and a forfeit on a bot board pay coins = 0,
+     XP = 0 and TIQ delta = 0. */
+  const matchReward = computeMatchRewards({
+    mode: settledRewardMode(r, live, ranked),
+    difficulty: r.difficulty,
+    seats: r.seats ?? 2,
+  });
+  const coins = r.forfeit === true ? 0 : (live || r.won ? payout(r, mult, matchReward) : 0);
+  const xp = xpForGame(r, live, ranked, matchReward);
   profile.coins += coins;
   profile.xp += xp;
-  flush();
+  flush();                             // persist immediately: the HUD and reload read the same save
   return { coins, xp, bot: !live };
 }
 

@@ -15670,13 +15670,15 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
    leave the flow, which an author `display: flex` would otherwise veto */
 .gm-foot[hidden],
 .gm-rewards[hidden] { display: none; }
-/* one centered capsule: WIN +30 (trophy) +65 (coin), never a row of loose numbers */
+/* one centered capsule: PRACTICE · +110 (coin) · +50 XP (star), never a row of loose numbers.
+   Both figures are computed live from the settlement's own pure calculator. */
 .gm-rewards {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: var(--s2);
+  column-gap: 7px;
+  row-gap: 2px;
   margin: 0;
   min-height: 26px;
   padding: 4px var(--s3);
@@ -15688,16 +15690,44 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
   color: var(--ink-soft);
 }
 .gm-lead { text-transform: uppercase; letter-spacing: .08em; }
+.gm-dot { color: var(--ink-soft); opacity: .5; font-weight: 700; }
+/* Isolated LTR + tabular digits: a Persian/Arabic row must NEVER mirror `+110` or `+50 XP`. */
 .gm-rw {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
   white-space: nowrap;
 }
-.gm-rw b { font-size: var(--t-micro); font-weight: 900; color: var(--ink); }
+.gm-rw b {
+  display: inline-block;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  color: var(--ink);
+  transform-origin: 50% 60%;
+}
+.gm-rw-unit { font-size: .84em; font-weight: 900; letter-spacing: .04em; color: var(--honey-ink); }
 .gm-rw .ico { width: 14px; height: 14px; color: var(--honey-ink); }
+.gm-rw .ico.gm-star { width: 15px; height: 15px; color: #fbbf24; }
 .gm-rw .coin { width: 14px; height: 14px; }
+/* Subtle numeric pulse on every mode / difficulty / seat change. A non-pulse repaint never
+   removes the class, so the animation is free to finish even when a watcher repaints twice. */
+.gm-rw.is-pulse b { animation: gm-num-pulse .44s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes gm-num-pulse {
+  0%   { transform: translateY(1px) scale(.94); opacity: .55; }
+  55%  { transform: translateY(-1px) scale(1.07); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+html.reduced-motion .gm-rw.is-pulse b { animation: none; }
+@media (max-width: 360px) {
+  .gm-rewards { column-gap: 5px; padding-inline: 7px; }
+  .gm-rw .ico.gm-star, .gm-rw .coin { width: 13px; height: 13px; }
+}
 /* the one loud key: a 3D clay slab that sinks into its lip on press */
 .gm-start {
   --d: 5px;

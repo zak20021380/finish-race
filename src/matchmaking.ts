@@ -1179,7 +1179,11 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   function paintStakes(): void {
     if (stakeEls.tiq) stakeEls.tiq.textContent = String(runtime.winTiq);
     if (stakeEls.gold) {
-      stakeEls.gold.textContent = String(payout({ difficulty: menuState.difficulty, won: true }, runtime.coinMult));
+      /* the matchmaker's own win projection reads the same ranked row as the settlement */
+      stakeEls.gold.textContent = String(payout(
+        { difficulty: menuState.difficulty, won: true, rewardMode: 'ranked', seats: 2 },
+        runtime.coinMult,
+      ));
     }
     /* the same Command Center season the Mind Ladder capsule counts down */
     const season = `S${arena().seasonNo}`;

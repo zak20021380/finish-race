@@ -70,7 +70,8 @@ import {
 import { applyFlagSupport } from './countries';
 import {
   autoTutorialForLaunch, createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy,
-  onGameModeChange, openInviteRoom, resumeRoom, setGameMode, takeAutoLaunch,
+  onGameModeChange, openInviteRoom, rewardModeFor, resumeRoom, setGameMode, setRewardSeats,
+  takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
 import { initSeize, resetSeizeContext } from './seize';
@@ -923,6 +924,13 @@ const makeBot = (d: Difficulty | ((seat: Player) => Difficulty)): Opponent => ({
 });
 
 let difficulty: Difficulty = menuState.difficulty;
+/**
+ * The reward family the Select Game Mode sheet quoted when this race was launched. `startGame()`
+ * is the only writer; `showOverlay()` hands it to `recordGame()`, which prices the win with the
+ * very same `computeMatchRewards()` the drawer used. `null` means the launch did not come from
+ * the drawer, so the settlement infers the family from the board's own tag instead.
+ */
+let matchRewardMode: string | null = null;
 /**
  * Does the match on screen SPEND the debut when it settles? The standalone first-boot lesson is a
  * scripted, unwinnable-to-lose tutorial: it is guarded but does not consume the flag, so the first
@@ -2021,7 +2029,10 @@ function showOverlay() {
   const boardMode = matchMode();
   const settled = mine
     ? recordGame({
+      /* the three inputs the mode sheet quoted: level, seat count and reward family. The
+         settlement's payout/XP doors pass these straight into `computeMatchRewards()`. */
       difficulty, won, mode: boardMode, defenseHeld,
+      rewardMode: matchRewardMode ?? undefined,
       ranked: rankedPvp(),
       /* the race ended without a finish line: a ranked run never survives a void board */
       forfeit: forfeit !== null,
@@ -3127,6 +3138,8 @@ function seatChrome(): void {
 interface StartSetup {
   difficulty: Difficulty;
   mode?: 'vs_bot';
+  /** The mode-sheet family this launch was previewed under (`practice` | `friendly` | `ranked`). */
+  rewardMode?: string;
   isQuestMatch?: boolean;
   /** one entry per seat — `[1, 1]` is a duel, `[1, 1, 1, 1]` a four-way. Capped at `MAX_TEAMS`. */
   sizes: readonly number[];
@@ -3242,7 +3255,10 @@ function startGame(setup: StartSetup) {
   /* A lesson that replaces the launch is the whole match: its end returns to Home. Pause →
      Replay is the one lesson that runs inside a real match and hands the board straight back. */
   tutorialStandalone = wantsTutorial;
+  /* Preserve the exact difficulty AND the exact reward family the drawer quoted. Both survive
+     every repaint and are read back by `showOverlay()` when the race settles. */
   difficulty = setup.difficulty;
+  matchRewardMode = setup.rewardMode ?? null;
   /* MATCHMAKING OVERRIDE FOR MATCH #1. Any live seat that still reached this door — a late
      MATCH_FOUND, a relic challenge accepted in-session — is dropped BEFORE a single socket
      callback is wired. The board becomes a local AI-controlled duel, so the outcome is 100% under
@@ -4881,6 +4897,9 @@ function paintParty(): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>('#sheet-game-modes [data-seats]')) {
     b.setAttribute('aria-pressed', String(Number(b.dataset.seats) === partySeats));
   }
+  /* Publish the seat count to the live reward preview. The drawer's coins/XP and the settlement
+     read the same number, so a 2P -> 4P tap changes BOTH figures on the very same beat. */
+  setRewardSeats(partySeats);
   /* only the practice card honours the seat count, so only its label speaks it */
   if (getGameMode().id !== 'bot') return;
   const start = $<HTMLButtonElement>('gm-start');
@@ -4969,6 +4988,7 @@ function launchSelectedMode(): void {
   const lobby = openLocalRoom(botTier);
   showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
   startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby,
+    rewardMode: rewardModeFor(sel.id),
     ...(sel.id === 'bot' ? { mode: 'vs_bot' as const } : {}) });
 }
 
@@ -4985,7 +5005,7 @@ initGameModes(sheets, {
     takeAutoLaunch();   // a roster with no socket never counted down: drop any stale flag
     const room = roomFromRoster(lobby.code, lobby.seats);
     showNote(lobbyLine(room, Date.now()), false, 2200, true);
-    startGame({ difficulty: menuState.difficulty, sizes: sizesOf(room), room });
+    startGame({ difficulty: menuState.difficulty, sizes: sizesOf(room), room, rewardMode: 'friendly' });
   },
   onRoomRace: (race: LobbyRace) => {
     const room = roomFromRoster(race.code, race.seats);
@@ -4993,7 +5013,8 @@ initGameModes(sheets, {
        is already the ceremony, so neither host nor guest pays for a second face-off. Dropping the
        stale flag keeps the next non-room launch honest. */
     takeAutoLaunch();
-    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: true });
+    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room,
+      rewardMode: 'friendly', quiet: true });
   },
   /* The armed duel reads the same roster the drawer paints, for one line: the wait ends the moment
      the challenged seat is held by a person. */
