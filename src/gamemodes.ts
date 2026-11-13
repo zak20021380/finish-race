@@ -465,30 +465,12 @@ export async function copyText(text: string): Promise<boolean> {
 /* ---------- the home Play Dock (same IDs home.ts owns) ---------- */
 
 /**
- * Repaint the PLAY key from the one selection: it wears the win the launch pays and
- * names the mode the drawer will open on. Nothing here reads the DOM as state — every
- * value comes from `getLobbyDisplay()` plus the drawer's own `REWARD` line.
+ * Repaint the PLAY key from the one selection: it names the mode the drawer will open on.
+ * The key carries no reward line — the win it pays is stated once, above the drawer's own
+ * Start — so there is nothing here to repaint per mode, in any language.
  */
 export function paintLobby(): void {
   const lobby = getLobbyDisplay();
-
-  const reward = rewardFor(lobby.id);
-  const n = (v: string): string => v.replace('+', '');
-  const rw = document.getElementById('home-play-rw');
-  if (rw) {
-    rw.setAttribute('aria-label', reward.trophy === null
-      ? `${reward.lead} · ${n(reward.coin)} ${t('coinsUnit')}`
-      : `${reward.lead} · ${n(reward.trophy)} TIQ · ${n(reward.coin)} ${t('coinsUnit')}`);
-  }
-  /* practice pays no trophies, so the chip leaves the face instead of reading "+0" */
-  const trophy = document.getElementById('home-play-rw-trophy');
-  const trophyN = document.getElementById('home-play-rw-trophy-n');
-  if (trophy) {
-    trophy.hidden = reward.trophy === null;
-    if (reward.trophy && trophyN) trophyN.textContent = reward.trophy;
-  }
-  const coinN = document.getElementById('home-play-rw-coin-n');
-  if (coinN) coinN.textContent = reward.coin;
 
   const play = document.getElementById('home-play') as HTMLButtonElement | null;
   if (play) play.setAttribute('aria-label', `${t('play')} · ${t('selectGameMode')} — ${lobby.title}`);

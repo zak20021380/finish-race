@@ -1980,6 +1980,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'قوانین رو بلدم',
   },
   ru: {
+    /* ---- главная кнопка PLAY: одно действие, без наград внутри ---- */
+    play: 'ИГРАТЬ',
+    searching: 'ПОИСК',
     /* ---- управление отрядом: одобрение вступления, заявки, рассылка ---- */
     squadRequireApproval: 'Одобрение вступления лидером',
     squadLockSub: 'По ссылке игроки отправляют заявку, а не вступают сразу.',
@@ -2162,6 +2165,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'Я знаю правила',
   },
   ar: {
+    /* ---- زر البدء في الرئيسية: فعل واحد بلا مكافآت داخله ---- */
+    play: 'ابدأ اللعب',
+    searching: 'جارٍ البحث',
     /* ---- إدارة الفريق: موافقة الانضمام والطلبات والرسائل ---- */
     squadRequireApproval: 'موافقة القائد على الانضمام',
     squadLockSub: 'روابط الدعوة تصبح طلبات إلى أن يوافق عليها القائد.',
@@ -2344,6 +2350,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'أعرف القواعد',
   },
   es: {
+    /* ---- el botón PLAY de la portada: una sola acción, sin recompensas dentro ---- */
+    play: 'JUGAR',
+    searching: 'BUSCANDO',
     /* ---- administración del escuadrón: aprobación, solicitudes, difusión ---- */
     squadRequireApproval: 'Aprobación del líder',
     squadLockSub: 'Los enlaces de invitación pasan a ser solicitudes.',

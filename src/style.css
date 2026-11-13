@@ -5110,13 +5110,12 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play CTA: one obsidian chassis holding a single clay launch pill ----
-   The outer silhouette is one continuous dark stadium with a 6px rim of chassis
-   all around, a top inner highlight and a deep ambient drop. The launch core is a
-   full-width, self-contained pill rounded on all four corners, so the screen has
-   exactly one primary target: PLAY. */
+/* ---- Play CTA: one recessed cradle holding a single luminous launch key ----
+   The cradle is a precision trigger guard: a 5px rim of dark chassis around one
+   full-width key, its inner face cut 2px into the slab so the key reads as seated
+   rather than stuck on. The key is the only loud surface on Home. */
 .launcher {
-  /* the capsule height: 56-72px on every phone, scaled by the height media rules */
+  /* the key height: 56-72px on every phone, scaled by the height media rules */
   --dock-key-h: 72px;
   flex: none;
   position: relative;
@@ -5125,28 +5124,27 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   align-items: stretch;
   gap: 0;
   width: 100%;
-  min-height: calc(var(--dock-key-h) + 12px);
-  padding-block: 6px;
-  padding-inline: 6px;
+  min-height: calc(var(--dock-key-h) + 10px);
+  padding: 5px;
   border: 0;
   border-radius: 999px;
   overflow: hidden;
   background:
-    radial-gradient(120% 160% at 0% 0%, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(120% 160% at 0% 0%, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 58%),
     linear-gradient(180deg, #121b2b 0%, #0a111c 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 -2px 6px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 2px 6px rgba(0, 0, 0, .55),
     0 10px 26px rgba(0, 0, 0, .46),
-    0 6px 20px rgba(0, 114, 255, .24),
     0 0 0 1px rgba(255, 255, 255, .06);
   isolation: isolate;
 }
 
-/* ---- the launch core: one full-width clay pill ----
-   One saturated cyan-to-sapphire clay pebble, fully rounded on all four corners
-   and sized by the chassis. The action word owns the top line; two micro-clay
-   reward chips sit beneath it, both centred. */
+/* ---- the launch key: one luminous glass-cyan pebble ----
+   A multi-stop electric-cyan ramp lit from above, a glass rim highlight, a 3px
+   compressed bottom lip and one soft ambient bloom — the whole depth model is
+   insets, so a press animates transform and shadow alone. The face holds exactly
+   two things: the vector Play and the action word, on one centred row. */
 .btn-hero {
   position: relative;
   overflow: hidden;
@@ -5154,104 +5152,128 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   min-width: 0;
   min-height: var(--dock-key-h);
   transform-origin: center center;
-  padding: 7px 14px;
-  display: flex;
-  flex-direction: column;
+  padding: 0 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 10px;
+  border: 1px solid rgba(186, 230, 253, .45);
   border-radius: 999px;
-  font-weight: 900;
-  background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%);
-  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 52%, #0284c7 100%);
+  color: #ffffff;
   box-shadow:
-    inset 0 3px 6px rgba(255, 255, 255, .45),
-    inset 0 -4px 6px rgba(0, 40, 120, .4),
-    0 6px 18px rgba(0, 168, 255, .35);
+    inset 0 1.5px 0 rgba(255, 255, 255, .58),
+    inset 0 -3px 0 rgba(3, 105, 161, .7),
+    0 10px 26px -4px rgba(14, 165, 233, .52);
   isolation: isolate;
   transition:
-    transform .24s cubic-bezier(.3, 1.45, .5, 1),
-    filter var(--motion-fast),
-    box-shadow var(--motion-fast);
+    transform .16s cubic-bezier(.2, .9, .3, 1),
+    filter .16s ease,
+    box-shadow .16s ease;
 }
 .btn-hero:hover:not(:active) {
-  transform: none;
-  filter: brightness(1.06) saturate(1.03);
+  transform: translateY(-1px);
+  filter: brightness(1.045) saturate(1.02);
   box-shadow:
-    inset 0 3px 6px rgba(255, 255, 255, .5),
-    inset 0 -4px 6px rgba(0, 40, 120, .36),
-    0 8px 22px rgba(0, 168, 255, .42);
+    inset 0 1.5px 0 rgba(255, 255, 255, .62),
+    inset 0 -3px 0 rgba(3, 105, 161, .7),
+    0 14px 30px -6px rgba(14, 165, 233, .58);
 }
+/* the press: the key travels 1.5px into the cradle and its lip compresses to 1px,
+   so the tap lands in the hand rather than on a picture of a button */
 .btn-hero:active {
   transform: translateY(1.5px) scale(.985);
-  filter: brightness(1.03);
+  filter: brightness(1.02);
+  transition-duration: .06s;
   box-shadow:
-    inset 0 3px 8px rgba(0, 26, 70, .45),
-    inset 0 -2px 5px rgba(255, 255, 255, .24),
-    0 3px 10px rgba(0, 168, 255, .28);
+    inset 0 1px 0 rgba(255, 255, 255, .44),
+    inset 0 -1px 0 rgba(3, 105, 161, .75),
+    0 4px 12px -4px rgba(14, 165, 233, .38);
 }
 .btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
-/* the idle shine: one slow metallic pass every six seconds; stilled by reduced motion */
-.btn-hero::before {
+/* one specular pass every 4.5s: a diagonal highlight glides across the glass, then
+   the key rests. Transform and opacity only, so it rides the compositor and never
+   wakes the main thread. */
+.btn-hero::after {
   content: "";
   position: absolute;
-  top: -35%;
-  bottom: -35%;
-  left: -55%;
-  width: 45%;
+  top: -40%;
+  bottom: -40%;
+  left: -60%;
+  width: 42%;
   z-index: 0;
-  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .2) 50%, rgba(255, 255, 255, 0) 100%);
-  transform: skewX(-18deg);
   pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, .26) 44%,
+    rgba(255, 255, 255, .44) 52%,
+    rgba(255, 255, 255, 0) 100%);
+  transform: translateX(0) skewX(-18deg);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .btn-hero::before { animation: pd-shine 6s cubic-bezier(.33, .7, .38, 1) infinite; }
+  .btn-hero::after { animation: hero-sheen 4.5s cubic-bezier(.45, 0, .3, 1) infinite; }
 }
-@keyframes pd-shine {
-  0%, 74% { transform: translateX(0) skewX(-18deg); opacity: 0; }
-  78% { opacity: 1; }
-  94%, 100% { transform: translateX(330%) skewX(-18deg); opacity: 0; }
+@keyframes hero-sheen {
+  0% { transform: translateX(0) skewX(-18deg); opacity: 0; }
+  4% { opacity: 1; }
+  32% { opacity: 1; }
+  46%, 100% { transform: translateX(330%) skewX(-18deg); opacity: 0; }
 }
-.btn-hero .ico { width: 1.25em; height: 1.25em; }
+html.reduced-motion .btn-hero::after,
+.btn-hero.is-searching::after { animation: none; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-hero::after { animation: none; opacity: 0; }
+}
 /* single-line wordmark: chiselled white Play, lit from above and seated below */
 .hero-t {
   min-width: 0;
-  font-size: clamp(1.02rem, 4.8vw, 1.18rem);
-  font-weight: 900;
-  letter-spacing: .075em;
+  font-size: clamp(18px, 4.9vw, 19px);
+  font-weight: 800;
+  letter-spacing: .03em;
   text-transform: uppercase;
-  color: #fff;
+  color: #ffffff;
   line-height: 1;
   white-space: nowrap;
-  text-shadow:
-    0 1px 0 rgba(0, 54, 120, .42),
-    0 0 6px rgba(255, 255, 255, .18);
+  text-shadow: 0 1px 2px rgba(2, 44, 73, .45);
 }
-/* the launch face: play chevron + the action word, one line */
+/* the joined scripts keep zero tracking: tracking a Persian or Arabic word is a
+   rendering fault, not a style, so the key's Latin whisper never reaches them */
+html[data-lang="fa"] .hero-t,
+html[data-lang="ar"] .hero-t { letter-spacing: 0; }
+/* the launch face: play chevron + the action word, one centred row */
 .pd-go-face {
   position: relative;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
   max-width: 100%;
   min-width: 0;
 }
+/* the glyph is the same sprite as everywhere else, thickened and round-joined so it
+   reads as a bold, soft-cornered Play rather than a razor triangle */
 .pd-go-face .ico {
-  width: clamp(15px, 4.3vw, 18px);
-  height: clamp(15px, 4.3vw, 18px);
-  filter: drop-shadow(0 1px 1px rgba(0, 20, 60, .35));
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgba(2, 44, 73, .35));
 }
 /* matchmaking: the action word becomes a wait, with three pulsing dots */
-.pd-search { display: none; align-items: center; gap: 2px; min-width: 0; }
+.pd-search { display: none; align-items: center; gap: 6px; min-width: 0; }
 .btn-hero.is-searching .pd-search { display: inline-flex; }
 .btn-hero.is-searching .pd-go-ico,
 .btn-hero.is-searching .pd-go-face > .hero-t { display: none; }
-.pd-dots { display: inline-flex; align-items: center; gap: 3px; padding-left: 1px; }
+.pd-dots { display: inline-flex; align-items: center; gap: 4px; padding-left: 1px; }
 .pd-dots i {
-  width: 3.5px;
-  height: 3.5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: currentColor;
   opacity: .32;
@@ -5268,86 +5290,17 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
 /* the queue dims the key 10%; a found match or a cancel lifts it straight back */
 .btn-hero.is-searching,
 .btn-hero.is-searching:hover:not(:active) { filter: brightness(.9); }
-/* the win it pays: two glowing micro-clay chips, never one cramped pill */
-.pd-rw {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  max-width: 100%;
-  font-size: clamp(10px, 3vw, 11.5px);
-  font-weight: 900;
-  letter-spacing: .02em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.pd-rw-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-  padding: 3px 7px 3px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .4);
-}
-/* brain / TIQ: a frosted cyan-indigo pod with a live glyph */
-.pd-rw-tiq {
-  color: #E6FBFF;
-  background:
-    radial-gradient(120% 150% at 18% -10%, rgba(125, 227, 244, .42) 0%, rgba(125, 227, 244, 0) 58%),
-    linear-gradient(180deg, rgba(10, 40, 90, .66) 0%, rgba(4, 17, 45, .86) 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, .5),
-    inset 0 0 0 1px rgba(125, 227, 244, .34),
-    inset 0 -2px 4px rgba(0, 12, 35, .55),
-    0 2px 6px rgba(0, 20, 60, .32);
-}
-/* coin: a frosted amber-gold pod around the one metal token */
-.pd-rw-coin {
-  color: #FFF1C4;
-  background:
-    radial-gradient(120% 150% at 18% -10%, rgba(255, 214, 110, .4) 0%, rgba(255, 214, 110, 0) 58%),
-    linear-gradient(180deg, rgba(92, 54, 8, .7) 0%, rgba(40, 20, 3, .88) 100%);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, .48),
-    inset 0 0 0 1px rgba(253, 211, 77, .38),
-    inset 0 -2px 4px rgba(30, 14, 2, .6),
-    0 2px 6px rgba(0, 20, 60, .32);
-}
-.pd-rw b { font-weight: 900; letter-spacing: .02em; }
-.pd-rw-tiq .ico {
-  width: 13px;
-  height: 13px;
-  color: #7DE3F4;
-  filter:
-    drop-shadow(0 0 4px rgba(125, 227, 244, .8))
-    drop-shadow(0 1px 1px rgba(0, 0, 0, .35));
-}
-.pd-rw-coin .coin {
-  width: 14px;
-  height: 14px;
-  filter:
-    drop-shadow(0 0 4px rgba(253, 211, 77, .45))
-    drop-shadow(0 1px 1px rgba(0, 0, 0, .4));
-}
 
-/* ---- the tight phones: the capsule stays whole; only its inner gutters breathe in ---- */
+/* ---- the tight phones: the key stays whole; only its inner gutters breathe in ---- */
 @media (max-width: 400px) {
-  .btn-hero { padding: 7px 12px; }
-  .pd-rw { gap: 4px; }
-  .pd-rw-item { padding: 3px 6px 3px 7px; }
+  .btn-hero { padding: 0 12px; gap: 9px; }
+  .pd-go-face { gap: 9px; }
 }
 @media (max-width: 352px) {
-  .btn-hero { padding: 6px 10px; }
-  .pd-go-face { gap: 5px; }
-  .pd-rw { gap: 4px; font-size: 10px; }
-  .pd-rw-item { padding: 2px 5px 2px 6px; gap: 3px; }
-  .pd-rw-tiq .ico { width: 12px; height: 12px; }
-  .pd-rw-coin .coin { width: 13px; height: 13px; }
+  .btn-hero { padding: 0 10px; }
+  .pd-go-face { gap: 8px; }
+  .pd-go-face .ico { width: 17px; height: 17px; }
+  .hero-t { font-size: 17px; }
 }
 
 /* legacy Play summary slot: kept for compat, hidden — the dock owns the mode line now */
@@ -33425,7 +33378,7 @@ html[data-lang="ar"] :is(#sheet-pause, #sheet-quit) .btn .ico { margin-inline-en
 html[data-lang="fa"] :is(
   #p-coins, #hud-tiq, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-streak,
   #pf-badge-count,
-  #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, #lb-count, #lb-code, .lb-count,
+  .gm-rw, #lb-count, #lb-code, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
   .id-team-rank, .stars-count, .pf-xp-lvl, .pf-xp-meta,
@@ -33504,7 +33457,9 @@ html[data-lang="fa"] .lb-hud-txt { text-align: right; }
 html[data-lang="fa"] .lb-hud-t { font-size: 10.5px; line-height: 1.5; }
 html[data-lang="fa"] .lb-hud-s { letter-spacing: 0; }
 html[data-lang="fa"] .lb-hud-b { letter-spacing: 0; font-size: 9.5px; }
-html[data-lang="fa"] .hero-t { font-size: clamp(0.95rem, 4.4vw, 1.1rem); }
+/* the joined script reads a touch larger than the Latin caps: it sits just under the
+   key's 18-19px ramp and keeps its real 1.4 line box for the descenders */
+html[data-lang="fa"] .hero-t { font-size: clamp(17.5px, 4.7vw, 18.5px); }
 html[data-lang="fa"] .set-card-h { justify-content: flex-start; direction: rtl; }
 
 /* Vazirmatn's Persian descenders need a real line box: every one of these
@@ -36476,17 +36431,15 @@ html:not(.game-live) .screen:not(.game) *::after,
   backdrop-filter: none !important;
 }
 
-/* Opaque slab recipe for the three pieces of chrome that float over the wash. */
+/* Opaque slab recipe for the chrome that floats over the wash.
+   The Play cradle is deliberately absent: its own gradient is already fully opaque,
+   and its 5px bezel + inner cut is the frame the key is seated in. */
 .id-card.id-compact {
   background: var(--lobby-surface) !important;
   border-color: var(--lobby-hairline) !important;
 }
 .tabs.dock-nav,
 .dock-nav {
-  background: var(--lobby-surface-deep) !important;
-  border: 1px solid var(--lobby-hairline) !important;
-}
-.launcher {
   background: var(--lobby-surface-deep) !important;
   border: 1px solid var(--lobby-hairline) !important;
 }
@@ -36567,52 +36520,17 @@ html:not(.game-live) .screen:not(.game) *::after,
   box-shadow: inset 0 0 0 1px rgba(255, 222, 145, .14) !important;
 }
 
-/* PLAY keeps its shine as an on-demand sweep: no 60fps loop, one tap transition. */
-.btn-hero::before {
-  animation: none !important;
-  opacity: 0;
-  transform: translateX(0) skewX(-18deg);
-  transition: transform .38s cubic-bezier(.22, .61, .36, 1), opacity .12s ease;
-}
-.btn-hero:active::before {
-  opacity: .9;
-  transform: translateX(330%) skewX(-18deg);
-}
-html.reduced-motion .btn-hero::before,
-html.reduced-motion .btn-hero:active::before { display: none !important; }
-@media (prefers-reduced-motion: reduce) {
-  .btn-hero::before,
-  .btn-hero:active::before { display: none !important; }
-}
+/* PLAY's sweep is the key's own living light: a transform-only 4.5s pass declared
+   with the key in the HOME section, parked there under reduced motion. No layer here
+   may replace the key's bevel — its insets ARE the depth model. */
 
 /* 3. TIGHT RIMS AND 2-4px LIFTS replace the wide, multi-layer neon stacks. */
 .id-card.id-compact,
 .car-card,
 .car-card.is-active,
 .tabs.dock-nav,
-.dock-nav,
-.launcher {
+.dock-nav {
   box-shadow: var(--lobby-lift) !important;
-}
-
-.btn-hero {
-  border: 1px solid rgba(255, 255, 255, .18) !important;
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .32),
-    inset 0 -3px 5px rgba(0, 40, 120, .34),
-    0 4px 10px rgba(0, 0, 0, .4) !important;
-}
-.btn-hero:hover:not(:active) {
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .36),
-    inset 0 -3px 5px rgba(0, 40, 120, .32),
-    0 4px 10px rgba(0, 0, 0, .4) !important;
-}
-.btn-hero:active {
-  box-shadow:
-    inset 0 2px 5px rgba(0, 40, 120, .45),
-    inset 0 -2px 4px rgba(255, 255, 255, .2),
-    0 2px 4px rgba(0, 0, 0, .45) !important;
 }
 
 .tab[aria-current="page"],
