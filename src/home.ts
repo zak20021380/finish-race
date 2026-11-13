@@ -1104,6 +1104,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       state: { ...s, turn: 0, winner: null },
       balls,
       hints: [],
+      routes: [],
       ghost: null,
       last: [null, null],
       thinking: null,

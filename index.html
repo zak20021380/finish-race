@@ -2480,18 +2480,17 @@
       </nav>
 
       <!-- ---------------- first-match hands-on tutorial ----------------
-           Four steps, all performed on the REAL board: see the GOAL / FINISH line, pick and
-           move the pawn, place a wall in ONE tap, then (after two live turns) ARM and PLANT
-           a mine. The mine step is fully interactive: step 4A spotlights the mine key and its
-           inventory counter, 4B spotlights one legal tile ahead of the rival, STAGES a real mine
-           so the board's ✓/✕ confirm/cancel pair takes over, and carries the exploding/respawning
-           tooltip (#tut-tip); a confirmed plant buries the charge and hands the board straight
-           back to live play. The scrim and the
-           .tut-block guard share one SVG cut-out, so the live target is sharp AND receives
-           the tap; everything outside the hole is swallowed. Only step 1 has a Next key. The
-           top bar carries a live EN / فارسی / RU switcher; copy lives in src/tutorial.ts and
-           the localised guidance strings in src/settings.ts. Geometry and the action gate
-           are handed in by main.ts. -->
+           ONE card, then light. The GOAL card (title, one line, Start) is the only text the
+           lesson ever shows; it goes on its own key or on a tap on the FINISH band. Every
+           stage after it is silent: select the pawn, step forward, STAGE a wall and press
+           its real green key, play two live turns, then ARM a mine, stage it and press its
+           green key. Guidance is the spotlight, the ghost hand, the board's dashed route
+           lines, sound and haptics — never a tooltip or a banner.
+           The scrim and the .tut-block guard share one SVG cut-out, so the live target is
+           sharp AND receives the tap; on a staged ✓/✕ pair the hole covers BOTH keys while
+           the ring sits on the green one, so cancel is a real way back. The top bar keeps the
+           EN / فارسی / RU switcher and Skip through every stage. Copy lives in src/tutorial.ts;
+           geometry and the action gate are handed in by main.ts. -->
       <div class="tutorial" id="tutorial" role="dialog"
         aria-labelledby="tut-title" aria-describedby="tut-body" hidden>
         <svg class="tut-svg" aria-hidden="true" focusable="false">
@@ -2517,35 +2516,27 @@
               stroke-linejoin="round" stroke-linecap="round" />
           </svg>
         </div>
-        <div class="tut-card" id="tut-card" tabindex="-1" data-tone="select">
+        <!-- the ONLY text surface in the lesson: shown on the goal stage, hidden on every other -->
+        <div class="tut-card" id="tut-card" tabindex="-1" data-tone="goal">
           <div class="tut-head">
             <span class="tut-ico" aria-hidden="true">
               <svg class="ico" focusable="false"><use id="tut-ico-use" href="#i-flag" /></svg>
             </span>
-            <div class="tut-head-txt">
-              <p class="tut-kicker" id="tut-step">STEP 1 OF 4</p>
-              <h2 class="tut-title" id="tut-title">THE GOAL</h2>
-            </div>
+            <h2 class="tut-title" id="tut-title">GOAL: REACH FINISH</h2>
           </div>
-          <p class="tut-body" id="tut-body">First player to reach the FINISH line at the top wins! Tap the FINISH line or Next to start.</p>
-          <!-- the mine lesson's concise explanation tooltip: hidden on every other stage -->
-          <p class="tut-tip" id="tut-tip" hidden></p>
+          <p class="tut-body" id="tut-body">First pawn to reach the green FINISH line wins!</p>
           <button class="tut-next" id="tut-next" type="button">
-            <span id="tut-next-label">Next</span>
+            <span id="tut-next-label">Start</span>
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
           </button>
         </div>
-        <button class="tut-skip" id="tut-skip" type="button">Skip Tutorial</button>
+        <button class="tut-skip" id="tut-skip" type="button">Skip</button>
         <div class="tut-lang" id="tut-lang" role="group" aria-label="Tutorial language">
           <button class="tut-lang-btn" type="button" data-tut-lang="en" aria-pressed="true">EN</button>
           <button class="tut-lang-btn" type="button" data-tut-lang="fa" aria-pressed="false">فارسی</button>
           <button class="tut-lang-btn" type="button" data-tut-lang="ru" aria-pressed="false">RU</button>
         </div>
         <p class="sr-only" id="tut-live" role="status" aria-live="polite"></p>
-      </div>
-      <div class="tut-ready" id="tut-ready" data-lang="en" dir="ltr" role="status" aria-live="polite" hidden>
-        <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
-        <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
       </div>
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->

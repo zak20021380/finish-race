@@ -493,6 +493,38 @@ export const pathOn = (d: Int16Array, pos: Pos, cols: number): number => {
 };
 
 /**
+ * The shortest run of cells from `from` to the FINISH row, as the cells themselves — the line a
+ * guidance layer draws. Every hop is a LEGAL step, not merely a neighbour one nearer the goal: a
+ * wall can leave two cells adjacent with the shorter route running the long way around, and that
+ * is exactly the detour this has to show. Empty when the cell is sealed in; pawns are ignored, as
+ * they are in `distField`, so the line is the route the board offers rather than a turn forecast.
+ */
+export function finishRoute(s: GameState, from: Pos): Pos[] {
+  const { cols, rows } = s;
+  const d = distField(s.walls, cols, rows);
+  if (d[from.r * cols + from.c] < 0) return [];
+  const b = blocks(s.walls);
+  const out: Pos[] = [{ c: from.c, r: from.r }];
+  let cur = from;
+  for (let guard = 0; guard < cols * rows; guard++) {
+    const here = d[cur.r * cols + cur.c];
+    if (here <= 0) break;
+    let stepped = false;
+    for (const [dc, dr] of DIRS) {
+      if (!canStep(b, cur.c, cur.r, dc, dr, cols, rows)) continue;
+      const nc = cur.c + dc, nr = cur.r + dr;
+      if (d[nr * cols + nc] !== here - 1) continue;
+      cur = { c: nc, r: nr };
+      out.push(cur);
+      stepped = true;
+      break;
+    }
+    if (!stepped) break;
+  }
+  return out;
+}
+
+/**
  * Does every pawn that still matters have a route to FINISH with `walls` standing?
  *
  * Named `own`, only that seat's live pawns are judged: a wall may seal a RIVAL in — that is the

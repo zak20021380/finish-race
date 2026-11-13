@@ -1,17 +1,17 @@
 import './style.css';
 import './result.css';
 import {
-  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, isEliminated, mineCells,
-  minesLeft, newGame, reachableBall, rivalMineAt, steps as teamSteps, view as fogOfWar, wallBudget,
-  wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
+  CONFIG, MAX_TEAMS, apply, ballById, distField, finishRoute, firstBall, getAutoMove, hasPathToFinish,
+  isEliminated, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt, steps as teamSteps,
+  view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  capsuleLayout, createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
+  capsuleLayout, capsuleSpots, createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
   type BallView, type BlastBeat, type CapsuleAction, type Ghost, type Hit,
-  type Mark, type Perspective, type Vec, type View,
+  type Mark, type Perspective, type RouteCue, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
 import { createChat, type PawnTint } from './chat';
@@ -61,7 +61,7 @@ import {
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
-import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
+import { capsuleStage, mineStage, setCapsuleStage, setMineStage, STAGE_CLEAR } from './staging';
 import { setPieceBoxes, type PieceBox } from './boardpieces';
 import {
   detonation, impact, initTelegram, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
@@ -1045,7 +1045,7 @@ const DRAG_SLOP = 6;                             // css px before a press become
 const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
-  state, balls: ballViews, hints, ghost, last: marks, thinking: null,
+  state, balls: ballViews, hints, routes: [], ghost, last: marks, thinking: null,
   human: localSide, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
@@ -1075,6 +1075,12 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
+/**
+ * The lesson's board-wide cues, in cells: the player's gold guide to FINISH and the rival's
+ * crimson threat run at the same line. Re-derived on every state change, so the wall the player
+ * builds visibly bends the rival's line around itself — the detour IS the lesson, with no caption.
+ */
+let tutorialRoutes: RouteCue[] = [];
 
 /* ---- invite-first onboarding: per-match session state ----
    All four are reset by `restart()`, so "first two turns" means the first two turns of THIS
@@ -1138,7 +1144,7 @@ function setMode(next: BoardMode<Ghost>) {
  * always a plain board tap.
  */
 function armMine(next: boolean) {
-  const on = next && canAct() && minesLeft(state, localSide) > 0;
+  const on = next && canAct() && minesLeft(state, localSide) > 0 && !mineReserved();
   if (on === mineArmed) return;
   impact('light');
   mineGhost = null;
@@ -1236,13 +1242,23 @@ function armCapsules() {
  */
 function syncStage() {
   const cap = capsule;
+  const blocked = state.balls.filter((b) => !b.isCheckmated).map((b) => b.pos);
   if (mineGhost && cap && cap.hit.kind === 'mine-confirm') {
     /* the pair's own box, resolved against the live pawns exactly as the renderer draws it:
        a horizontal pair on a roomy square, a vertical stack in a boundary column */
-    const lay = capsuleLayout(renderer.layout(), cap.ax, cap.ay,
-      state.balls.filter((b) => !b.isCheckmated).map((b) => b.pos));
+    const lay = capsuleLayout(renderer.layout(), cap.ax, cap.ay, blocked);
     setMineStage(lay ? boardRect(lay.box.left, lay.box.top, lay.box.width, lay.box.height) : null);
   } else setMineStage(null);
+  /* The lesson's ring needs the ✓ key on its own and its door needs the whole pair — for a wall's
+     glass toolbar exactly as for a mine's discs. One geometry call, the same one the frame draws
+     and the hit-test answers, so the spotlight can never point at a key that is not there. */
+  const spots = cap ? capsuleSpots(renderer.layout(), cap, blocked) : null;
+  setCapsuleStage(spots
+    ? {
+        confirm: boardRect(spots.confirm.left, spots.confirm.top, spots.confirm.width, spots.confirm.height),
+        pair: boardRect(spots.pair.left, spots.pair.top, spots.pair.width, spots.pair.height),
+      }
+    : null);
   placeNote();
 }
 
@@ -2247,7 +2263,7 @@ function maybeMicroCoach(): void {
   coachWasMyTurn = true;
   if (microCoachQuiet) return;
   if (hasCompletedTutorial()) return;
-  if (tutorialActive || tutorialStandalone || firstRunBoot) return;
+  if (tutorialActive || tutorialStandalone || firstRunBoot || waitingForMineTrigger) return;
   if (!isLiveDuel()) return;
   myTurnCount++;
   if (myTurnCount <= 2) {
@@ -2289,8 +2305,10 @@ function ui() {
     hints = step ? [step.to] : [];
   }
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
-  if (stage === 'mine-place' && mineArmed) {
-    const target = tutorialMineTarget();
+  if (mineArmed && (stage === 'mine-place' || stage === 'mine-confirm')) {
+    /* the staged square stays placeable through its own confirmation, so the ✓/✕ pair the lesson
+       is pointing at is never dropped by the repaint that raised it */
+    const target = stage === 'mine-confirm' && mineGhost ? { cell: mineGhost } : tutorialMineTarget();
     mineHints = target ? [target.cell] : [];
   }
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
@@ -2304,8 +2322,11 @@ function ui() {
   setClass(dots, 'on', thinking);
 
   setAttr(mineBtn, 'aria-pressed', String(mineArmed));
-  /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod */
-  setDisabled(mineBtn, tutorialActive ? stage !== 'mine-arm' : (!live || minesLeft(state, localSide) <= 0));
+  /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod.
+     During the live-play intermission the LAST charge is held back for that step. */
+  setDisabled(mineBtn, tutorialActive
+    ? stage !== 'mine-arm'
+    : (!live || minesLeft(state, localSide) <= 0 || mineReserved()));
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
@@ -2345,8 +2366,9 @@ function ui() {
     hidePeerPill();
     armGoalBeat();
   }
-  /* the wall's live-play intermission ends on the board's own terms: two real rival rows, then
+  /* the wall's live-play intermission ends on the board's own terms: two real rival turns, then
      this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
+  paintTutorialRoutes();
   if (waitingForMineTrigger) resumeMineLesson();
   /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
   maybeMicroCoach();
@@ -2455,7 +2477,10 @@ function play(a: Action, remote = false): boolean {
   if (a.kind === 'mine') { mineArmed = false; audio.play('move'); }   // one mine per trip to the key
   state = next;
   /* the mine lesson's intermission gate reads real plays, never a scripted walk */
-  if (waitingForMineTrigger) countMineStride();
+  if (waitingForMineTrigger) {
+    countMineStride();
+    if (by !== localSide) mineRivalTurns++;
+  }
   turnsPlayed++;                 // one seat has acted; the round caption counts them
   mineGhost = null;
   setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
@@ -3729,15 +3754,15 @@ function tapMine(hit: Hit | null): boolean {
   return true;
 }
 
-/** The lesson's vocabulary for a hit-test result. */
+/** The lesson's vocabulary for a hit-test result: a first tap stages, a green key commits. */
 function tutorialHitAction(hit: Hit | null): TutorialAction | null {
   if (!hit) return null;
   switch (hit.kind) {
     case 'ball': return { kind: 'select', ball: hit.id };
     case 'move': return { kind: 'move', to: hit.to };
-    case 'wall':
+    case 'wall': return { kind: 'wall-stage', spec: hit.spec };
     case 'confirm': return { kind: 'wall', spec: hit.spec };
-    case 'mine':
+    case 'mine': return { kind: 'mine-stage', cell: hit.cell };
     case 'mine-confirm': return { kind: 'mine', cell: hit.cell };
     default: return null;
   }
@@ -3756,15 +3781,17 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 /**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
- * canvas receives this tap exactly as it would after the lesson.
+ * canvas receives this tap exactly as it would after the lesson. Both placements run the game's
+ * own two taps: stage the ghost, then press its green key.
  */
 function tutorialTap(p: Vec) {
-  /* Step 1 is the GOAL, not a board action: the FINISH banner is the target, and a tap anywhere
-     inside its spotlight (or the card's Next key, wired in tutorial.ts) opens step 2. */
-  if (tutorialStage() === 'goal') {
+  const stage = tutorialStage();
+  const box = boardBox();
+  const vx = box.left + p.x, vy = box.top + p.y;
+  /* The goal card goes on the FINISH band itself, or on its Start key (wired in tutorial.ts). */
+  if (stage === 'goal') {
     const goal = tutorialFinishTarget();
-    const box = boardBox();
-    if (goal && tutorialSpotHas(goal, box.left + p.x, box.top + p.y)) {
+    if (goal && tutorialSpotHas(goal, vx, vy)) {
       impact('light');
       tutorial?.advance();
     } else {
@@ -3772,27 +3799,38 @@ function tutorialTap(p: Vec) {
     }
     return;
   }
-  const stage = tutorialStage();
   const hit = at(p);
-  /* STEP 4B's ✕ key: drop the staged charge, put the tile spotlight back and let the player
-     choose again. The ✕ is a real cancel, never a nudge, and the lesson stays on step 4. */
-  if (stage === 'mine-place' && hit?.kind === 'cancel' && mineGhost) {
-    impact('light');
-    mineGhost = null;
-    armCapsules();
-    invalidate();        // the canvas owns the ✓/✕ pair: repaint it once after the cancel
-    tutorial?.staged(false);
+  /* The ✕ beside a staged ghost is a real way back to the first tap, never a nudge. */
+  if (hit?.kind === 'cancel') {
+    if (stage === 'wall-confirm' && ghost?.armed) {
+      impact('light');
+      disarmWall();
+      tutorial?.notify({ kind: 'wall-cancel' });
+      return;
+    }
+    if (stage === 'mine-confirm' && mineGhost) {
+      impact('light');
+      mineGhost = null;
+      armCapsules();
+      invalidate();        // the canvas owns the pair: repaint it once after the cancel
+      tutorial?.notify({ kind: 'mine-cancel' });
+      return;
+    }
+    tutorial?.nudge();
     return;
   }
   let action = tutorialHitAction(hit);
-  /* Step 3 is forgiving by design: one tap anywhere in the spotlight — not only the hairline
-     groove — commits the wall, so the lesson is a single decisive action. */
-  if (stage === 'wall') {
+  /* The groove is a hairline and the ✓ a small disc: a tap anywhere inside the ring the lesson
+     paints counts as a tap on the thing it is pointing at. */
+  if (stage === 'wall-stage') {
     const target = tutorialWallTarget();
-    const box = boardBox();
-    if (target && tutorialSpotHas(target.spot, box.left + p.x, box.top + p.y)) {
-      action = { kind: 'wall', spec: target.spec };
-    }
+    if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'wall-stage', spec: target.spec };
+  } else if (stage === 'wall-confirm' && ghost?.armed) {
+    const target = tutorialWallConfirmTarget();
+    if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'wall', spec: ghost.spec };
+  } else if (stage === 'mine-confirm' && mineGhost) {
+    const target = tutorialMineConfirmTarget();
+    if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'mine', cell: mineGhost };
   }
   if (!action || !isTutorialActionAllowed(action)) { tutorial?.nudge(); return; }
   const L = renderer.layout();
@@ -3808,28 +3846,36 @@ function tutorialTap(p: Vec) {
       impact('light');
       if (!play({ kind: 'move', ball: selected ?? undefined, to: action.to })) return;
       break;
+    case 'wall-stage': {
+      /* FIRST tap: the ghost stands in the groove and raises the board's real ✓/✕ toolbar. No
+         toast comes with it — from here the green key IS the whole instruction. */
+      const wall: Wall = { ...action.spec, owner: state.turn };
+      if (!wallOk(state, wall)) { tutorial?.nudge(); return; }
+      setMode(previewWall(mode(), { spec: action.spec, ok: true, armed: true, p: state.turn }));
+      impact('light');
+      break;
+    }
     case 'wall': {
       const wall: Wall = { ...action.spec, owner: state.turn };
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
+      /* the bar locks in with weight: the rival's dashed route bends around it on this frame */
+      impact('heavy');
+      shake(true);
       break;
     }
+    case 'mine-stage':
+      /* FIRST tap: stage the charge on the exact tile the lesson names. The board's own pair
+         comes up and the spotlight walks onto its green disc; nothing is buried yet. */
+      mineGhost = action.cell;
+      armCapsules();
+      impact('light');
+      break;
     case 'mine':
-      /* STEP 4B, first tap: STAGE the charge on the exact tile the lesson is pointing at. That
-         raises the board's real ✓/✕ confirmation pair, and the spotlight moves onto it. The mine
-         is NOT buried yet: the lesson only advances when the player confirms with ✓. */
-      if (stage === 'mine-place' && hit?.kind === 'mine') {
-        mineGhost = action.cell;
-        armCapsules();
-        impact('light');
-        tutorial?.staged(true);
-        return;
-      }
-      /* The ✓ tap (or any other confirmed mine door): bury it through the same `play()` every
-         real race uses, then let the lesson close straight into live play. */
+      /* SECOND tap: bury it through the same `play()` every real race uses. */
       if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
       break;
-    case 'mine-arm':
-      return;   // the arm key is a dock button, never a board tap
+    default:
+      return;   // the arm key is a dock button, and cancels are handled above
   }
   tutorial?.notify(action);
 }
@@ -4055,9 +4101,14 @@ const tutorialRival = (): Ball | null =>
   firstBall(state, rivalSide()) ?? state.balls.find((b) => b.team !== localSide) ?? null;
 
 /**
- * Step 3's real target: a legal horizontal groove directly above the rival's pawn. The candidates
- * are tried nearest-first, then the whole lattice, so a crowded party board still finds a groove
- * that is genuinely legal instead of pointing at a refused slot.
+ * The wall lesson's real target: a legal horizontal groove directly above the rival's pawn. The
+ * candidates are tried nearest-first, then the whole lattice, so a crowded party board still finds
+ * a groove that is genuinely legal instead of pointing at a refused slot.
+ *
+ * Two rules the lesson adds on top of `wallOk`, which only guards its OWN author's route: every
+ * live pawn must still have a way to FINISH (a wall that checkmated the rival would end the race
+ * inside the tutorial), and a groove that actually lengthens the rival's run wins over one that
+ * does not — the detour the dashed line then draws is the whole point of the step.
  */
 function tutorialWallTarget(): TutorialTargetWall | null {
   if (state.turn !== localSide || state.winner !== null) return null;
@@ -4078,10 +4129,35 @@ function tutorialWallTarget(): TutorialTargetWall | null {
   for (let y = 1; y < state.rows; y++) {
     for (let x = 0; x <= state.cols - 2; x++) push({ o: 'h', x, y });
   }
+  const before = pathOn(distField(state.walls, state.cols, state.rows), rival.pos, state.cols);
+  let fallback: WallSpec | null = null;
   for (const spec of candidates) {
-    if (wallOk(state, { ...spec, owner: localSide })) return { spec, spot: grooveSpot(spec) };
+    const wall: Wall = { ...spec, owner: localSide };
+    if (!wallOk(state, wall)) continue;
+    const walls = [...state.walls, wall];
+    if (!hasPathToFinish(state, walls)) continue;
+    if (pathOn(distField(walls, state.cols, state.rows), rival.pos, state.cols) > before) {
+      return { spec, spot: grooveSpot(spec) };
+    }
+    if (!fallback) fallback = spec;
   }
-  return null;
+  return fallback ? { spec: fallback, spot: grooveSpot(fallback) } : null;
+}
+
+/**
+ * The wall's SECOND tap: the green key of the toolbar the staged ghost raised. The ring rides the
+ * key alone; the input door is the whole strip, so the ✕ beside it stays a real way back.
+ */
+function tutorialWallConfirmTarget(): TutorialTargetWall | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  if (!ghost?.armed || !ghost.ok) return null;
+  const keys = capsuleStage();
+  if (!keys) return null;
+  return {
+    spec: ghost.spec,
+    spot: { rect: keys.confirm, radius: Math.max(keys.confirm.width, keys.confirm.height) / 2 },
+    door: keys.pair,
+  };
 }
 
 /**
@@ -4121,11 +4197,50 @@ function tutorialMineTarget(): TutorialTargetMine | null {
 }
 
 /**
- * The gold FINISH banner: step 1's own target, and the re-pulse that answers the forward step.
- * Exactly the top row, so the guidance is the board's real goal line and never a floating band.
+ * The gold FINISH banner: the goal card's own target, and the re-pulse that answers the forward
+ * step. Exactly the top row, so the guidance is the board's real goal line and never a floating band.
  */
 const tutorialFinishTarget = (): TutorialSpot | null =>
   state.winner === null ? { rect: boardRect(0, 0, state.cols, 1), radius: 18 } : null;
+
+/** The mine's SECOND tap: the green disc of the pair the staged charge raised. */
+function tutorialMineConfirmTarget(): TutorialTargetMine | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  if (!mineGhost) return null;
+  const keys = capsuleStage();
+  if (!keys) return null;
+  return {
+    cell: mineGhost,
+    spot: { rect: keys.confirm, radius: Math.max(keys.confirm.width, keys.confirm.height) / 2 },
+    door: keys.pair,
+  };
+}
+
+/**
+ * The lesson's two dashed lines, re-derived from the board every time it changes: the player's own
+ * run to FINISH while the movement step is up, and the rival's threat run from the moment the wall
+ * step opens until the charge is buried. Both are real routes through the standing walls, so the
+ * wall the player commits bends the rival's line around itself in front of them.
+ */
+function paintTutorialRoutes() {
+  const stage = tutorialStage();
+  const routes: RouteCue[] = [];
+  if (state.winner === null) {
+    if (stage === 'move') {
+      const ball = selected !== null ? ballById(state, selected) : firstBall(state, localSide);
+      const path = ball ? finishRoute(state, ball.pos) : [];
+      if (path.length > 1) routes.push({ tone: 'guide', path });
+    }
+    const threat = waitingForMineTrigger || stage === 'wall-stage' || stage === 'wall-confirm'
+      || stage === 'mine-arm' || stage === 'mine-place' || stage === 'mine-confirm';
+    if (threat) {
+      const rival = tutorialRival();
+      const path = rival ? finishRoute(state, rival.pos) : [];
+      if (path.length > 1) routes.push({ tone: 'threat', path });
+    }
+  }
+  tutorialRoutes = routes;
+}
 
 /** The lesson's one bot beat: each machine seat steps once, deterministically, and hands back. */
 async function tutorialReply(): Promise<void> {
@@ -4147,30 +4262,40 @@ async function tutorialReply(): Promise<void> {
 }
 
 /**
- * Stage change from the lesson: clear every hover preview so the board stays bare behind the card,
- * then let `ui()` re-derive the dots and the mine key's state. On the mine's 4A stage the pod AND
- * its inventory counter are ringed — the player must see both the action button and the charges
- * it spends. `refresh(null)` takes that ring down when the lesson closes or suspends.
+ * Stage change from the lesson: clear any HOVER preview so the board stays bare behind the
+ * spotlight, then let `ui()` re-derive the dots and the mine key's state. An ARMED ghost is not a
+ * hover — it is the wall the player just staged, and the confirm stage is pointing at its ✓ — so
+ * it survives the refresh. On the ARM stage the pod AND its inventory counter are ringed;
+ * `refresh(null)` takes that ring down when the lesson closes or suspends.
  */
 function syncTutorialUI(stage: TutorialStage | null = null) {
   mineBtn.classList.toggle('tut-arm-target', stage === 'mine-arm');
-  if (!tutorialActive) return;
-  if (ghost) setMode({ ...mode(), preview: null });
+  if (!tutorialActive) {
+    paintTutorialRoutes();
+    invalidate();
+    return;
+  }
+  if (ghost && !ghost.armed) setMode({ ...mode(), preview: null });
   ui();
 }
 
 /* ---------- the live-play intermission before the mine lesson ---------- */
 
 /**
- * Step 3 has just put the wall up. The lesson has stepped aside; from here until the mine is
- * planted the board is ordinary live play. The two numbers below are the only gate: the rival's
- * real forward rows, counted off `play()`, and whose turn it is. Nothing is scripted, and nothing
- * opens while the rival is still parked on its starting row.
+ * The wall stands. The lesson has stepped aside; from here until the mine is planted the board is
+ * ordinary live play, with three rules of its own: the last mine charge is held for the lesson,
+ * the rival's two turns are counted whether they gain rows or sidestep around the new wall, and a
+ * race that settles here ends the lesson cleanly instead of stranding it.
  */
 let waitingForMineTrigger = false;
 let mineStrides = 0;
+/** Completed rival turns since the handoff — a detour costs a turn without gaining a row. */
+let mineRivalTurns = 0;
 /** Best (lowest) row each rival ball has reached since the handoff. */
 let mineGateRows: Map<number, number> | null = null;
+
+/** The lesson's own charge: live play may spend every mine but the last one. */
+const mineReserved = () => waitingForMineTrigger && minesLeft(state, localSide) <= 1;
 
 /** The wall stands: close the overlay, release the gate, and let the match actually play. */
 function beginMineIntermission() {
@@ -4180,6 +4305,7 @@ function beginMineIntermission() {
     state.balls.filter((b) => b.team !== localSide).map((b) => [b.id, b.pos.r]),
   );
   mineStrides = 0;
+  mineRivalTurns = 0;
   waitingForMineTrigger = true;
   ui();
   startClock();
@@ -4203,19 +4329,27 @@ function countMineStride() {
 }
 
 /**
- * The intermission is over: the rival has genuinely gained its two rows and the local seat is up.
- * Re-open the overlay on the mine half of step 4. A settled race ends the lesson instead.
+ * The intermission is over: the rival has taken its two turns — two forward rows, or two completed
+ * moves when the new wall sent it sideways — and the local seat is up. Re-open on the mine half of
+ * the lesson. A race that settled while the lesson was aside is COMPLETED, not cancelled: the flag
+ * is written and the board goes to its own result, never back into a half-open lesson.
  */
 function resumeMineLesson() {
-  if (!waitingForMineTrigger || tutorialActive || paused || overlayOpen) return;
+  if (!waitingForMineTrigger || tutorialActive) return;
+  /* the verdict comes first: the result sheet is exactly what would otherwise keep this gate
+     from ever running again, leaving the lesson suspended for the rest of the match */
   if (state.winner !== null) {
     waitingForMineTrigger = false;
-    tutorial?.cancel();
+    mineGateRows = null;
+    tutorial?.complete();
     return;
   }
-  if (state.turn !== localSide || mineStrides < TUTORIAL_LIVE_STEPS) return;
+  if (paused || overlayOpen) return;
+  if (state.turn !== localSide) return;
+  if (mineStrides < TUTORIAL_LIVE_STEPS && mineRivalTurns < TUTORIAL_LIVE_STEPS) return;
   waitingForMineTrigger = false;
-  /* the player spent every charge during live play: there is no mine lesson left to teach */
+  mineGateRows = null;
+  /* no charge left to teach with (a board that started without a budget): the lesson is read */
   if (minesLeft(state, localSide) <= 0) { tutorial?.skip(); return; }
   mineArmed = false;
   mineGhost = null;
@@ -4237,6 +4371,7 @@ function beginTutorial(auto = false) {
   }
   waitingForMineTrigger = false;
   mineStrides = 0;
+  mineRivalTurns = 0;
   mineGateRows = null;
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
@@ -4283,7 +4418,8 @@ function joinPendingDuelRoom(): void {
 function startTutorial() {
   if (sheets.isOpen) sheets.close();
   tutorialRequested = true;
-  startGame({ difficulty: menuState.difficulty, sizes: [1, 1] });
+  /* `quiet` skips the empty VS face-off: a lesson opens on the board, not on a cinematic. */
+  startGame({ difficulty: menuState.difficulty, sizes: [1, 1], quiet: true });
 }
 
 /* ---------- zero-friction invite boot ---------- */
@@ -4449,9 +4585,11 @@ function cancelTutorial() {
   if (!tutorialActive && !waitingForMineTrigger) return;
   waitingForMineTrigger = false;
   mineStrides = 0;
+  mineRivalTurns = 0;
   mineGateRows = null;
   tutorial?.cancel();
   tutorialActive = false;
+  paintTutorialRoutes();
 }
 
 tutorial = createTutorial({
@@ -4459,11 +4597,14 @@ tutorial = createTutorial({
   select: tutorialSelectTarget,
   move: tutorialMoveTarget,
   wall: tutorialWallTarget,
+  wallConfirm: tutorialWallConfirmTarget,
   mineArm: () => elementSpot(mineBtn, 8),
   minePlace: tutorialMineTarget,
+  mineConfirm: tutorialMineConfirmTarget,
   finish: tutorialFinishTarget,
   reply: tutorialReply,
   handoff: beginMineIntermission,
+  finishPulse: () => { renderer.pulseFinish(1200); invalidate(); },
   refresh: syncTutorialUI,
   end(result) {
     const bootLesson = firstRunBoot;
@@ -4485,7 +4626,9 @@ tutorial = createTutorial({
        Pause → Replay is the exception: the real match under it gets the board straight back. */
     if (tutorialStandalone) {
       tutorialStandalone = false;
-      if (result === 'finished' && bootLesson) {
+      /* A settled board keeps its own result: a race that finished during the live-play
+         intermission is crowned and scored like any other, then Home follows the card. */
+      if (result === 'finished' && (bootLesson || state.winner !== null)) {
         firstRunSprint = true;
         $<HTMLElement>('s-game').focus({ preventScroll: true });
         ui();
@@ -4687,6 +4830,7 @@ function frame(now: number) {
     view.state = state;
     view.balls = ballViews;
     view.hints = hints;
+    view.routes = tutorialRoutes;
     view.ghost = ghost;
     view.mineHints = mineHints;
     view.mineGhost = mineGhost;

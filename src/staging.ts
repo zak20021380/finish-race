@@ -15,6 +15,10 @@
  *     square is staged, and a bubble repeating "tap again" only covers them; and
  *   · a hint that must stay — an event beat, a refusal — keeps `STAGE_CLEAR` px of daylight from
  *     the pair's rims, or does not paint at all.
+ *
+ * `capsuleStage()` is the same signal one level down, for either staged action (a wall's glass
+ * toolbar or a mine's discs): the ✓ key on its own, and the pair together. The lesson rings the
+ * first and cuts its input hole around the second.
  */
 
 /** A viewport box, in css px. The same shape as a `TutorialRect`, deliberately. */
@@ -25,10 +29,21 @@ export interface StageBox {
   height: number;
 }
 
+/**
+ * The two keys a staged action offers, in viewport css px: the ✓ on its own, and the pair together.
+ * The hands-on lesson rings `confirm` and opens its input door around `pair`, so the ✕ beside it
+ * stays a real way back instead of a disc the overlay swallows.
+ */
+export interface CapsuleStage {
+  confirm: StageBox;
+  pair: StageBox;
+}
+
 /** Daylight a surviving hint keeps from the pair's rims, in css px. */
 export const STAGE_CLEAR = 20;
 
 let box: StageBox | null = null;
+let keys: CapsuleStage | null = null;
 
 const sameBox = (a: StageBox | null, b: StageBox | null): boolean => a === b
   || (!!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height);
@@ -41,6 +56,16 @@ export function setMineStage(next: StageBox | null): void {
 
 /** The pair's box in viewport css px, or `null` while no mine is staged. */
 export const mineStage = (): StageBox | null => box;
+
+/** Publish the ✓ key and the whole pair — wall toolbar or mine discs. Cleared with `null`. */
+export function setCapsuleStage(next: CapsuleStage | null): void {
+  if (keys === next) return;
+  if (keys && next && sameBox(keys.confirm, next.confirm) && sameBox(keys.pair, next.pair)) return;
+  keys = next;
+}
+
+/** The live ✓/✕ geometry, or `null` while no action is staged. */
+export const capsuleStage = (): CapsuleStage | null => keys;
 
 /** Would `r` (viewport css px) come within `pad` px of the pair? Never true while nothing is staged. */
 export function stageOverlaps(r: StageBox, pad = STAGE_CLEAR): boolean {
