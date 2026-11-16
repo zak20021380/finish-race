@@ -25,7 +25,7 @@ import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { formatCountdown, getGrandCup, paidPlaces, type GrandCup } from './data';
-import { arena } from './arenaState';
+import { arena, onArena } from './arenaState';
 import { adoptUserStorageKey, onChange, profile, theme } from './storage';
 import { impact } from './telegram';
 import { flagPhoto } from './flags';
@@ -819,6 +819,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /* The season is local truth: stamp the crest now, so the header never flashes a
      placeholder number while the first ladder read is still on the wire. */
   paintMindTop(null);
+
+  /* A Command Center edit or a rollover renames this crest at once. A new season number also
+     drops the cached ladder, so the next look at Home reads the new season's board. */
+  let homeSeasonNo = arena().seasonNo;
+  onArena(() => {
+    const no = arena().seasonNo;
+    if (no !== homeSeasonNo) {
+      homeSeasonNo = no;
+      mindsSyncedAt = 0;
+      mindKey = '';
+    }
+    paintMindTop(mindFeed);
+  });
 
   const loadMinds = async (): Promise<void> => {
     mindsSyncedAt = Date.now();

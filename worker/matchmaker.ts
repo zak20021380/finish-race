@@ -1446,6 +1446,8 @@ const TIER_DEFAULTS: Record<ArenaTierId, number> = {
 };
 const SEASON_ANCHOR = Date.UTC(2026, 9, 16, 14, 0);
 const SEASON_MS = 28 * 86400_000;
+/** The longest clock a rollover may open on: a year, so a typo cannot park a season forever. */
+const SEASON_MAX_DAYS = 366;
 const SNAPSHOT_MAX = 50;
 const AWARDS_KEEP = 6;
 
@@ -1582,8 +1584,17 @@ function arenaPatch(base: ArenaState, raw: unknown, now = Date.now()): ArenaStat
   if (!raw || typeof raw !== 'object') return base;
   const p = raw as Partial<ArenaState>;
   const next: ArenaState = { ...base, divisions: [...base.divisions], updatedAt: now };
-  if (ARENA_STATUSES.includes(p.status as ArenaStatus)) next.status = p.status as ArenaStatus;
-  if (typeof p.matchLocked === 'boolean') next.matchLocked = p.matchLocked;
+  const explicitStatus = ARENA_STATUSES.includes(p.status as ArenaStatus);
+  if (explicitStatus) next.status = p.status as ArenaStatus;
+  if (typeof p.matchLocked === 'boolean') {
+    next.matchLocked = p.matchLocked;
+    /* Unlocking a paused season whose clock still runs reopens it: a lock is a pause, never a
+       verdict. An explicit `status` in the same patch still wins, and a board already in its
+       finale stays final. */
+    if (!p.matchLocked && !explicitStatus && next.status === 'maintenance' && next.endsAt > now) {
+      next.status = 'active';
+    }
+  }
   if (typeof p.seasonName === 'string') {
     const name = arenaText(p.seasonName, 60);
     if (name) {
@@ -3657,7 +3668,8 @@ export class MatchmakerDO {
       ],
       openLobbies: lobbies,
       config: this.config(),
-      arena: this.arena,
+      /* the same five fields the public mirror serves, `title` included */
+      arena: this.arenaWire(this.arena),
     };
   }
 
@@ -4454,11 +4466,19 @@ export class MatchmakerDO {
 
   /* ---------- the arena & tournament board ---------- */
 
+  /**
+   * The board as the wire carries it. `title` is `seasonName` published under the name the
+   * Season panel speaks in — one season, two vocabularies, never two values.
+   */
+  private arenaWire(a: ArenaState): ArenaState & { title: string } {
+    return { ...a, title: a.seasonName };
+  }
+
   /** What any player reads: the clock and statuses, with only the snapshot's head exposed. */
-  private arenaPublicView(): ArenaState {
+  private arenaPublicView(): ArenaState & { title: string } {
     const snap = this.arena.lastSnapshot;
     return {
-      ...this.arena,
+      ...this.arenaWire(this.arena),
       lastSnapshot: snap ? { ...snap, entries: snap.entries.slice(0, 3) } : null,
     };
   }
@@ -4814,21 +4834,35 @@ export class MatchmakerDO {
     return { ok: true, country, total: field.length, rows, you };
   }
 
-  /** The Arena tab's write door: one patch, or one of the two emergency commands. */
+  /** The Season panel's write door: one patch, or one of the season commands. */
   private arenaCommand(body: Record<string, unknown>): {
     ok: boolean;
     error?: string;
-    arena?: ArenaState;
+    arena?: ArenaState & { title: string };
     dismissed?: number;
     awards?: number;
     snapshot?: ArenaSnapshot;
   } {
     const action = typeof body.action === 'string' ? body.action : '';
-    if (action === 'FORCE_STOP') return this.forceStop();
-    if (action === 'SEASON_RESET') return this.resetSeason();
+    if (action === 'FORCE_STOP') {
+      const out = this.forceStop();
+      return { ok: true, arena: this.arenaWire(out.arena), dismissed: out.dismissed };
+    }
+    if (action === 'SEASON_RESET') {
+      const out = this.resetSeason();
+      return { ok: true, arena: this.arenaWire(out.arena), snapshot: out.snapshot, awards: out.awards };
+    }
+    /* A brand-new season on the panel's own clock and title: N+1, active, unlocked, fresh. */
+    if (action === 'SEASON_START') {
+      const out = this.resetSeason({
+        durationDays: typeof body.durationDays === 'number' ? body.durationDays : undefined,
+        title: typeof body.title === 'string' ? body.title : '',
+      });
+      return { ok: true, arena: this.arenaWire(out.arena), snapshot: out.snapshot, awards: out.awards };
+    }
     if (action) return { ok: false, error: 'unknown_action' };
     const patch = body.patch && typeof body.patch === 'object' ? body.patch : body;
-    return { ok: true, arena: this.configureArena(patch) };
+    return { ok: true, arena: this.arenaWire(this.configureArena(patch)) };
   }
 
   /**
@@ -4858,10 +4892,13 @@ export class MatchmakerDO {
 
   /**
    * Finalize the season: rank the registry, bank the snapshot, push every player an award, and
-   * roll the counter to N+1 with a fresh 28-day clock. The snapshot is the audit record; the
-   * awards are what the client claims once per season.
+   * roll the counter to N+1 on the clock the Command Center picked (28 days when it picked
+   * none). The snapshot is the audit record; the awards are what the client claims once per
+   * season.
    */
-  private resetSeason(): { ok: true; arena: ArenaState; snapshot: ArenaSnapshot; awards: number } {
+  private resetSeason(
+    opts: { durationDays?: number; title?: string } = {},
+  ): { ok: true; arena: ArenaState; snapshot: ArenaSnapshot; awards: number } {
     const now = Date.now();
     const old = this.arena;
     const ranked = [...this.players.values()]
@@ -4895,13 +4932,23 @@ export class MatchmakerDO {
     });
 
     const nextNo = clamp(old.seasonNo + 1, 1, 999);
+    /* The panel names the new season and picks its clock; an absent choice keeps the carried
+       title and the 28-day default. */
+    const days = Math.round(clamp(
+      typeof opts.durationDays === 'number' && Number.isFinite(opts.durationDays)
+        ? opts.durationDays
+        : SEASON_MS / 86400_000,
+      1,
+      SEASON_MAX_DAYS,
+    ));
+    const typed = arenaText(opts.title, 60);
     this.arena = {
       ...old,
       status: 'active',
       matchLocked: false,
       seasonNo: nextNo,
-      seasonName: nextSeasonName(old.seasonName, nextNo),
-      endsAt: now + SEASON_MS,
+      seasonName: nextSeasonName(typed || old.seasonName, nextNo),
+      endsAt: now + days * 86400_000,
       updatedAt: now,
       lastSnapshot: snapshot,
       awardsCount: ranked.length,

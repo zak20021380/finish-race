@@ -1290,7 +1290,7 @@
                          never a raw head-count pill. The field size lives in the title. -->
                     <span class="mind-top" id="mind-top">
                       <i class="mind-pulse" aria-hidden="true"></i>
-                      <span class="mind-season" id="mind-season">Season 1</span>
+                      <span class="mind-season" id="mind-season"></span>
                     </span>
                   </div>
                   <ol class="mind-podium" id="home-minds">
@@ -1463,6 +1463,9 @@
             <div class="arena-road-head-copy">
               <span class="arena-road-kicker" data-i18n="arenaRoadKicker">THE ROAD OF REALMS</span>
               <h1 class="m-title arena-road-title" id="arena-title" data-i18n="arenaTitle">Arena</h1>
+              <span class="arena-season" id="arena-season" data-tone="live">
+                <i aria-hidden="true"></i><span id="arena-season-t"></span>
+              </span>
             </div>
             <span class="arena-tiq-pill" id="arena-tiq-pill" role="status" aria-live="polite" aria-label="Tactical IQ">
               <svg class="ico arena-tiq-ico" aria-hidden="true"><use href="#i-brain" /></svg>
@@ -1510,9 +1513,9 @@
             </span>
             <div class="ml-id">
               <h1 class="m-title ml-title" id="ranks-title"><span class="ml-title-ink" data-i18n="ladderTitle">The Mind Ladder</span></h1>
-              <span class="ml-sub" id="ranks-sub">Season 5</span>
+              <span class="ml-sub" id="ranks-sub"></span>
             </div>
-            <span class="ml-season" id="ranks-season" title="Season 5 closes">
+            <span class="ml-season" id="ranks-season" title="Season countdown">
               <i class="ml-pulse" aria-hidden="true"></i>
               <span class="ml-season-stack">
                 <small class="ml-season-k" aria-hidden="true">Ends in</small>
@@ -3581,141 +3584,113 @@
 
           <div class="adm-ctrl-view" id="ctrl-panel-season" data-ctrl-view="season" role="tabpanel"
             aria-labelledby="actrl-tab-season" hidden>
-            <p class="adm-sec-h">Season &amp; league</p>
-            <section class="adm-arena" id="adm-season" data-state="active" data-lock="false"
-              aria-label="Season and league management">
+            <!-- Season command: three cards and nothing else. Card 1 is the live read, Card 2
+                 edits the running season, Card 3 rolls it. Every figure on this panel is the
+                 Worker's own season state — there is not one hardcoded season string here. -->
+            <section class="sc-panel" id="adm-season" data-state="active" data-lock="false"
+              aria-label="Season command panel">
 
-              <!-- season title and the Bronze → Challenger thresholds -->
-              <div class="adm-arena-card">
-                <div class="adm-arena-head">
-                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-cup" /></svg></span>
-                  <span class="adm-arena-copy">
-                    <b>Season &amp; divisions</b>
-                    <small id="arena-season-chip">Season 5</small>
+              <!-- CARD 1 — the live season, read only -->
+              <article class="sc-card" aria-labelledby="sc-live-h">
+                <header class="sc-head">
+                  <span class="sc-ico" aria-hidden="true"><svg class="ico"><use href="#i-cup" /></svg></span>
+                  <span class="sc-head-copy">
+                    <b class="sc-badge" id="sc-badge">SEASON</b>
+                    <small id="sc-live-h">Live season status</small>
                   </span>
-                </div>
-                <label class="adm-arena-fld">
-                  <span class="adm-arena-k">Season title</span>
-                  <input id="arena-season-name" class="adm-input" type="text" maxlength="60"
+                  <span class="sc-state" id="sc-state" data-tone="live">
+                    <i aria-hidden="true"></i><span id="sc-state-t">—</span>
+                  </span>
+                </header>
+                <p class="sc-season" id="sc-title">—</p>
+                <p class="sc-count" id="sc-count">—</p>
+              </article>
+
+              <!-- CARD 2 — edit the running season -->
+              <article class="sc-card" aria-labelledby="sc-edit-h">
+                <header class="sc-head">
+                  <span class="sc-ico" aria-hidden="true"><svg class="ico"><use href="#i-edit" /></svg></span>
+                  <span class="sc-head-copy">
+                    <b id="sc-edit-h">Edit current season</b>
+                    <small>Title · duration · standings</small>
+                  </span>
+                </header>
+
+                <label class="sc-fld">
+                  <span class="sc-k">Season title</span>
+                  <input id="season-title" class="adm-input" type="text" maxlength="60"
                     autocomplete="off" spellcheck="false" aria-label="Season title"
-                    placeholder="Season 5: Mind Clash" />
+                    placeholder="Season title" />
                 </label>
-                <div class="adm-divs" role="group" aria-label="Arena division thresholds">
-                  <p class="adm-arena-k adm-divs-h">Division thresholds <span>minimum TIQ</span></p>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="bronze" aria-hidden="true"></i>
-                    <span>Bronze</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="0" max="1000000"
-                      step="50" value="0" data-div-min="bronze" aria-label="Bronze minimum TIQ" readonly />
-                  </label>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="silver" aria-hidden="true"></i>
-                    <span>Silver</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
-                      step="50" value="1200" data-div-min="silver" aria-label="Silver minimum TIQ" />
-                  </label>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="gold" aria-hidden="true"></i>
-                    <span>Gold</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
-                      step="50" value="1800" data-div-min="gold" aria-label="Gold minimum TIQ" />
-                  </label>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="platinum" aria-hidden="true"></i>
-                    <span>Platinum</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
-                      step="50" value="2400" data-div-min="platinum" aria-label="Platinum minimum TIQ" />
-                  </label>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="diamond" aria-hidden="true"></i>
-                    <span>Diamond</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
-                      step="50" value="3000" data-div-min="diamond" aria-label="Diamond minimum TIQ" />
-                  </label>
-                  <label class="adm-div">
-                    <i class="adm-div-dot" data-div="challenger" aria-hidden="true"></i>
-                    <span>Challenger</span>
-                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
-                      step="50" value="4000" data-div-min="challenger" aria-label="Challenger minimum TIQ" />
-                  </label>
-                </div>
-              </div>
 
-              <!-- the live clock, its presets, an exact end, and the player-facing capsule -->
-              <div class="adm-arena-card">
-                <div class="adm-arena-head">
-                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-calendar" /></svg></span>
-                  <span class="adm-arena-copy">
-                    <b>Season countdown</b>
-                    <small id="arena-clock-zone">Local time</small>
-                  </span>
+                <div class="sc-extend" role="group" aria-label="Extend the current season">
+                  <button class="sc-key" type="button" data-extend="30">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg><span>30 Days</span>
+                  </button>
+                  <button class="sc-key" type="button" data-extend="90">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg><span>90 Days</span>
+                  </button>
                 </div>
-                <div class="adm-count" id="arena-count" role="timer" aria-live="off">— —</div>
-                <div class="adm-presets" role="group" aria-label="Extend the season countdown">
-                  <button class="adm-preset" type="button" data-preset="6">+6 Hours</button>
-                  <button class="adm-preset" type="button" data-preset="24">+24 Hours</button>
-                  <button class="adm-preset" type="button" data-preset="72">+3 Days</button>
-                  <button class="adm-preset" type="button" data-preset="168">+7 Days</button>
-                </div>
-                <div class="adm-expiry">
-                  <label class="adm-arena-fld adm-expiry-fld">
-                    <span class="adm-arena-k">Exact end</span>
-                    <input id="arena-ends" class="adm-input" type="datetime-local" step="60"
-                      aria-label="Exact season end" />
-                  </label>
-                  <button class="adm-btn adm-expiry-set" type="button" id="arena-ends-apply">Set</button>
-                </div>
-                <!-- the exact capsule the Mind Ladder header renders -->
-                <div class="adm-pv" aria-label="Mind Ladder countdown preview">
-                  <div class="adm-pv-top">
-                    <span class="adm-pv-crest" aria-hidden="true"><svg class="ico"><use href="#i-brain" /></svg></span>
-                    <span class="adm-pv-title">
-                      <b>The Mind Ladder</b>
-                      <small id="arena-pv-season">Season 5</small>
-                    </span>
-                    <span class="ml-season adm-pv-pill" id="arena-pv-pill" data-tone="live" title="Season countdown">
-                      <i class="ml-pulse" aria-hidden="true"></i>
-                      <span class="ml-season-stack">
-                        <small class="ml-season-k" id="arena-pv-kicker">Ends in</small>
-                        <b class="ml-season-t" id="arena-pv-value">— left</b>
-                      </span>
-                    </span>
-                  </div>
-                  <p class="adm-pv-note" id="arena-pv-note">What players see on the Mind Ladder right now.</p>
-                </div>
-              </div>
 
-              <!-- the last finalized season, kept as an audit read -->
-              <div class="adm-arena-card" id="arena-snap-card" hidden>
-                <div class="adm-arena-head">
-                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
-                  <span class="adm-arena-copy">
-                    <b>Last snapshot</b>
-                    <small id="arena-snap-meta">—</small>
-                  </span>
-                </div>
-                <ul class="adm-arena-snap" id="arena-snap-list" aria-label="Final season standings"></ul>
-              </div>
-
-              <!-- the two keys that must feel dangerous -->
-              <div class="adm-arena-card is-danger">
-                <div class="adm-arena-head">
-                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-restart" /></svg></span>
-                  <span class="adm-arena-copy">
-                    <b>Emergency</b>
-                    <small id="arena-awards-meta">No prizes pushed</small>
-                  </span>
-                </div>
-                <button class="adm-btn adm-btn-danger adm-reset" type="button" id="arena-reset">
-                  Force Season Reset
+                <button class="adm-sw sc-lock" type="button" role="switch" id="season-lock"
+                  aria-checked="false" aria-label="Lock season standings">
+                  <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
+                  <span class="adm-sw-t" id="season-lock-t">Unlocked — matches count</span>
+                  <span class="adm-knob" aria-hidden="true"><i></i></span>
                 </button>
-                <button class="adm-btn adm-btn-danger adm-stop" type="button" id="arena-stop">
-                  <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg><span>Emergency Force-Stop</span>
+
+                <button class="adm-btn adm-btn-primary sc-save" type="button" id="season-save">
+                  Save Current Season
                 </button>
-                <p class="adm-arena-fine">Reset finalizes the ladder, banks a snapshot, pushes
-                  every player's TIQ award and badge, then opens the next season. Force-stop freezes
-                  the arena, dismisses the queue and notifies every connected client.</p>
-              </div>
+                <p class="sc-note" id="season-note" role="status" hidden>
+                  <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+                  <span id="season-note-t">Season updated</span>
+                </p>
+              </article>
+
+              <!-- CARD 3 — roll to the next season -->
+              <article class="sc-card" aria-labelledby="sc-new-h">
+                <header class="sc-head">
+                  <span class="sc-ico" aria-hidden="true"><svg class="ico"><use href="#i-restart" /></svg></span>
+                  <span class="sc-head-copy">
+                    <b id="sc-new-h">Start new season</b>
+                    <small id="sc-new-sub">Auto-increments the season number</small>
+                  </span>
+                </header>
+
+                <label class="sc-fld">
+                  <span class="sc-k">New season title</span>
+                  <input id="season-next-title" class="adm-input" type="text" maxlength="60"
+                    autocomplete="off" spellcheck="false" aria-label="New season title" />
+                </label>
+
+                <div class="sc-durs" role="radiogroup" aria-label="New season length">
+                  <button class="sc-dur" type="button" role="radio" data-duration="90"
+                    aria-checked="true"><b>3 Months</b><span>90d</span></button>
+                  <button class="sc-dur" type="button" role="radio" data-duration="60"
+                    aria-checked="false"><b>2 Months</b><span>60d</span></button>
+                  <button class="sc-dur" type="button" role="radio" data-duration="30"
+                    aria-checked="false"><b>1 Month</b><span>30d</span></button>
+                </div>
+
+                <p class="sc-help">Archives current season rankings, unlocks standings immediately,
+                  and starts a fresh timer.</p>
+
+                <button class="sc-cta" type="button" id="season-start">
+                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                  <span id="season-start-t">Start Season</span>
+                </button>
+                <div class="sc-confirm" id="season-confirm" hidden>
+                  <span class="sc-confirm-q">Confirm Start?</span>
+                  <button class="sc-confirm-yes" type="button" id="season-confirm-yes"
+                    aria-label="Confirm the new season">
+                    <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+                  </button>
+                  <button class="sc-confirm-no" type="button" id="season-confirm-no" aria-label="Cancel">
+                    <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+                  </button>
+                </div>
+              </article>
             </section>
           </div>
 

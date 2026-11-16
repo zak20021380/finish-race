@@ -11,6 +11,7 @@
  * route entry, on a save that moved TIQ, and on a language switch.
  */
 import { myTiq } from './matchmaking';
+import { arena, arenaLocked, onArena } from './arenaState';
 import { onLang, t } from './settings';
 import { onChange } from './storage';
 
@@ -140,6 +141,31 @@ export function createArenaRoad(): ArenaRoad {
 
   let lastTiq = -1;
 
+  /* The header's season line. It is the Worker's own reading — `seasonNo` and the lock —
+     never a string in the markup, and it repaints the instant the Command Center saves. */
+  const seasonChip = document.getElementById('arena-season');
+  const seasonChipT = document.getElementById('arena-season-t');
+  let seasonKey = '';
+
+  function paintSeasonChip(force = false): void {
+    if (!seasonChip || !seasonChipT) return;
+    const a = arena();
+    const ended = a.status === 'finale' || a.endsAt <= Date.now();
+    const tone = ended ? 'ended' : arenaLocked(a) ? 'locked' : 'live';
+    const status = tone === 'ended'
+      ? t('arenaSeasonEnded')
+      : tone === 'locked'
+        ? t('arenaSeasonLocked')
+        : t('arenaSeasonLive');
+    const label = `${t('ladderSeason').replace('{season}', String(a.seasonNo))} · ${status}`;
+    const key = `${label}|${tone}`;
+    if (!force && key === seasonKey) return;
+    seasonKey = key;
+    seasonChip.dataset.tone = tone;
+    seasonChipT.textContent = label;
+    seasonChip.hidden = false;
+  }
+
   function cardMarkup(tier: ArenaTier, tiq: number): string {
     const name = t(tier.nameKey);
     const sub = t(tier.subKey);
@@ -246,6 +272,7 @@ export function createArenaRoad(): ArenaRoad {
   }
 
   function paint(tiq: number, force = false): void {
+    paintSeasonChip(force);
     if (!force && tiq === lastTiq) return;
     lastTiq = tiq;
     root!.setAttribute('aria-label', t('arenaRoadAria'));
@@ -257,9 +284,14 @@ export function createArenaRoad(): ArenaRoad {
     if (isVisible()) paint(myTiq());
   });
 
+  /* a season edit or a rollover lands here without a reload */
+  onArena(() => paintSeasonChip());
+
   onLang(() => {
     lastTiq = -1;
+    seasonKey = '';
     if (isVisible()) paint(myTiq(), true);
+    else paintSeasonChip(true);
   });
 
   paint(myTiq(), true);

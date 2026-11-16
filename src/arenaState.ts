@@ -50,6 +50,8 @@ export interface ArenaState {
   matchLocked: boolean;
   seasonNo: number;
   seasonName: string;
+  /** The Worker also publishes `seasonName` under this name; read either, never both. */
+  title?: string;
   /** Epoch ms the season closes. */
   endsAt: number;
   divisions: ArenaDivisionRule[];
@@ -183,7 +185,7 @@ export function normalizeArena(raw: unknown, now = Date.now()): ArenaState {
     status,
     matchLocked: r.matchLocked === true,
     seasonNo,
-    seasonName: str(r.seasonName, 60).trim() || d.seasonName,
+    seasonName: (str(r.seasonName, 60).trim() || str(r.title, 60).trim()) || d.seasonName,
     endsAt: isNum(r.endsAt) ? clamp(Math.floor(r.endsAt), 0, now + 10 * 366 * 86400_000) : d.endsAt,
     divisions: normalizeDivisions(r.divisions),
     updatedAt: isNum(r.updatedAt) ? Math.max(0, Math.floor(r.updatedAt)) : 0,

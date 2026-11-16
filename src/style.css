@@ -9919,7 +9919,8 @@ html.reduced-motion .notif-dot { animation: none; }
   position: relative;
   isolation: isolate;
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: var(--ml-head-h);
@@ -10022,12 +10023,20 @@ html.reduced-motion .notif-dot { animation: none; }
 .ml-title {
   flex: none;
   max-width: 100%;
+  min-width: 0;
   text-align: left;
-  font-size: 20px;
+  /* The wordmark is a proper noun, never an ellipsis: it wraps at word
+     boundaries instead of printing "THE MIND LA…". The clamp keeps it inside
+     the 320px plate while the countdown capsule holds its own column. */
+  font-size: clamp(15px, 5.2vw, 20px);
   font-weight: 800;
   letter-spacing: -.3px;
   text-transform: uppercase;
   line-height: 1.02;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
   color: #FFFFFF;
   text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
 }
@@ -10120,6 +10129,7 @@ html.reduced-motion .notif-dot { animation: none; }
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+  overflow: hidden;
 }
 .ml-season-k {
   font-size: 7px;
@@ -10130,6 +10140,11 @@ html.reduced-motion .notif-dot { animation: none; }
   color: rgba(251, 191, 36, .66);
 }
 .ml-season-t {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .01em;
@@ -10168,7 +10183,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   .ranks-head { gap: 6px; padding: 6px 4px; }
   .ml-crest { width: 28px; height: 28px; border-radius: 10px; }
   .ml-crest-ico { width: 16px; height: 16px; }
-  .ml-season { position: relative; gap: 0; padding: 4px 6px 4px 16px; }
+  .ml-season { position: relative; gap: 0; padding: 4px 6px 4px 16px; max-width: 132px; }
   .ml-season-k { display: none; }
   .ml-pulse { position: absolute; left: 5px; top: 50%; transform: translateY(-50%); }
 }
@@ -20043,12 +20058,6 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
     0 16px 32px -26px rgba(0, 0, 0, .95),
     inset 0 1px 0 rgba(255, 255, 255, .06);
 }
-.adm-arena-card.is-danger {
-  border-color: rgba(224, 38, 79, .32);
-  background:
-    linear-gradient(180deg, rgba(224, 38, 79, .09) 0%, rgba(224, 38, 79, 0) 46%),
-    rgba(13, 19, 31, .85);
-}
 .adm-arena-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .adm-arena-ico {
   flex: none;
@@ -20062,7 +20071,6 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
 }
 .adm-arena-ico .ico { width: 16px; height: 16px; }
-.adm-arena-card.is-danger .adm-arena-ico { color: var(--red-ink); }
 .adm-arena-copy { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .adm-arena-copy b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
 .adm-arena-copy small {
@@ -20210,197 +20218,359 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   color: var(--ink-soft);
 }
 
-/* ---- season title + the division ladder ---- */
-.adm-arena-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.adm-arena-k {
+/* ==========================================================================
+   SEASON COMMAND — three cards, one job each.
+   Card 1 reads the live season (badge, status pill, exact in-game title, the
+   countdown), Card 2 edits it, Card 3 rolls it. Dark glass slabs, one gold key,
+   no cartoon glyphs: every icon is the inline sprite, every figure is Latin.
+   ========================================================================== */
+.sc-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sc-card {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04) 0%, rgba(255, 255, 255, 0) 46%),
+    rgba(13, 19, 31, .88);
+  box-shadow:
+    0 18px 34px -28px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+/* the rollover card is the one warm slab in the panel */
+.sc-card:last-child { border-color: rgba(245, 158, 11, .22); }
+
+.sc-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sc-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--brand-ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.sc-ico .ico { width: 16px; height: 16px; }
+.sc-card:last-child .sc-ico { color: var(--honey-ink); }
+.sc-head-copy { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-head-copy b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+}
+.sc-head-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+/* the season badge: the number the whole panel is about. It outranks the head's own
+   `.sc-head-copy b` rule, which is why the class is repeated on the element. */
+.sc-head-copy b.sc-badge {
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: .05em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tiq);
+}
+
+/* ---- the live status pill: emerald active, crimson locked, amber ended ---- */
+.sc-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(52, 211, 153, .34);
+  background: rgba(16, 185, 129, .13);
+  color: var(--mint-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+  transition: color var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast);
+}
+.sc-state i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+}
+.sc-state[data-tone="locked"] {
+  border-color: rgba(251, 113, 133, .4);
+  background: rgba(224, 38, 79, .14);
+  color: #FDA4AF;
+}
+.sc-state[data-tone="ended"] {
+  border-color: rgba(245, 158, 11, .36);
+  background: rgba(245, 158, 11, .13);
+  color: var(--honey-ink);
+}
+
+/* ---- the exact title the ladder prints, then the countdown readout ---- */
+.sc-season {
   margin: 0;
+  min-width: 0;
+  font-size: var(--t-1);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.sc-count {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, .08);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .18);
+  font-size: var(--t-3);
+  font-weight: 800;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+  overflow-wrap: break-word;
+}
+.sc-count[data-tone="ended"] {
+  background: rgba(148, 163, 184, .08);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
+  color: #CBD5E1;
+}
+
+/* ---- the editors ---- */
+.sc-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sc-k {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .09em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.adm-arena-k span { color: #64748B; letter-spacing: .04em; }
-.adm-arena-fld .adm-input {
+.sc-fld .adm-input {
   min-height: 48px;
-  padding: 0 11px;
-  border-radius: 9px;
+  padding: 0 12px;
+  border-radius: 11px;
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
   color: var(--ink);
 }
-.adm-arena-fld .adm-input:focus-visible {
+.sc-fld .adm-input:focus-visible {
   outline: 3px solid var(--brand-2);
   outline-offset: -1px;
 }
-.adm-divs { display: flex; flex-direction: column; gap: 4px; }
-.adm-divs-h { margin-bottom: 1px; }
-.adm-div {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 48px;
-  padding: 0 10px;
-  border-radius: 9px;
-  border: 1px solid rgba(148, 163, 184, .1);
-  background: rgba(255, 255, 255, .025);
-  cursor: text;
-}
-.adm-div > span {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--ink);
-}
-.adm-div-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #94A3B8;
-  box-shadow: 0 0 0 2px rgba(148, 163, 184, .14);
-}
-.adm-div-dot[data-div="bronze"] { background: #C98A5B; box-shadow: 0 0 0 2px rgba(201, 138, 91, .18); }
-.adm-div-dot[data-div="silver"] { background: #CBD5E1; box-shadow: 0 0 0 2px rgba(203, 213, 225, .18); }
-.adm-div-dot[data-div="gold"] { background: #FCD34D; box-shadow: 0 0 0 2px rgba(252, 211, 77, .18); }
-.adm-div-dot[data-div="platinum"] { background: #67E8F9; box-shadow: 0 0 0 2px rgba(103, 232, 249, .18); }
-.adm-div-dot[data-div="diamond"] { background: #93C5FD; box-shadow: 0 0 0 2px rgba(147, 197, 253, .18); }
-.adm-div-dot[data-div="challenger"] { background: #F0ABFC; box-shadow: 0 0 0 2px rgba(240, 171, 252, .2); }
-.adm-div-i {
-  flex: none;
-  width: 86px;
-  height: 48px;
-  appearance: textfield;
-  -moz-appearance: textfield;
-  border: 0;
-  background: transparent;
-  outline: none;
-  text-align: right;
-  font: inherit;
-  font-size: var(--t-2);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--honey-ink);
-  -webkit-user-select: text;
-  user-select: text;
-}
-.adm-div-i::-webkit-outer-spin-button,
-.adm-div-i::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.adm-div-i[readonly] { color: var(--ink-soft); }
-.adm-div-i:focus-visible {
-  border-radius: 6px;
-  outline: 2px solid var(--brand-2);
-  outline-offset: 2px;
-}
-
-/* ---- the clock: one monospaced instrument ---- */
-.adm-count {
+.sc-extend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.sc-key {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 58px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, .22);
-  background: linear-gradient(180deg, #0A111E 0%, #0E1526 100%);
-  box-shadow:
-    var(--inset),
-    inset 0 0 0 1px rgba(255, 255, 255, .03),
-    0 0 26px -16px rgba(245, 158, 11, .8);
-  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
-  font-size: clamp(1rem, .84rem + 1.4vw, 1.28rem);
-  font-weight: 800;
-  letter-spacing: .035em;
-  font-variant-numeric: tabular-nums;
-  color: var(--honey-ink);
-  text-align: center;
-  text-shadow: 0 0 14px rgba(245, 158, 11, .32);
-  white-space: nowrap;
-  overflow: hidden;
-}
-#adm-arena[data-state="maintenance"] .adm-count,
-#adm-season[data-state="maintenance"] .adm-count {
-  border-color: rgba(224, 38, 79, .28);
-  color: var(--red-ink);
-  text-shadow: 0 0 14px rgba(224, 38, 79, .3);
-}
-.adm-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-.adm-preset {
+  gap: 5px;
   min-width: 0;
-  min-height: 48px;
-  padding: 0 2px;
+  min-height: 46px;
+  padding: 0 6px;
   appearance: none;
-  border: 1px solid rgba(148, 163, 184, .14);
+  border: 1px solid rgba(148, 163, 184, .16);
   cursor: pointer;
-  border-radius: 9px;
+  border-radius: 11px;
   background: var(--field);
   color: var(--brand-ink);
   font: inherit;
   font-size: var(--t-micro);
   font-weight: 800;
-  letter-spacing: .01em;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
-}
-.adm-preset:hover { color: var(--ink); }
-.adm-preset:active { transform: translateY(var(--press-y)); }
-.adm-preset:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-.adm-expiry { display: flex; align-items: flex-end; gap: 6px; }
-.adm-expiry-fld { flex: 1 1 auto; }
-.adm-expiry .adm-input { color: var(--ink); color-scheme: dark; }
-.adm-expiry-set { flex: none; min-height: 48px; padding: 0 16px; }
-
-/* ---- the Mind Ladder preview: the real capsule, in player colours ---- */
-.adm-pv {
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, .16);
-  background:
-    radial-gradient(120% 130% at 0% 0%, rgba(245, 158, 11, .07) 0%, transparent 58%),
-    rgba(9, 14, 23, .72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
 }
-.adm-pv-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.adm-pv-crest {
+.sc-key .ico { width: 13px; height: 13px; }
+.sc-key:hover { color: var(--ink); }
+.sc-key:active { transform: translateY(var(--press-y)); }
+.sc-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+
+/* the standings lock: the same clay switch, armed in crimson */
+.sc-lock .adm-sw-t { font-size: var(--t-3); }
+.sc-lock[aria-checked="true"] {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(224, 38, 79, .42),
+    0 0 22px -8px rgba(224, 38, 79, .8);
+}
+.sc-lock[aria-checked="true"] .adm-knob { background: rgba(224, 38, 79, .2); }
+.sc-lock[aria-checked="true"] .adm-knob i {
+  background: #FB7185;
+  box-shadow: 0 2px 0 #7F0B2A, 0 0 14px rgba(224, 38, 79, .8), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+
+.sc-save { width: 100%; }
+.sc-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--mint-ink);
+}
+.sc-note[hidden] { display: none !important; }
+.sc-note .ico { flex: none; width: 13px; height: 13px; }
+.sc-note[data-error="true"] { color: #FDA4AF; }
+
+/* ---- the duration presets: one gold pill, two slate ---- */
+.sc-durs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sc-dur {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 0 2px;
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 11px;
+  background: var(--field);
+  font: inherit;
+  color: var(--ink-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  transition: color var(--motion-fast), background var(--motion-fast),
+              border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.sc-dur b {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  white-space: nowrap;
+  color: inherit;
+}
+.sc-dur span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: #64748B;
+}
+.sc-dur:active { transform: translateY(var(--press-y)); }
+.sc-dur:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.sc-dur[aria-checked="true"] {
+  border-color: rgba(252, 211, 77, .44);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .26) 0%, rgba(180, 83, 9, .1) 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .22),
+    0 0 20px -10px rgba(245, 158, 11, .9);
+}
+.sc-dur[aria-checked="true"] span { color: rgba(253, 230, 138, .8); }
+.sc-help { margin: 0; font-size: 9.5px; line-height: 1.5; color: var(--ink-soft); }
+
+/* ---- the one gold key in the panel, and its two-step confirm ---- */
+.sc-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 50px;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  color: #2A1B04;
+  font: inherit;
+  font-size: var(--t-2);
+  font-weight: 900;
+  letter-spacing: .01em;
+  box-shadow:
+    0 4px 0 #8A4B08,
+    0 16px 26px -14px rgba(245, 158, 11, .85),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.sc-cta .ico { flex: none; width: 17px; height: 17px; }
+.sc-cta:hover { filter: brightness(1.05); }
+.sc-cta:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #8A4B08,
+    0 10px 18px -14px rgba(245, 158, 11, .85),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.sc-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sc-cta[hidden] { display: none !important; }
+.sc-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 7px 0 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(252, 211, 77, .34);
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.sc-confirm[hidden] { display: none !important; }
+.sc-confirm-q {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--honey-ink);
+}
+.sc-confirm-yes,
+.sc-confirm-no {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  border: 1px solid rgba(252, 211, 77, .28);
-  background: rgba(245, 158, 11, .1);
-  color: var(--tiq);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  width: 40px;
+  height: 40px;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 11px;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-.adm-pv-crest .ico { width: 16px; height: 16px; }
-.adm-pv-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.adm-pv-title b {
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sc-confirm-yes {
+  background: linear-gradient(180deg, #34D399 0%, #059669 100%);
+  color: #04231A;
+  box-shadow: 0 3px 0 #047857, inset 0 1px 0 rgba(255, 255, 255, .4);
 }
-.adm-pv-title small {
-  min-width: 0;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sc-confirm-no {
+  background: rgba(148, 163, 184, .14);
+  color: #CBD5E1;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .24);
 }
-.adm-pv .ml-season { flex: none; }
-.adm-pv-note { margin: 8px 0 0; font-size: 9px; line-height: 1.45; color: var(--ink-soft); }
+.sc-confirm-yes .ico,
+.sc-confirm-no .ico { width: 17px; height: 17px; }
+.sc-confirm-yes:hover,
+.sc-confirm-no:hover { filter: brightness(1.08); }
+.sc-confirm-yes:active,
+.sc-confirm-no:active { transform: translateY(2px); }
+.sc-confirm-yes:focus-visible,
+.sc-confirm-no:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* the capsule's live states, shared with the real ladder header */
 .ml-season[data-tone="ending"] {
@@ -20446,53 +20616,12 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
 }
 .ml-season[data-tone="closed"] .ml-pulse::after { display: none; }
 
-/* ---- the final snapshot ---- */
-.adm-arena-snap { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
-.adm-snap-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  border-top: 1px solid rgba(148, 163, 184, .09);
-  font-size: var(--t-3);
-}
-.adm-snap-row:first-child { border-top: 0; }
-.adm-snap-rank {
-  flex: none;
-  width: 24px;
-  font-size: 10px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-}
-.adm-snap-row:nth-child(1) .adm-snap-rank { color: var(--honey-ink); }
-.adm-snap-row:nth-child(2) .adm-snap-rank { color: #CBD5E1; }
-.adm-snap-row:nth-child(3) .adm-snap-rank { color: #C98A5B; }
-.adm-snap-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 800;
-  color: var(--ink);
-}
-.adm-snap-tiq {
-  flex: none;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--honey-ink);
-}
-.adm-reset, .adm-stop { width: 100%; margin: 0; }
-.adm-stop { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.adm-stop .ico { width: 16px; height: 16px; }
-
 @media (max-width: 380px) {
   .adm-arena-card { padding: 10px; gap: 8px; }
-  .adm-preset { font-size: 9px; }
-  .adm-count { font-size: 1rem; letter-spacing: 0; }
-  .adm-div-i { width: 72px; }
-  .adm-pv .ml-season { padding: 4px 8px; }
+  .sc-card { padding: 11px; gap: 9px; }
+  .sc-dur b { font-size: 9.5px; }
+  .sc-key { font-size: 10px; }
+  .sc-head-copy b.sc-badge { font-size: var(--t-2); }
 }
 
 /* ==========================================================================
@@ -34371,6 +34500,43 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The live season, as the road header states it: one line of Latin figures and a
+   status lamp that turns crimson the moment the standings are frozen. The number
+   and the title both come from the Worker's arena payload, never from markup. */
+.arena-season {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #94A3B8;
+  white-space: nowrap;
+}
+.arena-season i {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #34D399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, .8);
+}
+.arena-season span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.arena-season[data-tone="locked"] { color: #FDA4AF; }
+.arena-season[data-tone="locked"] i {
+  background: #FB7185;
+  box-shadow: 0 0 6px rgba(251, 113, 133, .8);
+}
+.arena-season[data-tone="ended"] { color: #FCD34D; }
+.arena-season[data-tone="ended"] i {
+  background: #FBBF24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, .8);
+}
+.arena-season[hidden] { display: none !important; }
 .arena-tiq-pill {
   flex: none;
   display: inline-flex;

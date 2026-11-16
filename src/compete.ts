@@ -35,7 +35,7 @@ import { isSeizable, openSeize, relicShelter, seizeTargetOf } from './seize';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
-import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
+import { arena, countdownPill, fullCountdown, onArena, seasonLabel } from './arenaState';
 import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
@@ -626,28 +626,27 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   /** The arena's reading, as the season capsule and its plate need it. */
   type Season = ReturnType<typeof arena>;
 
-  /** Persian digits inside a translated sentence. A Latin clock keeps its own numerals. */
-  const langDigits = (value: string): string =>
-    lang === 'fa' ? value.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : value;
-
   /**
    * The season line under the wordmark. The built-in season is translated
-   * (`فصل ۵: نبرد ذهن‌ها`), while a title the operator typed in the Command Center is shown
+   * (`فصل 5: نبرد ذهن‌ها`), while a title the operator typed in the Command Center is shown
    * exactly as typed — the panel owns that copy, not the dictionary.
+   *
+   * The number is Latin in every locale, like every other season figure the app prints: the
+   * panel, the Arena chip and the ladder must quote one and the same `5`.
    */
   function seasonTitle(a: Season): string {
     const typed = (a.seasonName || '').trim();
     const named = /^season\s+\d+\s*[:\-·]?\s*(.*)$/i.exec(typed)?.[1]?.trim() ?? typed;
     if (!named || /^mind\s*clash$/i.test(named)) {
-      return t('ranksSeasonTitle').replace('{season}', langDigits(String(a.seasonNo)));
+      return t('ranksSeasonTitle').replace('{season}', String(a.seasonNo));
     }
     return seasonLabel(a);
   }
 
   /**
-   * The capsule in the player's language. The day count is a sentence (`{d} روز مانده`), so its
-   * figure takes the language's own digits; the h/m code inside the last two days is an
-   * instrument reading and stays Latin, exactly as the app's other clocks do.
+   * The capsule in the player's language. The day count is a sentence (`{d} روز مانده`), but its
+   * figure stays Latin: a day counter is an instrument reading, and the panel quotes the same
+   * digits for the same remainder.
    */
   function seasonCountdown(
     a: Season,
@@ -665,7 +664,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       const days = Math.max(1, Math.ceil(left / 86400_000));
       return {
         kicker: t('ranksEndsIn'),
-        value: t('ranksDaysLeft').replace('{d}', langDigits(String(days))),
+        value: t('ranksDaysLeft').replace('{d}', String(days)),
       };
     }
     return { kicker: t('ranksClosingIn'), value: pill.value };
@@ -713,6 +712,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       seasonChip.setAttribute('title', `${seasonTitle(a)} — ${fullCountdown(a, now)}`);
     }
   }
+
+  /**
+   * The Command Center lives in the same page, so a season edit has to reach this plate with
+   * no reload: the title, the capsule and the tone repaint on the spot. A rollover also drops
+   * every cached board — the ladder, the guilds and the nations all belong to one season.
+   */
+  let paintedSeasonNo = arena().seasonNo;
+  onArena(() => {
+    const no = arena().seasonNo;
+    if (no !== paintedSeasonNo) {
+      paintedSeasonNo = no;
+      loadedBoard = {};
+      for (const key of Object.keys(lastLoad) as Board[]) delete lastLoad[key];
+      if (isRanksVisible()) void loadBoard(board);
+    }
+    paintSeason();
+  });
 
   function selectBoard(next: Board): void {
     if (next === board && loadedBoard[next]) {

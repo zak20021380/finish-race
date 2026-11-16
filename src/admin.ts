@@ -68,10 +68,9 @@ import {
   type VipRevenueSummary, type VipTierRevenue,
 } from '../shared/vip';
 import {
-  ARENA_TIER_IDS, SEASON_LENGTH_MS, adoptArena, arena, arenaLocked, countdownPill,
-  datetimeLocalValue, fullCountdown, nextSeasonName, onArena, parseDatetimeLocal, seasonLabel,
-  seasonNoFrom, setArenaLocal, syncArena,
-  type ArenaDivisionRule, type ArenaSnapshot, type ArenaState, type ArenaStatus,
+  adoptArena, arena, arenaLocked, nextSeasonName, onArena, seasonLabel, seasonNoFrom,
+  setArenaLocal, syncArena,
+  type ArenaSnapshot, type ArenaState, type ArenaStatus,
 } from './arenaState';
 
 /* ---------- who may open it ---------- */
@@ -1903,25 +1902,27 @@ export function createAdmin(api: AdminApi): Admin {
   const arenaStateSub = $<HTMLElement>('arena-state-sub');
   const arenaStateKeys = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-arena-state]') ?? [])];
   const arenaLockBtn = stage?.querySelector<HTMLButtonElement>('[data-arena-lock]') ?? null;
-  const arenaSeasonName = $<HTMLInputElement>('arena-season-name');
-  const arenaSeasonChip = $<HTMLElement>('arena-season-chip');
-  const arenaDivInputs = [...(stage?.querySelectorAll<HTMLInputElement>('[data-div-min]') ?? [])];
-  const arenaCount = $<HTMLElement>('arena-count');
-  const arenaClockZone = $<HTMLElement>('arena-clock-zone');
-  const arenaPresets = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-preset]') ?? [])];
-  const arenaEnds = $<HTMLInputElement>('arena-ends');
-  const arenaEndsApply = $<HTMLButtonElement>('arena-ends-apply');
-  const arenaPvPill = $<HTMLElement>('arena-pv-pill');
-  const arenaPvKicker = $<HTMLElement>('arena-pv-kicker');
-  const arenaPvValue = $<HTMLElement>('arena-pv-value');
-  const arenaPvSeason = $<HTMLElement>('arena-pv-season');
-  const arenaPvNote = $<HTMLElement>('arena-pv-note');
-  const arenaSnapCard = $<HTMLElement>('arena-snap-card');
-  const arenaSnapMeta = $<HTMLElement>('arena-snap-meta');
-  const arenaSnapList = $<HTMLElement>('arena-snap-list');
-  const arenaAwardsMeta = $<HTMLElement>('arena-awards-meta');
-  const arenaResetBtn = $<HTMLButtonElement>('arena-reset');
-  const arenaStopBtn = $<HTMLButtonElement>('arena-stop');
+  /* The Season command panel: one read card, one edit card, one rollover card. */
+  const seasonBadge = $<HTMLElement>('sc-badge');
+  const seasonState = $<HTMLElement>('sc-state');
+  const seasonStateT = $<HTMLElement>('sc-state-t');
+  const seasonTitleEl = $<HTMLElement>('sc-title');
+  const seasonCountEl = $<HTMLElement>('sc-count');
+  const seasonTitleInput = $<HTMLInputElement>('season-title');
+  const seasonExtend = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-extend]') ?? [])];
+  const seasonLockBtn = $<HTMLButtonElement>('season-lock');
+  const seasonLockT = $<HTMLElement>('season-lock-t');
+  const seasonSave = $<HTMLButtonElement>('season-save');
+  const seasonNote = $<HTMLElement>('season-note');
+  const seasonNoteT = $<HTMLElement>('season-note-t');
+  const seasonNextTitle = $<HTMLInputElement>('season-next-title');
+  const seasonNextSub = $<HTMLElement>('sc-new-sub');
+  const seasonDurs = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-duration]') ?? [])];
+  const seasonStart = $<HTMLButtonElement>('season-start');
+  const seasonStartT = $<HTMLElement>('season-start-t');
+  const seasonConfirm = $<HTMLElement>('season-confirm');
+  const seasonConfirmYes = $<HTMLButtonElement>('season-confirm-yes');
+  const seasonConfirmNo = $<HTMLButtonElement>('season-confirm-no');
   /* the Stats dashboard: the strict live reading from `GET /api/admin/metrics` */
   const statsPanel = stage?.querySelector<HTMLElement>('[data-apanel="stats"]') ?? null;
   const statActive = $<HTMLElement>('stat-active');
@@ -2278,90 +2279,131 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
-  /** The instrument and the player capsule, both off the same tick. */
-  function paintArenaClock(now = Date.now()) {
-    const a = arena();
-    paintArenaStatus(a);
-    if (arenaCount) arenaCount.textContent = fullCountdown(a, now);
-    if (!arenaPvPill) return;
-    const pill = countdownPill(a, now);
-    arenaPvPill.dataset.tone = pill.tone;
-    arenaPvPill.title = `${seasonLabel(a)} — ${pill.exact}`;
-    if (arenaPvKicker) arenaPvKicker.textContent = pill.kicker;
-    if (arenaPvValue) arenaPvValue.textContent = pill.value;
-    if (arenaPvSeason) arenaPvSeason.textContent = seasonLabel(a);
-    if (arenaPvNote) {
-      arenaPvNote.textContent = a.status === 'maintenance'
-        ? 'Locked tone: players see the capsule in crimson. Live races still resolve.'
-        : a.status === 'finale'
-          ? 'Finale tone: the ladder is locked and the capsule reads final.'
-          : pill.tone === 'ending'
-            ? 'Closing-in tone: under 48 hours the capsule counts hours and minutes.'
-            : 'What players see on the Mind Ladder right now.';
+  /* ---------- the Season command panel ---------- */
+
+  /** Card 3's chosen length, in days. A quarter is the default the panel opens on. */
+  let seasonDuration = 90;
+  /** The number Card 3 will launch, and the title it suggested last, so typing is never clobbered. */
+  let seasonNextNo = 0;
+  let seasonSuggested = '';
+  let seasonNoteTimer = 0;
+  /** Typed but unsaved: the one-second clock must never overwrite a half-written title. */
+  let seasonTitleDirty = false;
+
+  const pad2 = (n: number): string => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+
+  /** The readout under the title: days while there is room, then a clock, then the verdict. */
+  function seasonReadout(a: ArenaState, now: number): { text: string; ended: boolean } {
+    const date = new Date(a.endsAt).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+    const left = a.endsAt - now;
+    if (left <= 0) return { text: `Timer expired — standings locked · ${date}`, ended: true };
+    /* Whole days while there is room; the figure is the ladder capsule's own (it rounds up),
+       so the panel and the player never quote two different remainders. */
+    if (left >= 86400_000) {
+      const days = Math.max(1, Math.ceil(left / 86400_000));
+      return { text: `Ends in ${days} ${days === 1 ? 'day' : 'days'} · ${date}`, ended: false };
+    }
+    const total = Math.floor(left / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const clock = h > 0 ? `${h}h ${pad2(m)}m` : `${m}m ${pad2(s)}s`;
+    return { text: `Ends in ${clock} · ${date}`, ended: false };
+  }
+
+  /** Emerald while matches count, crimson once the ladder is frozen, amber when it is over. */
+  function seasonTone(a: ArenaState, now: number): { tone: 'live' | 'locked' | 'ended'; label: string } {
+    if (a.status === 'finale' || a.endsAt <= now) return { tone: 'ended', label: 'Ended' };
+    if (a.matchLocked || a.status === 'maintenance') return { tone: 'locked', label: 'Locked' };
+    return { tone: 'live', label: 'Active' };
+  }
+
+  /** The in-card confirmation: one line, two seconds, never a floating toast. */
+  function flashSeasonNote(text: string, error = false): void {
+    if (!seasonNote) return;
+    if (seasonNoteT) seasonNoteT.textContent = text;
+    seasonNote.dataset.error = String(error);
+    seasonNote.hidden = false;
+    window.clearTimeout(seasonNoteTimer);
+    seasonNoteTimer = window.setTimeout(() => {
+      seasonNote.hidden = true;
+    }, 2400);
+  }
+
+  /** Card 3's two-step answer: the gold key stands down while the ✓ / ✕ pair is up. */
+  function armSeasonStart(armed: boolean, focus = true): void {
+    if (seasonStart) seasonStart.hidden = armed;
+    if (seasonConfirm) seasonConfirm.hidden = !armed;
+    if (!focus) return;
+    if (armed) seasonConfirmYes?.focus({ preventScroll: true });
+    else seasonStart?.focus({ preventScroll: true });
+  }
+
+  /** One duration pill lit at a time; 90 days unless the operator says otherwise. */
+  function selectDuration(days: number): void {
+    seasonDuration = days;
+    for (const btn of seasonDurs) {
+      btn.setAttribute('aria-checked', String(Number(btn.dataset.duration) === days));
     }
   }
 
-  function paintArenaSnapshot(snap: ArenaSnapshot | null) {
-    if (arenaSnapCard) arenaSnapCard.hidden = !snap;
-    if (arenaSnapList) arenaSnapList.textContent = '';
-    if (!snap) return;
-    if (arenaSnapMeta) {
-      const when = new Date(snap.takenAt).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      });
-      arenaSnapMeta.textContent = `S${snap.seasonNo} · ${snap.total.toLocaleString('en-US')} ranked · ${when}`;
+  /** One paint for the three cards: Card 1 and 2 read the board, Card 3 suggests the roll. */
+  function paintSeasonPanel(now = Date.now()): void {
+    const a = arena();
+    paintArenaStatus(a);
+
+    const tone = seasonTone(a, now);
+    const read = seasonReadout(a, now);
+    if (seasonBadge) seasonBadge.textContent = `SEASON ${a.seasonNo}`;
+    if (seasonState) seasonState.dataset.tone = tone.tone;
+    if (seasonStateT) seasonStateT.textContent = tone.label;
+    if (seasonTitleEl) seasonTitleEl.textContent = seasonLabel(a);
+    if (seasonCountEl) {
+      seasonCountEl.textContent = read.text;
+      seasonCountEl.dataset.tone = read.ended ? 'ended' : 'live';
     }
-    if (!arenaSnapList) return;
-    for (const row of snap.entries.slice(0, 5)) {
-      const li = document.createElement('li');
-      li.className = 'adm-snap-row';
-      const rank = document.createElement('b');
-      rank.className = 'adm-snap-rank';
-      rank.textContent = `#${row.rank}`;
-      const name = document.createElement('span');
-      name.className = 'adm-snap-name';
-      name.textContent = row.name;
-      const tiq = document.createElement('b');
-      tiq.className = 'adm-snap-tiq';
-      tiq.textContent = row.tiq.toLocaleString('en-US');
-      li.title = `${row.name} · ${row.wins.toLocaleString('en-US')} wins`;
-      li.append(rank, name, tiq);
-      arenaSnapList.append(li);
+
+    if (seasonTitleInput && !seasonTitleDirty && document.activeElement !== seasonTitleInput) {
+      seasonTitleInput.value = a.seasonName;
+    }
+    if (seasonLockBtn) seasonLockBtn.setAttribute('aria-checked', String(a.matchLocked));
+    if (seasonLockT) {
+      seasonLockT.textContent = a.matchLocked
+        ? 'Locked — finale freeze'
+        : 'Unlocked — matches count';
+    }
+
+    const nextNo = Math.min(999, a.seasonNo + 1);
+    const fresh = nextSeasonName(a.seasonName, nextNo);
+    if (seasonNextTitle
+      && (!seasonNextTitle.value.trim() || seasonNextTitle.value === seasonSuggested)) {
+      seasonNextTitle.value = fresh;
+    }
+    seasonSuggested = fresh;
+    if (nextNo !== seasonNextNo) {
+      seasonNextNo = nextNo;
+      if (seasonNextSub) seasonNextSub.textContent = `Auto-increments to Season ${nextNo}`;
+      if (seasonStartT) seasonStartT.textContent = `Start Season ${nextNo}`;
     }
   }
 
   function paintArena() {
     const a = arena();
-    paintArenaStatus(a);
     for (const key of arenaStateKeys) {
       key.setAttribute('aria-checked', String(key.dataset.arenaState === a.status));
     }
     arenaLockBtn?.setAttribute('aria-checked', String(a.matchLocked));
-    if (arenaSeasonName && document.activeElement !== arenaSeasonName) arenaSeasonName.value = a.seasonName;
-    if (arenaSeasonChip) arenaSeasonChip.textContent = `Season ${a.seasonNo}`;
-    for (const input of arenaDivInputs) {
-      const row = a.divisions.find((d) => d.id === input.dataset.divMin);
-      if (row && document.activeElement !== input) input.value = String(row.min);
-    }
-    if (arenaEnds && document.activeElement !== arenaEnds) arenaEnds.value = datetimeLocalValue(a.endsAt);
-    if (arenaClockZone) {
-      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time';
-      arenaClockZone.textContent = `${zone} · local`;
-    }
-    if (arenaAwardsMeta) {
-      arenaAwardsMeta.textContent = a.awardsCount
-        ? `${a.awardsCount.toLocaleString('en-US')} awards pushed`
-        : 'No prizes pushed';
-    }
-    paintArenaClock();
-    paintArenaSnapshot(a.lastSnapshot);
+    /* the season cards own the status paint: `paintSeasonPanel` calls `paintArenaStatus` */
+    paintSeasonPanel();
   }
 
   function startArenaClock() {
     stopArenaClock();
-    paintArenaClock();
+    paintSeasonPanel();
     arenaTimer = window.setInterval(() => {
-      if (open) paintArenaClock();
+      if (open) paintSeasonPanel();
     }, 1000);
   }
 
@@ -6263,8 +6305,8 @@ export function createAdmin(api: AdminApi): Admin {
     return false;
   }
 
-  /** The season as the on-device directory sees it, for a reset with no Worker behind the page. */
-  function localSeasonReset(): ArenaReply & { ok: true } {
+  /** The season as the on-device directory sees it, for a rollover with no Worker behind the page. */
+  function localSeasonReset(durationDays: number, title: string): ArenaReply & { ok: true } {
     const page = directoryPage({
       q: '', filter: 'all', country: '', age: 'all', plan: 'all', sort: 'tiq', offset: 0, limit: 50,
     }, liveSeat());
@@ -6285,8 +6327,8 @@ export function createAdmin(api: AdminApi): Admin {
       status: 'active',
       matchLocked: false,
       seasonNo: nextNo,
-      seasonName: nextSeasonName(old.seasonName, nextNo),
-      endsAt: now + SEASON_LENGTH_MS,
+      seasonName: title || nextSeasonName(old.seasonName, nextNo),
+      endsAt: now + durationDays * 86400_000,
       updatedAt: now,
       lastSnapshot: snapshot,
       awardsCount: page.total,
@@ -6295,71 +6337,45 @@ export function createAdmin(api: AdminApi): Admin {
     return { ok: true, arena: arena(), snapshot, awards: page.total };
   }
 
-  /** Finalize, snapshot, award, roll. The confirm has already been answered. */
-  async function resetSeasonNow(): Promise<void> {
+  /** Archive the ladder, push the prizes, open the next season on the chosen clock. */
+  async function startSeasonNow(): Promise<void> {
+    /* the answer is always consumed, even when another edit is still in flight */
+    armSeasonStart(false, false);
     if (arenaBusy) return;
     arenaBusy = true;
     impact('medium');
     notify('warning');
     const before = arena();
+    const nextNo = Math.min(999, before.seasonNo + 1);
+    const title = (seasonNextTitle?.value ?? '').trim() || nextSeasonName(before.seasonName, nextNo);
+    const days = seasonDuration;
     try {
       if (!serverOn) {
-        const local = localSeasonReset();
+        const local = localSeasonReset(days, title);
         notify('success');
-        api.note(`Season ${before.seasonNo} rolled to ${local.arena?.seasonNo ?? before.seasonNo + 1} on this device — no Worker to push prizes.`, false, 3400);
+        api.note(
+          `Season ${before.seasonNo} archived on this device — no Worker to push prizes. Season ${local.arena?.seasonNo ?? nextNo} is open.`,
+          false,
+          3600,
+        );
         return;
       }
-      const reply = await pushArena({ action: 'SEASON_RESET' });
+      const reply = await pushArena({ action: 'SEASON_START', durationDays: days, title });
       if (reply?.ok && reply.arena) {
         adoptArena(reply.arena, true);
         paintArena();
         notify('success');
-        const next = reply.arena.seasonNo;
         const awards = reply.awards ?? reply.arena.awardsCount;
         api.note(
-          `Season ${before.seasonNo} finalized — snapshot banked, ${awards.toLocaleString('en-US')} awards pushed. Season ${next} is open.`,
+          `Season ${before.seasonNo} archived — ${awards.toLocaleString('en-US')} awards pushed. Season ${reply.arena.seasonNo} is live for ${days} days.`,
           false,
           3800,
         );
       } else if (!reply) {
         markLocal();
-        api.note('Reset failed — the Worker did not answer. Nothing was rolled.', true, 3000);
+        api.note('The Worker did not answer — nothing was rolled.', true, 3000);
       } else {
-        api.note(ARENA_ERROR[reply.error ?? ''] ?? 'The Worker refused the reset.', true, 3000);
-      }
-    } finally {
-      arenaBusy = false;
-    }
-  }
-
-  /** Freeze the arena now: no new entries, the queue dismissed, every socket told. */
-  async function forceStopNow(): Promise<void> {
-    if (arenaBusy) return;
-    arenaBusy = true;
-    impact('medium');
-    notify('warning');
-    setArenaLocal({ status: 'maintenance', matchLocked: true });
-    paintArena();
-    try {
-      if (!serverOn) {
-        api.note('Arena frozen on this device — no Worker means no clients to notify.', true, 3200);
-        return;
-      }
-      const reply = await pushArena({ action: 'FORCE_STOP' });
-      if (reply?.ok && reply.arena) {
-        adoptArena(reply.arena, true);
-        paintArena();
-        const n = reply.dismissed ?? 0;
-        api.note(
-          `Arena frozen. ${n} waiting ${n === 1 ? 'seat' : 'seats'} dismissed; every connected client was notified.`,
-          false,
-          3200,
-        );
-      } else if (!reply) {
-        markLocal();
-        api.note('Force-stop reached this device only — the Worker did not answer.', true, 3000);
-      } else {
-        api.note(ARENA_ERROR[reply.error ?? ''] ?? 'The Worker refused the force-stop.', true, 3000);
+        api.note(ARENA_ERROR[reply.error ?? ''] ?? 'The Worker refused the rollover.', true, 3000);
       }
     } finally {
       arenaBusy = false;
@@ -6420,8 +6436,11 @@ export function createAdmin(api: AdminApi): Admin {
     void stage.offsetWidth;               // lay the stage out at its closed position first
     stage.classList.add('open');
     document.documentElement.classList.add('admin-open');
+    /* a half-written title or an armed rollover never survives a close: the panel opens clean */
+    seasonTitleDirty = false;
     paintAll();
     startArenaClock();
+    armSeasonStart(false, false);
     startTelemetry();
     startServerPolling();
     void refreshMetrics();                // the Stats tab reads the strict metrics door
@@ -7070,117 +7089,97 @@ export function createAdmin(api: AdminApi): Admin {
     );
   });
 
-  function applySeasonName(): void {
-    const raw = (arenaSeasonName?.value ?? '').trim();
+  /* ---------- the Season command panel ---------- */
+
+  /**
+   * The patch that reopens the ladder. A pause is the Worker's own `maintenance` state; a
+   * finale is a verdict the Season panel is allowed to reverse — but only while the clock
+   * still runs, because an expired season has nothing left to resume.
+   */
+  function unlockPatch(a: ArenaState): Partial<ArenaState> {
+    return a.status === 'finale' && a.endsAt > Date.now()
+      ? { matchLocked: false, status: 'active' }
+      : { matchLocked: false };
+  }
+
+  /** Card 2's one save: the title, the number behind it and the lock, in a single patch. */
+  async function saveCurrentSeason(): Promise<void> {
     const a = arena();
+    const raw = (seasonTitleInput?.value ?? '').trim();
     if (raw.length < 2) {
-      api.note('Give the season a title first.', true, 2200);
-      paintArena();
+      flashSeasonNote('Give the season a title first', true);
+      seasonTitleInput?.focus({ preventScroll: true });
       return;
     }
     const no = seasonNoFrom(raw, a.seasonNo);
-    if (raw === a.seasonName && no === a.seasonNo) return;
-    void commitArena({ seasonName: raw, seasonNo: no }, `Season ${no} saved.`);
+    const lock = seasonLockBtn?.getAttribute('aria-checked') === 'true';
+    const patch: Partial<ArenaState> = { seasonName: raw, seasonNo: no, matchLocked: lock };
+    if (!lock && a.status !== 'active' && a.endsAt > Date.now()) patch.status = 'active';
+    const unchanged = raw === a.seasonName && no === a.seasonNo
+      && lock === a.matchLocked && patch.status === undefined;
+    if (unchanged) {
+      seasonTitleDirty = false;
+      flashSeasonNote('No changes to save');
+      return;
+    }
+    impact('light');
+    /* quiet=false: when the Worker is not answering, its device-only warning is the truth
+       this save has to carry. A confirmed save says nothing global — the card says it all. */
+    const ok = await commitArena(patch, '', false);
+    const landed = ok || arena().seasonName === raw;
+    /* the save settles the field: whatever the Worker now holds is what this input shows */
+    seasonTitleDirty = false;
+    paintSeasonPanel();
+    flashSeasonNote(landed ? 'Season updated' : 'Not saved');
   }
 
-  arenaSeasonName?.addEventListener('change', applySeasonName);
-  arenaSeasonName?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      arenaSeasonName.blur();
-    }
+  seasonSave?.addEventListener('click', () => { void saveCurrentSeason(); });
+  seasonTitleInput?.addEventListener('input', () => { seasonTitleDirty = true; });
+  seasonTitleInput?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void saveCurrentSeason();
   });
 
-  function applyDivisions(): void {
-    const rows: ArenaDivisionRule[] = [];
-    let prev = -1;
-    for (const id of ARENA_TIER_IDS) {
-      const input = arenaDivInputs.find((el) => el.dataset.divMin === id);
-      const value = id === 'bronze' ? 0 : Math.floor(Number(input?.value));
-      if (!Number.isFinite(value) || value <= prev || value > 1_000_000) {
-        impact('light');
-        notify('error');
-        api.note('Division thresholds must rise, from Bronze upward.', true, 2800);
-        paintArena();
-        return;
-      }
-      rows.push({ id, min: value });
-      prev = value;
-    }
-    void commitArena({ divisions: rows }, 'Arena division thresholds saved.');
-  }
-
-  for (const input of arenaDivInputs) {
-    input.addEventListener('change', applyDivisions);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        input.blur();
-      }
-    });
-  }
-
-  const HUMAN_HOURS: Record<string, string> = { '6': '6 hours', '24': '24 hours', '72': '3 days', '168': '7 days' };
-  for (const btn of arenaPresets) {
+  /** +30 / +90: the clock moves forward from whichever end is later, never backwards. */
+  for (const btn of seasonExtend) {
     btn.addEventListener('click', () => {
-      const hours = Number(btn.dataset.preset);
-      if (!Number.isFinite(hours) || hours <= 0) return;
+      const days = Number(btn.dataset.extend);
+      if (!Number.isFinite(days) || days <= 0) return;
       impact('light');
       const base = Math.max(Date.now(), arena().endsAt);
-      void commitArena({ endsAt: base + hours * 3600_000 }, `Season extended by ${HUMAN_HOURS[String(hours)] ?? `${hours} hours`}.`);
+      void commitArena({ endsAt: base + days * 86400_000 }, `Season extended by ${days} days.`);
     });
   }
 
-  function applyExactEnd(): void {
-    const ms = parseDatetimeLocal(arenaEnds?.value ?? '');
-    if (ms === null) {
-      api.note('Pick an exact end date and time.', true, 2400);
-      arenaEnds?.focus({ preventScroll: true });
-      return;
-    }
-    if (ms <= Date.now()) {
-      api.note('The season end must be in the future.', true, 2600);
-      arenaEnds?.focus({ preventScroll: true });
-      return;
-    }
-    const when = new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    void commitArena({ endsAt: ms }, `Season now ends ${when}.`);
+  seasonLockBtn?.addEventListener('click', () => {
+    const next = seasonLockBtn.getAttribute('aria-checked') !== 'true';
+    impact(next ? 'medium' : 'light');
+    notify(next ? 'warning' : 'success');
+    void commitArena(
+      next ? { matchLocked: true } : unlockPatch(arena()),
+      next ? 'Standings locked — the finale is frozen.' : 'Standings unlocked — matches count again.',
+    );
+  });
+
+  for (const btn of seasonDurs) {
+    btn.addEventListener('click', () => {
+      const days = Number(btn.dataset.duration);
+      if (!Number.isFinite(days) || days <= 0) return;
+      impact('light');
+      selectDuration(days);
+    });
   }
 
-  arenaEndsApply?.addEventListener('click', applyExactEnd);
-  arenaEnds?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      applyExactEnd();
-    }
+  seasonStart?.addEventListener('click', () => {
+    impact('light');
+    armSeasonStart(true);
   });
-
-  arenaResetBtn?.addEventListener('click', () => {
-    impact('medium');
-    const a = arena();
-    const title = a.seasonName.trim().toLowerCase().startsWith('season')
-      ? a.seasonName
-      : `Season ${a.seasonNo} — ${a.seasonName}`;
-    const scope = serverOn
-      ? 'every registered player is ranked, sent a TIQ award and a season badge'
-      : 'the Worker is offline, so the snapshot and rollover stay on this device';
-    openConfirm(
-      'Force season reset?',
-      `${title} closes immediately. A top-50 snapshot is banked, ${scope}, and Season ${Math.min(999, a.seasonNo + 1)} opens with a fresh 28-day clock. This cannot be undone.`,
-      'Reset Season',
-      () => void resetSeasonNow(),
-    );
+  seasonConfirmNo?.addEventListener('click', () => {
+    impact('light');
+    armSeasonStart(false);
   });
-
-  arenaStopBtn?.addEventListener('click', () => {
-    impact('medium');
-    openConfirm(
-      'Emergency force-stop?',
-      'New matchmaking stops immediately and every waiting seat is dismissed. Every connected client is told over the live socket. Races already on a board play out.',
-      'Force-Stop',
-      () => void forceStopNow(),
-    );
-  });
+  seasonConfirmYes?.addEventListener('click', () => { void startSeasonNow(); });
 
   /* Escape closes one layer at a time: the confirm dialog, then a drawer, then the stage. */
   onArena(() => {
@@ -7189,6 +7188,11 @@ export function createAdmin(api: AdminApi): Admin {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !open || e.defaultPrevented) return;
+    /* the armed rollover is a layer too: Escape answers ✕ before it closes anything */
+    if (seasonConfirm && !seasonConfirm.hidden) {
+      armSeasonStart(false);
+      return;
+    }
     if (confirmEl && !confirmEl.hidden) {
       closeConfirm();
       return;
