@@ -613,6 +613,12 @@ const LOBBY_ERROR_KEY: Record<string, string> = {
   room_closed: 'errRoomClosed',
   MAINTENANCE: 'errMaintenance',
   BANNED: 'errBanned',
+  /* The arena/season gate is matchmaking's, never a private room's. If it ever answers a room
+     socket anyway, the player reads that the servers are paused — never a generic refusal that
+     blames the room they just made. */
+  MATCHING_LOCKED: 'errMaintenance',
+  SEASON_ENDED: 'errMaintenance',
+  FORCE_STOP: 'errMaintenance',
 };
 
 const errorLine = (reason: string): string => t(LOBBY_ERROR_KEY[reason] ?? 'errJoinUnknown');
@@ -1399,10 +1405,13 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
         hooks.onMaintenance?.();
         return;
       }
-      /* Two hosts on one code would fight over the crown. The collision is ours to fix: mint a
-         fresh code and try again, rather than asking the player to understand a room they cannot
-         see. */
-      if ((reason === 'room_exists' || reason === 'ROOM_EXISTS') && host && codeTries < 2) {
+      /* Two collisions are ours to fix, never the player's to understand: another host already
+         holds this code, or the code this tab just minted is one the room retired a while ago. A
+         brand-new room is minted and tried again. Only a room this client is *creating* may be
+         re-coded — an invite, or a membership being resumed, names somebody else's room. */
+      const collided = reason === 'room_exists' || reason === 'ROOM_EXISTS'
+        || reason === 'room_consumed' || reason === 'room_started' || reason === 'ROOM_STARTED';
+      if (collided && host && !resume && !invite && codeTries < 2) {
         codeTries++;
         const fresh = createRoomCode();
         saveSession({ code: fresh, host: true, invite: false, at: Date.now() });
@@ -2000,6 +2009,10 @@ function paintSheetHead(next: SheetView): void {
 /** Swap the drawer between the mode list, the friends entry and the live lobby. */
 function showView(next: SheetView): void {
   view = next;
+  /* The friends pane never re-opens carrying the last refusal: an error from a room this client
+     has already left says nothing about the door it is looking at now. `roomFailed` writes its
+     line AFTER calling this, so a live refusal still paints. */
+  if (next === 'room') clearRoomError();
   /* returning to the list re-prices the saved selection: a transient row tap is not a selection */
   if (next === 'modes') previewMode = null;
   /* the countdown belongs to the roster it is counting: leaving that pane stops it */
@@ -2236,6 +2249,10 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     }
     impact('medium');
     clearRoomError();
+    /* Create is ALWAYS a brand-new room. A code this device still holds — a dead lobby, a spent
+       invite, a seat that was struck from its race — belongs to the room being replaced, so the
+       membership is dropped before the new code is minted: nothing here may resume or rejoin it. */
+    if (inLobby() || session) leaveRoom();
     const sel = createRoom();
     notify('success');
     openRoom(sel.roomCode ?? createRoomCode(), true);

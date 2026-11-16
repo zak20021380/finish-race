@@ -2805,9 +2805,24 @@ export class MatchmakerDO {
     }
     this.touch(identity);
 
+    /* Every spelling of an invite is the same room: `roomcode=1909`, `?room=#1909`,
+       `?startapp=room_1909` and a shared `room_1909` payload all read as 1909. `room=` stays a
+       seat count when it is one (2-4); a four-digit `room=` is an invite, not a size. It is read
+       here, before the tournament gate, because that gate has to know whether this socket is a
+       matchmaking search or somebody's private room. */
+    const roomSize = readRoomSize(queryValue(url, 'room'));
+    const roomCode = readRoomCode(queryValue(url, 'roomcode'))
+      || readInviteRoomCode(queryValue(url, 'startapp'))
+      || readInviteRoomCode(queryValue(url, 'start_param'))
+      || readInviteRoomCode(queryValue(url, 'code'))
+      || (roomSize ? '' : readRoomCode(queryValue(url, 'room')));
+
     /* The tournament gate sits before the queue, not inside the panel: a socket that connects
-       while the arena is locked is told why and let go, while races already on a board resolve. */
-    if (this.maintenance || this.arenaLocked()) {
+       while the arena is locked is told why and let go, while races already on a board resolve.
+       A friends room is NOT matchmaking: a four-digit code two people already agreed on is a
+       private room, and neither the season clock nor the arena lock may close that door. Only the
+       operator's own maintenance lock stops a room — and that reason has a line of its own. */
+    if (this.maintenance || (this.arenaLocked() && !roomCode)) {
       const gate = new WebSocketPair();
       const denied = gate[1];
       denied.accept();
@@ -2834,15 +2849,7 @@ export class MatchmakerDO {
        never take the handshake down; the try/catch is the last line of defence for anything the
        parsers did not anticipate. */
     try {
-      /* Every spelling of an invite is the same room: `roomcode=1909`, `?room=#1909`,
-         `?startapp=room_1909` and a shared `room_1909` payload all read as 1909. `room=` stays a
-         seat count when it is one (2-4); a four-digit `room=` is an invite, not a size. */
-      const roomSize = readRoomSize(queryValue(url, 'room'));
-      const roomCode = readRoomCode(queryValue(url, 'roomcode'))
-        || readInviteRoomCode(queryValue(url, 'startapp'))
-        || readInviteRoomCode(queryValue(url, 'start_param'))
-        || readInviteRoomCode(queryValue(url, 'code'))
-        || (roomSize ? '' : readRoomCode(queryValue(url, 'room')));
+      /* `roomCode` / `roomSize` were resolved above, before the tournament gate. */
       if (roomCode) {
         /* the friends lobby: a code the host minted, not a search for strangers */
         this.joinLobby(server, identity, roomCode, queryValue(url, 'host') === '1',
@@ -6644,11 +6651,14 @@ export class MatchmakerDO {
    *     `room_consumed` (the client says "this invite has already been used or expired");
    *   - a player returning to a seat they still hold is reattached, never turned away;
    *   - `host=1` reclaims the crown when it is empty or held by a dropped socket, and only a
-   *     second *live* host on one code is refused (`room_exists`).
+   *     second *live* host on one code is refused (`room_exists`);
+   *   - the arena's season lock is matchmaking's gate, never a private room's: a code two people
+   *     already agreed on opens while the tournament is closed.
    */
   private joinLobby(ws: WebSocket, identity: Identity, code: string, host: boolean, tier: BotTier): void {
+    /* Only the operator's stop-the-world lock closes a private room. The arena lock belongs to
+       matchmaking: a season that has ended must never tell two friends their own code is dead. */
     if (this.maintenance) { this.rejectSocket(ws, 'MAINTENANCE'); return; }
-    if (this.arenaLocked()) { this.rejectSocket(ws, 'MATCHING_LOCKED'); return; }
     this.sweepRetired();
     /* The code the socket said, in its one canonical spelling. `1909`, `#1909` and `room_1909` all
        land on the same key, so a link cannot address a room its host never minted. */
