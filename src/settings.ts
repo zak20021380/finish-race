@@ -320,6 +320,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     checkmateKicker: 'CHECKMATE',
     checkmateOut: 'OUT',
     checkmatePawnNote: 'Pawn sealed — no path to the finish!',
+    /* The top banner a party match raises when a seat is eliminated. `{name}` is the seat's FULL
+       display name and is wrapped in a `<bdi>` by the caller, so a mixed-direction handle keeps
+       its own order inside the sentence. */
+    checkmateBanner: '{name} checkmated — no path to FINISH',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'You',
     hudTop: 'Top',
@@ -1281,6 +1285,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     checkmateKicker: 'کیش و مات',
     checkmateOut: 'حذف شد',
     checkmatePawnNote: 'مهره در بن‌بست کامل ماند — راهی به خط پایان ندارد!',
+    /* The top banner a party match raises when a seat is eliminated. `{name}` is the seat's FULL
+       display name and is wrapped in a `<bdi>` by the caller, so a mixed-direction handle keeps
+       its own order inside the sentence. */
+    checkmateBanner: '{name} کیش و مات شد — مسیر به خط پایان بسته شد',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'تو',
     hudTop: 'برتر',
@@ -2175,6 +2183,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     checkmateKicker: 'МАТ',
     checkmateOut: 'ВЫБЫЛ',
     checkmatePawnNote: 'Пешка заперта — пути к финишу нет!',
+    /* The top banner a party match raises when a seat is eliminated. `{name}` is the seat's FULL
+       display name and is wrapped in a `<bdi>` by the caller, so a mixed-direction handle keeps
+       its own order inside the sentence. */
+    checkmateBanner: '{name} в тупике — нет пути к финишу',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Вы',
     hudTop: 'Топ',
@@ -2430,6 +2442,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     checkmateKicker: 'كش مات',
     checkmateOut: 'خارج',
     checkmatePawnNote: 'قطعة محاصرة — لا طريق إلى خط النهاية!',
+    /* The top banner a party match raises when a seat is eliminated. `{name}` is the seat's FULL
+       display name and is wrapped in a `<bdi>` by the caller, so a mixed-direction handle keeps
+       its own order inside the sentence. */
+    checkmateBanner: '{name} محاصر — لا يوجد مسار إلى النهاية',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'أنت',
     hudTop: 'الأفضل',
@@ -2673,6 +2689,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     checkmateKicker: 'JAQUE MATE',
     checkmateOut: 'FUERA',
     checkmatePawnNote: '¡Pieza sellada — sin camino a la meta!',
+    /* The top banner a party match raises when a seat is eliminated. `{name}` is the seat's FULL
+       display name and is wrapped in a `<bdi>` by the caller, so a mixed-direction handle keeps
+       its own order inside the sentence. */
+    checkmateBanner: '{name} sin salida — camino bloqueado',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Tú',
     hudTop: 'Top',

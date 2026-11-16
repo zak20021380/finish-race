@@ -498,6 +498,92 @@ function paintPeerPill(template: string, name: string): void {
   peerPillText.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
 }
 
+/* ---------- the CHECKMATE banner: who was trapped, and why ----------
+   A party race does not end when a trap closes: the seat is out, the race plays on, and the board
+   says so. The banner is the same quiet top pill the connection notices use, in its own tone, and
+   it names the seat the way the forfeit banner does — the FULL display name in a `<bdi>`, so a
+   mixed-direction handle never reorders the sentence around itself. It never takes a tap: it is
+   pointer-transparent, it holds its own clock, and it hides itself when it is done. */
+const checkmateBanner = document.createElement('div');
+checkmateBanner.className = 'cm-banner';
+checkmateBanner.id = 'cm-banner';
+checkmateBanner.setAttribute('role', 'status');
+checkmateBanner.setAttribute('aria-live', 'assertive');
+checkmateBanner.hidden = true;
+/* One text child owns the ellipsis: the banner is a flex row (dot + copy), and `text-overflow`
+   only bites on a block that can actually shrink. */
+const checkmateBannerText = document.createElement('span');
+checkmateBannerText.className = 'cm-banner-t';
+checkmateBanner.appendChild(checkmateBannerText);
+gameScreen.appendChild(checkmateBanner);
+
+/** How long one verdict holds the top of the screen before the next one takes its place. */
+const CHECKMATE_BANNER_MS = 4200;
+let cmBannerTimer = 0;
+/** The name the banner is printing right now: a live language flip re-speaks it in place. */
+let cmBannerName = '';
+/** Verdicts still waiting for their turn: one trap can close more than one seat at once. */
+const cmBannerQueue: string[] = [];
+let cmBannerUp = false;
+
+/**
+ * Print the checkmate banner around a player's FULL display name. The name goes in a `<bdi>` so a
+ * Latin, Persian, Arabic, Russian or Spanish handle keeps its own direction and never reorders the
+ * sentence around it — and it is a text node, so a name is never parsed as markup.
+ */
+function paintCheckmateBanner(name: string): void {
+  const template = t('checkmateBanner');
+  checkmateBannerText.textContent = '';
+  const at = name ? template.indexOf('{name}') : -1;
+  if (at < 0) { checkmateBannerText.textContent = template; return; }
+  const bdi = document.createElement('bdi');
+  bdi.textContent = name;
+  checkmateBannerText.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
+}
+
+/** Hand the banner over to the next verdict in the queue, or take it down when there is none. */
+function stepCheckmateBanner(): void {
+  window.clearTimeout(cmBannerTimer);
+  cmBannerTimer = 0;
+  const next = cmBannerQueue.shift();
+  if (next === undefined) {
+    cmBannerUp = false;
+    cmBannerName = '';
+    checkmateBanner.hidden = true;
+    return;
+  }
+  cmBannerName = next;
+  checkmateBanner.hidden = false;
+  paintCheckmateBanner(next);
+  cmBannerTimer = window.setTimeout(stepCheckmateBanner, CHECKMATE_BANNER_MS);
+}
+
+/**
+ * Announce a seat that a trap just closed. The banner is a verdict, not a promise: it comes up
+ * once, holds its own clock and goes away on its own. A connection notice gives way to it — the
+ * elimination is the bigger news — and the live region is filled the moment the verdict lands.
+ */
+function showCheckmateBanner(name: string): void {
+  if (!name) return;
+  hidePeerPill();
+  cmBannerQueue.push(name);
+  if (cmBannerUp) return;              // the banner is already up: this verdict queues behind it
+  cmBannerUp = true;
+  stepCheckmateBanner();
+}
+
+/** Take the banner down: the race is over, or the screen is going somewhere else. */
+function hideCheckmateBanner(): void {
+  window.clearTimeout(cmBannerTimer);
+  cmBannerTimer = 0;
+  cmBannerQueue.length = 0;
+  cmBannerUp = false;
+  cmBannerName = '';
+  checkmateBanner.hidden = true;
+}
+
+onLang(() => { if (cmBannerUp) paintCheckmateBanner(cmBannerName); });
+
 /** The name a banner prints: the room's own roster first, the HUD's seat label as the fallback. */
 function seatFullName(side: Player): string {
   if (active && 'seats' in active) {
@@ -1403,7 +1489,7 @@ function syncStage() {
 }
 
 /**
- * Publish every live pawn's footprint to the guidance layers (`boardpieces.ts`).
+ * Publish every pawn's footprint to the guidance layers (`boardpieces.ts`).
  *
  * The event callouts must never stand over a ball, and they cannot look: the pieces are canvas
  * pixels, and sampling them was a `getImageData()` readback on the detonation tick. The board knows
@@ -1416,7 +1502,8 @@ function syncStage() {
 function syncPieces() {
   const out: PieceBox[] = [];
   for (const b of state.balls) {
-    if (b.isCheckmated) continue;
+    /* A sealed pawn keeps its token on the board, so it keeps its footprint too: the callouts must
+       not stand over a piece the player can still see, frozen or not. */
     const tile = boardRect(b.pos.c, b.pos.r);
     const w = tile.width * 0.7, h = tile.height * 0.7;
     out.push({
@@ -2576,8 +2663,10 @@ function ui() {
   }
   if (state.winner !== null) {
     /* A settled board has no live opponent to reconnect: the pill would be a promise with no
-       match left to keep it. */
+       match left to keep it. The same goes for the checkmate banner — a verdict about a race that
+       is already over has nothing left to announce. */
     hidePeerPill();
+    hideCheckmateBanner();
     armGoalBeat();
   }
   /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
@@ -2776,8 +2865,15 @@ function play(a: Action, remote = false): boolean {
         shake(false);
       }
     }
-    if (trap.teams.length) showCheckmateSplash();
-    else if (trap.cells.length) showNote(t('checkmatePawnNote'), false, 2800);
+    if (trap.teams.length) {
+      showCheckmateSplash();
+      /* A PARTY match does not end on a trap: the seat is out, the race plays on, and the top
+         banner names the seat and the reason. A duel is already decided by the splash and the
+         result card, so it never raises one. */
+      if (state.teams.length > 2) {
+        for (const seat of trap.teams) showCheckmateBanner(seatFullName(seat));
+      }
+    } else if (trap.cells.length) showNote(t('checkmatePawnNote'), false, 2800);
   }
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
@@ -3063,6 +3159,8 @@ function restart() {
   overlay.classList.remove('win', 'lose', 'is-party');
   menuBtn.disabled = false;
   clearNote();
+  /* A fresh board has no verdict to announce: the last race's checkmate banner goes with it. */
+  hideCheckmateBanner();
   confetti.stop();
   invalidate();      // a restart repaints the fresh board once, then the loop parks again
   renderer.resetFx();
@@ -3080,6 +3178,9 @@ function restart() {
 function applyRoomSnapshot(next: GameState, turnLeftMs: number): void {
   if (!active) return;
   const dimsChanged = next.cols !== state.cols || next.rows !== state.rows;
+  /* The seats this client had already seen go out: a trap that closed while the socket was down
+     shows up in the snapshot alone, and the banner says so when the board lands. */
+  const knownOut = state.eliminated ?? [];
   state = next;
   selected = null;
   autoPicked = null;
@@ -3110,6 +3211,14 @@ function applyRoomSnapshot(next: GameState, turnLeftMs: number): void {
     paintClock();
   }
   ui();
+  /* The verdict the snapshot brought with it: a seat the board found already eliminated. The
+     banner names it, exactly as it would have named it live. */
+  if (state.teams.length > 2) {
+    for (const seat of state.eliminated ?? []) {
+      if (knownOut.includes(seat)) continue;
+      showCheckmateBanner(seatFullName(seat));
+    }
+  }
   syncLoop();
 }
 

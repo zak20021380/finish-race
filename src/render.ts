@@ -3827,7 +3827,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     SEATS_N.fill(0);
     for (let i = 0; i < v.balls.length; i++) {
-      if (logical[i]?.isCheckmated) continue;         // a sealed pawn owns no badge slot
+      if (logical[i]?.isCheckmated) continue;         // a frozen pawn owns no badge slot
       const b = v.balls[i];
       if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
     }
@@ -3840,12 +3840,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       /* the finisher's own pawn: once its burst begins, the ball is gone — the debris takes over */
       const pawn = fin ? fin.byId.get(b.id) : undefined;
       if (pawn && finNow >= pawn.burstAt) continue;
-      /* A checkmated pawn is off the board the moment the rules seal it. Two exceptions keep their
-         token: a pawn the endgame finisher is already staging (so a duel won by checkmate still
-         ends on the loser's explosion), and a struck seat's pawn, which stays as ash — a record of
-         where that player got to, not a piece anybody can move or must route around. */
-      const dimmed = leftSeats.has(seat);
-      if (logical[i]?.isCheckmated && !pawn && !dimmed) continue;
+      /* A SEALED PAWN KEEPS ITS TOKEN. It used to vanish the instant the rules flagged it, and a
+         pawn disappearing into thin air reads as the board losing a piece rather than as a trap
+         closing. It now stays on the EXACT tile it died on, frozen in the drained slate the struck
+         seats wear: 0.35 alpha, no seat glow, no lamp, no aura, no thinking pips — a record of
+         where it was trapped, not a piece anybody can move, block or route around. The endgame
+         finisher is the one exception: a pawn it is already staging keeps its own look, so a duel
+         won by checkmate still ends on the loser's explosion. */
+      const sealed = logical[i]?.isCheckmated === true;
+      const dimmed = leftSeats.has(seat) || (sealed && !pawn);
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
       /* A chain keeps one arc per beat in the queue: the FIRST unexpired one is the active throw,
@@ -4001,8 +4004,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     // "<side> is thinking" pips above that side's leading ball
     if (v.thinking !== null && !leftSeats.has(v.thinking)) {
       let lead: BallView | null = null;
-      for (const b of v.balls) {
+      for (let i = 0; i < v.balls.length; i++) {
+        const b = v.balls[i];
         if (b.team !== v.thinking) continue;
+        /* A frozen pawn never thinks: the pips belong to the side's LEADING LIVE ball, so they
+           float over a runner and never over the slate token a sealed pawn left behind. */
+        if (logical[i]?.isCheckmated) continue;
         if (!lead || b.pos.y < lead.pos.y) lead = b;
       }
       if (lead) {
@@ -4219,8 +4226,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /**
      * Queue the CHECKMATE flare at every pawn the rules just sealed off. The caller owns the
      * verdict (and the DOM announcement); this owns the blast under it. One finite transition per
-     * cell, no particle state kept afterwards, and the sealed pawn itself is simply not drawn —
-     * see the `isCheckmated` gate in `draw()`.
+     * cell, no particle state kept afterwards, and the sealed pawn itself stays on the board as
+     * the frozen slate token — see the `isCheckmated` gate in `draw()`.
      */
     checkmate(cells: readonly Cell[]) {
       if (!cells.length) return;

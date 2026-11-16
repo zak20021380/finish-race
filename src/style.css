@@ -36085,6 +36085,73 @@ html[data-lang="ar"] .peer-pill { direction: rtl; letter-spacing: 0; }
 html.reduced-motion .peer-pill::before { animation: none; }
 html.reduced-motion .peer-pill { transition: none; }
 
+/* ---- the checkmate banner: a seat trapped out of a party, named at the top ---- */
+.cm-banner {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 14;                /* above the peer pill: a verdict outranks a connection notice */
+  box-sizing: border-box;
+  max-width: min(92vw, 420px);
+  margin: 0;
+  padding: 8px 16px 8px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(209, 31, 60, .42);
+  border-radius: 999px;
+  background:
+    radial-gradient(140% 200% at 50% 0%, rgba(190, 24, 60, .18) 0%, rgba(190, 24, 60, 0) 72%),
+    linear-gradient(180deg, #17131a 0%, #0a080c 100%);
+  box-shadow:
+    0 14px 28px -18px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .07);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;      /* NON-BLOCKING: never eats a tap aimed at the board */
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+/* the copy is the only shrinkable item: a long full name ellipsises instead of widening the pill */
+.cm-banner-t {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* a player's name keeps its own direction inside the sentence, whatever the UI language is */
+.cm-banner bdi { unicode-bidi: isolate; font-weight: 800; }
+.cm-banner:not([hidden]) { opacity: 1; transform: none; }
+.cm-banner[hidden] { display: none !important; }
+/* the dot is a sealed pawn: a slow crimson ember, never the gold pulse of a live notice */
+.cm-banner::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #D11F3C;
+  box-shadow: 0 0 0 3px rgba(209, 31, 60, .14);
+  animation: cm-banner-pulse 1.6s ease-in-out infinite;
+}
+html[data-lang="fa"] .cm-banner,
+html[data-lang="ar"] .cm-banner { direction: rtl; letter-spacing: 0; }
+@keyframes cm-banner-pulse {
+  0%, 100% { opacity: .5; transform: scale(.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+html.reduced-motion .cm-banner::before { animation: none; }
+html.reduced-motion .cm-banner { transition: none; }
+
 /* ---- 2. first-duel welcome bonus: a gold-leaf badge inside the result card ---- */
 .iv-bonus {
   box-sizing: border-box;
