@@ -9,17 +9,19 @@
  * threat run, no beam. Nothing to read, nothing to dismiss.
  *
  * The curriculum is the real game, performed on the real board:
- *   goal → select → move → wall-stage → wall-confirm → [live play] → mine-arm → mine-place →
- *   mine-confirm → the race itself.
+ *   goal → select → move → wall-stage → wall-confirm → (rival reply) → advance × ADVANCE_TURNS →
+ *   mine-arm → mine-place → mine-confirm → mine-blast → the race itself.
  * Both placements are the REAL two-tap flow: the first tap stages a ghost and raises the board's
  * own ✓/✕ controls, the second commits it. The spotlight moves onto the green ✓ while the input
  * cut-out stays wide enough for the ✕ beside it, so cancelling is a genuine way back rather than a
  * dead disc under the guard.
  *
- * After the wall locks in, the lesson steps OUT of the way: the overlay closes, the gate releases
- * and the board is ordinary live play until the rival has taken its two turns. Then it re-opens on
- * its own for the mine, and gets out of the way for good the instant the charge is buried — with
- * one gold breath over the FINISH row as the parting "run" cue.
+ * After the wall locks in the rival answers it, and then both pawns climb: a run of guided
+ * forward-advance turns — the same spotlight, the same gate, no line on the board — carries them
+ * into the middle of the board, where the mine lesson begins. The charge is buried on the exact
+ * tile the rival is about to take, and the rival walks onto it while the spotlight holds that
+ * square: the detonation the player watches is the engine's own. One gold breath over the FINISH
+ * row is the parting "run" cue.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one.
@@ -49,7 +51,8 @@ export interface TutorialSpot {
 export type TutorialStage =
   | 'goal' | 'select' | 'move'
   | 'wall-stage' | 'wall-confirm'
-  | 'mine-arm' | 'mine-place' | 'mine-confirm';
+  | 'advance-select' | 'advance-move'
+  | 'mine-arm' | 'mine-place' | 'mine-confirm' | 'mine-blast';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 export type TutorialLang = 'en' | 'fa' | 'ru';
@@ -128,13 +131,15 @@ export interface TutorialHooks {
   minePlace(): TutorialTargetMine | null;
   /** The staged charge's green ✓, with the whole pair as its door. */
   mineConfirm(): TutorialTargetMine | null;
+  /** The buried charge's own square: the spotlight holds it while the rival walks into it. */
+  mineBlast(cell: Cell | null): TutorialTargetMine | null;
   /** One fast, deterministic reply per bot seat; resolves when the local seat is on turn again. */
   reply(): Promise<void>;
   /**
-   * The wall is up: the overlay is about to step aside so the race can be played for real. The
-   * board releases the lesson's input gate, runs the live turns, and re-opens it at the mine.
+   * The charge is buried on `cell`. The board scripts the rival's very next step onto that square
+   * and resolves once the real detonation has played out, so the lesson closes on the crater.
    */
-  handoff(): void;
+  mineBait(cell: Cell): Promise<void>;
   /** The parting cue: one gold breath over the FINISH row, drawn by the board itself. */
   finishPulse(): void;
   /** A stage began (or the lesson closed, with null): re-derive hints, routes and the mine key. */
@@ -143,17 +148,13 @@ export interface TutorialHooks {
 }
 
 export interface Tutorial {
-  /** The overlay is up and the action gate is live. False during the live-play intermission. */
+  /** The overlay is up and the action gate is live. */
   readonly active: boolean;
-  /** The lesson is between sittings: the wall is placed and the board is being played for real. */
-  readonly suspended: boolean;
   readonly stage: TutorialStage | null;
   start(): void;
   /** The goal card was dismissed: the FINISH band was tapped, or its Start key pressed. */
   advance(): void;
-  /** The intermission is over: re-open the overlay on the mine lesson. */
-  resume(): void;
-  /** The race settled while the lesson was aside: close it as read, never as cancelled. */
+  /** The race settled mid-lesson: close it as read, never as cancelled. */
   complete(): void;
   skip(): void;
   cancel(): void;
@@ -196,21 +197,27 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'move', icon: '#i-move', tone: 'move' },
   { stage: 'wall-stage', icon: '#i-wall', tone: 'wall' },
   { stage: 'wall-confirm', icon: '#i-wall', tone: 'confirm' },
+  { stage: 'advance-select', icon: '#i-target', tone: 'select' },
+  { stage: 'advance-move', icon: '#i-move', tone: 'move' },
   { stage: 'mine-arm', icon: '#i-mine-tactical', tone: 'mine' },
   { stage: 'mine-place', icon: '#i-mine-tactical', tone: 'mine' },
   { stage: 'mine-confirm', icon: '#i-mine-tactical', tone: 'confirm' },
+  { stage: 'mine-blast', icon: '#i-mine-tactical', tone: 'mine' },
 ];
 
-/** What comes after each successful action. The wall's green key hands over to live play instead. */
+/** What comes after each successful action; the wall's green key waits for the rival's reply. */
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
   goal: 'select',
   select: 'move',
   move: 'wall-stage',
   'wall-stage': 'wall-confirm',
-  'wall-confirm': 'mine-arm',
+  'wall-confirm': 'advance-select',
+  'advance-select': 'advance-move',
+  'advance-move': 'mine-arm',
   'mine-arm': 'mine-place',
   'mine-place': 'mine-confirm',
-  'mine-confirm': 'done',
+  'mine-confirm': 'mine-blast',
+  'mine-blast': 'done',
 };
 
 /** A confirm stage whose controls vanished falls BACK to its own first tap, never forward. */
@@ -226,17 +233,20 @@ const STAGE_KIND: Readonly<Record<TutorialStage, TutorialAction['kind'] | null>>
   move: 'move',
   'wall-stage': 'wall-stage',
   'wall-confirm': 'wall',
+  'advance-select': 'select',
+  'advance-move': 'move',
   'mine-arm': 'mine-arm',
   'mine-place': 'mine-stage',
   'mine-confirm': 'mine',
+  'mine-blast': null,
 };
 
-/** The stage that hands the board back: the wall is up and the overlay leaves for live play. */
-export const TUTORIAL_HANDOFF: TutorialStage = 'wall-confirm';
-/** Where the lesson re-opens on its own once live play has run its course. */
-export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
-/** Rival turns (or forward rows) the live intermission runs before the mine lesson re-opens. */
-export const TUTORIAL_LIVE_STEPS = 2;
+/**
+ * How many guided forward-advance turns sit between the wall and the mine. Three rows carry both
+ * pawns off their starting row and into the middle of the board, which is what makes the mine
+ * lesson read as a trap laid in open ground rather than a placement on the start line.
+ */
+export const TUTORIAL_ADVANCE_TURNS = 3;
 
 /**
  * STRICT FIRST-TIME-ONLY rule. Only a local, single-human bot race may auto-route into the lesson,
@@ -270,8 +280,10 @@ export function tutorialAllows(
       /* the card goes by its own key or by the FINISH band: no board action belongs to it */
       return false;
     case 'select':
+    case 'advance-select':
       return action.kind === 'select' && targets.select !== null && action.ball === targets.select;
     case 'move':
+    case 'advance-move':
       return action.kind === 'move' && sameCell(action.to, targets.move);
     case 'wall-stage':
       return action.kind === 'wall-stage' && sameWall(action.spec, targets.wall);
@@ -370,9 +382,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const langBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-tut-lang]'));
 
   let open = false;
-  /** The wall is up and the board is being played for real: no overlay, no gate, step held. */
-  let suspended = false;
   let stepIndex = 0;
+  /** Guided advance turns still to run between the wall and the mine. */
+  let advanceLeft = TUTORIAL_ADVANCE_TURNS;
+  /** The square the lesson's own charge was buried on: the spotlight holds it through the blast. */
+  let blastCell: Cell | null = null;
   let trackId = 0;
   let trackUntil = 0;
   let transitionTimer = 0;
@@ -387,8 +401,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const targets = (): TutorialTargets => {
     const s = stage();
     return {
-      select: s === 'select' ? hooks.select()?.ball ?? null : null,
-      move: s === 'move' ? hooks.move()?.to ?? null : null,
+      select: s === 'select' || s === 'advance-select' ? hooks.select()?.ball ?? null : null,
+      move: s === 'move' || s === 'advance-move' ? hooks.move()?.to ?? null : null,
       wall: s === 'wall-stage' ? hooks.wall()?.spec ?? null : null,
       wallConfirm: s === 'wall-confirm' ? hooks.wallConfirm()?.spec ?? null : null,
       mineArm: s === 'mine-arm' && hooks.mineArm() !== null,
@@ -401,13 +415,16 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const targetFor = (s: TutorialStage): { spot: TutorialSpot; door?: TutorialRect } | null => {
     switch (s) {
       case 'goal': { const g = hooks.goal(); return g ? { spot: g } : null; }
-      case 'select': return hooks.select();
-      case 'move': return hooks.move();
+      case 'select':
+      case 'advance-select': return hooks.select();
+      case 'move':
+      case 'advance-move': return hooks.move();
       case 'wall-stage': return hooks.wall();
       case 'wall-confirm': return hooks.wallConfirm();
       case 'mine-arm': { const m = hooks.mineArm(); return m ? { spot: m } : null; }
       case 'mine-place': return hooks.minePlace();
       case 'mine-confirm': return hooks.mineConfirm();
+      case 'mine-blast': return hooks.mineBlast(blastCell);
     }
   };
 
@@ -420,6 +437,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const aidFor = (s: TutorialStage, target: { spot: TutorialSpot }): TutorialSpot | null => {
     switch (s) {
       case 'move':
+      case 'advance-move':
       case 'wall-confirm':
       case 'mine-confirm': return null;
       default: return target.spot;
@@ -628,6 +646,23 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     go('select');
   };
 
+  /**
+   * One bot beat, then the next stage. Token-guarded like every other transition, so a skip, a
+   * close or a stale reply can never advance a lesson that has already moved on.
+   */
+  const awaiting = (beat: () => Promise<void>, next: () => void) => {
+    const token = ++flow;
+    transitionTimer = window.setTimeout(() => {
+      transitionTimer = 0;
+      void beat()
+        .catch(() => undefined)
+        .then(() => {
+          if (!open || token !== flow) return;
+          next();
+        });
+    }, REPLY_BEAT_MS);
+  };
+
   const attach = () => {
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
@@ -641,38 +676,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     document.removeEventListener('keydown', onKeydown, true);
   };
 
-  /**
-   * The live-play intermission. The wall stands, so the lesson takes its overlay AND its input gate
-   * down and holds its place: step, timers and targets are kept, and `resume()` re-opens directly on
-   * the mine. Nothing here ends the lesson — only the mine (or a skip) does that.
-   */
-  const suspend = () => {
-    if (!open) return;
-    open = false;
-    suspended = true;
-    flow++;
-    clearTimers();
-    if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
-    trackUntil = 0;
-    root.hidden = true;
-    root.removeAttribute('data-stage');
-    root.removeAttribute('data-tone');
-    document.body.classList.remove('tutorial-live');
-    /* no paint of the lesson survives the intermission: a hidden overlay must never leave a
-       stale spotlight box behind for a tester (or a screen) to read */
-    drawMask(null, 0);
-    placeRing(null, 0);
-    card.hidden = true;
-    aidEl.hidden = true;
-    pointer.style.display = 'none';
-    detach();
-    hooks.refresh(null);
-  };
 
   function close(result: TutorialResult) {
-    if (!open && !suspended) return;
+    if (!open) return;
     open = false;
-    suspended = false;
+    blastCell = null;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -712,13 +720,13 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   return {
     get active() { return open; },
-    get suspended() { return suspended; },
     get stage() { return stage(); },
     start() {
       if (open) return;
       open = true;
-      suspended = false;
       stepIndex = 0;
+      advanceLeft = TUTORIAL_ADVANCE_TURNS;
+      blastCell = null;
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -726,18 +734,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       trackFor(460);   // the screen is still sliding in; follow the target's real box
     },
     advance,
-    resume() {
-      if (open || !suspended) return;
-      suspended = false;
-      open = true;
-      const at = TUTORIAL_STEPS.findIndex((s) => s.stage === TUTORIAL_RESUME_STAGE);
-      if (at >= 0) stepIndex = at;
-      root.hidden = false;
-      document.body.classList.add('tutorial-live');
-      attach();
-      render();
-      trackFor(460);
-    },
     complete() { close('finished'); },
     skip() { close('skipped'); },
     cancel() { close('cancelled'); },
@@ -764,10 +760,23 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           return;
         case 'wall-confirm':
           if (cancel) { go('wall-stage'); return; }
-          /* The wall is locked in. The lesson gets out of the way at once: the player plays the
-             next turns for real and main.ts calls resume() once the rival has taken its two. */
-          suspend();
-          hooks.handoff();
+          /* The wall is locked in and the rival answers it at once. Then both pawns climb the board
+             together — one guided advance at a time, the spotlight moving from pawn to forward
+             tile — until they stand in the middle of the board, where the mine is buried. */
+          advanceLeft = TUTORIAL_ADVANCE_TURNS;
+          awaiting(hooks.reply, () => go('advance-select'));
+          return;
+        case 'advance-select':
+          go('advance-move');
+          return;
+        case 'advance-move':
+          /* The player's pawn is a row further on: the rival takes its own step before the next
+             pick, so the pair stays level and the run reads as a race, not a solo walk. */
+          awaiting(hooks.reply, () => {
+            advanceLeft -= 1;
+            if (advanceLeft > 0) { go('advance-select'); return; }
+            go('mine-arm');
+          });
           return;
         case 'mine-arm':
           go('mine-place');
@@ -775,30 +784,33 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         case 'mine-place':
           go('mine-confirm');
           return;
-        case 'mine-confirm':
+        case 'mine-confirm': {
           if (cancel) { go('mine-place'); return; }
-          /* The charge is buried. play() already handed the turn to the rival, so the board is
-             live again on this same frame: the FINISH row breathes gold once and the race is on. */
-          hooks.finishPulse();
-          impact('medium');
-          audio.play('swoosh', { gain: 0.5 });
-          close('finished');
-          return;
-        case 'move': {
-          /* the forward step hands the turn to the machine: one reply through the normal door,
-             then the player is up again with the wall groove spotlit */
+          if (action.kind !== 'mine') { close('finished'); return; }
+          /* The charge is buried. The spotlight holds that square while the board walks the rival
+             onto it: the blast, the knockback, the shake and the bang are the engine's own, and the
+             lesson only lets go — one gold breath over FINISH — once they have played. */
+          blastCell = action.cell;
+          go('mine-blast');
           const token = ++flow;
-          transitionTimer = window.setTimeout(() => {
-            transitionTimer = 0;
-            void hooks.reply()
-              .catch(() => undefined)
-              .then(() => {
-                if (!open || token !== flow) return;
-                go('wall-stage');
-              });
-          }, REPLY_BEAT_MS);
+          void hooks.mineBait(action.cell)
+            .catch(() => undefined)
+            .then(() => {
+              if (!open || token !== flow) return;
+              hooks.finishPulse();
+              impact('medium');
+              audio.play('swoosh', { gain: 0.5 });
+              close('finished');
+            });
           return;
         }
+        case 'mine-blast':
+          return;
+        case 'move':
+          /* the forward step hands the turn to the machine: one reply through the normal door,
+             then the player is up again with the wall groove spotlit */
+          awaiting(hooks.reply, () => go('wall-stage'));
+          return;
       }
     },
     nudge() {

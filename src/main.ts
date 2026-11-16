@@ -57,7 +57,7 @@ import {
   ONBOARDING_TURN_GRACE, onboardingActive, onboardingRivalAction, playerIsStuck,
 } from './onboarding';
 import {
-  createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
+  createTutorial, shouldAutoStartTutorial, tutorialSpotHas,
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
@@ -1245,7 +1245,7 @@ function setMode(next: BoardMode<Ghost>) {
  * always a plain board tap.
  */
 function armMine(next: boolean) {
-  const on = next && canAct() && minesLeft(state, localSide) > 0 && !mineReserved();
+  const on = next && canAct() && minesLeft(state, localSide) > 0;
   if (on === mineArmed) return;
   impact('light');
   mineGhost = null;
@@ -2371,7 +2371,7 @@ function maybeMicroCoach(): void {
   coachWasMyTurn = true;
   if (microCoachQuiet) return;
   if (hasCompletedTutorial()) return;
-  if (tutorialActive || tutorialStandalone || firstRunBoot || waitingForMineTrigger) return;
+  if (tutorialActive || tutorialStandalone || firstRunBoot) return;
   if (!isLiveDuel()) return;
   myTurnCount++;
   if (myTurnCount <= 2) {
@@ -2410,7 +2410,7 @@ function ui() {
   /* the pick step is the player's own: no dots until they choose. The forward step keeps every
      legal dot the rules offer — three directions off the starting row — exactly as a real match
      draws them. The spotlight and the action gate, not the dots, name the one tile that advances. */
-  if (stage === 'select') hints = [];
+  if (stage === 'select' || stage === 'advance-select') hints = [];
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   if (mineArmed && (stage === 'mine-place' || stage === 'mine-confirm')) {
     /* the staged square stays placeable through its own confirmation, so the ✓/✕ pair the lesson
@@ -2432,11 +2432,10 @@ function ui() {
   setClass(dots, 'on', thinking);
 
   setAttr(mineBtn, 'aria-pressed', String(mineArmed));
-  /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod.
-     During the live-play intermission the LAST charge is held back for that step. */
+  /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod. */
   setDisabled(mineBtn, tutorialActive
     ? stage !== 'mine-arm'
-    : (!live || minesLeft(state, localSide) <= 0 || mineReserved()));
+    : (!live || minesLeft(state, localSide) <= 0));
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
@@ -2481,9 +2480,6 @@ function ui() {
     hidePeerPill();
     armGoalBeat();
   }
-  /* the wall's live-play intermission ends on the board's own terms: two real rival turns, then
-     this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
-  if (waitingForMineTrigger) resumeMineLesson();
   /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
   maybeMicroCoach();
 }
@@ -2494,10 +2490,8 @@ async function runOpponent() {
   if (token !== gen) return;
   if (paused) await new Promise<void>((res) => waiting.push(res));   // parked until Resume
   if (token !== gen) return;
-  /* The brain reasons on the fog it has always been fed; the debut gates read the FULL board.
-     `hold` is dropped during the lesson's live-play intermission, whose two-row rival stride is
-     part of the tutorial's choreography and must still be allowed to happen. */
-  const a = await opponent.think(fogOfWar(state, state.turn), state, !waitingForMineTrigger);
+  /* The brain reasons on the fog it has always been fed; the debut gates read the FULL board. */
+  const a = await opponent.think(fogOfWar(state, state.turn), state, true);
   if (token !== gen) return;
   /* ULTIMATE FALLBACK: no safe, non-winning action is left for the rival. Award the resignation
      instead of letting it play a move that would end the race against the player. */
@@ -2590,11 +2584,6 @@ function play(a: Action, remote = false): boolean {
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; audio.play('move'); impact('medium'); }
   if (a.kind === 'mine') { mineArmed = false; audio.play('move'); }   // one mine per trip to the key
   state = next;
-  /* the mine lesson's intermission gate reads real plays, never a scripted walk */
-  if (waitingForMineTrigger) {
-    countMineStride();
-    if (by !== localSide) mineRivalTurns++;
-  }
   turnsPlayed++;                 // one seat has acted; the round caption counts them
   mineGhost = null;
   setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
@@ -3399,7 +3388,7 @@ function startGame(setup: StartSetup) {
        · an ad-verified Referral Hard Bot quest, whose server-side verification demands strict
          Hard AI (and which launches straight into its own match);
        · the standalone / auto / manually replayed LESSON. It is already a scripted, guaranteed
-         finish with its own choreography (including the rival's two-row live-play stride), so it
+         finish with its own choreography (including the rival steps the lesson scripts), so it
          is left untouched — and it does NOT spend the debut. The first race a player could
          actually lose is the one the controller is owed to govern. */
   const invitedRoom = INVITE_DUEL_LAUNCH || !!INVITE_ROOM_CODE || !!peekPendingDuelRoom()
@@ -3596,7 +3585,7 @@ function endOnline(end: RaceEnd): void {
 function concedeOnboarding(): void {
   if (!onboardingActive() || state.winner !== null) return;
   /* A lesson card must not sit on top of the result capsule. */
-  if (tutorialActive || waitingForMineTrigger) cancelTutorial();
+  if (tutorialActive) cancelTutorial();
   stopClock();
   state = { ...state, winner: localSide };
   showNote('Opponent resigned — you win', false, 3200);
@@ -4298,28 +4287,23 @@ function tutorialWallConfirmTarget(): TutorialTargetWall | null {
 }
 
 /**
- * Step 4's real target: the tile directly in the rival's forward path. It must be a legal mine
- * cell from the rules' own list, so the lesson never points at a square the action would refuse —
- * and it is read from the rival's LIVE position, never from a scripted route.
+ * Step 4's real target: the tile the rival is about to step onto. `tutorialRivalStep()` reads the
+ * LIVE board and the rules' own step query, so the tile is one the rival can actually reach in one
+ * move — straight ahead when that edge is open, the nearest sidestep/forward tile on its shortest
+ * route when a wall turns it aside — and it must also be a legal mine cell, so the lesson never
+ * points at a square the placement would refuse. The rival is then scripted onto exactly this tile
+ * the moment the charge is confirmed.
  */
 function tutorialMineTarget(): TutorialTargetMine | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const cells = mineCells(state, localSide);
   if (!cells.length) return null;
-  const rival = tutorialRival();
-  const wanted: Cell[] = [];
-  const want = (c: Cell) => { if (!wanted.some((w) => sameCell(w, c))) wanted.push(c); };
-  if (rival) {
-    want({ c: rival.pos.c, r: rival.pos.r - 1 });
-    want({ c: rival.pos.c - 1, r: rival.pos.r - 1 });
-    want({ c: rival.pos.c + 1, r: rival.pos.r - 1 });
-    want({ c: rival.pos.c, r: rival.pos.r - 2 });
-  }
-  for (const cell of wanted) {
-    const legal = cells.find((c) => sameCell(c, cell));
-    if (legal) return { cell: legal, spot: { rect: boardRect(legal.c, legal.r), radius: 16 } };
-  }
-  /* every square ahead is spoken for: the nearest forward cell the rules still allow */
+  const step = tutorialRivalStep();
+  const at = step ? cells.find((c) => sameCell(c, step.to)) ?? null : null;
+  if (at) return { cell: at, spot: { rect: boardRect(at.c, at.r), radius: 16 } };
+  /* No reachable tile is mine-legal (a board whose rival is still inside the start rows): the
+     nearest legal square ahead of it keeps the lesson alive without pointing at a refused cell. */
+  const rival = step?.ball ?? tutorialRival();
   const ahead = rival ? cells.filter((c) => c.r < rival.pos.r) : cells;
   const pool = ahead.length ? ahead : cells;
   let best = pool[0];
@@ -4353,17 +4337,23 @@ function tutorialMineConfirmTarget(): TutorialTargetMine | null {
   };
 }
 
-/** The lesson's one bot beat: each machine seat steps once, deterministically, and hands back. */
+/** The lesson's one bot beat: the rival's scripted step, then the board is the player's again. */
 async function tutorialReply(): Promise<void> {
   for (let guard = 0; guard < 8; guard++) {
     if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
     const seat = state.turn;
     await new Promise<void>((res) => window.setTimeout(res, 50));
     if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
+    /* The choreography is a walk, not a search: the rival takes the same forward lane the
+       spotlight is teaching, so the pair climbs the board in lockstep. A party board — or a rival
+       that does not hold the scripted ball — still falls back to the brain's own answer. */
+    const scripted = tutorialRivalStep();
+    const auto = scripted && scripted.ball.team === seat
+      ? { kind: 'move' as const, ball: scripted.ball.id, to: scripted.to }
+      : getAutoMove(state, seat);
     /* A lesson replayed from the Pause sheet inside a governed debut still answers to the gates:
        a deterministic forward step may never become the move that wins the race or seals the
-       player. `hold` is false here, because these two rows are the lesson's own choreography. */
-    const auto = getAutoMove(state, seat);
+       player. `hold` is false here, because these rows are the lesson's own choreography. */
     const guarded = onboardingActive()
       ? onboardingRivalAction(state, localSide, auto, false)
       : auto;
@@ -4389,86 +4379,64 @@ function syncTutorialUI(stage: TutorialStage | null = null) {
   ui();
 }
 
-/* ---------- the live-play intermission before the mine lesson ---------- */
+/* ---------- the lesson's own bot beats ---------- */
 
 /**
- * The wall stands. The lesson has stepped aside; from here until the mine is planted the board is
- * ordinary live play, with three rules of its own: the last mine charge is held for the lesson,
- * the rival's two turns are counted whether they gain rows or sidestep around the new wall, and a
- * race that settles here ends the lesson cleanly instead of stranding it.
+ * The rival's next step, read from the live board: straight ahead whenever that edge is open, and
+ * otherwise the sidestep/forward tile nearest FINISH on its shortest route. `reachableBall()` is
+ * the rules' own step query, so a walled edge is never pointed at, and `distField()` is the same
+ * route the board measures, so the tile the lesson names is the tile the rival actually takes.
  */
-let waitingForMineTrigger = false;
-let mineStrides = 0;
-/** Completed rival turns since the handoff — a detour costs a turn without gaining a row. */
-let mineRivalTurns = 0;
-/** Best (lowest) row each rival ball has reached since the handoff. */
-let mineGateRows: Map<number, number> | null = null;
+function tutorialRivalStep(): { ball: Ball; to: Pos } | null {
+  const rival = tutorialRival();
+  if (!rival) return null;
+  const opts = reachableBall(state, rival.id);
+  if (!opts.length) return null;
+  const d = distField(state.walls, state.cols, state.rows);
+  const dist = (p: Pos): number => {
+    const v = d[p.r * state.cols + p.c];
+    return v < 0 ? Number.POSITIVE_INFINITY : v;
+  };
+  const straight = (p: Pos): boolean => p.c === rival.pos.c && p.r === rival.pos.r - 1;
+  let best = opts[0];
+  for (const p of opts) {
+    const dp = dist(p), db = dist(best);
+    if (dp < db || (dp === db && straight(p) && !straight(best))) best = p;
+  }
+  return { ball: rival, to: best };
+}
 
-/** The lesson's own charge: live play may spend every mine but the last one. */
-const mineReserved = () => waitingForMineTrigger && minesLeft(state, localSide) <= 1;
+/** The beat the buried charge needs before the rival starts walking into it. */
+const MINE_BAIT_BEAT_MS = 240;
+/** The beat the real detonation gets before the lesson's spotlight lets the board go. */
+const MINE_BLAST_READ_MS = 900;
 
-/** The wall stands: close the overlay, release the gate, and let the match actually play. */
-function beginMineIntermission() {
-  tutorialActive = false;
-  document.body.classList.remove('tutorial-live');
-  mineGateRows = new Map(
-    state.balls.filter((b) => b.team !== localSide).map((b) => [b.id, b.pos.r]),
-  );
-  mineStrides = 0;
-  mineRivalTurns = 0;
-  waitingForMineTrigger = true;
-  ui();
-  startClock();
-  if (wantsOpponent()) void runOpponent();
+/** The buried charge's square: the spotlight holds the crater while it goes off. */
+function tutorialMineBlastTarget(cell: Cell | null): TutorialTargetMine | null {
+  return cell ? { cell, spot: { rect: boardRect(cell.c, cell.r), radius: 16 } } : null;
 }
 
 /**
- * Real forward progress of the rival, counted once per new row. Every rival ball counts, so a
- * 2v2 board cannot stall the intermission by moving the piece the lesson did not name.
+ * The lesson's last beat. The charge is buried on `cell`, and the rival's very next move is the
+ * scripted step onto that square — performed through `play()`, so the detonation, the knockback,
+ * the shake and the bang are the engine's real ones rather than a re-enactment. Resolves once the
+ * blast has had its beat, so the lesson closes on the crater and not over it.
  */
-function countMineStride() {
-  if (!mineGateRows) return;
-  for (const ball of state.balls) {
-    if (ball.team === localSide) continue;
-    const best = mineGateRows.get(ball.id);
-    if (best === undefined) { mineGateRows.set(ball.id, ball.pos.r); continue; }
-    if (ball.pos.r >= best) continue;
-    mineStrides += best - ball.pos.r;
-    mineGateRows.set(ball.id, ball.pos.r);
+async function tutorialMineBait(cell: Cell): Promise<void> {
+  await new Promise<void>((res) => window.setTimeout(res, MINE_BAIT_BEAT_MS));
+  for (let guard = 0; guard < 4; guard++) {
+    if (state.winner !== null || state.turn === localSide) break;
+    const rival = tutorialRival();
+    if (!rival || rival.team !== state.turn) break;
+    /* The named tile first: the rival steps onto the mined square itself whenever the rules still
+       offer it, which is what makes the blast certain rather than hoped for. */
+    const opts = reachableBall(state, rival.id);
+    const to = opts.find((p) => sameCell(p, cell)) ?? tutorialRivalStep()?.to ?? null;
+    if (!to) break;
+    if (play({ kind: 'move', ball: rival.id, to })) break;
+    if (!play({ kind: 'pass' })) break;
   }
-}
-
-/**
- * The intermission is over: the rival has taken its two turns — two forward rows, or two completed
- * moves when the new wall sent it sideways — and the local seat is up. Re-open on the mine half of
- * the lesson. A race that settled while the lesson was aside is COMPLETED, not cancelled: the flag
- * is written and the board goes to its own result, never back into a half-open lesson.
- */
-function resumeMineLesson() {
-  if (!waitingForMineTrigger || tutorialActive) return;
-  /* the verdict comes first: the result sheet is exactly what would otherwise keep this gate
-     from ever running again, leaving the lesson suspended for the rest of the match */
-  if (state.winner !== null) {
-    waitingForMineTrigger = false;
-    mineGateRows = null;
-    tutorial?.complete();
-    return;
-  }
-  if (paused || overlayOpen) return;
-  if (state.turn !== localSide) return;
-  if (mineStrides < TUTORIAL_LIVE_STEPS && mineRivalTurns < TUTORIAL_LIVE_STEPS) return;
-  waitingForMineTrigger = false;
-  mineGateRows = null;
-  /* no charge left to teach with (a board that started without a budget): the lesson is read */
-  if (minesLeft(state, localSide) <= 0) { tutorial?.skip(); return; }
-  mineArmed = false;
-  mineGhost = null;
-  selected = null;
-  autoPicked = null;
-  setMode(BOARD_IDLE);
-  tutorialActive = true;      // before stopClock: clockLive reads this flag
-  stopClock();
-  tutorial?.resume();         // render() refreshes the board through syncTutorialUI -> ui()
+  await new Promise<void>((res) => window.setTimeout(res, MINE_BLAST_READ_MS));
 }
 
 function beginTutorial(auto = false) {
@@ -4479,10 +4447,6 @@ function beginTutorial(auto = false) {
     tutorialStandalone = false;   // nothing replaces this race: it plays as an ordinary match
     return;
   }
-  waitingForMineTrigger = false;
-  mineStrides = 0;
-  mineRivalTurns = 0;
-  mineGateRows = null;
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
   /* step one is the player's own pick: clear the auto-pick the race painted before the lesson */
@@ -4692,11 +4656,7 @@ function maybeOfferTraining(): void {
 
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */
 function cancelTutorial() {
-  if (!tutorialActive && !waitingForMineTrigger) return;
-  waitingForMineTrigger = false;
-  mineStrides = 0;
-  mineRivalTurns = 0;
-  mineGateRows = null;
+  if (!tutorialActive) return;
   tutorial?.cancel();
   tutorialActive = false;
 }
@@ -4710,8 +4670,9 @@ tutorial = createTutorial({
   mineArm: () => elementSpot(mineBtn, 8),
   minePlace: tutorialMineTarget,
   mineConfirm: tutorialMineConfirmTarget,
+  mineBlast: tutorialMineBlastTarget,
   reply: tutorialReply,
-  handoff: beginMineIntermission,
+  mineBait: tutorialMineBait,
   finishPulse: () => { renderer.pulseFinish(1200); invalidate(); },
   refresh: syncTutorialUI,
   end(result) {
@@ -4734,8 +4695,8 @@ tutorial = createTutorial({
        Pause → Replay is the exception: the real match under it gets the board straight back. */
     if (tutorialStandalone) {
       tutorialStandalone = false;
-      /* A settled board keeps its own result: a race that finished during the live-play
-         intermission is crowned and scored like any other, then Home follows the card. */
+      /* A settled board keeps its own result: a race that finished under the lesson is
+         crowned and scored like any other, then Home follows the card. */
       if (result === 'finished' && (bootLesson || state.winner !== null)) {
         firstRunSprint = true;
         $<HTMLElement>('s-game').focus({ preventScroll: true });
