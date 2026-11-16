@@ -16494,11 +16494,11 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   color: #C3CEDD;
 }
 .ms-dot.u { background: var(--field); box-shadow: var(--inset); color: var(--ink-soft); }
-/* ---- the relic vault: three pedestals between the TIQ plaque and the scorecard ----
-   One frosted obsidian shelf plate carries the row; a minted honor stands on a lit
-   pedestal wearing its own accent's aura, and an unfilled socket stays recessed,
-   dashed and silent. The shelf never grows past three columns, so a 320px phone
-   reads the same row as a desktop. */
+/* ---- the relic vault: the full triad between the TIQ plaque and the scorecard ----
+   One frosted obsidian shelf plate carries the row; an earned honor stands on a lit
+   pedestal wearing its own accent's aura, and a locked one keeps the same emblem in
+   a disabled treatment under a padlock pill — never a blank socket. The shelf never
+   grows past three columns, so a 320px phone reads the same row as a desktop. */
 .relic-showcase-row {
   position: relative;
   display: grid;
@@ -16525,15 +16525,14 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   pointer-events: none;
 }
 
-.relic-socket {
+.relic-slot {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  /* a shelf of bare sockets keeps the same height as a shelf of minted ones */
   min-height: 75px;
   padding: 10px 4px 8px;
   border: 0;
@@ -16546,11 +16545,11 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   --relic-ink: #CBD5E1;
 }
 /* cyan = Churchill titanium · amber = Einstein gold · emerald = Heisenberg chrome */
-.relic-socket[data-accent="titanium"] { --relic-aura: rgba(34, 211, 238, .6); --relic-rim: rgba(34, 211, 238, .46); --relic-ink: #A5F3FC; }
-.relic-socket[data-accent="quantum"]  { --relic-aura: rgba(245, 158, 11, .68); --relic-rim: rgba(245, 158, 11, .52); --relic-ink: #FDE047; }
-.relic-socket[data-accent="frost"]    { --relic-aura: rgba(52, 211, 153, .6); --relic-rim: rgba(52, 211, 153, .48); --relic-ink: #6EE7B7; }
+.relic-slot[data-accent="titanium"] { --relic-aura: rgba(34, 211, 238, .6); --relic-rim: rgba(34, 211, 238, .46); --relic-ink: #A5F3FC; }
+.relic-slot[data-accent="quantum"]  { --relic-aura: rgba(245, 158, 11, .68); --relic-rim: rgba(245, 158, 11, .52); --relic-ink: #FDE047; }
+.relic-slot[data-accent="frost"]    { --relic-aura: rgba(52, 211, 153, .6); --relic-rim: rgba(52, 211, 153, .48); --relic-ink: #6EE7B7; }
 
-.relic-socket.is-owned {
+.relic-slot.is-unlocked {
   cursor: pointer;
   background:
     radial-gradient(80% 62% at 50% 0%, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 70%),
@@ -16561,9 +16560,9 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
     0 6px 14px -8px #000;
   transition: transform .13s ease, box-shadow .2s ease;
 }
-.relic-socket.is-owned:hover:not(:active) { transform: translateY(-1px); }
-.relic-socket.is-owned:active { transform: scale(.95); transition-duration: .04s; }
-.relic-socket.is-owned:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.relic-slot.is-unlocked:hover:not(:active) { transform: translateY(-1px); }
+.relic-slot.is-unlocked:active { transform: scale(.95); transition-duration: .04s; }
+.relic-slot.is-unlocked:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 
 /* the ambient bloom behind a minted coin — opacity only, so it can never push the row wider */
 .relic-halo {
@@ -16605,6 +16604,21 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   filter: saturate(1.06) contrast(1.05) drop-shadow(0 1px 2px rgba(0, 0, 0, .7));
 }
 
+/* the badge title under the crest: high contrast when earned, muted slate when locked */
+.relic-name {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  line-height: 1.2;
+  color: #F1F5F9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* the engraved micro plaque: Latin digits, isolated from the sheet's own run direction */
 .relic-tag {
   position: relative;
@@ -16634,23 +16648,60 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   unicode-bidi: isolate;
 }
 
-.relic-socket.is-empty {
+/* ---- locked honor: the same emblem, disabled — recessed crest, zero glow, padlock pill ---- */
+.relic-slot.is-locked {
+  cursor: pointer;
   background: linear-gradient(180deg, rgba(6, 10, 17, .9) 0%, rgba(9, 14, 24, .72) 100%);
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, .75),
     inset 0 0 0 1px rgba(255, 255, 255, .035);
+  transition: transform .13s ease;
 }
-.relic-ghost {
-  width: clamp(30px, 9vw, 36px);
-  aspect-ratio: 1 / 1;
+.relic-slot.is-locked:hover:not(:active) { transform: translateY(-1px); }
+.relic-slot.is-locked:active { transform: scale(.95); transition-duration: .04s; }
+.relic-slot.is-locked:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.relic-slot.is-locked .relic-frame {
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: radial-gradient(circle at 50% 22%, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, .01) 46%, rgba(0, 0, 0, .42) 100%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6);
+}
+.relic-slot.is-locked .relic-frame .relic-coin {
+  filter: grayscale(1) brightness(.6);
+  opacity: .45;
+}
+.relic-slot.is-locked .relic-name { color: rgba(226, 232, 240, .42); }
+.relic-slot.is-locked .relic-tag {
+  color: rgba(148, 163, 184, .6);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .95),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+/* the padlock badge: a 14px monochrome vector in a dark-glass pill on the ring's corner */
+.relic-lock {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
-  border: 1px dashed rgba(148, 163, 184, .35);
-  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, .03) 0%, rgba(255, 255, 255, 0) 70%);
-  opacity: .35;
+  color: #94A3B8;
+  background: linear-gradient(180deg, rgba(15, 21, 34, .92) 0%, rgba(7, 11, 19, .94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .12),
+    0 2px 6px rgba(0, 0, 0, .6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
+.relic-lock .ico { width: 14px; height: 14px; }
+
 @media (prefers-reduced-motion: reduce) {
   .relic-halo { animation: none; opacity: .5; }
-  .relic-socket.is-owned { transition: none; }
+  .relic-slot.is-unlocked,
+  .relic-slot.is-locked { transition: none; }
 }
 
 /* ---- foot keys: one locked obsidian plate, one luminous squad door ---- */
@@ -16819,8 +16870,8 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .46);
 }
 /* an exposed pedestal takes the rim the shield no longer carries; a guarded one steps back */
-.relic-socket[data-shelter="open"] { box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .5), 0 4px 14px -6px rgba(224, 38, 79, .55); }
-.relic-socket[data-shelter="guarded"] { opacity: .78; }
+.relic-slot[data-shelter="open"] { box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .5), 0 4px 14px -6px rgba(224, 38, 79, .55); }
+.relic-slot[data-shelter="guarded"] { opacity: .78; }
 
 /* ---- the confrontation card ---- */
 .sheet.seize-sheet {
@@ -33541,6 +33592,16 @@ html[data-lang="fa"] :is(.ms-squad-card.is-empty .ms-squad-v, .ms-handle) {
 html[data-lang="fa"] .ms-squad-card.is-empty .ms-squad-v { direction: rtl; }
 html[data-lang="fa"] .ms-handle { font-family: var(--font-numeric); direction: ltr; }
 html[data-lang="fa"] :is(.ms-challenge span, .ms-guild span) { direction: rtl; }
+/* relic vault labels: Persian titles read from the right; the serial plaque stays LTR */
+html[data-lang="fa"] :is(.relic-name, .relic-slot.is-locked .relic-tag) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  direction: rtl;
+}
+html[data-lang="ar"] :is(.ms-h, .relic-name, .relic-slot.is-locked .relic-tag) {
+  direction: rtl;
+  letter-spacing: 0;
+}
 
 /* dynamic labels that are written by JS rather than data-i18n */
 html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .sq-roster-empty, .sq-you-tag, .gm-err) {

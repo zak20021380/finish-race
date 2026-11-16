@@ -42,7 +42,7 @@ import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
 import { isSelfPlayerId } from './players';
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
-import { showToast } from './toast';
+import { showToast, showRoyalToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 
@@ -1611,11 +1611,31 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     return wrap;
   }
 
-  /* ---------- the relic vault: the three honors this seat holds, on lit pedestals ----------
-     A rival's shelf is read from the ledger's own holder index, so a supply reading that has
-     not landed says nothing at all rather than printing three empty sockets as a verdict.
-     Every pedestal is a door into that honor's collector card, and the card hands the
-     dossier back when it is dismissed. */
+  /* ---------- the relic vault: the full Genius Triad on lit pedestals ----------
+     Every seat shows all three honors — the ones it holds first, the rest still locked
+     under their own emblem, so a shelf never carries a blank socket. A rival's holdings
+     are read from the ledger's own holder index; while that reading is silent the whole
+     triad simply stands locked. Every pedestal is a door: an earned honor opens its
+     collector card, a locked one reads out the exact mission that would unlock it. */
+
+  /** The vault's copy keys per honor — names, tile titles and unlock missions live in STRINGS. */
+  const RELIC_COPY: Record<string, { name: string; tile: string; hint: string }> = {
+    churchill_bastion: { name: 'relicNameChurchill', tile: 'relicTileChurchill', hint: 'relicHintChurchill' },
+    einstein_singularity: { name: 'relicNameEinstein', tile: 'relicTileEinstein', hint: 'relicHintEinstein' },
+    heisenberg_formula: { name: 'relicNameHeisenberg', tile: 'relicTileHeisenberg', hint: 'relicHintHeisenberg' },
+  };
+  const relicName = (def: BadgeDef): string => {
+    const c = RELIC_COPY[def.id];
+    return c ? t(c.name) : def.name;
+  };
+  const relicTile = (def: BadgeDef): string => {
+    const c = RELIC_COPY[def.id];
+    return c ? t(c.tile) : def.figure;
+  };
+  const relicHint = (def: BadgeDef): string => {
+    const c = RELIC_COPY[def.id];
+    return c ? t(c.hint) : def.criteria.en;
+  };
 
   /** The honors this dossier seat holds — rarest edition first — or null while the ledger is silent. */
   function relicsOf(p: PlayerRow): WornEdition[] | null {
@@ -1646,7 +1666,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   function msRelicPedestal(w: WornEdition, onBack: () => void, guardedHours: number | null): HTMLElement {
     const key = document.createElement('button');
     key.type = 'button';
-    key.className = 'relic-socket is-owned';
+    key.className = 'relic-slot is-unlocked';
     key.dataset.accent = w.def.accent;
     if (guardedHours !== null) key.dataset.shelter = guardedHours > 0 ? 'guarded' : 'open';
 
@@ -1658,28 +1678,57 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     frame.className = 'relic-frame';
     frame.innerHTML = badgeCrestHtml(w.def, 'badge-crest relic-coin');
 
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = relicTile(w.def);
+
     const tag = document.createElement('small');
     tag.className = 'relic-tag';
     /* the serial is Latin digits behind a № mark: isolated, a Persian sheet cannot reorder it */
     tag.dir = 'ltr';
     tag.textContent = w.serial !== null ? `№ ${String(w.serial).padStart(3, '0')}` : 'LIMITED';
 
-    key.append(halo, frame, tag);
-    key.title = w.serial !== null ? `${w.def.name} · ${editionSerialLabel(w.serial)}` : w.def.name;
-    key.setAttribute('aria-label', `${w.def.name} — ${t('msRelicView')}`);
+    key.append(halo, frame, name, tag);
+    key.title = w.serial !== null ? `${relicName(w.def)} · ${editionSerialLabel(w.serial)}` : relicName(w.def);
+    key.setAttribute('aria-label', `${relicName(w.def)} — ${t('relicUnlocked')}. ${t('msRelicView')}`);
     key.addEventListener('click', () => openRelicCard(w.def.id, onBack));
     return key;
   }
 
-  /** An unfilled socket: a recessed silhouette, decorative — it promises nothing. */
-  function msRelicSocket(): HTMLElement {
-    const socket = document.createElement('span');
-    socket.className = 'relic-socket is-empty';
-    socket.setAttribute('aria-hidden', 'true');
-    const ghost = document.createElement('i');
-    ghost.className = 'relic-ghost';
-    socket.append(ghost);
-    return socket;
+  /** An honor not yet earned: the same emblem under a disabled treatment, a padlock pill on
+      the ring, and a tap that reads out the exact mission that would unlock it. */
+  function msRelicLocked(def: BadgeDef): HTMLElement {
+    const key = document.createElement('button');
+    key.type = 'button';
+    key.className = 'relic-slot is-locked';
+    key.dataset.accent = def.accent;
+
+    const frame = document.createElement('span');
+    frame.className = 'relic-frame';
+    frame.innerHTML = badgeCrestHtml(def, 'badge-crest relic-coin');
+    const lock = document.createElement('span');
+    lock.className = 'relic-lock';
+    lock.setAttribute('aria-hidden', 'true');
+    lock.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>';
+    frame.append(lock);
+
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = relicTile(def);
+
+    const tag = document.createElement('small');
+    tag.className = 'relic-tag';
+    tag.dir = 'auto';
+    tag.textContent = t('relicLocked');
+
+    key.append(frame, name, tag);
+    key.title = `${relicName(def)} · ${t('relicLocked')}`;
+    key.setAttribute('aria-label', `${relicName(def)} — ${t('relicLocked')}. ${relicHint(def)}`);
+    key.addEventListener('click', () => {
+      impact('light');
+      showRoyalToast(relicName(def), `${t('relicLocked')} · ${relicHint(def)}`, 'i-lock');
+    });
+    return key;
   }
 
   /** One line under the shelf: the soonest this rival's guard comes off, or that it is already off. */
@@ -1701,17 +1750,22 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     return note;
   }
 
-  function msRelicVault(relics: WornEdition[], onBack: () => void, rival: boolean): HTMLElement {
+  function msRelicVault(relics: WornEdition[] | null, onBack: () => void, rival: boolean): HTMLElement {
+    const owned = relics ?? [];
+    const heldIds = new Set(owned.map((w) => w.def.id));
+    const cells: HTMLElement[] = owned.map((w) => {
+      const hours = rival && w.serial !== null ? relicShelter(w.def.id, w.serial).hoursLeft : null;
+      return msRelicPedestal(w, onBack, hours);
+    });
+    for (const def of BADGES) {
+      if (!heldIds.has(def.id)) cells.push(msRelicLocked(def));
+    }
     const shelf = document.createElement('div');
     shelf.className = 'relic-showcase-row';
-    for (let i = 0; i < 3; i++) {
-      const w = relics[i];
-      const hours = w && rival && w.serial !== null ? relicShelter(w.def.id, w.serial).hoursLeft : null;
-      shelf.append(w ? msRelicPedestal(w, onBack, hours) : msRelicSocket());
-    }
+    shelf.append(...cells.slice(0, 3));
     const block = msSection(t('msRelicVault'), shelf);
     /* a player's own shelf needs no verdict — only a rival's says whether it can be called out */
-    if (rival) block.append(msShelterNote(relics));
+    if (rival) block.append(msShelterNote(owned));
     return block;
   }
 
@@ -1904,7 +1958,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const subLine = document.createDocumentFragment();
     subLine.append(wins, document.createTextNode(` · ${rankTag}`));
     const panels = [msHero(tiq, pct, subLine)];
-    if (relics) panels.push(msRelicVault(relics, () => openMind(p, rank), rival));
+    panels.push(msRelicVault(relics, () => openMind(p, rank), rival));
     panels.push(
       msSection(t('msScorecard'), msStatCapsule(rivalStats(p))),
       msFormBlock(rivalForm(p.id, p.trend)),
