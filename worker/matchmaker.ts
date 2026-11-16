@@ -116,6 +116,9 @@ type ClientMessage =
      that ID, while `text` is the VIP custom line — checked against the seat's signed entitlement
      in `relayPostChat`, so a free seat cannot type its way past the gate. */
   | { type: 'POST_MATCH_CHAT'; text?: string; preset?: string }
+  /* An explicit forfeit: the player pressed Leave, confirmed it, and this frame is their verdict.
+     Distinct from a socket that simply died — this one must never hand the chair to a bot. */
+  | { type: 'FORFEIT' }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's format pick (1v1 / 3P / 4P / 2v2), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
@@ -782,6 +785,12 @@ const zeroGameMetrics = (): GameMetrics => ({
 
 /** The default ladder award for a win: 120 for the win plus the 20 the race itself banks. */
 const NATION_WIN_TIQ = 140;
+/**
+ * The competitive match stake, identical in every multiplayer format: a forfeit costs 15 TIQ and a
+ * multiplayer victory pays 15. Local practice boards and seats the machine filled never move it.
+ */
+const FORFEIT_TIQ = 15;
+const WIN_TIQ = 15;
 /**
  * A settled match count is the proof a seat races. Below it a seat is enrolled but not yet
  * proven — its current TIQ still carries the flag, it is simply not preferred over a proven
@@ -1757,6 +1766,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'LEAVE') return { type: 'LEAVE' };
     if (msg.type === 'SYNC_REQ') return { type: 'SYNC_REQ' };
+    if (msg.type === 'FORFEIT') return { type: 'FORFEIT' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'PING') return { type: 'PING' };
     /* `START_MATCH` is the crisp name the lobby screen sends; `ROOM_START` is the older spelling
@@ -5371,6 +5381,50 @@ export class MatchmakerDO {
     }
   }
 
+  /** Which chair rode the winning side: a team winner names a team, every other race a seat. */
+  private onWinningSide(live: LiveRoom, seat: number, winner: number): boolean {
+    return live.mode === 'team' ? live.teams[seat] === winner : seat === winner;
+  }
+
+  /**
+   * Move one player's TIQ by a signed amount and persist it in the same debounced flush the rest of
+   * the registry rides. Clamped at zero: no verdict may leave a rating below the floor. Returns what
+   * was actually applied, so a broadcast can name the real number.
+   */
+  private adjustTiq(id: string, delta: number): number {
+    const p = this.players.get(id);
+    if (!p || !Number.isFinite(delta) || !delta) return 0;
+    const before = Math.max(0, whole(p.tiq));
+    const after = Math.max(0, before + Math.trunc(delta));
+    if (after === before) return 0;
+    p.tiq = after;
+    p.lastSeen = Math.max(p.lastSeen, Date.now());
+    this.persist();
+    return after - before;
+  }
+
+  /** Pay a finished room's victory: +15 TIQ to every connected chair on the winning side. */
+  private awardRoomWin(live: LiveRoom, winner: number): Record<string, number> {
+    const deltas: Record<string, number> = {};
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m || !m.connected) continue;
+      if (!this.onWinningSide(live, i, winner)) continue;
+      const paid = this.adjustTiq(m.id, WIN_TIQ);
+      if (paid !== 0) deltas[m.id] = paid;
+    }
+    return deltas;
+  }
+
+  /** Seats still in the race: the leaver and every struck chair are left out. */
+  private activeSeatsOf(state: GameState): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < state.teams.length; i++) {
+      if (!isEliminated(state, i)) out.push(i);
+    }
+    return out;
+  }
+
   /** Mark a seat as holding a live board (or back on the market). */
   private setInMatch(id: string, on: boolean): void {
     const p = this.players.get(id);
@@ -7642,7 +7696,10 @@ export class MatchmakerDO {
     if (!live.driver) {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
-      if (msg.type === 'CANCEL' || msg.type === 'LEAVE') { this.leaveLobby(ref, true); return; }
+      if (msg.type === 'CANCEL' || msg.type === 'LEAVE' || msg.type === 'FORFEIT') {
+        this.leaveLobby(ref, true);
+        return;
+      }
       if (msg.type === 'BUSY') {
         if (member) member.busy = msg.busy;
         this.broadcastLobby(live);
@@ -7691,7 +7748,7 @@ export class MatchmakerDO {
       }
       if (msg.type === 'KICK') {
         /* Only the crown may remove a chair, and only before launch: a live board's leaver is the
-           machine's to finish (`takeSeatOver`), never a host's to delete from the race. */
+           machine's to finish (a forfeit strikes the chair), never a host's to delete from the race. */
         if (ref.seat !== live.hostSeat) return;
         this.kickPlayer(live, msg.side);
         return;
@@ -7716,7 +7773,12 @@ export class MatchmakerDO {
       }
       return;
     }
-    if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
+    /* An explicit exit — the new FORFEIT, an older client's RESIGN, or a CANCEL on a live board —
+       is a forfeit: the seat is struck at once and no machine ever plays for it. */
+    if (msg.type === 'FORFEIT' || msg.type === 'RESIGN' || msg.type === 'CANCEL') {
+      this.forfeitSeat(ref);
+      return;
+    }
     if (msg.type !== 'MOVE') return;
     const before = live.driver.state;
     const result = live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
@@ -7749,20 +7811,23 @@ export class MatchmakerDO {
 
   /**
    * The room's board came to rest: every person still holding a seat is counted, winner to the
-   * seat that played it, and the rest take the loss. A seat backfilled with a bot was never in the
-   * registry and claims nothing — the same rule the dock's standings already play by.
+   * seat that played it (every chair of the winning team in a 2v2), and the rest take the loss. A
+   * seat backfilled with a bot was never in the registry and claims nothing. The victory also pays
+   * the competitive stake, +15 TIQ, and the applied amounts are returned so the forfeit broadcast
+   * can name them on the same beat.
    */
-  private finishRoom(live: LiveRoom, winner: number): void {
+  private finishRoom(live: LiveRoom, winner: number): Record<string, number> {
     /* One race is paid once. A seat struck mid-batch settles the room inside `pushRoomEvents`,
        and the caller that batch belongs to still reaches its own finish line afterwards. */
-    if (!this.rooms.has(live.matchId)) return;
+    if (!this.rooms.has(live.matchId)) return {};
     this.completeRoom(live);
+    const tiqDeltas = this.awardRoomWin(live, winner);
     const humans: RoomMember[] = [];
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
       /* a chair held for an absent socket was the machine's race, not that player's */
       if (m && m.connected) {
-        this.verdict(m.id, i === winner);
+        this.verdict(m.id, this.onWinningSide(live, i, winner));
         humans.push(m);
       }
     }
@@ -7770,8 +7835,8 @@ export class MatchmakerDO {
     if (humans.length > 1) {
       this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium, id: m.id })));
     }
+    return tiqDeltas;
   }
-
   /**
    * Hand every event to every human seat except the one that played it — that seat applied its own
    * action locally before it ever reached the wire. The machine's turns are in the same batch, so a
@@ -7840,18 +7905,27 @@ export class MatchmakerDO {
   }
 
   /**
-   * A seat's player is gone for good: the reconnect grace ran out, or the machine spent the two
-   * substitute turns it was allowed. The chair is struck from the race — its pawns go inert, the
-   * turn rotation skips it, and a returning socket is refused rather than handed the board back.
-   * A duel ends here with the surviving player taking the win; a party plays on until one
-   * contender (or, in a 2v2, one team) is left standing.
+   * Strike a seat from the race for good: the reconnect grace ran out, the machine spent the two
+   * substitute turns it was allowed, or the player pressed Leave and confirmed. The chair's pawns go
+   * inert, the turn rotation skips it, the stake is charged, and a returning socket is refused rather
+   * than handed the board back. A duel ends here with the survivor taking the win; a party plays on
+   * until one contender (or, in a 2v2, one team) is left standing, and that finish pays +15 TIQ.
    */
-  private eliminateSeat(ref: RoomRef): void {
+  private eliminateSeat(
+    ref: RoomRef,
+    reason: 'MATCH_FORFEITED' | 'MATCH_FORFEITED_DISCONNECT' = 'MATCH_FORFEITED_DISCONNECT',
+  ): void {
     const live = ref.live;
     const driver = live.driver;
     if (!driver || driver.state.winner !== null || isLeft(driver.state, ref.seat)) return;
     const member = live.members[ref.seat];
     const name = member?.name ?? driver.room.seats[ref.seat]?.name ?? `Seat ${ref.seat}`;
+    /** The competitive verdict, by player id: the leaver pays, the survivors' finish pays. */
+    const tiqDeltas: Record<string, number> = {};
+    if (member) {
+      const paid = this.adjustTiq(member.id, -FORFEIT_TIQ);
+      if (paid !== 0) tiqDeltas[member.id] = paid;
+    }
     if (member && live.code) {
       const key = lobbyKey(live.room.code);
       let gone = this.forfeited.get(key);
@@ -7866,7 +7940,7 @@ export class MatchmakerDO {
       /* The verdict travels BEFORE the socket goes: a client that is merely away must still read
          why it was removed when it next opens the room. */
       this.postTo(member.ws, JSON.stringify({
-        type: 'SEAT_ELIMINATED', side: ref.seat, name, reason: 'MATCH_FORFEITED_DISCONNECT',
+        type: 'SEAT_ELIMINATED', side: ref.seat, name, reason,
       }));
       this.refs.delete(member.ws);
       try {
@@ -7893,67 +7967,51 @@ export class MatchmakerDO {
         driver.award(alive[0]);
       }
     }
-    for (const m of live.members) {
-      if (m && m.connected) {
-        this.postTo(m.ws, JSON.stringify({ type: 'SEAT_LEFT', side: ref.seat, name }));
-      }
+    /* The hand-off can land on a machine chair: play it at once, exactly as a human's action would,
+       so a party never stalls behind a bot that nobody is waiting for. */
+    if (driver.state.winner === null && driver.botTurn) {
+      const before = driver.state;
+      this.pushRoomEvents(live, driver.runBots(this.substituteBudget(live)));
+      this.countBoard(before, driver.state);
     }
     this.armRoomTurn(live);
+    /* A party carries on without this chair, so every remaining screen receives the authoritative
+       board on the same beat: the struck list, the new turn and the clock's new owner. A settled
+       duel needs it just as much — it is what makes every screen agree on the team verdict. */
+    for (const m of live.members) {
+      if (m && m.connected) this.postTo(m.ws, this.roomSyncMessage(live));
+    }
     if (driver.state.winner !== null) {
       live.turnDeadlineMs = 0;
-      /* The survivors' own replicas resolve a duel and a last-man-standing party, but a team
-         verdict is the room's alone: the snapshot is what makes every screen agree on it. */
-      for (const m of live.members) {
-        if (m && m.connected) this.postTo(m.ws, this.roomSyncMessage(live));
-      }
-      this.finishRoom(live, driver.state.winner);
+      Object.assign(tiqDeltas, this.finishRoom(live, driver.state.winner));
       this.rooms.delete(live.matchId);
+    }
+    /* The announcement carries the whole verdict — who left, what it cost, who won, who is still
+       in — so every remaining screen paints the same banner, the same ash pawn and the same stake
+       without having to reconstruct any of it. */
+    const payload = JSON.stringify({
+      type: 'PLAYER_FORFEITED',
+      seat: ref.seat,
+      playerId: member?.id ?? '',
+      fullName: name,
+      tiqDeltas,
+      winner: driver.state.winner,
+      activeSeats: this.activeSeatsOf(driver.state),
+    });
+    for (const m of live.members) {
+      if (m && m.connected) this.postTo(m.ws, payload);
     }
     this.rearm();
   }
-
   /**
-   * A seat's person left — a resignation, a CANCEL, or a socket that simply died. The seat is not
-   * abandoned: the machine takes it over at the room's own tier, everyone else is told, and the race
-   * carries on to a real finish instead of dissolving. Before the room launches there is no board to
-   * carry on with, so the seat merely reopens for somebody else.
+   * A seat's person confirmed they are leaving. This is a FORFEIT, not a disconnect: the chair is
+   * struck from the race on this very frame, no machine is ever handed it, the leaver pays the
+   * competitive stake, and every socket still at the table hears the whole verdict by name. A duel
+   * ends here for the survivor; a party carries on with the chair skipped and its pawn inert.
    */
-  private takeSeatOver(ref: RoomRef): void {
-    const live = ref.live;
-    const member = live.members[ref.seat];
-    if (member) {
-      /* a seat walking out of a settled board also closes the banter lane */
-      this.dropPostChat(member.ws, true);
-      this.refs.delete(member.ws);
-      try {
-        member.ws.close(1000, 'left');
-      } catch {
-        /* the socket is already gone */
-      }
-      live.members[ref.seat] = null;
-      /* a person who walked out of a live board counts as a loss: the machine finishes it for them */
-      if (live.driver) this.verdict(member.id, false);
-    }
-    const driver = live.driver;
-    if (!driver) { this.rearm(); return; }
-    const roster = driver.room;
-    driver.drop(ref.seat);
-    const name = roster.seats[ref.seat]?.name ?? `Seat ${ref.seat}`;
-    for (const m of live.members) {
-      if (m) this.postTo(m.ws, JSON.stringify({ type: 'SEAT_BOT', side: ref.seat, name }));
-    }
-    const before = driver.state;
-    this.pushRoomEvents(live, driver.runBots(this.substituteBudget(live)));
-    this.countBoard(before, driver.state);
-    this.armRoomTurn(live);
-    if (driver.state.winner !== null) {
-      live.turnDeadlineMs = 0;
-      this.completeRoom(live);
-      this.rooms.delete(live.matchId);
-    }
-    this.rearm();
+  private forfeitSeat(ref: RoomRef): void {
+    this.eliminateSeat(ref, 'MATCH_FORFEITED');
   }
-
   /**
    * A live seat's socket went away. The chair is *held* for the reconnect grace window instead of
    * being handed to the machine on the spot: a phone changing networks is not a resignation. The
@@ -8119,7 +8177,7 @@ export class MatchmakerDO {
     if (!race || race.over) return;
 
     this.markActive(seat.id, race.mode);
-    if (msg.type === 'RESIGN') {
+    if (msg.type === 'RESIGN' || msg.type === 'FORFEIT') {
       this.endRace(race, seat.side, 'RESIGN');
       /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
          the leaver keeps their socket around */
@@ -8176,8 +8234,12 @@ export class MatchmakerDO {
   /** Forfeit: a resignation, or a socket that died mid-race. The seat opposite takes the win. */
   private endRace(race: Race, leaver: 0 | 1, why: 'RESIGN' | 'LEFT'): void {
     if (race.over) return;
-    this.settle(race, leaver === 0 ? 1 : 0);
     const other = race.seats[leaver === 0 ? 1 : 0];
+    /* The verdict pays the stake on both sides: the seat that walked pays it, the survivor banks
+       it, and both records are flushed with the match counters they already ride. */
+    this.adjustTiq(race.seats[leaver].id, -FORFEIT_TIQ);
+    this.adjustTiq(other.id, WIN_TIQ);
+    this.settle(race, leaver === 0 ? 1 : 0);
     this.deliver(other, JSON.stringify(why === 'RESIGN'
       ? { type: 'RESIGN', side: leaver }
       : { type: 'OPPONENT_LEFT', side: leaver }));

@@ -53,6 +53,17 @@ export function showToast(message: string, tone: ToastTone = 'success', ms = 320
 }
 
 /**
+ * A toast whose copy carries its own markup — the TIQ stake rides in its own LTR span so a Persian,
+ * Arabic or Russian sentence around it never reorders the number. Only static strings from the
+ * locale table ever reach this door; a player's name stays a text node elsewhere.
+ */
+export function showMarkupToast(html: string, tone: ToastTone = 'warning', ms = 3600): void {
+  const toast = mount(tone, ms);
+  if (!toast) return;
+  toast.copy.innerHTML = html;
+}
+
+/**
  * The ceremonial toast: obsidian glass, one gold rim, an engraved mark and the copy.
  * Used where a reading has to explain itself, or where a rule must refuse with dignity.
  * It rides the shared host but never stacks: the newest royal toast replaces the last.

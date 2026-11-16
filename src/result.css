@@ -1428,3 +1428,28 @@ html[data-lang="fa"] .overlay.result .result-stake-saved { unicode-bidi: isolate
 .result-row.is-out { opacity: .56; }
 .result-row.is-out .result-medal { filter: saturate(.25); }
 .result-row.is-out .result-place { color: #FDA4AF; }
+
+/* ---- the stake reads as one digit-aligned column in every language ---- */
+#result-tiq-chip .result-bank-value,
+#result-stake .result-stake-n,
+#result-stake .result-stake-saved {
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- a victory a forfeit handed over: one quiet line under the header ---- */
+.result-left {
+  align-self: center;
+  max-width: min(100%, 360px);
+  margin: -4px 0 10px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .10);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .22);
+  color: var(--ink-soft, #94A3B8);
+  font-size: 11px;
+  letter-spacing: .02em;
+  line-height: 1.5;
+  text-align: center;
+}
+.result-left[hidden] { display: none; }

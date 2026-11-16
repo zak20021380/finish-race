@@ -239,7 +239,7 @@ export interface OnlineSession extends OnlineMatch {
   sendPhrase(lang: ChatLang, index: number): boolean;
   /** Send one post-match line to the rival. False when the socket is gone. */
   sendPostMatchChat(line: PostChatLine): boolean;
-  /** Forfeit: the rival wins immediately. */
+  /** Forfeit: the rival wins immediately. The frame goes before the socket closes. */
   resign(): void;
   /** Let the socket go (no forfeit): the session is done being a race. */
   close(): void;
@@ -261,6 +261,12 @@ export interface OnlineSession extends OnlineMatch {
   onEnd(cb: (end: RaceEnd) => void): void;
   /** The matchmaker refused a move: the two boards have drifted apart. */
   onReject(cb: (reason: string) => void): void;
+  /**
+   * An explicit forfeit another seat confirmed. Friends rooms broadcast the whole verdict — who
+   * left, the stake both sides moved, whether the race ended there; the ranked queue, with only two
+   * seats, answers through `onEnd` instead.
+   */
+  onForfeit?(cb: (info: { side: number; deltas: Record<string, number>; winner: number | null }) => void): void;
 }
 
 /** One frame the room can send (`worker/matchmaker.ts` is its only producer). */
@@ -663,7 +669,9 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       }
     },
     resign() {
-      post(sock, JSON.stringify({ type: 'RESIGN' }));
+      /* An explicit exit is a forfeit, not a dead socket: the room must hear it while the socket
+         is still open, or the seat would be treated as a drop and held for the reconnect grace. */
+      post(sock, JSON.stringify({ type: 'FORFEIT' }));
     },
     close() {
       forget(sock);

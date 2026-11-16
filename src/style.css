@@ -41848,3 +41848,16 @@ html.reduced-motion #s-home .car-card.nations-cup .slide-cta-go { transition: no
   #s-home .carousel-track > .car-card.nations-cup .slide-foot { gap: 5px; }
   #s-home .carousel-track > .car-card.nations-cup .slide-cta { height: 34px; min-height: 34px; max-height: 34px; }
 }
+
+/* ---- the match stake: every TIQ delta is a Latin, LTR, digit-aligned figure ----
+   The stake rides inside a Persian, Arabic or Russian sentence, so its own span isolates the
+   number from the bidi run around it; `bdi` does the same for a player's name. */
+bdi { unicode-bidi: isolate; }
+.tiq-neg {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  color: #F87171;
+  font-weight: 700;
+  white-space: nowrap;
+}

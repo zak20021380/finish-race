@@ -31,7 +31,7 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications, clearRelicChallenges, dismissRelicChallenge, noteRelicMissed, showRelicChallenge } from './notifications';
 import { fetchRelicMailbox, startRelicChannel } from './network';
-import { showToast } from './toast';
+import { showMarkupToast, showToast } from './toast';
 import { mountCoins } from './coin';
 import { appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import {
@@ -46,7 +46,7 @@ import {
   closeVipSheet, initVipStore, isPremiumUser, onVipChange,
 } from './premium';
 import {
-  accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasChosenLanguage,
+  accountChanged, applyTiqDelta, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasChosenLanguage,
   hasClaimedFirstDuelBonus, hasCompletedTutorial, isFirstOnboardingEligible, isFirstTimePlayer,
   ladderTally, markFirstOnboardingWin, onChange, pieceColor, profile, peekPendingDuelRoom,
   reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom, resetTutorialState,
@@ -212,6 +212,8 @@ const resultRoster = $<HTMLOListElement>('result-roster');
 const resultBank = $<HTMLElement>('result-bank');
 const resultTiqChip = $<HTMLElement>('result-tiq-chip');
 const resultTiqN = $<HTMLElement>('result-tiq-n');
+const resultLeft = $<HTMLElement>('result-left');
+const resultLeftTxt = $<HTMLElement>('result-left-txt');
 const resultXpChip = $<HTMLElement>('result-xp-chip');
 const resultXpN = $<HTMLElement>('result-xp-n');
 const resultBankDivA = $<HTMLElement>('result-bank-div-a');
@@ -497,7 +499,33 @@ function seatFullName(side: Player): string {
     const seat = active.seats.find((s) => s.side === side);
     if (seat?.name) return seat.name;
   }
+  /* a ranked rival is named by the matchmaker's own seat data, never by the dock's placeholder */
+  if (active && side === rivalSide() && active.opponent.name) return active.opponent.name;
   return TEAM_NAME[side] ?? '';
+}
+
+/** The seat whose forfeit decided this race: the struck one, or the ranked rival who resigned. */
+function forfeitedSeatName(): string {
+  const seat = (state.left ?? [])[0];
+  return seatFullName((seat ?? rivalSide()) as Player);
+}
+
+/**
+ * The result capsule's own verdict line: a bdi-wrapped name and 'left the match', under the header
+ * in the live language. The name stays a text node, so a mixed-direction handle never reorders it.
+ */
+function paintResultLeft(name: string): void {
+  const template = t('peerLeft');
+  resultLeftTxt.textContent = '';
+  const at = name ? template.indexOf('{name}') : -1;
+  if (at < 0) {
+    resultLeftTxt.textContent = template;
+  } else {
+    const bdi = document.createElement('bdi');
+    bdi.textContent = name;
+    resultLeftTxt.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
+  }
+  resultLeft.hidden = false;
 }
 
 /** A friend-room seat's socket changed state: the pill says so, the board keeps its turn. */
@@ -929,6 +957,12 @@ let localSide: Player = 0;
 let active: OnlineSession | LobbyRace | null = null;
 /** Why an online race ended without a finish line, for the panel's own caption. */
 let forfeit: RaceEnd['why'] | null = null;
+/** A seat forfeited during this race: its victory pays the exact ±15 stake the sheet quotes. */
+let forfeitMatch = false;
+/** The window after a confirmed forfeit: the Home screen owes the player one verdict toast. */
+let forfeitToast = false;
+/** The one competitive stake, in TIQ: what a forfeit costs and what the victory pays. */
+const FORFEIT_TIQ = 15;
 const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
 /**
  * How this board is counted: an Arena cup race carries the tag the room announced; every other
@@ -2183,7 +2217,17 @@ function showOverlay() {
   const welcomeBonus = claimFirstDuelBonus();
   bonusBadge.hidden = welcomeBonus <= 0;
   const afterTally = ladderTally();
-  const afterTiq = tiqFrom(afterTally.wins, afterTally.games, profile.tiqBonus);
+  let afterTiq = tiqFrom(afterTally.wins, afterTally.games, profile.tiqBonus);
+  /* THE MATCH STAKE. A race a forfeit decided settles at exactly +15 TIQ, the number the leave
+     sheet quoted. The ladder may have moved the same save a little on its own (the race counted, a
+     win paid), so the stake is applied as the DIFFERENCE: the reading lands on the verdict, never
+     on the sum of two systems. A bot board is TIQ-neutral by rule and never reaches this. */
+  /* The authoritative board is the last word: a struck seat in the state IS the forfeit, even when
+     the capsule opened off the snapshot a frame before the broadcast landed. */
+  const forfeited = forfeitMatch || (state.left?.length ?? 0) > 0;
+  const stakeTiq = settled.bot || !mine || !won || !forfeited ? 0 : FORFEIT_TIQ;
+  forfeitMatch = false;
+  if (stakeTiq > 0) afterTiq = Math.max(0, afterTiq + applyTiqDelta(stakeTiq - (afterTiq - beforeTiq)));
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
   /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
@@ -2203,6 +2247,10 @@ function showOverlay() {
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
   paintResultCopy();
+  /* One quiet line under the header when a forfeit handed this victory over, and never a stale one
+     from last match's settlement. */
+  resultLeft.hidden = true;
+  if (won && forfeited) paintResultLeft(forfeitedSeatName());
   resultTiqN.textContent = '0';
   resultCoinsN.textContent = '0';
   resultXpN.textContent = '0';
@@ -3028,6 +3076,35 @@ function strikeSeat(side: number, name: string): void {
 }
 
 /**
+ * A rival confirmed their own exit. The worker already struck the chair, charged the stake and —
+ * when that left one contender standing — settled the race. This screen paints the same banner,
+ * marks the same pawn inert, and opens the victory capsule on the same beat; the +15 stake is
+ * applied by the settlement itself, exactly as the sheet promises.
+ */
+function opponentForfeited(info: { side: number; name: string; deltas: Record<string, number>; winner: number | null }): void {
+  const side = info.side as Player;
+  const name = info.name || seatFullName(side);
+  forfeitMatch = true;
+  /* The authoritative snapshot may already carry the struck chair, so the banner is raised here
+     either way — the verdict is the news, not the repaint. */
+  if (state.teams[side] && !isLeft(state, side)) strikeSeat(side, name);
+  else showSeatLeftPill(side, name);
+  if (info.winner === null || state.winner !== null) return;
+  /* A 2v2 is won by a TEAM: the room's verdict names a team, so the local seat rides it when the
+     roster puts both chairs on that colour. Every other format names a seat. */
+  const localTeam = active && 'seats' in active
+    ? active.seats.find((s) => s.side === localSide)?.team ?? null
+    : null;
+  const won = localTeam === null ? info.winner === localSide : info.winner === localTeam;
+  if (!won) return;                           // the local seat is out: the board's own verdict lands
+  /* The chair that left took the rematch with it. */
+  resultLocked = true;
+  stopClock();
+  state = { ...state, winner: localSide };
+  ui();
+}
+
+/**
  * The colour family a seat wears on THIS screen: the local seat gets the player's chosen one, the
  * rival the opposite, then the fixed gold / green order for the extra seats a party adds. The chip's
  * class, the chat bubble's neon and the sphere all read this plan, so the three can never disagree
@@ -3492,6 +3569,8 @@ function startGame(setup: StartSetup) {
          a board after a resume, a refusal or an explicit sync request. */
       session.onPeerStatus((side, status, graceMs, name) => setPeerStatus(side, status, graceMs, name));
       session.onSeatLeft((side, name) => strikeSeat(side, name));
+      /* An explicit forfeit carries the worker's whole verdict, not just the struck chair. */
+      session.onForfeit?.((info) => opponentForfeited(info));
       session.onSync((next, turnLeftMs) => applyRoomSnapshot(next, turnLeftMs));
       /* A chair already struck before this screen mounted: a reconnect into a race that moved on
          without us. The roster carries the verdict, so the board opens on it instead of catching
@@ -3562,6 +3641,9 @@ function endOnline(end: RaceEnd): void {
     return;
   }
   forfeit = end.why;
+  /* A resignation is a forfeit on the wire: the survivor's capsule pays the same +15 stake a
+     friends room's PLAYER_FORFEITED pays. */
+  if (end.win && end.why === 'resign') forfeitMatch = true;
   state = { ...state, winner: end.win ? localSide : rivalSide() };
   /* Only a resignation leaves the rival's socket open long enough to taunt. A dropped or
      abandoned connection, or an operator abort, has nobody on the far side of a rematch. */
@@ -3609,18 +3691,22 @@ function paintPause(): void {
   pauseQuitBtn.textContent = t(quitKind() === 'practice' ? 'pauseQuit' : 'pauseForfeit');
 }
 
-/** One dialog, three faces. Staying is always the primary key; only a ranked exit wears crimson —
- *  a practice board or a friend's round costs no stake, so its confirm stays a quiet second key. */
+/**
+ * One dialog, three faces. Staying is always the primary key; a live seat's exit wears crimson.
+ * A party exit keeps its chairs on the board and strikes only the leaving pawn; a duel hands the
+ * win over at once. The copy says which one this is; the stake is the same 15 either way.
+ */
 function paintQuit(): void {
   const kind = quitKind();
-  const key = kind === 'practice' ? 'quitPractice' : kind === 'duel' ? 'quitDuel' : 'quitForfeit';
-  quitTitle.textContent = t(`${key}Title`);
-  quitBody.textContent = t(`${key}Body`);
-  quitStay.textContent = t(`${key}Stay`);
-  quitYes.textContent = t(`${key}Confirm`);
-  const ranked = kind === 'forfeit';
-  quitYes.classList.toggle('btn-danger', ranked);
-  quitYes.classList.toggle('btn-ghost', !ranked);
+  const practice = kind === 'practice';
+  const party = sizes.length > 2;
+  quitTitle.textContent = t(practice ? 'quitPracticeTitle' : 'quitForfeitTitle');
+  /* static locale copy only — the stake's own span is what keeps its figure Latin and LTR */
+  quitBody.innerHTML = t(practice ? 'quitPracticeBody' : party ? 'quitForfeitPartyBody' : 'quitForfeitBody');
+  quitStay.textContent = t(practice ? 'quitPracticeStay' : 'quitForfeitStay');
+  quitYes.textContent = t(practice ? 'quitPracticeConfirm' : 'quitForfeitConfirm');
+  quitYes.classList.toggle('btn-danger', !practice);
+  quitYes.classList.toggle('btn-ghost', practice);
 }
 
 /** The one door into the pause sheet: the HUD's menu key and the system back key both take it. */
@@ -3704,6 +3790,8 @@ function quitToMenu() {
     /* Only an unsettled board can be forfeited. A race that already reached its verdict was paid
        out by `showOverlay()` above (or by the goal beat), and must not be counted twice. */
     if (state.winner === null) {
+      /* The frame goes FIRST: the worker must hear the verdict while the socket is still open, or
+         the seat would read as a drop and the room would hold it for the reconnect grace. */
       active.resign();
       /* The forfeit is a defeat on this device's ledger too, not only in the room: the tally, the
          streak and the TIQ the ladder derives from them move exactly as a finished loss would.
@@ -3712,7 +3800,14 @@ function quitToMenu() {
       const mode = matchMode();
       const ranked = rankedPvp();
       if (mode !== 'bot' && (!room || rewardEligible(room, localSide))) {
+        const before = myTiq();
         recordGame({ difficulty, won: false, mode, ranked, forfeit: true }, runtime.coinMult);
+        /* EXACTLY the stake, not the ladder's coincidence: whatever the recorded defeat did to
+           this save on its own, the reading lands 15 below where it stood, and never below zero. */
+        const stake = Math.min(FORFEIT_TIQ, Math.max(0, before));
+        const adjust = (before - stake) - myTiq();
+        if (adjust !== 0) applyTiqDelta(adjust);
+        forfeitToast = true;
       }
     }
     active.close();
@@ -3720,6 +3815,11 @@ function quitToMenu() {
   }
   paused = true;
   router.popTo('home');
+  /* The verdict follows the player home: one crisp toast naming the stake just paid. */
+  if (forfeitToast) {
+    forfeitToast = false;
+    showMarkupToast(t('forfeitToast'), 'warning');
+  }
 }
 
 /* ---------- input ---------- */

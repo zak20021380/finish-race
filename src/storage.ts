@@ -613,7 +613,9 @@ function migrate(raw: Partial<Save> | null): Save {
   } else if (raw.displayName === null) {
     s.displayName = null;
   }
-  if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
+  /* A rating debt (a forfeit's stake) may sit below zero: `tiqFrom()` clamps the READING at zero,
+     so the HUD never prints a minus, while the next wins still have something to pay off. */
+  if (typeof raw.tiqBonus === 'number' && Number.isFinite(raw.tiqBonus)) s.tiqBonus = Math.trunc(raw.tiqBonus);
   if (whole(raw.xp)) s.xp = Math.max(0, Math.floor(raw.xp));
   if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
   if (raw.langChosen === true) s.langChosen = true;
@@ -1268,6 +1270,20 @@ export function earnTiq(n: number): number {
   profile.tiqBonus += gain;
   flush();
   return gain;
+}
+
+/**
+ * Settle one competitive TIQ verdict on this device: the forfeit's stake, or the survivor's bonus.
+ * The ladder's own counters are left alone — this is the match stake riding beside them, applied
+ * and flushed on the same beat it is decided. `tiqFrom()` reads the total clamped at zero, so a
+ * debt is never a negative chip on screen; it is simply paid off by the next wins.
+ */
+export function applyTiqDelta(delta: number): number {
+  const d = Math.trunc(delta);
+  if (!Number.isFinite(d) || d === 0) return 0;
+  profile.tiqBonus += d;
+  flush();
+  return d;
 }
 
 /* ---------- referral / invite-to-earn ---------- */

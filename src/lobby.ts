@@ -243,6 +243,11 @@ export interface LobbyRace {
    * turns ran out. `name` is the full display name the banner has to print.
    */
   onSeatLeft(cb: (side: number, name: string) => void): void;
+  /**
+   * An explicit forfeit: the chair is struck for good and no machine plays it. The frame carries
+   * the worker's verdict — the stake both sides moved, and the winner when that ended the race.
+   */
+  onForfeit(cb: (info: { side: number; name: string; deltas: Record<string, number>; winner: number | null }) => void): void;
   /** The room's authoritative board, sent after a resume, a refusal or an explicit sync request. */
   onSync(cb: (state: GameState, turnLeftMs: number) => void): void;
   /** Ask the room to re-send its authoritative board. */
@@ -532,6 +537,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   /** Seats struck from the race for good; `SEAT_LEFT` is the disconnect allowance running out. */
   const raceLeft = new Set<number>();
   const raceSeatLefts: Array<(side: number, name: string) => void> = [];
+  /** Explicit forfeits, with the verdict the worker settled: seat, TIQ deltas, and the winner. */
+  const raceForfeits: Array<(info: { side: number; name: string; deltas: Record<string, number>; winner: number | null }) => void> = [];
   const raceLefts: Array<() => void> = [];
   let racePostGone = false;
   const markPostGone = (): void => {
@@ -556,6 +563,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   let raceDroppedAt = 0;
   /** A refused or abandoned race must not raise another socket behind the player's back. */
   let raceDead = false;
+  /** This seat pressed Leave and confirmed: the room's own strike is already answered by the quit. */
+  let forfeiting = false;
 
   /** Drop to the local lobby: the host is alone and may fill wells with the machine. */
   const fallback = (): void => {
@@ -682,6 +691,9 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         sock = null;
         link = null;
         push({ ...lobby, status: 'closed', online: false, you: -1 });
+        /* Our own confirmed forfeit: the quit path is already taking the screen Home, so there is
+           no "you were removed" verdict to read. */
+        if (forfeiting) { forfeiting = false; return; }
         opts.onEliminated?.();
         return;
       }
@@ -751,7 +763,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
           sendPostMatchChat: (line) => send({ type: 'POST_MATCH_CHAT', ...line }),
-          resign: () => { send({ type: 'RESIGN' }); },
+          resign: () => { forfeiting = true; send({ type: 'FORFEIT' }); },
           close: () => {
             /* This is the screen walking away from the race, not a network drop: no reconnect may
                raise a socket for a board the player has already left. */
@@ -777,6 +789,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           onPostChat: (cb) => { racePosts.push(cb); },
           onPeerStatus: (cb) => { racePeers.push(cb); },
           onSeatLeft: (cb) => { raceSeatLefts.push(cb); },
+          onForfeit: (cb) => { raceForfeits.push(cb); },
           onSync: (cb) => { raceSyncs.push(cb); },
           requestSync: () => { send({ type: 'SYNC_REQ' }); },
           onPostLeft: (cb) => { raceLefts.push(cb); },
@@ -857,6 +870,28 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           flushOutbox();
         }
         for (const cb of raceRejects) cb(typeof msg.reason === 'string' ? msg.reason : 'refused');
+        return;
+      }
+      case 'PLAYER_FORFEITED': {
+        /* An explicit Leave, confirmed: the chair is struck for good, no machine ever plays it, and
+           the frame carries the whole verdict the worker settled — the name, the stake both sides
+           moved, and whether that was the last contender standing. */
+        const side = Number(msg.seat);
+        if (!Number.isInteger(side) || side < 0) return;
+        const name = typeof msg.fullName === 'string' ? msg.fullName : '';
+        const raw = (msg.tiqDeltas && typeof msg.tiqDeltas === 'object') ? msg.tiqDeltas : {};
+        const deltas: Record<string, number> = {};
+        for (const [id, value] of Object.entries(raw)) {
+          const n = Number(value);
+          if (id && Number.isFinite(n) && n !== 0) deltas[id] = Math.trunc(n);
+        }
+        const winner = typeof msg.winner === 'number' && Number.isInteger(msg.winner) ? msg.winner : null;
+        raceLeft.add(side);
+        raceGone.add(side);
+        /* The verdict first: the board's own strike may settle the race on the same frame, and the
+           capsule has to open already knowing the stake it is about to pay. */
+        for (const cb of raceForfeits) cb({ side, name, deltas, winner });
+        for (const cb of raceSeatLefts) cb(side, name);
         return;
       }
       case 'SEAT_LEFT': {
