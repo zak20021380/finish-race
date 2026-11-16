@@ -225,6 +225,8 @@ export interface LobbyRace {
   sendEmote(emote: ChatEmoteId): boolean;
   /** Send one tactical line to the other seats, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
+  /** Send one in-match free-text line to the other seats (VIP only). False when the socket is gone. */
+  sendChat(text: string): boolean;
   /** Send one post-match line to the other seats. False when the socket is gone. */
   sendPostMatchChat(line: PostChatLine): boolean;
   resign(): void;
@@ -234,6 +236,8 @@ export interface LobbyRace {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line another seat sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
+  /** An in-match free-text line another seat sent (VIP), plus the room's VIP verdict. */
+  onChat(cb: (text: string, side: number, vip: boolean) => void): void;
   /** A post-match line another seat sent from the result capsule, plus the room's VIP verdict. */
   onPostChat(cb: (line: PostChatLine, side: number, vip: boolean) => void): void;
   /** A peer's socket entered or left its reconnect grace window, or was taken over by a bot. */
@@ -531,6 +535,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const raceMoves: Array<(a: Action, side: number) => void> = [];
   const raceEmotes: Array<(emote: ChatEmoteId, side: number) => void> = [];
   const racePhrases: Array<(lang: ChatLang, index: number, side: number) => void> = [];
+  const raceChats: Array<(text: string, side: number, vip: boolean) => void> = [];
   const racePosts: Array<(line: PostChatLine, side: number, vip: boolean) => void> = [];
   /** Seats a person walked out of; `SEAT_BOT` is the machine taking the chair over. */
   const raceGone = new Set<number>();
@@ -762,6 +767,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           send: (a) => send({ type: 'MOVE', action: a }),
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
+          sendChat: (text) => send({ type: 'CHAT', text }),
           sendPostMatchChat: (line) => send({ type: 'POST_MATCH_CHAT', ...line }),
           resign: () => { forfeiting = true; send({ type: 'FORFEIT' }); },
           close: () => {
@@ -786,6 +792,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           onMove: (cb) => { raceMoves.push(cb); },
           onEmote: (cb) => { raceEmotes.push(cb); },
           onPhrase: (cb) => { racePhrases.push(cb); },
+          onChat: (cb) => { raceChats.push(cb); },
           onPostChat: (cb) => { racePosts.push(cb); },
           onPeerStatus: (cb) => { racePeers.push(cb); },
           onSeatLeft: (cb) => { raceSeatLefts.push(cb); },
@@ -839,6 +846,14 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         const index = Number(msg.index);
         if (!isChatLang(msg.lang) || !Number.isInteger(index) || index < 0 || index >= PHRASE_COUNT) return;
         for (const cb of racePhrases) cb(msg.lang, index, Number(msg.side) || 0);
+        return;
+      }
+      case 'CHAT': {
+        /* the room cleared the sender as VIP before relaying; `vip` is that clearance */
+        if (typeof msg.text !== 'string') return;
+        const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
+        if (!text) return;
+        for (const cb of raceChats) cb(text, Number(msg.side) || 0, msg.vip === true);
         return;
       }
       case 'POST_MATCH_CHAT': {

@@ -29,6 +29,8 @@ import {
 import { playLaugh, playAngrySound } from './audio';
 import { impact, notify } from './telegram';
 import { readJson, writeJson } from './storage';
+import { isPremiumUser, onVipChange, openVipSheet } from './premium';
+import { onLang, t } from './settings';
 
 /**
  * The neon family a seat wears on THIS client, out of the same plan that tints the board and the
@@ -68,6 +70,8 @@ export interface ChatOptions {
   onEmote?: (id: ChatEmoteId) => void;
   /** The wire: a phrase this player sent, as its `(lang, index)`. Absent offline. */
   onPhrase?: (lang: ChatLang, index: number) => void;
+  /** The wire: a free-text line this VIP player typed in match. Absent offline. */
+  onCustom?: (text: string) => void;
 }
 
 export interface Chat {
@@ -79,6 +83,8 @@ export interface Chat {
   inboundEmote(id: ChatEmoteId, seat?: Player): void;
   /** A phrase the rival sent: the closed table turns `(lang, index)` back into a line and pops it. */
   inboundPhrase(lang: ChatLang, index: number, seat?: Player): void;
+  /** A free-text line a VIP rival sent: popped over their pawn, gold when the room vouched for it. */
+  inboundCustom(text: string, seat?: Player, vip?: boolean): void;
   destroy(): void;
 }
 
@@ -143,6 +149,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function readChatLang(): ChatLang {
   const raw = readJson<{ lang?: unknown }>(LANG_KEY);
   return isChatLang(raw?.lang) ? raw.lang : 'EN';
+}
+
+/** The VIP composer's ceiling: the same 40 printable characters the post-match line allows. */
+const CUSTOM_MAX = 40;
+function clipCustom(raw: string): string {
+  const clean = (raw ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
+  return Array.from(clean).slice(0, CUSTOM_MAX).join('');
 }
 
 export function createChat(o: ChatOptions): Chat {
@@ -409,7 +422,7 @@ export function createChat(o: ChatOptions): Chat {
     return from !== undefined && o.chips[from] ? from : rivalSide();
   }
 
-  function setBubble(side: Side, content: Node, emote = false, lang: ChatLang = 'EN', from?: Player) {
+  function setBubble(side: Side, content: Node, emote = false, lang: ChatLang = 'EN', from?: Player, vip = false) {
     if (side === 'foe' && muted) return;
     const node = bubbles[side];
     const seat = side === 'me' ? o.localSide() : senderSeat(from);
@@ -417,12 +430,13 @@ export function createChat(o: ChatOptions): Chat {
     window.clearTimeout(bubbleTimers[side]);
     node.classList.remove('is-out');     // a new message cancels a fade in flight
     node.classList.toggle('is-emote', emote);
-    /* the tongue gives the line its own base direction: a Persian one needs `rtl`, or its closing
-       mark — the `!` of `نقشه بود داداش!` — is resolved against the English document and thrown to
-       the far edge of the sentence instead of ending it */
+    /* a VIP free-text line wears gold and reads in its own direction; a closed phrase keeps the
+       tongue it was tapped in — a Persian one needs `rtl`, or its closing mark is thrown to the
+       far edge of the sentence instead of ending it */
+    node.classList.toggle('is-vip', vip);
     const text = bubbleText[side];
-    text.dir = lang === 'FA' ? 'rtl' : 'ltr';
-    text.classList.toggle('is-rtl', lang === 'FA');
+    text.dir = vip ? 'auto' : (lang === 'FA' ? 'rtl' : 'ltr');
+    text.classList.toggle('is-rtl', !vip && lang === 'FA');
     text.replaceChildren(content);
     if (!node.isConnected) o.lane.appendChild(node);
     node.hidden = false;                 // measurable before it is placed
@@ -469,6 +483,18 @@ export function createChat(o: ChatOptions): Chat {
     const line = phraseLine(lang, index);
     if (!line) return;
     setBubble('foe', document.createTextNode(line), false, lang, seat);
+  }
+
+  /**
+   * A VIP rival's free-text line, arrived over the wire: popped over their pawn in its own
+   * direction, wearing gold only when the room vouched for the sender's entitlement. A muted
+   * opponent is as silent as they are invisible, so the whole call is dropped while muted.
+   */
+  function inboundCustom(text: string, seat?: Player, vip = false): void {
+    if (!o.live() || muted) return;
+    const clean = clipCustom(text);
+    if (!clean) return;
+    setBubble('foe', document.createTextNode(clean), false, 'EN', seat, vip);
   }
 
   /* ---------- the sheet (built from the closed vocabulary) ---------- */
@@ -547,7 +573,33 @@ export function createChat(o: ChatOptions): Chat {
     phraseKeys.push(b);
     phraseList.appendChild(b);
   }
-  body.append(emoteRow, phraseList);
+  /* ---- the VIP free-text composer ----
+     An entitled seat gets a 40-character field and a send key; a free seat sees the same row
+     behind a locked door that opens the store instead of a keyboard. The preset tiles above stay
+     available to everyone — custom text is the thing VIP buys. */
+  const custom = el('div', 'chat-custom');
+  const customForm = el('form', 'chat-custom-form');
+  customForm.noValidate = true;
+  const customInput = el('input', 'chat-input');
+  customInput.type = 'text';
+  customInput.maxLength = CUSTOM_MAX;
+  customInput.autocomplete = 'off';
+  customInput.setAttribute('enterkeyhint', 'send');
+  customInput.dir = 'auto';
+  const customSend = el('button', 'chat-send');
+  customSend.type = 'submit';
+  customSend.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>';
+  customForm.append(customInput, customSend);
+  const customGate = el('button', 'chat-custom-gate');
+  customGate.type = 'button';
+  customGate.innerHTML =
+    '<svg class="ico chat-custom-crown" aria-hidden="true"><use href="#i-crown" /></svg>'
+    + '<span class="chat-custom-gate-t"></span>'
+    + '<span class="chat-custom-vip" aria-hidden="true">VIP</span>'
+    + '<span class="chat-custom-lock" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>';
+  const customGateT = customGate.querySelector('.chat-custom-gate-t') as HTMLElement;
+  custom.append(customForm, customGate);
+  body.append(emoteRow, phraseList, custom);
 
   const wait = el('div', 'chat-wait');
   const waitN = el('b', 'chat-wait-n', '0');
@@ -672,6 +724,64 @@ export function createChat(o: ChatOptions): Chat {
     paintCool();
   }
 
+  /* ---------- the VIP free-text composer ---------- */
+
+  /** The composer's entitlement face: a live field for a VIP, a locked door for a free seat. */
+  function paintCustomVip() {
+    const vip = isPremiumUser();
+    customForm.hidden = !vip;
+    customGate.hidden = vip;
+    custom.classList.toggle('is-vip', vip);
+  }
+
+  function paintCustomCopy() {
+    customInput.placeholder = t('banterPlaceholder');
+    customInput.setAttribute('aria-label', t('banterInputLabel'));
+    customSend.setAttribute('aria-label', t('banterSendLabel'));
+    customGateT.textContent = t('banterCustomLocked');
+    customGate.setAttribute('aria-label', t('banterCustomLockedAria'));
+  }
+
+  /** After a successful unlock the same seat lands in the live field, one tap from the wire. */
+  function unlockCustom() {
+    paintCustomVip();
+    paintCustomCopy();
+    if (sheetOpen && canChat()) customInput.focus({ preventScroll: true });
+  }
+
+  /**
+   * A typed line: sanitized and clamped, popped over the local pawn in gold, and handed to the
+   * wire. The room judges the entitlement again on its side, so a free seat that hand-rolls a
+   * frame never reaches a rival — the client gate is the courtesy, the server gate is the law.
+   */
+  function sendCustom(raw: string) {
+    if (!canChat() || isCooling()) return;
+    if (!isPremiumUser()) {
+      notify('warning');
+      openVipSheet({ reason: 'gate', onUnlocked: unlockCustom });
+      return;
+    }
+    const text = clipCustom(raw);
+    if (!text) return;
+    lastSentAt = Date.now();
+    impact('light');
+    setBubble('me', document.createTextNode(text), false, activeChatLang, undefined, true);
+    o.onCustom?.(text);
+    customInput.value = '';
+    closeSheet(false);
+    paintCool();
+  }
+
+  customForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    sendCustom(customInput.value);
+  });
+  customGate.addEventListener('click', () => {
+    if (!canChat()) return;
+    notify('warning');
+    openVipSheet({ reason: 'gate', onUnlocked: unlockCustom });
+  });
+
   /** The machine's side — one line, eight seconds apart, silence while muted. */
   function botSay(line: string, now: number) {
     if (muted || !o.live()) return;
@@ -728,6 +838,7 @@ export function createChat(o: ChatOptions): Chat {
       cooling = next;
       sheet.classList.toggle('cooling', cooling);
     }
+    customSend.disabled = cooling;
   }
 
   function paintMenu() {
@@ -739,6 +850,8 @@ export function createChat(o: ChatOptions): Chat {
     sheetOpen = true;
     closeMenu();
     paintCool();
+    paintCustomVip();
+    paintCustomCopy();
     o.key.classList.remove('is-ping');   // the reply is being written: the slot goes quiet
     sheet.hidden = false;
     scrim.hidden = false;
@@ -752,6 +865,7 @@ export function createChat(o: ChatOptions): Chat {
   function closeSheet(restore = true) {
     if (!sheetOpen) return;
     sheetOpen = false;
+    customInput.blur();
     sheet.classList.remove('open');
     o.key.setAttribute('aria-expanded', 'false');
     window.setTimeout(() => { if (!sheetOpen) sheet.hidden = true; }, 210);
@@ -868,13 +982,28 @@ export function createChat(o: ChatOptions): Chat {
   paintCool();
   paintLang();
   paintPhrases();
+  paintCustomVip();
+  paintCustomCopy();
+  /* a pass bought mid-race (or a language flip) repaints the composer without reopening the sheet */
+  const offVip = onVipChange(() => {
+    if (!sheetOpen) return;
+    paintCustomVip();
+    paintCustomCopy();
+  });
+  const offLang = onLang(() => {
+    if (!sheetOpen) return;
+    paintCustomCopy();
+  });
   const watcher = window.setInterval(tick, POLL_MS);
 
   return {
     inboundEmote,
     inboundPhrase,
+    inboundCustom,
     destroy() {
       window.clearInterval(watcher);
+      offVip();
+      offLang();
       window.clearTimeout(bubbleTimers.me);
       window.clearTimeout(bubbleTimers.foe);
       window.clearTimeout(toastTimer);

@@ -178,6 +178,20 @@
   --pawn-rim: #b845ff;
   --pawn-glow: rgba(184, 69, 255, 0.55);
 }
+/* a VIP free-text line wears gold instead of the pawn neon: the room vouched for this sender, so
+   the chassis reads as the pass, not the seat. Placed after the tints so it wins the rim. */
+.chat-bubble.is-vip {
+  --pawn-rim: #F3D483;
+  --pawn-glow: rgba(243, 212, 131, .5);
+  --bubble-plate: #241A08;
+}
+.chat-bubble.is-vip:not(.is-emote) {
+  background: linear-gradient(180deg, rgba(40, 32, 13, .95), rgba(22, 17, 7, .95)) !important;
+  color: #FFF3D6 !important;
+}
+.chat-bubble.is-vip .chat-bubble-t {
+  font-family: 'Vazirmatn', 'Vazir', 'Segoe UI', Tahoma, 'Noto Naskh Arabic', system-ui, sans-serif;
+}
 
 /* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its sender's neon ----
    No live blur (the design system forbids backdrop-filter): the frost is a fine diagonal grain
@@ -346,6 +360,9 @@
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 /* three large emote pods, one row, centred: each a recessed obsidian well with a hot core in its
@@ -556,6 +573,109 @@
 .chat-phrases[data-lang="FA"] .chat-phrase {
   font-family: 'Vazirmatn', 'Vazir', 'Segoe UI', Tahoma, 'Noto Naskh Arabic', system-ui, sans-serif;
   font-size: 12.5px;
+  letter-spacing: 0;
+}
+
+/* ---- the VIP free-text composer: a live field for an entitled seat, a locked door otherwise ---- */
+.chat-custom { display: flex; min-width: 0; }
+.chat-custom-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 3px 3px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(243, 212, 131, .28);
+  background: linear-gradient(180deg, #141C2B 0%, #0B111D 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), 0 0 0 1px rgba(243, 212, 131, .06);
+}
+.chat-custom-form[hidden] { display: none; }
+.chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 7px 0;
+}
+.chat-input::placeholder { color: var(--ink-soft); opacity: .72; }
+.chat-input:focus { outline: none; }
+.chat-send {
+  flex: none;
+  appearance: none;
+  border: 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 52%, #C9A75E 100%);
+  color: #2A1D04;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 2px 0 #080C14;
+  transition: transform .12s ease, filter .14s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-send .ico { width: 15px; height: 15px; }
+.chat-send:active { transform: scale(.94); }
+.chat-send:disabled { filter: saturate(.5) brightness(.82); cursor: default; }
+.chat-send:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+/* the free seat's door: the same row behind a gold frost, a real button that opens the store */
+.chat-custom-gate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(243, 212, 131, .2);
+  background: linear-gradient(180deg, rgba(243, 212, 131, .07), rgba(255, 255, 255, .015));
+  color: #E8CFA0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, .1);
+  transition: transform .12s ease, border-color .14s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-custom-gate[hidden] { display: none; }
+.chat-custom-gate:active { transform: scale(.98); border-color: rgba(243, 212, 131, .45); }
+.chat-custom-gate:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.chat-custom-crown { flex: none; width: 15px; height: 15px; color: #F3D483; }
+.chat-custom-gate-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-custom-vip {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(243, 212, 131, .16);
+  border: 1px solid rgba(243, 212, 131, .3);
+  color: #FFE7A8;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.chat-custom-lock { flex: none; display: grid; place-items: center; color: #C9B784; }
+.chat-custom-lock .ico { width: 13px; height: 13px; }
+html[data-lang="fa"] .chat-input,
+html[data-lang="fa"] .chat-custom-gate {
+  font-family: 'Vazirmatn', 'Vazir', 'Segoe UI', Tahoma, 'Noto Naskh Arabic', system-ui, sans-serif;
   letter-spacing: 0;
 }
 

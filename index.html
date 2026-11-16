@@ -1011,6 +1011,14 @@
       <symbol id="i-bolt" viewBox="0 0 24 24">
         <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- the VIP +50% Coins & XP mark (src/premium.ts): a struck stack of three coins, monochrome -->
+      <symbol id="i-coins" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5.6" rx="6.4" ry="2.6" />
+          <path d="M5.6 5.6v5.2c0 1.4 2.9 2.6 6.4 2.6s6.4-1.2 6.4-2.6V5.6" />
+          <path d="M5.6 10.8v5.2c0 1.4 2.9 2.6 6.4 2.6s6.4-1.2 6.4-2.6v-5.2" />
+        </g>
+      </symbol>
       <!-- career streak: an asymmetric flame — the left notch is what stops it
            reading as a water drop at the 10px the capsule can afford -->
       <symbol id="i-flame" viewBox="0 0 24 24">
@@ -2298,6 +2306,12 @@
               <ol class="result-roster" id="result-roster" aria-label="Final standings"></ol>
               <p id="quest-wrong-mode-notice" dir="ltr" data-i18n="quest_wrong_mode_notice" role="status" hidden>This match does not count toward the quest. Play Hard Bot 1v1 and watch the full sponsor ad to verify each match.</p>
 
+              <!-- Obsidian VIP: the +50% bonus the settlement already paid, shown beside the rewards -->
+              <span class="result-vip-boost" id="result-vip-boost" hidden>
+                <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                <span id="result-vip-boost-t" dir="ltr">VIP +50%</span>
+              </span>
+
               <!-- Rewards and stakes share one obsidian capsule: a coin bank on the left, the TIQ
                    ledger on the right. The divider keeps the two columns symmetrical while each
                    side owns exactly one action (the prism, the shield). -->
@@ -2315,10 +2329,12 @@
                   <button class="ad-chip ad-chip--mini" id="btn-double-coins" type="button" hidden>
                     <svg class="ad-chip-ico" width="12" height="12" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
-                      <path d="M8.6 5.4 18.8 12 8.6 18.6V5.4Z" fill="currentColor" />
-                      <path d="M8.6 5.4 13.7 12 8.6 18.6V5.4Z" fill="#fff" fill-opacity=".26" />
+                      <use id="double-coins-ico" href="#i-play" />
                     </svg>
-                    <span class="ad-chip-label" id="double-coins-label">2×</span>
+                    <span class="ad-chip-text">
+                      <span class="ad-chip-label" id="double-coins-label">2×</span>
+                      <span class="ad-chip-sub" id="double-coins-sub" hidden>NO ADS</span>
+                    </span>
                     <span class="ad-chip-spin" id="double-coins-spin" aria-hidden="true" hidden></span>
                   </button>
                 </div>

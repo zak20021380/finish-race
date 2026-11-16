@@ -237,6 +237,8 @@ export interface OnlineSession extends OnlineMatch {
   sendEmote(emote: ChatEmoteId): boolean;
   /** Send one tactical line to the rival, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
+  /** Send one in-match free-text line (VIP only). False when the socket is gone. */
+  sendChat(text: string): boolean;
   /** Send one post-match line to the rival. False when the socket is gone. */
   sendPostMatchChat(line: PostChatLine): boolean;
   /** Forfeit: the rival wins immediately. The frame goes before the socket closes. */
@@ -249,6 +251,8 @@ export interface OnlineSession extends OnlineMatch {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line the rival sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
+  /** An in-match free-text line the rival sent (VIP), plus the room's VIP verdict. */
+  onChat(cb: (text: string, side: number, vip: boolean) => void): void;
   /**
    * A post-match line the rival sent from the result capsule. `vip` is the room's word on the
    * sender, never the sender's own: it is stamped from the entitlement the socket authenticated
@@ -279,6 +283,9 @@ export type RaceFrame =
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
+  /* In-match free text from a VIP seat: the room relays it only after clearing the sender, and
+     stamps `vip` from that clearance, never from the sender's own claim. */
+  | { type: 'CHAT'; side: 0 | 1; vip: boolean; text: string }
   /* The result capsule's banter: a closed preset id, or a VIP custom line relayed only after the
      board has settled. `vip` is stamped by the room from the sender's verified entitlement. */
   | { type: 'POST_MATCH_CHAT'; side: 0 | 1; vip: boolean; preset?: PostChatPresetId; text?: string }
@@ -501,6 +508,11 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
         && msg.index >= 0 && msg.index < PHRASE_COUNT
         ? { type: 'PHRASE', side, lang: msg.lang, index: msg.index } : null;
     }
+    if (msg.type === 'CHAT') {
+      if (typeof msg.text !== 'string') return null;
+      const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
+      return text ? { type: 'CHAT', side, vip: msg.vip === true, text } : null;
+    }
     if (msg.type === 'POST_MATCH_CHAT') {
       /* A preset is the room's own vocabulary: it is relayed as the ID and painted from the
          receiver's table. Text only ever arrives from a seat the room already cleared as VIP. */
@@ -547,6 +559,7 @@ let raceEnd: ((end: RaceEnd) => void) | null = null;
 let raceReject: ((reason: string) => void) | null = null;
 let raceEmote: ((emote: ChatEmoteId, side: number) => void) | null = null;
 let racePhrase: ((lang: ChatLang, index: number, side: number) => void) | null = null;
+let raceChat: ((text: string, side: number, vip: boolean) => void) | null = null;
 let racePostChat: ((line: PostChatLine, side: number, vip: boolean) => void) | null = null;
 /** Fired once when the settled socket can no longer carry banter: the rival left, or we did. */
 let racePostLeft: (() => void) | null = null;
@@ -557,6 +570,8 @@ let raceQueue: Array<{ action: Action; side: 0 | 1 }> = [];
 let raceEmoteQueue: Array<{ emote: ChatEmoteId; side: number }> = [];
 /** And same for a phrase: the line waits with its pair instead of being dropped. */
 let racePhraseQueue: Array<{ lang: ChatLang; index: number; side: number }> = [];
+/** An in-match free-text line that beat the board: it waits for `onChat` instead of vanishing. */
+let raceChatQueue: Array<{ text: string; side: number; vip: boolean }> = [];
 /** A post-match line that beat the result capsule: it waits for `onPostChat` instead of vanishing. */
 let racePostChatQueue: Array<{ line: PostChatLine; side: number; vip: boolean }> = [];
 
@@ -580,12 +595,14 @@ function forget(sock: WebSocket): void {
     raceReject = null;
     raceEmote = null;
     racePhrase = null;
+    raceChat = null;
     racePostChat = null;
     racePostLeft = null;
     racePostGone = false;
     raceQueue = [];
     raceEmoteQueue = [];
     racePhraseQueue = [];
+    raceChatQueue = [];
     racePostChatQueue = [];
   }
   try {
@@ -608,9 +625,11 @@ function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   raceReject = null;
   raceEmote = null;
   racePhrase = null;
+  raceChat = null;
   raceQueue = [];
   raceEmoteQueue = [];
   racePhraseQueue = [];
+  raceChatQueue = [];
   racePostChatQueue = [];
   ended?.({ win, why });
   /* Only a resignation leaves the rival in their result capsule. Every other ending — a dead
@@ -657,6 +676,15 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
         return false;
       }
     },
+    sendChat(text) {
+      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      try {
+        sock.send(JSON.stringify({ type: 'CHAT', text }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     sendPostMatchChat(line) {
       if (race?.socket !== sock || sock.readyState !== 1) return false;
       try {
@@ -693,6 +721,12 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       const queued = racePhraseQueue;
       racePhraseQueue = [];
       for (const p of queued) cb(p.lang, p.index, p.side);
+    },
+    onChat(cb) {
+      raceChat = cb;
+      const queued = raceChatQueue;
+      raceChatQueue = [];
+      for (const c of queued) cb(c.text, c.side, c.vip);
     },
     onPostChat(cb) {
       racePostChat = cb;
@@ -835,6 +869,9 @@ export function applyRaceFrame(
   } else if (frame.type === 'PHRASE') {
     if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
     else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
+  } else if (frame.type === 'CHAT') {
+    if (raceChat) raceChat(frame.text, frame.side, frame.vip);
+    else raceChatQueue.push({ text: frame.text, side: frame.side, vip: frame.vip });
   } else if (frame.type === 'POST_MATCH_CHAT') {
     const line: PostChatLine = frame.preset
       ? { preset: frame.preset }

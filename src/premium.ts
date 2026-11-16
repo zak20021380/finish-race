@@ -19,7 +19,7 @@
  */
 import { workerUrl } from './adminApi';
 import { activeTgId } from './storage';
-import { lang, onLang, t } from './settings';
+import { onLang, t } from './settings';
 import {
   impact, notify, openInvoice, tgInitData, tgUser, type InvoiceStatus,
 } from './telegram';
@@ -351,20 +351,17 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return node;
 };
 
-/** Persian prices use Persian numerals; every other locale keeps Latin tabular digits. */
+/** Every locale reads Latin tabular digits: VIP prices, day counts and the 4/4 badge all use 0-9. */
 function digits(n: number): string {
-  if (lang === 'fa') {
-    try { return n.toLocaleString('fa-IR'); } catch { /* fall through */ }
-  }
   return n.toLocaleString('en-US');
 }
 
-/** The four promises, in the order a player weighs them. Titles only — the bento carries no subtext. */
-const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string }> = [
-  { ico: '#i-chat', key: 'vipFeatChat' },
-  { ico: '#i-rx-volt', key: 'vipFeatReactions' },
-  { ico: '#i-flame', key: 'vipFeatAura' },
-  { ico: '#i-shield', key: 'vipFeatRecovery' },
+/** The four promises, in the order a player weighs them: a bold title and one line of value each. */
+const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string; sub: string }> = [
+  { ico: '#i-chat', key: 'vipFeatChat', sub: 'vipFeatChatSub' },
+  { ico: '#i-shield', key: 'vipFeatRecovery', sub: 'vipFeatRecoverySub' },
+  { ico: '#i-coins', key: 'vipFeatBoost', sub: 'vipFeatBoostSub' },
+  { ico: '#i-bolt', key: 'vipFeatDouble', sub: 'vipFeatDoubleSub' },
 ];
 
 interface StoreDom {
@@ -496,7 +493,9 @@ function paintFeatures(): void {
     const row = el('li', 'vip-feat');
     const mark = el('span', 'vip-feat-ico');
     mark.append(ico(feature.ico));
-    row.append(mark, el('b', 'vip-feat-t', t(feature.key)));
+    const copy = el('span', 'vip-feat-copy');
+    copy.append(el('b', 'vip-feat-t', t(feature.key)), el('span', 'vip-feat-d', t(feature.sub)));
+    row.append(mark, copy);
     return row;
   }));
 }

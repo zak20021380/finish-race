@@ -727,6 +727,64 @@
 #btn-recover-tiq.is-busy .ad-chip-ico,
 #btn-double-coins.is-busy .ad-chip-ico { opacity: 0; }
 
+/* ---- Obsidian VIP: the +50% pill and the ad-free faces of the two reward keys ---- */
+/* the bonus the settlement already paid, riding just above the coin/XP bank */
+.result-vip-boost {
+  display: flex;
+  width: fit-content;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid rgba(243, 212, 131, .34);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(243, 212, 131, .16), rgba(243, 212, 131, .05));
+  color: #FFE7A8;
+  font-family: var(--font-stat);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.result-vip-boost[hidden] { display: none; }
+.result-vip-boost .ico { flex: none; width: 11px; height: 11px; color: #F3D483; }
+.result-vip-boost span { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+/* the shield key reads AD-FREE for a VIP: one calm notch brighter, never a second glow */
+#btn-recover-tiq.is-vip { border-color: rgba(243, 212, 131, .5); }
+#btn-recover-tiq.is-vip .ad-chip-label { color: #FFF3D6; }
+/* the double key stacks ×2 over a micro ad-free line and swaps the video triangle for a bolt.
+   The sub-line wraps inside a narrow cap so the chip never outgrows the coin column on a 320px phone. */
+#btn-double-coins.is-vip {
+  height: auto;
+  min-height: 26px;
+  padding-block: 3px;
+  padding-inline: 6px 7px;
+  gap: 3px;
+}
+#btn-double-coins.is-vip .ad-chip-ico { width: 10px; height: 10px; }
+#btn-double-coins.is-vip .ad-chip-text { flex-direction: column; align-items: flex-start; gap: 1px; }
+#btn-double-coins.is-vip .ad-chip-label { font-size: 9px; }
+.ad-chip-sub {
+  display: block;
+  max-width: 24px;
+  color: #FFE7A8;
+  font-family: var(--font-stat);
+  font-size: 5.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.15;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  opacity: .85;
+}
+.ad-chip-sub[hidden] { display: none; }
+html[data-lang="fa"] .overlay.result .ad-chip-sub {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  font-size: 6px;
+}
+
 /* ==========================================================================
    RESULT ACTIONS — THE THRONE ROOM
    Three ranks, one hierarchy: a gold-rimmed hero, a lit combat banner, and a

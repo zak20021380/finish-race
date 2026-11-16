@@ -111,6 +111,10 @@ type ClientMessage =
   /* One of the six tactical lines, also off the sheet: a tongue plus a tile index, relayed as a
      pair and looked back up in the receiver's own closed table — no text crosses this wire. */
   | { type: 'PHRASE'; lang: string; index: number }
+  /* In-match free text off the VIP composer: sanitized and clamped like a post-match line, and
+     relayed only from a seat the room cleared as entitled (see `relay` / `roomFrame`). A free
+     seat's hand-rolled CHAT is dropped, never broadcast. */
+  | { type: 'CHAT'; text: string }
   /* The result capsule's banter. Two shapes reach this wire and only one of them carries text:
      `preset` names one of the closed quick-chat lines (`src/data/postchat.ts`) and is relayed as
      that ID, while `text` is the VIP custom line — checked against the seat's signed entitlement
@@ -1811,6 +1815,12 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
         && typeof msg.index === 'number' && Number.isInteger(msg.index)
         && msg.index >= 0 && msg.index < PHRASE_COUNT
         ? { type: 'PHRASE', lang: msg.lang, index: msg.index } : null;
+    }
+    if (msg.type === 'CHAT') {
+      /* The same printable, single-spaced 40-character ceiling the composer enforces. Whether the
+         sender may cross the wire at all is judged later, against the seat's entitlement. */
+      const text = readPostChatText(msg.text);
+      return text ? { type: 'CHAT', text } : null;
     }
     if (msg.type === 'POST_MATCH_CHAT') {
       /* Both shapes are read here and judged later: `preset` against the closed table, `text`
@@ -7820,6 +7830,15 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (msg.type === 'CHAT') {
+      /* Free text crosses only from a seat the room cleared as VIP; every other seat sees it gold. */
+      if (!live.driver || !member || !(member.premium || this.vipActive(member.id))) return;
+      for (const m of live.members) {
+        if (!m || m.seat === ref.seat) continue;
+        this.postTo(m.ws, JSON.stringify({ type: 'CHAT', side: ref.seat, vip: true, text: msg.text }));
+      }
+      return;
+    }
     /* An explicit exit — the new FORFEIT, an older client's RESIGN, or a CANCEL on a live board —
        is a forfeit: the seat is struck at once and no machine ever plays for it. */
     if (msg.type === 'FORFEIT' || msg.type === 'RESIGN' || msg.type === 'CANCEL') {
@@ -8241,6 +8260,14 @@ export class MatchmakerDO {
       /* A phrase is chat too: the rival looks the pair back up in the closed table on their side. */
       this.deliver(race.seats[seat.side === 0 ? 1 : 0],
         JSON.stringify({ type: 'PHRASE', side: seat.side, lang: msg.lang, index: msg.index }));
+      return;
+    }
+    if (msg.type === 'CHAT') {
+      /* In-match free text is the VIP door. The record is the authority, so a seat that bought the
+         pass mid-race can still type; a free seat's CHAT is dropped, never relayed. */
+      if (!(seat.premium || this.vipActive(seat.id))) return;
+      this.deliver(race.seats[seat.side === 0 ? 1 : 0],
+        JSON.stringify({ type: 'CHAT', side: seat.side, vip: true, text: msg.text }));
       return;
     }
     if (msg.type !== 'MOVE') return;                     // queue traffic on a paired socket: ignored

@@ -231,7 +231,12 @@ const recoverQuota = $<HTMLElement>('recover-tiq-quota');
 const recoverSpin = $<HTMLElement>('recover-tiq-spin');
 const doubleBtn = $<HTMLButtonElement>('btn-double-coins');
 const doubleLabel = $<HTMLElement>('double-coins-label');
+const doubleSub = $<HTMLElement>('double-coins-sub');
+const doubleIco = document.getElementById('double-coins-ico') as SVGUseElement | null;
 const doubleSpin = $<HTMLElement>('double-coins-spin');
+/* Obsidian VIP: the +50% pill the settlement already paid, shown beside the coin/XP bank */
+const resultVipBoost = $<HTMLElement>('result-vip-boost');
+const resultVipBoostT = $<HTMLElement>('result-vip-boost-t');
 const adToast = $<HTMLParagraphElement>('ad-toast');
 /* the pre-watch consent sheet: it must be answered before the SDK may open a fullscreen video */
 const adConfirm = $<HTMLDivElement>('ad-confirm');
@@ -1798,6 +1803,12 @@ function rollResultValues(): void {
 function paintRewardButtons(): void {
   if (!resultView) return;
   const { won, coins, stake } = resultView;
+  const vip = isPremiumUser();
+
+  /* ---- the +50% pill: the bonus the settlement already folded into these rewards ---- */
+  const boosted = vip && (coins > 0 || resultView.xp > 0);
+  resultVipBoost.hidden = !boosted;
+  if (boosted) resultVipBoostT.textContent = t('resultVipBoost');
 
   /* ---- TIQ recovery: only a defeat that actually cost TIQ ---- */
   const lost = !won && stake > 0;
@@ -1812,11 +1823,17 @@ function paintRewardButtons(): void {
      exhausted key stays announced-only, because its label still explains why it will not pay. */
   setDisabled(recoverBtn, claimed);
   recoverBtn.setAttribute('aria-disabled', String(claimed || left <= 0));
+  /* An active VIP shields the stake with no video: the same shield key reads AD-FREE, and the
+     quota beside it is the 4/4 daily budget. A free seat keeps the rewarded-ad RECOVER face. */
+  const recoverOpen = vip && !claimed && left > 0;
+  recoverBtn.classList.toggle('is-vip', recoverOpen);
   recoverLabel.textContent = claimed
     ? t('adRecoverProtected')
-    : left > 0 ? t('adRecoverCta') : t(limit > 3 ? 'adRecoverLimitVip' : 'adRecoverLimit');
+    : left > 0 ? t(recoverOpen ? 'adRecoverCtaVip' : 'adRecoverCta') : t(limit > 3 ? 'adRecoverLimitVip' : 'adRecoverLimit');
   recoverQuota.textContent = `${left}/${limit}`;
   recoverQuota.hidden = claimed || left <= 0;
+  if (recoverOpen) recoverBtn.setAttribute('aria-label', t('adRecoverVipAria'));
+  else recoverBtn.removeAttribute('aria-label');
 
   const user = referralQuestUser();
   const activeQuest = isReferralQuestActive(user);
@@ -1843,10 +1860,21 @@ function paintRewardButtons(): void {
   doubleBtn.classList.remove('is-exhausted');
   setDisabled(doubleBtn, paid && !pending);
   doubleBtn.setAttribute('aria-disabled', String(paid && !pending));
+  /* Obsidian VIP doubles the coins instantly: a lightning key with an ad-free micro-line, never
+     the video play triangle. A referral quest still watches its sponsor ad, so it keeps the play face. */
+  const vipDouble = vip && !quest;
+  const doubleOpen = vipDouble && !paid && !pending;
+  doubleBtn.classList.toggle('is-vip', doubleOpen);
+  doubleSub.hidden = !doubleOpen;
+  if (doubleOpen) doubleSub.textContent = t('adDoubleSubVip');
+  doubleIco?.setAttribute('href', vipDouble ? '#i-bolt' : '#i-play');
   doubleLabel.textContent = pending ? t('quest_sync_retry')
     : paid ? t(quest && resultView.questVerified ? 'quest_verified' : 'adDoubleClaimed')
     : quest ? t(user.matchesCount === 9 || user.hardWins === 4 ? 'quest_ad_button_final' : 'quest_ad_button_standard')
+    : doubleOpen ? t('adDoubleCtaVip')
     : t('adDoubleCta');
+  if (doubleOpen) doubleBtn.setAttribute('aria-label', t('adDoubleVipAria'));
+  else doubleBtn.removeAttribute('aria-label');
   /* the consolation tint belongs to the reward, never to the key that doubles it */
   resultCoinChip.classList.toggle('is-doubled', coins > 0);
 }
@@ -2039,6 +2067,21 @@ async function claimTiqRecovery(): Promise<void> {
   if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
   if (getRemainingTiqRecoveries() <= 0) return;
 
+  /* Obsidian VIP shields the stake with no video and no consent sheet: the refund lands on the tap,
+     spends one of the day's 4 recoveries, and the quota beside the key counts down (4/4 -> 3/4). */
+  if (isPremiumUser()) {
+    stopDefeat();
+    earnTiq(view.stake);
+    recordTiqRecovery();
+    markClaimedInMatch('recover_tiq');
+    paintSeatIdentity();
+    animateStakeRefund();
+    paintRewardButtons();
+    showAdToast(t('ad_success_tiq_saved'), 'success');
+    notify('success');
+    return;
+  }
+
   if (!(await askAdConfirm('tiq'))) return;
   /* the sheet can outlive the card: re-check the settlement before a fullscreen video opens */
   if (resultView !== view || !overlayOpen) return;
@@ -2098,23 +2141,32 @@ async function claimDoubleCoins(): Promise<void> {
       return;
     }
     if (!retry) {
-      if (!(await askAdConfirm('coins'))) return;
-      if (resultView !== view || !overlayOpen) return;
-      stopDefeat();
-      holdAudio();
-      const outcome = await playRewardedAd('double_coins', {
-        stillWanted: () => overlayOpen && resultView === view,
-      }).finally(releaseAudio);
-      if (resultView !== view) return;
-      if (!outcome.rewarded) {
-        const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
-        showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
-        return;
+      if (isPremiumUser() && !quest) {
+        /* Obsidian VIP: the doubled coins land on the tap — no consent sheet, no rewarded video. */
+        stopDefeat();
+        earnCoins(view.coins);
+        markClaimedInMatch('double_coins');
+        animateCoinTotal(view.coins);
+        view.questAdCompleted = false;
+      } else {
+        if (!(await askAdConfirm('coins'))) return;
+        if (resultView !== view || !overlayOpen) return;
+        stopDefeat();
+        holdAudio();
+        const outcome = await playRewardedAd('double_coins', {
+          stillWanted: () => overlayOpen && resultView === view,
+        }).finally(releaseAudio);
+        if (resultView !== view) return;
+        if (!outcome.rewarded) {
+          const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
+          showAdToast(t(exhausted ? 'adToastUnavailable' : 'ad_failed_incomplete'), 'error');
+          return;
+        }
+        earnCoins(view.coins);
+        markClaimedInMatch('double_coins');
+        animateCoinTotal(view.coins);
+        view.questAdCompleted = quest;
       }
-      earnCoins(view.coins);
-      markClaimedInMatch('double_coins');
-      animateCoinTotal(view.coins);
-      view.questAdCompleted = quest;
     }
     if (quest && matchId && isReferralQuestActive(referralQuestUser())) {
       const verified = await verifyReferralQuestMatch(matchId, view.won);
@@ -2195,7 +2247,7 @@ function showOverlay() {
       /* the race ended without a finish line: a ranked run never survives a void board */
       forfeit: forfeit !== null,
       seats: sizes.length,
-    }, runtime.coinMult)
+    }, runtime.coinMult, isPremiumUser())
     : { coins: 0, xp: 0, bot: boardMode === 'bot' };
   const earned = settled.coins;
   /* CLEAN COMPLETION & PERSISTENCE. The governed debut has settled and `recordGame()` has flushed
@@ -3551,6 +3603,8 @@ function startGame(setup: StartSetup) {
     session.onEmote((emote, side) => chat.inboundEmote(emote, side));
     /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
     session.onPhrase((lang, index, side) => chat.inboundPhrase(lang, index, side));
+    /* the rival's in-match free text: gold only when the room vouched for their VIP entitlement */
+    session.onChat((text, side, vip) => chat.inboundCustom(text, side, vip));
     /* the rival's post-match line: it lands on whichever standings row their seat owns, wearing
        the crown only when the room vouched for that seat's VIP entitlement */
     session.onPostChat((line, side, vip) => banter.inbound(line, side, vip));
@@ -3801,7 +3855,7 @@ function quitToMenu() {
       const ranked = rankedPvp();
       if (mode !== 'bot' && (!room || rewardEligible(room, localSide))) {
         const before = myTiq();
-        recordGame({ difficulty, won: false, mode, ranked, forfeit: true }, runtime.coinMult);
+        recordGame({ difficulty, won: false, mode, ranked, forfeit: true }, runtime.coinMult, isPremiumUser());
         /* EXACTLY the stake, not the ladder's coincidence: whatever the recorded defeat did to
            this save on its own, the reading lands 15 below where it stood, and never below zero. */
         const stake = Math.min(FORFEIT_TIQ, Math.max(0, before));
@@ -5373,6 +5427,8 @@ const chat = createChat({
   onEmote: (id) => { active?.sendEmote(id); },
   /* and every phrase too, as the closed (lang, index) pair the sheet is built from */
   onPhrase: (lang, index) => { active?.sendPhrase(lang, index); },
+  /* a VIP's typed line rides the same socket; the room gates the entitlement again on its side */
+  onCustom: (text) => { active?.sendChat(text); },
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into

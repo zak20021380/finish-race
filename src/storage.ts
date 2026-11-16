@@ -996,6 +996,7 @@ export function recordGame(
     seats?: number;
   },
   mult = 1,
+  vip = false,
 ): GameSettlement {
   const s = profile.stats;
   const live = r.mode === 'pvp' || r.mode === 'arena';
@@ -1060,8 +1061,14 @@ export function recordGame(
     difficulty: r.difficulty,
     seats: r.seats ?? 2,
   });
-  const coins = r.forfeit === true ? 0 : (live || r.won ? payout(r, mult, matchReward) : 0);
-  const xp = xpForGame(r, live, ranked, matchReward);
+  const baseCoins = r.forfeit === true ? 0 : (live || r.won ? payout(r, mult, matchReward) : 0);
+  const baseXp = xpForGame(r, live, ranked, matchReward);
+  /* Obsidian VIP pays +50% on everything the race earned — coins and XP alike, each rounded once.
+     A forfeit still pays nothing, and a bot board still pays only a win: the boost scales what the
+     settlement already decided, it never invents a reward the race did not earn. */
+  const boost = vip ? 1.5 : 1;
+  const coins = Math.round(baseCoins * boost);
+  const xp = Math.round(baseXp * boost);
   profile.coins += coins;
   profile.xp += xp;
   flush();                             // persist immediately: the HUD and reload read the same save
