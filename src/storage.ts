@@ -1009,6 +1009,8 @@ export function recordGame(
   const mode: Mode = live ? 'online' : 'bot';
   s.modes[mode] = (s.modes[mode] ?? 0) + 1;
   if (r.won) {
+    /* Lifetime history only: a bot seat is recorded through `botWins` below and removed again
+       by `ladderTally()`/`ladderWins()`, so this increment never becomes a ladder win. */
     s.wins++;
     s.streak++;
     s.best = Math.max(s.best, s.streak);
@@ -1086,6 +1088,14 @@ export const ladderTally = (): { wins: number; games: number } => {
   const wins = Math.min(games, Math.max(0, profile.stats.wins - (profile.stats.botWins ?? 0)));
   return { wins, games };
 };
+
+/**
+ * The only win figure allowed into a Worker sync payload or a leaderboard row. The lifetime
+ * `stats.wins` still counts every race the player actually played (so the save keeps its honest
+ * history), but every machine-held board is subtracted here before a single digit leaves the
+ * device. A Practice-vs-Bot victory therefore never inflates THE MIND LADDER.
+ */
+export const ladderWins = (): number => ladderTally().wins;
 
 /**
  * Read the saved lesson flag. STRICT: only the literal `true` counts as "returning player". A

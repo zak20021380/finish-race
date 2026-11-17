@@ -1085,9 +1085,10 @@ const matchMode = (): MatchMode => {
   if (!active) return 'bot';
   if (active.mode === 'arena') return 'arena';
   /* A friends room can launch with one person and a backfilled seat; that board is practice,
-     exactly as the room counts it. A seat the machine took over does not make the room PvP. */
+     exactly as the room counts it. A seat the machine took over (`left`) is ALSO practice —
+     the person who opened it is gone, so a win there is against the AI, never a PvP win. */
   if ('seats' in active) {
-    const humans = active.seats.reduce((n, seat) => n + (seat.bot ? 0 : 1), 0);
+    const humans = active.seats.reduce((n, seat) => n + (seat.bot || seat.left ? 0 : 1), 0);
     return humans >= 2 ? 'pvp' : 'bot';
   }
   return 'pvp';

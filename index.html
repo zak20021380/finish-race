@@ -1563,6 +1563,13 @@
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
             <section class="podium" id="ranks-podium" role="list" aria-label="Top three" hidden></section>
             <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite" hidden></section>
+            <!-- A quiet, persistent grammar note for the competitive board: only a person on the
+                 far side mints a ladder win. The shield is the same inline sprite used across
+                 the clay shell — no glyph, no emoji. Hidden on the two aggregate boards. -->
+            <div class="ranks-pvp-note" id="ranks-pvp-note" role="note">
+              <svg class="ranks-pvp-note-ico" aria-hidden="true"><use href="#i-shield" /></svg>
+              <span class="ranks-pvp-note-t" data-i18n="ranksPvpNotice">Only Online &amp; Friends wins count · Bot matches excluded</span>
+            </div>
             <div id="ranks-minds" role="tabpanel" aria-label="Top Minds"></div>
             <div id="ranks-guilds" role="tabpanel" aria-label="Squad IQ" hidden></div>
             <div id="ranks-nations" role="tabpanel" aria-label="Nations IQ" hidden></div>

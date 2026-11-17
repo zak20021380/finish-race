@@ -3360,6 +3360,51 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 #ranks-guilds[hidden],
 #ranks-nations[hidden] { display: none; }
 
+/* ---- PvP-only ledger note, direct under the competitive board's standing strip ----
+   A quiet dark-glass footnote: one tinted shield sprite and one line of localized copy.
+   It lives in normal flow (never absolute) so it cannot cover a row at 320px, and it
+   disappears with the Top Minds tab so the aggregate boards keep their own vocabulary. */
+.ranks-pvp-note {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 70%),
+    rgba(15, 22, 36, .72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 8px 18px -14px rgba(0, 0, 0, .9);
+  color: #94A3B8;
+}
+.ranks-pvp-note[hidden] { display: none; }
+.ranks-pvp-note-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #7DD3FC;
+  opacity: .85;
+}
+.ranks-pvp-note-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: .005em;
+  overflow-wrap: anywhere;
+}
+html[data-lang="fa"] .ranks-pvp-note-t,
+html[data-lang="ar"] .ranks-pvp-note-t { text-align: right; }
+@media (max-width: 430px) {
+  .ranks-pvp-note { gap: 6px; padding: 7px 9px; }
+  .ranks-pvp-note-t { font-size: 10.5px; }
+}
+
 .lb-pill {
   --d: 2px;
   appearance: none;
@@ -3592,6 +3637,7 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   font-weight: 600;
   letter-spacing: .01em;
   line-height: 1.25;
+  font-variant-numeric: tabular-nums;
   color: #8CA0B8;
 }
 .lb-serial { margin-right: 1px; }
@@ -16349,6 +16395,7 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
   line-height: 1.3;
   color: #B8C6D8;
   background: rgba(148, 163, 184, .08);
@@ -32113,6 +32160,7 @@ html[data-lang="ar"] .sq-broadcast-btn .ico { transform: scaleX(-1); }
   font-weight: 600;
   letter-spacing: .01em;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   color: #94A3B8;
 }
 .nd-score {

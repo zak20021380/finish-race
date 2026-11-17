@@ -22,7 +22,7 @@
  * that ships rendered art paints that medallion instead, on every surface.
  */
 
-import { cacheBadgeClaim, cacheBadgeSupply, guestId, profile, type EditionClaim, type EditionSupply } from './storage';
+import { cacheBadgeClaim, cacheBadgeSupply, guestId, ladderWins, profile, type EditionClaim, type EditionSupply } from './storage';
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData, tgUser } from './telegram';
@@ -677,7 +677,8 @@ export async function refreshBadgeEditions(): Promise<void> {
   const snapshot = {
     tiq: myTiq(),
     games: profile.stats.games,
-    wins: profile.stats.wins,
+    /* PvP-only: a bot victory must never mint a competitive honor on the server. */
+    wins: ladderWins(),
     streak: profile.stats.streak,
     best: profile.stats.best,
     pvpBest: profile.stats.pvpBest,

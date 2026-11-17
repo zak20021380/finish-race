@@ -9,7 +9,7 @@
  */
 import { workerUrl } from './adminApi';
 import { telegramAvatarUrl } from './squads';
-import { guestId, profile, readJson, writeJson } from './storage';
+import { guestId, ladderWins, profile, readJson, writeJson } from './storage';
 import { tgInitData, tgUser } from './telegram';
 
 export type MindTrend = 'up' | 'down' | 'same';
@@ -154,7 +154,8 @@ function localRow(standing: MindStanding): MindRowData {
     countryCode: myCountry(),
     avatar: myPhoto(),
     tiq: standing.tiq,
-    wins: Math.max(0, Math.floor(profile.stats.wins)),
+    /* PvP only: the local row must quote the same verified figure the Worker prints. */
+    wins: ladderWins(),
     trend: 'same',
     delta: 0,
     isYou: true,

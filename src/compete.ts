@@ -141,10 +141,19 @@ function dedupeMinds(rows: PlayerRow[]): PlayerRow[] {
 }
 
 /**
- * The win count as its own bidi island. Persian reads right-to-left, and a bare `{n} برد`
- * template lets the digits drift to the wrong end of the sentence, so the number is written into
- * a `<bdi dir="ltr">`: one isolated left-to-right object, always displayed as `0 برد`,
- * `1 برد`, `12 برد` — never `برد 0` and never glued to the rank that follows it.
+ * THE PvP-ONLY WIN COUNT. Every figure on this screen is a verified human-vs-human win: the
+ * Worker only mints one when a real person sat on the far side, and the client never publishes
+ * a bot victory. The copy says so in every locale (`0 PvP wins`, `12 PvP wins`); no locale may
+ * fall back to a bare "wins" label.
+ */
+const winsText = (n: number): string =>
+  (n === 1 ? t('msWinOne') : t('msWins')).replace('{n}', n.toLocaleString('en-US'));
+
+/**
+ * The win count as its own bidi island. Persian and Arabic read right-to-left, and a bare
+ * `{n} برد رقابتی` template lets the digits drift to the wrong end of the sentence, so the
+ * number is written into `<bdi dir="ltr">`: one isolated left-to-right object, always
+ * shown with Latin tabular digits — never reversed and never glued to the rank after it.
  */
 function winsPhrase(n: number): DocumentFragment {
   const template = n === 1 ? t('msWinOne') : t('msWins');
@@ -219,6 +228,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
   const seasonKicker = seasonChip?.querySelector<HTMLElement>('.ml-season-k') ?? null;
   const seasonSub = document.getElementById('ranks-sub');
+  const pvpNote = document.getElementById('ranks-pvp-note');
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
     minds: document.getElementById('ranks-minds'),
@@ -681,6 +691,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     // "Your Standing" is the Top Minds HUD. Nations paints its own nation strip.
     const standing = soloStandingEl();
     if (standing) standing.hidden = board !== 'minds';
+    /* The PvP-only grammar note belongs to the competitive board alone: its wins are the
+       only figures on this screen, so the legend must never follow the guild/nation tabs. */
+    if (pvpNote) pvpNote.hidden = board !== 'minds';
     // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
     const regBar = document.getElementById('squad-reg-bar');
     if (regBar) regBar.hidden = board !== 'guilds';
@@ -2174,7 +2187,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     }
     const sub = document.createElement('small');
     sub.className = 'nd-sub';
-    sub.textContent = `${m.wins.toLocaleString('en-US')} wins`;
+    sub.append(winsPhrase(m.wins));
     id.append(line, sub);
 
     const score = document.createElement('span');
@@ -2187,7 +2200,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     li.append(rk, nationAvatar(m), id, score);
     li.setAttribute(
       'aria-label',
-      `#${m.rank} ${m.name}${m.isYou ? ', you' : ''} — ${m.tiq.toLocaleString('en-US')} Tactical IQ, ${m.wins.toLocaleString('en-US')} wins`,
+      `#${m.rank} ${m.name}${m.isYou ? ', you' : ''} — ${m.tiq.toLocaleString('en-US')} Tactical IQ, ${winsText(m.wins)}`,
     );
     return li;
   }

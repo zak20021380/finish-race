@@ -1344,7 +1344,10 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     lastSeen: whole(r.lastSeen),
     lastPlayed: whole(r.lastPlayed),
     matches: whole(r.matches),
-    wins: whole(r.wins),
+    /* A hydrated or hand-edited blob can never claim more wins than races played. This is the
+       last clamp before a row reaches the leaderboard, so an inflated win figure from an older
+       build (or a tampered store) cannot survive a restart. */
+    wins: Math.min(whole(r.matches), whole(r.wins)),
     losses: whole(r.losses),
     streak: whole(r.streak),
     best: whole(r.best),
@@ -4540,7 +4543,9 @@ export class MatchmakerDO {
     const rawTiq = Number(url.searchParams.get('tiq'));
     const reported = Number.isFinite(rawTiq) ? clamp(Math.floor(rawTiq), 0, 10_000_000) : 0;
     const myTiq = Math.max(0, Math.floor(mine?.tiq ?? 0), reported);
-    const myWins = Math.max(0, Math.floor(mine?.wins ?? 0));
+    /* The published win figure is the verified PvP tally clamped to the races behind it —
+       a client cannot talk a bot streak into a ladder row. */
+    const myWins = Math.min(Math.max(0, Math.floor(mine?.matches ?? 0)), Math.max(0, Math.floor(mine?.wins ?? 0)));
     const selfBanned = mineId ? this.banned.has(mineId) || mine?.banned === true : false;
 
     /* A leaderboard read is a cleanup and a dedupe, in that order: the ghosts a random-seat
@@ -4560,7 +4565,7 @@ export class MatchmakerDO {
         /* The seat's signed `photo_url` wins; a seat cached before that field existed
            still gets Telegram's public userpic derived from its own username. */
         avatar: p.avatar || telegramPhotoUrl(p.username),
-        wins: p.id === mineId ? myWins : p.wins,
+        wins: p.id === mineId ? myWins : Math.min(Math.max(0, p.matches), Math.max(0, p.wins)),
         tiq: p.id === mineId ? myTiq : p.tiq,
       }))
       .filter((p) => p.tiq > 0)
@@ -4834,7 +4839,8 @@ export class MatchmakerDO {
       id: p.id,
       name: p.name,
       tiq: Math.max(0, whole(p.tiq)),
-      wins: Math.max(0, whole(p.wins)),
+      /* The roster quotes the same verified, clamped PvP figure as the ladder. */
+      wins: Math.min(Math.max(0, whole(p.matches)), Math.max(0, whole(p.wins))),
       isYou: !!mineId && p.id === mineId,
     });
 
@@ -5309,7 +5315,9 @@ export class MatchmakerDO {
     target.lastSeen = Math.max(target.lastSeen, guest.lastSeen);
     target.lastPlayed = Math.max(target.lastPlayed, guest.lastPlayed);
     target.matches += guest.matches;
-    target.wins += guest.wins;
+    /* Clamp after folding: a guest row carried over from an older build may hold wins that were
+       really bot practice, and no merge may push the signed seat above its race count. */
+    target.wins = Math.min(target.matches, target.wins + guest.wins);
     target.losses += guest.losses;
     target.best = Math.max(target.best, guest.best);
     target.streak = Math.max(target.streak, guest.streak);
@@ -5389,8 +5397,13 @@ export class MatchmakerDO {
     this.creditModeActive(mode, prev > 0 ? prev : -1, at);
   }
 
-  /** The seat's board came to rest: count it. `winner` null means nobody won — an admin abort. */
-  private verdict(id: string, won: boolean | null): void {
+  /**
+   * The seat's board came to rest: count it. `winner` null means nobody won — an admin abort.
+   * `pvp` is the strict human-opponent gate: ONLY a verified PvP board may mint a ladder win,
+   * extend a streak or bank nation points. A machine-held practice board still records that a
+   * race happened (`matches`) and a defeat (`losses`), but it can never inflate competitive wins.
+   */
+  private verdict(id: string, won: boolean | null, pvp: boolean): void {
     const p = this.players.get(id);
     if (!p) return;
     p.inMatch = false;
@@ -5399,15 +5412,19 @@ export class MatchmakerDO {
       p.matches++;
       p.lastPlayed = p.lastSeen;
       if (won) {
-        p.wins++;
-        p.streak++;
-        p.best = Math.max(p.best, p.streak);
-        this.creditNation(p);
+        if (pvp) {
+          p.wins++;
+          p.streak++;
+          p.best = Math.max(p.best, p.streak);
+          this.creditNation(p);
+        }
       } else {
         p.losses++;
         p.streak = 0;
       }
     }
+    /* Forward-only invariant, even on a seat whose wins came from an older build. */
+    p.wins = Math.min(p.matches, p.wins);
     this.persist();
   }
 
@@ -5792,6 +5809,23 @@ export class MatchmakerDO {
     return humans >= 2 ? 'pvp' : 'bot';
   }
 
+  /**
+   * The strict PvP gate for a ladder win: a real person is still holding THIS chair, and at least
+   * one other real person was seated across from them. A bot backfill or a seat the machine took
+   * over is a practice board no matter how the room was opened — a win there never mints a ladder
+   * win, never extends the streak and never banks nation points.
+   */
+  private roomPvpSeat(live: LiveRoom, seatIndex: number): boolean {
+    const roster = live.driver?.room ?? live.room;
+    const person = (i: number): boolean => {
+      const seat = roster.seats[i];
+      return !!seat && seat.kind === 'human' && !!seat.id && !isAutomated(roster, i);
+    };
+    if (!person(seatIndex)) return false;
+    for (let i = 0; i < roster.seats.length; i++) if (i !== seatIndex && person(i)) return true;
+    return false;
+  }
+
   /** One completed room credits the match counter once, however it reached its winner. */
   private completeRoom(live: LiveRoom): void {
     if (live.counted) return;
@@ -6128,7 +6162,7 @@ export class MatchmakerDO {
       if (!m) continue;
       this.refs.delete(m.ws);
       /* an admin pull is not a verdict: the seat is free, the record untouched */
-      this.verdict(m.id, null);
+      this.verdict(m.id, null, false);
       try {
         m.ws.send(JSON.stringify({ type: 'ABORTED', matchId: live.matchId }));
         m.ws.close(1000, 'aborted');
@@ -7900,7 +7934,9 @@ export class MatchmakerDO {
       const m = live.members[i];
       /* a chair held for an absent socket was the machine's race, not that player's */
       if (m && m.connected) {
-        this.verdict(m.id, this.onWinningSide(live, i, winner));
+        /* The win only counts when a real person was still on the other side. A room that
+           started with two invitations but finished against a backfill is practice. */
+        this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i));
         humans.push(m);
       }
     }
@@ -8053,7 +8089,7 @@ export class MatchmakerDO {
       member.connected = false;
       member.droppedAt = 0;
       this.setInMatch(member.id, false);
-      this.verdict(member.id, false);
+      this.verdict(member.id, false, this.roomPvpSeat(live, ref.seat));
     }
     driver.leave(ref.seat);
     this.collapseLoneTeam(live);
@@ -8359,7 +8395,9 @@ export class MatchmakerDO {
     for (const seat of race.seats) {
       if (seat.race === race) seat.race = null;
       this.markActive(seat.id, race.mode);
-      this.verdict(seat.id, winner === null ? null : seat.side === winner);
+      /* A queue pairing, an Arena cup and an accepted relic duel are always two real sockets:
+         no bot can hold a `Race` seat, so every win here is a verified PvP win. */
+      this.verdict(seat.id, winner === null ? null : seat.side === winner, true);
     }
   }
 
