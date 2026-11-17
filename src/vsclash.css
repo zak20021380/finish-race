@@ -1,130 +1,59 @@
-/* vsclash.css — the pre-match face-off, in one shape for two, three or four seats.
-   Presentation only. Nothing here moves a token, a rule or the board.
-
-   The screen is a stack of rows — opponents on top, the crest on the seam, the ground you defend
-   underneath — so the same markup answers a duel, a three-way and a four-way. A duel fills every
-   row; a trio splits its top row in two; a four-way balances two over two. The cards drop the role
-   tag, the ISO chip and the crest block, and keep only name, squad and TIQ, with the flag pinned
-   to the portrait as a micro-badge.
-
-   Everything is built from `--vsc-*` properties set once on `.vsc`, so the pearl finish is a dozen
-   lines of overrides rather than a parallel stylesheet. Every animation is keyed off `.is-in` /
-   `.is-clash` / `.is-leaving`; `.is-quiet` switches the cinema off and leaves the information up. */
+/* vsclash.css — a deliberately light pre-match reveal.
+   No backdrop filters, no animated rings, no grain, no tagline rotation: the cards are painted
+   synchronously from in-memory match data and the board is live underneath before the crest lands.
+   Every dynamic name is a <bdi> with unicode-bidi:isolate so RTL locales cannot scramble it. */
 
 .vsc {
   --vsc-gold: #FCD34D;
-  --vsc-champagne: #E8D9A8;
+  --vsc-ink: #F8FAFC;
+  --vsc-ink-2: rgba(226, 232, 240, .74);
   --vsc-cyan: #38BDF8;
   --vsc-crimson: #FF3D6E;
   --vsc-violet: #A78BFA;
-  --vsc-ruby: #B3123C;
-  --vsc-ink: #F8FAFC;
-  --vsc-ink-2: rgba(226, 232, 240, .74);
-  --vsc-ink-3: rgba(203, 213, 225, .5);
   --vsc-plate: linear-gradient(180deg, rgba(26, 35, 52, .94) 0%, rgba(11, 16, 26, .96) 100%);
-  --vsc-hair: rgba(255, 255, 255, .1);
-  --vsc-base: #05070C;
-  --vsc-veil: radial-gradient(120% 92% at 50% 46%, rgba(10, 16, 28, .96) 0%, rgba(3, 6, 11, 1) 100%);
-  --vsc-exit: 400ms; /* keep in step with EXIT_MS in vsclash.ts */
 
   position: fixed;
   inset: 0;
-  /* above every sheet, scrim and stage in the shell; only the boot veil still sits over it */
   z-index: 2000;
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  /* an opaque base first: a face-off you can read the launcher through is not a face-off */
-  background-color: var(--vsc-base);
-  background-image: var(--vsc-veil);
+  background: linear-gradient(180deg, #0A1020 0%, #05070C 100%);
   color: var(--vsc-ink);
-  animation: vsc-veil-in 160ms ease-out both;
+  animation: vsc-veil-in 110ms ease-out both;
   contain: layout paint;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* ---- the stage: crimson rain from the top, sapphire from the bottom, one seam between ---- */
-.vsc-bg { position: absolute; inset: 0; pointer-events: none; }
+/* names, guilds and nations never inherit the surrounding direction */
+.vsc bdi,
+.vsc .vsc-name,
+.vsc .vsc-squad-t,
+.vsc .vsc-country,
+.vsc .vsc-sub-t,
+.vsc .vsc-initial { unicode-bidi: isolate; }
 
-.vsc-aura-rival {
-  position: absolute;
-  top: -14%;
-  left: 8%;
-  right: -22%;
-  height: 66%;
-  background:
-    radial-gradient(60% 60% at 72% 30%, rgba(255, 61, 110, .34), transparent 72%),
-    radial-gradient(50% 50% at 20% 10%, rgba(179, 18, 60, .26), transparent 74%);
-}
-
-.vsc-aura-you {
-  position: absolute;
-  bottom: -14%;
-  left: -22%;
-  right: 8%;
-  height: 66%;
-  background:
-    radial-gradient(60% 60% at 28% 70%, rgba(56, 189, 248, .32), transparent 72%),
-    radial-gradient(50% 50% at 84% 94%, rgba(252, 211, 77, .16), transparent 74%);
-}
-
-/* the seam is the only hard line on the stage, so it owns the diagonal */
-.vsc-seam {
-  position: absolute;
-  left: -10%;
-  top: 50%;
-  width: 120%;
-  height: 2px;
-  rotate: -6deg;
-  background: linear-gradient(90deg,
-    transparent 0%, rgba(56, 189, 248, .45) 18%, rgba(248, 250, 252, .8) 50%,
-    rgba(255, 61, 110, .5) 82%, transparent 100%);
-  box-shadow: 0 0 16px 2px rgba(56, 189, 248, .28);
-  scale: 0 1;
-  opacity: 0;
-}
-
-.vsc-grain {
-  position: absolute;
-  inset: 0;
-  opacity: .5;
-  background-image: repeating-linear-gradient(112deg,
-    rgba(255, 255, 255, .02) 0 2px, transparent 2px 9px);
-}
-
-/* the board is centred in the space the footer does not take, so the tagline always holds the
-   bottom edge instead of drifting up behind a four-card stack */
 .vsc-shake {
   position: relative;
-  z-index: 1;
-  height: 100%;
   width: 100%;
+  height: 100%;
   max-width: var(--app-w);
-  margin-inline: auto;
-  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
            max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--s3);
+  align-content: center;
 }
 
-/* ---- the rows: one card in a duel, two across in a trio or a four-way ---- */
-.vsc-grid {
-  align-self: center;
-  display: grid;
-  gap: clamp(6px, 1.6vh, 12px);
-  min-width: 0;
-}
-
+.vsc-grid { display: grid; gap: 8px; min-width: 0; }
 .vsc-row { display: grid; gap: 8px; min-width: 0; }
 .vsc-row[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .vsc-row[data-cols="1"] { grid-template-columns: minmax(0, 1fr); }
 
-/* ---- one fighter: portrait with its flag, then three tight lines ---- */
+/* ---- one fighter: portrait, name, then only the rows that carry real data ---- */
 .vsc-side {
   --vsc-tint: var(--vsc-cyan);
-  --vsc-edge: rgba(56, 189, 248, .45);
-  --vsc-wash: rgba(56, 189, 248, .1);
   position: relative;
   display: flex;
   align-items: center;
@@ -132,136 +61,41 @@
   min-width: 0;
   padding: 9px 11px;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(115deg, var(--vsc-wash) 0%, transparent 42%),
-    var(--vsc-plate);
-  box-shadow:
-    inset 0 0 0 1px var(--vsc-edge),
-    inset 0 1px 0 var(--vsc-hair),
-    0 18px 34px -26px rgba(0, 0, 0, .95);
+  background: var(--vsc-plate);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 10px 22px -18px rgba(0, 0, 0, .9);
 }
 
-/* the accents: your seat holds the neon cyan, the rivals the obsidian end of the palette */
-.vsc-side[data-accent="cyan"] {
-  --vsc-tint: var(--vsc-cyan);
-  --vsc-edge: rgba(56, 189, 248, .55);
-  --vsc-wash: rgba(56, 189, 248, .13);
-}
+.vsc-side[data-accent="cyan"] { --vsc-tint: var(--vsc-cyan); }
+.vsc-side[data-accent="crimson"] { --vsc-tint: var(--vsc-crimson); }
+.vsc-side[data-accent="violet"] { --vsc-tint: var(--vsc-violet); }
+.vsc-side[data-accent="obsidian"] { --vsc-tint: #CBD5E1; }
 
-.vsc-side[data-accent="crimson"] {
-  --vsc-tint: var(--vsc-crimson);
-  --vsc-edge: rgba(255, 61, 110, .34);
-  --vsc-wash: rgba(255, 61, 110, .1);
-}
+.vsc-side--you { box-shadow: inset 0 0 0 1.5px rgba(56, 189, 248, .6), 0 10px 22px -18px rgba(0, 0, 0, .9); }
 
-.vsc-side[data-accent="violet"] {
-  --vsc-tint: var(--vsc-violet);
-  --vsc-edge: rgba(167, 139, 250, .34);
-  --vsc-wash: rgba(167, 139, 250, .1);
-}
-
-.vsc-side[data-accent="obsidian"] {
-  --vsc-tint: #CBD5E1;
-  --vsc-edge: rgba(148, 163, 184, .32);
-  --vsc-wash: rgba(148, 163, 184, .09);
-}
-
-/* the local card is the one you cannot mistake: a neon rim and a bloom that the rivals do not get */
-.vsc-side--you {
-  box-shadow:
-    inset 0 0 0 1.5px rgba(56, 189, 248, .6),
-    inset 0 1px 0 var(--vsc-hair),
-    0 0 26px -8px rgba(56, 189, 248, .6),
-    0 18px 34px -26px rgba(0, 0, 0, .95);
-}
-
-/* the half-width variant: same order, one size down, and the nation word stays off the card */
 .vsc-side[data-compact="1"] { padding: 7px 9px; gap: 8px; }
-.vsc-side[data-compact="1"] .vsc-orb { width: clamp(30px, 9.5vw, 38px); }
+.vsc-side[data-compact="1"] .vsc-face { width: clamp(30px, 9.5vw, 38px); }
 .vsc-side[data-compact="1"] .vsc-name { font-size: clamp(10.5px, 3vw, 12.5px); }
-.vsc-side[data-compact="1"] .vsc-squad-t { font-size: 8.5px; }
-.vsc-side[data-compact="1"] .vsc-country,
-.vsc-side[data-compact="1"] .vsc-meta-dot { display: none; }
-.vsc-side[data-compact="1"] .vsc-rank { font-size: 9.5px; }
-.vsc-side[data-compact="1"] .vsc-rank .vsc-ico { width: 9px; height: 9px; }
-
-.vsc-orb {
-  position: relative;
-  flex: none;
-  width: clamp(40px, 12vw, 54px);
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-}
-
-.vsc-aura {
-  position: absolute;
-  inset: -12%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, var(--vsc-wash), transparent 74%);
-}
 
 .vsc-face {
-  position: relative;
-  width: 82%;
-  height: 82%;
+  flex: none;
+  width: clamp(40px, 12vw, 52px);
+  aspect-ratio: 1;
   display: grid;
   place-items: center;
   border-radius: 50%;
   overflow: hidden;
   background: linear-gradient(180deg, #26324B 0%, #121926 100%);
-  box-shadow: inset 0 0 0 2px var(--vsc-tint), 0 6px 14px -6px rgba(0, 0, 0, .85);
+  box-shadow: inset 0 0 0 2px var(--vsc-tint);
 }
 
 .vsc-av { width: 100%; height: 100%; object-fit: cover; }
+.vsc-initial { font-size: clamp(16px, 4.8vw, 21px); font-weight: 900; line-height: 1; color: var(--vsc-ink); }
 
-.vsc-initial {
-  font-size: clamp(16px, 4.8vw, 21px);
-  font-weight: 900;
-  line-height: 1;
-  color: var(--vsc-ink);
-}
+/* the machine's honest emblem: a crisp, monochrome glyph, never a cartoon face */
+.vsc-bot-ico { width: 62%; height: 62%; color: var(--vsc-ink); opacity: .9; }
+.vsc-side[data-kind="bot"] .vsc-face { background: linear-gradient(180deg, #2A2F3A 0%, #151922 100%); }
 
-/* the collision ring, punched out of the portrait when the crest lands */
-.vsc-shock {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid var(--vsc-tint);
-  opacity: 0;
-}
-
-/* the flag: a circular micro-badge sitting on the portrait's bottom-right corner, never a row */
-.vsc-flag {
-  position: absolute;
-  right: 1%;
-  bottom: 1%;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #060A11;
-  box-shadow: 0 0 0 2px var(--vsc-tint), 0 4px 8px -3px rgba(0, 0, 0, .9);
-}
-
-.vsc-flag-fp { --fp-d: 14px; }
-.vsc-flag-fp .fp-chip { border-radius: 50%; font-size: 6px; letter-spacing: 0; }
-.vsc-flag-fp .fp-img { box-shadow: none; }
-
-.vsc-side[data-compact="1"] .vsc-flag { width: 15px; height: 15px; box-shadow: 0 0 0 1.5px var(--vsc-tint), 0 3px 6px -3px rgba(0, 0, 0, .9); }
-.vsc-side[data-compact="1"] .vsc-flag-fp { --fp-d: 12px; }
-.vsc-side[data-compact="1"] .vsc-flag-fp .fp-chip { font-size: 5px; }
-
-.vsc-id {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-/* name and TIQ on one line: the number is the ladder's, right-aligned where a score belongs */
+.vsc-id { flex: 1 1 auto; min-width: 0; display: grid; gap: 3px; }
 .vsc-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 .vsc-name {
@@ -270,7 +104,6 @@
   margin: 0;
   font-size: clamp(12.5px, 3.5vw, 15px);
   font-weight: 900;
-  letter-spacing: -.01em;
   line-height: 1.15;
   overflow: hidden;
   white-space: nowrap;
@@ -287,406 +120,118 @@
   color: var(--vsc-gold);
   font-variant-numeric: tabular-nums;
 }
+.vsc-ico { flex: none; width: 10px; height: 10px; }
+.vsc-rank .vsc-ico { color: var(--vsc-gold); }
+.vsc-shield { color: var(--vsc-tint); opacity: .9; }
 
-.vsc-rank .vsc-ico { width: 10px; height: 10px; color: var(--vsc-gold); }
-
-/* squad: one shield, one name. The crest block and its initials are gone. */
 .vsc-squad { display: flex; align-items: center; gap: 4px; min-width: 0; }
-
-.vsc-shield { width: 10px; height: 10px; color: var(--vsc-tint); opacity: .9; }
-
-.vsc-squad-t {
+.vsc-squad-t,
+.vsc-country,
+.vsc-sub-t {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 9.5px;
-  font-weight: 700;
-  color: var(--vsc-ink-2);
+  line-height: 1.2;
 }
+.vsc-squad-t { font-size: 9.5px; font-weight: 700; color: var(--vsc-ink-2); }
+.vsc-country { font-size: 8px; font-weight: 700; color: rgba(203, 213, 225, .55); }
+.vsc-sub-t { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--vsc-ink-2); }
+.vsc-meta { display: flex; align-items: center; min-width: 0; }
 
-.vsc-squad[data-kind="lone"] .vsc-squad-t { color: var(--vsc-champagne); font-weight: 800; }
-
-/* the closing line of a card: the nation's name, held to the same height on every seat */
-.vsc-meta { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 10px; overflow: hidden; }
-
-.vsc-meta-dot { flex: none; width: 2px; height: 2px; border-radius: 50%; background: rgba(203, 213, 225, .34); }
-
-.vsc-country {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 8px;
-  font-weight: 700;
-  color: var(--vsc-ink-3);
-}
-
-.vsc-ico { flex: none; }
-
-/* ---- the crest, on the seam between the rows ---- */
-.vsc-core {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 4px;
-  padding: 1px 0;
-}
-
-.vsc-crest-holder { position: relative; display: grid; place-items: center; }
-
-.vsc-ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 54px;
-  height: 54px;
-  translate: -50% -50%;
-  border-radius: 50%;
-  border: 3px solid rgba(248, 250, 252, .88);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.vsc-ring--late { border-color: rgba(56, 189, 248, .7); }
-
+/* ---- the crest: a plain word, not an animated machine ---- */
+.vsc-core { display: grid; justify-items: center; gap: 3px; padding: 2px 0; }
 .vsc-vs {
-  font-size: clamp(36px, 10.5vw, 54px);
+  font-size: clamp(32px, 9vw, 46px);
   font-weight: 900;
   font-style: italic;
-  line-height: .92;
-  letter-spacing: -.03em;
-  background: linear-gradient(178deg, #FFF6D8 4%, var(--vsc-gold) 34%, #C88A16 68%, #FFF1C2 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 10px rgba(252, 211, 77, .45)) drop-shadow(0 4px 8px rgba(0, 0, 0, .85));
-  opacity: 0;
+  line-height: .95;
+  letter-spacing: -.02em;
+  color: var(--vsc-gold);
 }
-
-/* three and four seats get the format mark instead of the duel's crest, so a four-way is never
-   read as a straight pair */
-.vsc-vs[data-shape="multi"] {
-  font-style: normal;
-  font-size: clamp(26px, 8vw, 38px);
-  letter-spacing: -.01em;
-}
-
+.vsc-vs[data-shape="multi"] { font-style: normal; font-size: clamp(24px, 7vw, 34px); }
 .vsc-shape {
   font-size: 7.5px;
   font-weight: 900;
-  letter-spacing: .22em;
-  text-transform: uppercase;
+  letter-spacing: .18em;
   text-align: center;
   color: var(--vsc-ink-2);
-  opacity: 0;
 }
 
-.vsc-crest-bolt {
-  position: absolute;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  translate: 0 -50%;
-  color: var(--vsc-cyan);
-  opacity: 0;
-}
-
-.vsc-crest-bolt--l { left: -18px; rotate: 180deg; color: var(--vsc-cyan); }
-.vsc-crest-bolt--r { right: -18px; color: var(--vsc-crimson); }
-
-/* ---- the stakes: one glass pill, no nested blocks ---- */
+/* one compact label pill, no blur, no glass */
 .vsc-stakes {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 7px;
   max-width: 100%;
-  padding: 5px 12px;
+  padding: 4px 11px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .07);
   border: 1px solid rgba(255, 255, 255, .14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 10px 22px -18px rgba(0, 0, 0, .9);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
   font-size: 8px;
   font-weight: 800;
-  letter-spacing: .13em;
+  letter-spacing: .1em;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   color: var(--vsc-ink-2);
-  opacity: 0;
 }
-
 .vsc-stakes-mode { color: var(--vsc-ink); font-weight: 900; }
-.vsc-stakes-tier { color: #FFA9BE; }
-.vsc-stakes-seats { color: var(--vsc-ink-2); }
+.vsc-stakes-seats { color: var(--vsc-ink-2); font-variant-numeric: tabular-nums; }
 .vsc-stakes-dot { flex: none; width: 3px; height: 3px; border-radius: 50%; background: rgba(226, 232, 240, .32); }
-.vsc-stakes-gap { color: var(--vsc-gold); letter-spacing: .06em; }
 
-/* ---- the footer: the war cry, then the skip key, both holding the bottom ---- */
-.vsc-foot { display: grid; justify-items: center; gap: 9px; }
-
-.vsc-banner { min-height: 2.6em; display: grid; place-items: center; opacity: 0; }
-
-.vsc-line {
-  margin: 0;
-  font-size: clamp(9.5px, 3vw, 11.5px);
-  font-weight: 900;
-  letter-spacing: .04em;
-  line-height: 1.35;
-  text-align: center;
-  text-transform: uppercase;
-  color: var(--vsc-ink);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .85);
-  transition: opacity 170ms ease, translate 170ms ease;
-}
-
-.vsc-banner.is-swapping .vsc-line { opacity: 0; translate: 0 6px; }
-
+.vsc-foot { display: grid; justify-items: center; padding-top: 8px; }
 .vsc-skip {
   margin: 0;
   text-align: center;
   font-size: 8px;
   font-weight: 700;
-  letter-spacing: .24em;
+  letter-spacing: .2em;
   text-transform: uppercase;
-  color: var(--vsc-ink-3);
-  opacity: 0;
+  color: rgba(203, 213, 225, .5);
 }
 
-/* ---- the timeline ---- */
-.vsc-side[data-slam="l"] { transform: translate3d(-112%, 14%, 0) rotate(-3deg); opacity: 0; }
-.vsc-side[data-slam="r"] { transform: translate3d(112%, -14%, 0) rotate(3deg); opacity: 0; }
+/* ---- the short timeline ---- */
+.vsc-side[data-slam="l"] { transform: translate3d(-8%, 0, 0); opacity: 0; }
+.vsc-side[data-slam="r"] { transform: translate3d(8%, 0, 0); opacity: 0; }
+.vsc.is-in .vsc-side { animation: vsc-in 180ms ease-out both; }
+.vsc.is-in .vsc-core { opacity: 0; }
+.vsc.is-clash .vsc-core { animation: vsc-in 130ms ease-out both; }
+.vsc.is-clash .vsc-foot { animation: vsc-in 130ms ease-out 40ms both; }
+.vsc.is-leaving { background: transparent; animation: vsc-veil-out 140ms ease-in both; }
+.vsc.is-leaving .vsc-grid,
+.vsc.is-leaving .vsc-foot { animation: vsc-out 140ms ease-in both; }
+.vsc.is-leaving.is-skipped { animation-duration: 100ms; }
 
-.vsc.is-in .vsc-side[data-slam="l"] { animation: vsc-slam-l 350ms cubic-bezier(.14, 1.16, .32, 1) both; }
-.vsc.is-in .vsc-side[data-slam="r"] { animation: vsc-slam-r 350ms cubic-bezier(.14, 1.16, .32, 1) 30ms both; }
-.vsc.is-in .vsc-seam { animation: vsc-seam-draw 340ms ease-out 110ms both; }
-.vsc.is-in .vsc-vs { animation: vsc-land 420ms cubic-bezier(.2, 1.32, .28, 1) 300ms both; }
-.vsc.is-in .vsc-shape { animation: vsc-rise 300ms ease-out 380ms both; }
-.vsc.is-in .vsc-aura-you,
-.vsc.is-in .vsc-aura-rival { animation: vsc-breathe 2400ms ease-in-out infinite; }
-.vsc.is-in .vsc-aura-rival { animation-delay: -1200ms; }
-
-/* the collision: shockwave, shake, bolts, then the stakes and the cry */
-.vsc.is-clash .vsc-ring { animation: vsc-ring-out 560ms cubic-bezier(.16, .84, .3, 1) both; }
-.vsc.is-clash .vsc-ring--late { animation-delay: 110ms; }
-.vsc.is-clash .vsc-shock { animation: vsc-ring-out 520ms ease-out both; }
-.vsc.is-clash .vsc-shake { animation: vsc-shake 340ms cubic-bezier(.36, .07, .19, .97) both; }
-.vsc.is-clash .vsc-seam { animation: vsc-seam-flash 460ms ease-out both; }
-.vsc.is-clash .vsc-crest-bolt { animation: vsc-bolt-in 380ms ease-out 60ms both; }
-.vsc.is-clash .vsc-stakes { animation: vsc-rise 300ms ease-out 130ms both; }
-.vsc.is-clash .vsc-banner { animation: vsc-rise 320ms ease-out 230ms both; }
-.vsc.is-clash .vsc-skip { animation: vsc-rise 300ms ease-out 650ms both; }
-
-/* ---- the hand-off: the crest breaks, the cards peel apart, the board is already under them ---- */
-.vsc.is-leaving { background: transparent; animation: vsc-veil-out var(--vsc-exit) ease-in both; }
-.vsc.is-leaving .vsc-side:not(.vsc-side--you) { animation: vsc-part-r var(--vsc-exit) cubic-bezier(.5, 0, .75, 0) both; }
-.vsc.is-leaving .vsc-side--you { animation: vsc-part-l var(--vsc-exit) cubic-bezier(.5, 0, .75, 0) both; }
-.vsc.is-leaving .vsc-core { animation: vsc-shatter var(--vsc-exit) cubic-bezier(.5, 0, .75, 0) both; }
-.vsc.is-leaving .vsc-banner,
-.vsc.is-leaving .vsc-skip { animation: vsc-fade-out 180ms ease-in both; }
-.vsc.is-leaving .vsc-seam { animation: vsc-seam-out var(--vsc-exit) ease-in both; }
-.vsc.is-leaving.is-skipped { --vsc-exit: 150ms; }
-
-/* ---- reduced motion: the information, none of the movement ---- */
+/* reduced motion: the information, none of the movement */
 .vsc.is-quiet,
 .vsc.is-quiet * { animation: none !important; transition: none !important; }
-.vsc.is-quiet .vsc-side { transform: none; opacity: 1; }
-.vsc.is-quiet .vsc-vs,
-.vsc.is-quiet .vsc-shape,
-.vsc.is-quiet .vsc-stakes,
-.vsc.is-quiet .vsc-banner,
-.vsc.is-quiet .vsc-skip { opacity: 1; }
-.vsc.is-quiet .vsc-seam { scale: 1 1; opacity: .8; }
+.vsc.is-quiet .vsc-side,
+.vsc.is-quiet .vsc-core,
+.vsc.is-quiet .vsc-foot { opacity: 1; transform: none; }
 
-/* ---- the pearl finish: the same clash, handled in ivory for the board it hands over to ---- */
 html[data-theme="light"] .vsc {
   --vsc-ink: #0F1725;
   --vsc-ink-2: rgba(23, 33, 49, .74);
-  --vsc-ink-3: rgba(42, 54, 72, .6);
   --vsc-plate: linear-gradient(180deg, rgba(255, 255, 255, .97) 0%, rgba(226, 234, 244, .97) 100%);
-  --vsc-hair: rgba(16, 24, 38, .12);
-  --vsc-base: #DCE5F1;
-  --vsc-veil: radial-gradient(120% 92% at 50% 46%, rgba(238, 244, 251, .99) 0%, rgba(199, 212, 230, 1) 100%);
+  background: linear-gradient(180deg, #E7EEF8 0%, #D5DFEC 100%);
   --vsc-gold: #96601A;
-  --vsc-champagne: #7A5A16;
-  --vsc-cyan: #0C7BB8;
-  --vsc-crimson: #D31F4C;
-  --vsc-violet: #6D4BC4;
 }
-
 html[data-theme="light"] .vsc-initial { color: #0F1725; }
 html[data-theme="light"] .vsc-face { background: linear-gradient(180deg, #DCE5F0 0%, #C2CCDB 100%); }
-html[data-theme="light"] .vsc-flag { background: #F5F8FC; }
-html[data-theme="light"] .vsc-side[data-accent="cyan"] {
-  --vsc-edge: rgba(12, 123, 184, .5);
-  --vsc-wash: rgba(12, 123, 184, .1);
-}
-html[data-theme="light"] .vsc-side[data-accent="crimson"] {
-  --vsc-edge: rgba(211, 31, 76, .45);
-  --vsc-wash: rgba(211, 31, 76, .1);
-}
-html[data-theme="light"] .vsc-side[data-accent="violet"] {
-  --vsc-edge: rgba(109, 75, 196, .42);
-  --vsc-wash: rgba(109, 75, 196, .1);
-}
-html[data-theme="light"] .vsc-side[data-accent="obsidian"] {
-  --vsc-tint: #48566B;
-  --vsc-edge: rgba(72, 86, 107, .32);
-  --vsc-wash: rgba(72, 86, 107, .07);
-}
-html[data-theme="light"] .vsc-side--you {
-  box-shadow:
-    inset 0 0 0 1.5px rgba(12, 123, 184, .6),
-    0 0 20px -8px rgba(12, 123, 184, .55),
-    0 18px 34px -26px rgba(16, 24, 38, .45);
-}
-html[data-theme="light"] .vsc-stakes {
-  background: rgba(255, 255, 255, .58);
-  border-color: rgba(16, 24, 38, .14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 10px 22px -18px rgba(16, 24, 38, .4);
-}
-html[data-theme="light"] .vsc-stakes-tier { color: #B3123C; }
-html[data-theme="light"] .vsc-stakes-dot { background: rgba(30, 41, 59, .34); }
+html[data-theme="light"] .vsc-side[data-kind="bot"] .vsc-face { background: linear-gradient(180deg, #D3DAE5 0%, #B9C3D2 100%); }
+html[data-theme="light"] .vsc-bot-ico { color: #0F1725; }
+html[data-theme="light"] .vsc-side--you { box-shadow: inset 0 0 0 1.5px rgba(12, 123, 184, .6), 0 10px 22px -18px rgba(16, 24, 38, .5); }
+html[data-theme="light"] .vsc-stakes { background: rgba(255, 255, 255, .68); border-color: rgba(16, 24, 38, .14); }
+html[data-theme="light"] .vsc-country { color: rgba(42, 54, 72, .6); }
 
-/* the pearl stage has to fight its own light: the hues go saturated and the glows go dark, or a
-   white bloom around small dark type simply erases it */
-html[data-theme="light"] .vsc-aura-rival {
-  background:
-    radial-gradient(60% 60% at 72% 30%, rgba(211, 31, 76, .28), transparent 72%),
-    radial-gradient(50% 50% at 20% 10%, rgba(140, 12, 48, .18), transparent 74%);
-}
-
-html[data-theme="light"] .vsc-aura-you {
-  background:
-    radial-gradient(60% 60% at 28% 70%, rgba(12, 123, 184, .24), transparent 72%),
-    radial-gradient(50% 50% at 84% 94%, rgba(150, 96, 26, .18), transparent 74%);
-}
-
-html[data-theme="light"] .vsc-grain {
-  background-image: repeating-linear-gradient(112deg,
-    rgba(16, 24, 38, .03) 0 2px, transparent 2px 9px);
-}
-
-html[data-theme="light"] .vsc-seam {
-  background: linear-gradient(90deg,
-    transparent 0%, rgba(12, 123, 184, .8) 18%, rgba(30, 41, 59, .85) 50%,
-    rgba(211, 31, 76, .85) 82%, transparent 100%);
-  box-shadow: 0 0 14px 2px rgba(12, 123, 184, .24);
-}
-
-html[data-theme="light"] .vsc-line { text-shadow: 0 1px 0 rgba(255, 255, 255, .7); }
-html[data-theme="light"] .vsc-skip { color: rgba(30, 41, 59, .72); }
-html[data-theme="light"] .vsc-vs {
-  background: linear-gradient(178deg, #C08415 4%, #8A5A05 40%, #5E3A02 72%, #A9761A 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .8)) drop-shadow(0 6px 12px rgba(94, 58, 2, .4));
-}
-
-/* ---- keyframes ---- */
 @keyframes vsc-veil-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes vsc-veil-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes vsc-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes vsc-in { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: none; } }
+@keyframes vsc-out { from { opacity: 1; } to { opacity: 0; } }
 
-@keyframes vsc-slam-r {
-  0% { transform: translate3d(112%, -14%, 0) rotate(3deg); opacity: 0; }
-  60% { opacity: 1; }
-  100% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
-}
-
-@keyframes vsc-slam-l {
-  0% { transform: translate3d(-112%, 14%, 0) rotate(-3deg); opacity: 0; }
-  60% { opacity: 1; }
-  100% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
-}
-
-@keyframes vsc-land {
-  0% { transform: scale(3.1) rotate(-9deg); opacity: 0; }
-  38% { opacity: 1; }
-  72% { transform: scale(.94) rotate(1.5deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes vsc-ring-out {
-  0% { transform: scale(.3); opacity: .95; }
-  100% { transform: scale(3.6); opacity: 0; }
-}
-
-@keyframes vsc-shake {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  18% { transform: translate3d(-6px, 3px, 0) rotate(-.5deg); }
-  36% { transform: translate3d(5px, -4px, 0) rotate(.4deg); }
-  56% { transform: translate3d(-4px, 2px, 0); }
-  76% { transform: translate3d(3px, -1px, 0); }
-}
-
-@keyframes vsc-seam-draw {
-  from { scale: 0 1; opacity: 0; }
-  to { scale: 1 1; opacity: .8; }
-}
-
-@keyframes vsc-seam-flash {
-  0% { scale: 1 1; opacity: 1; height: 7px; filter: drop-shadow(0 0 14px rgba(255, 255, 255, .9)); }
-  45% { opacity: 1; }
-  100% { scale: 1 1; opacity: .8; height: 2px; filter: none; }
-}
-
-@keyframes vsc-seam-out { from { opacity: .8; } to { opacity: 0; } }
-
-@keyframes vsc-bolt-in {
-  0% { opacity: 0; scale: .4; }
-  55% { opacity: 1; scale: 1.3; }
-  100% { opacity: .85; scale: 1; }
-}
-
-@keyframes vsc-rise {
-  from { opacity: 0; transform: translate3d(0, 12px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes vsc-breathe {
-  0%, 100% { opacity: .8; }
-  50% { opacity: 1; }
-}
-
-@keyframes vsc-part-r {
-  from { transform: translate3d(0, 0, 0); opacity: 1; }
-  to { transform: translate3d(46%, -70%, 0) scale(.86); opacity: 0; }
-}
-
-@keyframes vsc-part-l {
-  from { transform: translate3d(0, 0, 0); opacity: 1; }
-  to { transform: translate3d(-46%, 70%, 0) scale(.86); opacity: 0; }
-}
-
-@keyframes vsc-shatter {
-  0% { transform: scale(1); opacity: 1; filter: blur(0); }
-  30% { transform: scale(1.16); opacity: 1; }
-  100% { transform: scale(2.7); opacity: 0; filter: blur(7px); }
-}
-
-/* the narrow phone: the cards lose their padding, not their contents */
 @media (max-width: 360px) {
   .vsc-shake { padding-inline: 10px; }
   .vsc-side { padding: 8px 9px; gap: 8px; }
-  .vsc-side[data-compact="1"] { padding: 6px 7px; gap: 6px; }
-  .vsc-row { gap: 6px; }
-  .vsc-grid { gap: 6px; }
-  .vsc-banner { min-height: 2.4em; }
-}
-
-/* a short phone: the crest and the footer tighten, the cards keep their three lines */
-@media (max-height: 640px) {
-  .vsc-grid { gap: 5px; }
-  .vsc-core { gap: 2px; }
-  .vsc-vs { font-size: clamp(30px, 9vw, 44px); }
-  .vsc-vs[data-shape="multi"] { font-size: clamp(24px, 7.5vw, 32px); }
-  .vsc-banner { min-height: 2.2em; }
-  .vsc-foot { gap: 6px; }
+  .vsc-grid, .vsc-row { gap: 6px; }
 }

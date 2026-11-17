@@ -27,8 +27,7 @@
 import type { Action, GameState } from './rules';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
 import { isPostChatPreset, type PostChatLine } from './data/postchat';
-import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
-import { profile } from './storage';
+import { chime, myTier, roomSocketUrl, tierOf, type MindTier, type OpponentData } from './matchmaking';
 import {
   FORMAT_CAPACITY, FORMAT_LINE, FORMAT_MODE, assignTeam, defaultTeam, isLobbyFormat, reflowSeats,
   teamCapacity,
@@ -48,6 +47,10 @@ export interface LobbySeat {
   initial: string;
   /** Telegram's profile photo for this seat, when the client or a frame carries one. */
   avatarUrl?: string | null;
+  /** Real profile metadata relayed by the room; empty when the player never set one. */
+  tiq?: number;
+  nation?: string | null;
+  guild?: string | null;
   host: boolean;
   /** True when the machine holds the seat (a backfilled bot, or one the host added). */
   bot: boolean;
@@ -199,6 +202,12 @@ export interface LobbyRaceSeat {
   name: string;
   bot: boolean;
   team: 0 | 1;
+  /** Real profile metadata, already held by the room when the board launched. */
+  avatarUrl?: string | null;
+  tiq?: number;
+  nation?: string | null;
+  guild?: string | null;
+  difficulty?: string;
   /** The room's verdict on this seat's VIP entitlement. */
   vip: boolean;
   /** The chair was struck from the race after its player disconnected. */
@@ -425,6 +434,9 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
       name,
       initial: faceOf(name),
       avatarUrl: avatar ?? (at === mine ? localFace : null),
+      tiq: typeof s.tiq === 'number' ? s.tiq : undefined,
+      nation: typeof s.flag === 'string' && s.flag ? s.flag : null,
+      guild: typeof s.guild === 'string' && s.guild ? s.guild : null,
       host: s.host === true || s.isHost === true,
       bot: s.bot === true,
       team: s.team === 1 ? 1 : 0,
@@ -738,6 +750,12 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             name: typeof s.name === 'string' ? s.name : `Seat ${i + 1}`,
             bot: s.bot === true,
             team: s.team === 1 ? 1 : 0,
+            avatarUrl: typeof s.avatar === 'string' && /^https?:\/\//i.test(s.avatar) ? s.avatar : null,
+            tiq: typeof s.tiq === 'number' ? s.tiq : undefined,
+            nation: typeof s.nation === 'string' && s.nation ? s.nation
+              : typeof s.flag === 'string' && s.flag ? s.flag : null,
+            guild: typeof s.guild === 'string' && s.guild ? s.guild : null,
+            difficulty: typeof s.difficulty === 'string' ? s.difficulty : undefined,
             vip: s.vip === true,
             left: s.left === true,
           };
@@ -757,11 +775,16 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           opponent: {
             id: rival?.id ?? 'rival',
             name: rival?.name ?? 'Rival',
-            tiq: myTiq(),
-            tier: myTier(),
-            avatarUrl: null,
+            /* the rival's own metadata, never this client's — a room card must not inherit my TIQ
+               or my flag just because the seat omitted one */
+            tiq: rival?.tiq ?? 0,
+            tier: rival?.bot ? tierOf(rival.tiq ?? 0) : myTier(),
+            avatarUrl: rival?.avatarUrl ?? null,
             initial: faceOf(rival?.name ?? 'R'),
-            flag: profile.country ?? null,
+            flag: rival?.nation ?? null,
+            nation: rival?.nation ?? null,
+            guild: rival?.guild ?? null,
+            isBot: rival?.bot === true,
             vip: rival?.vip === true,
           },
           send: (a) => send({ type: 'MOVE', action: a }),

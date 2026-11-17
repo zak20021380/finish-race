@@ -200,6 +200,11 @@ export interface Seat {
   takenOver: boolean;
   /** False once a person's socket drops. A bot seat is always connected. */
   connected: boolean;
+  /** Real profile metadata, copied from the seat that joined. Empty when never supplied. */
+  avatarUrl?: string | null;
+  nation?: string | null;
+  guild?: string | null;
+  tiq?: number | null;
 }
 
 export interface Room {

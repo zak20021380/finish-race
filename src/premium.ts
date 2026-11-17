@@ -28,6 +28,7 @@ import {
   vipPlanOf, vipPlanWithConfig,
   type VipPlan, type VipPlanConfig, type VipPlanId,
 } from '../shared/vip';
+import telegramStarsUrl from './assets/images/telegram_stars.png';
 
 /* ---------- entitlement state ---------- */
 
@@ -344,6 +345,16 @@ function ico(href: string, cls = 'ico'): SVGSVGElement {
   return svg;
 }
 
+/** The authentic Telegram Stars PNG, bundled and hashed by Vite — never a glyph or an emoji. */
+function vipStarIcon(): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = telegramStarsUrl;
+  img.className = 'vip-star-icon';
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  return img;
+}
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -473,7 +484,7 @@ function buildPlans(): void {
     days.setAttribute('dir', 'ltr');
 
     const price = el('span', 'vip-plan-price');
-    price.append(ico('#i-star-3d', 'vip-plan-star'), el('b', 'vip-plan-price-n', digits(plan.stars)));
+    price.append(vipStarIcon(), el('b', 'vip-plan-price-n', digits(plan.stars)));
     price.setAttribute('dir', 'ltr');
 
     button.append(days, price);
@@ -687,6 +698,7 @@ export function initVipStore(): void {
   const status = $<HTMLElement>('vip-status');
   const cta = $<HTMLButtonElement>('vip-cta');
   const ctaT = $<HTMLElement>('vip-cta-t');
+  const ctaStar = $<HTMLImageElement>('vip-cta-star');
   const scrim = $<HTMLElement>('vip-scrim');
   const homePill = $<HTMLButtonElement>('home-vip');
   const homePillT = $<HTMLElement>('home-vip-t');
@@ -705,6 +717,8 @@ export function initVipStore(): void {
     sheet, scrim, card, close, kicker, title, sub, plans, feats, active, activeT, activeD,
     status, cta, ctaT, homePill, homePillT, homePillD, arenaPill, arenaPillT, arenaPillBadge,
   };
+  /* the CTA's Star is a static <img> in the markup; point it at Vite's hashed asset URL */
+  if (ctaStar) ctaStar.src = telegramStarsUrl;
 
   close.addEventListener('click', () => closeVipSheet());
   scrim.addEventListener('click', () => closeVipSheet());

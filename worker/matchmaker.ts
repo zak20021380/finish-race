@@ -235,6 +235,8 @@ interface Waiter {
   flag: string;
   /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to a relic challenger. */
   avatar: string;
+  /** The real guild/squad handle this seat arrived with, or `''`. Relayed to the face-off. */
+  guild: string;
   /** The player asked for a wider net after a quiet queue. */
   wide: boolean;
   /** When they entered the queue: the order, and who takes side 0. */
@@ -290,6 +292,8 @@ interface RoomMember {
   flag: string;
   /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to the other seats. */
   avatar: string;
+  /** The real guild/squad handle this seat arrived with, or `''`. Relayed to the face-off. */
+  guild: string;
   /** The VIP entitlement behind this seat, decided by `authenticate` from the signed payload. */
   premium: boolean;
   /**
@@ -380,6 +384,8 @@ interface StoredMember {
   tier: MindTier;
   flag: string;
   avatar: string;
+  /** The real guild/squad handle this seat held, persisted with the roster. */
+  guild: string;
   /** The VIP entitlement this seat held: persisted so a rehydrated room keeps its gold bubbles. */
   premium: boolean;
   busy: boolean;
@@ -1872,6 +1878,9 @@ function foundMessage(
       tiq: opponent.tiq,
       tier: opponent.tier,
       flag: opponent.flag,
+      nation: opponent.flag,
+      guild: opponent.guild,
+      isBot: false,
       avatar: opponent.avatar,
       vip: opponent.premium,
       vipUntil: opponent.vipUntil,
@@ -1898,6 +1907,9 @@ function duelStartMessage(
       tiq: opponent.tiq,
       tier: opponent.tier,
       flag: opponent.flag,
+      nation: opponent.flag,
+      guild: opponent.guild,
+      isBot: false,
       avatar: opponent.avatar,
       vip: opponent.premium,
       vipUntil: opponent.vipUntil,
@@ -6186,6 +6198,7 @@ export class MatchmakerDO {
       tier: identity.tier,
       flag: identity.flag,
       avatar: identity.player.avatar,
+      guild: identity.squad,
       wide,
       joinedAt: Date.now(),
       sizes,
@@ -6767,6 +6780,7 @@ export class MatchmakerDO {
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      guild: identity.squad,
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
@@ -6883,6 +6897,7 @@ export class MatchmakerDO {
     room.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      guild: identity.squad,
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
@@ -7108,6 +7123,8 @@ export class MatchmakerDO {
         name: m.name,
         avatar: m.avatar,
         flag: m.flag,
+        tiq: m.tiq,
+        guild: m.guild,
         host: i === live.hostSeat,
         isHost: i === live.hostSeat,
         bot: false,
@@ -7368,6 +7385,7 @@ export class MatchmakerDO {
           tier: m.tier,
           flag: m.flag,
           avatar: m.avatar,
+          guild: m.guild,
           premium: m.premium,
           busy: m.busy,
           droppedAt: m.connected ? 0 : m.droppedAt,
@@ -7457,6 +7475,7 @@ export class MatchmakerDO {
             ? m.tier : 'rookie',
           flag: typeof m.flag === 'string' ? m.flag : '',
           avatar: typeof m.avatar === 'string' ? m.avatar : '',
+          guild: typeof m.guild === 'string' ? m.guild : '',
           premium: m.premium === true,
           connected: false,
           droppedAt: typeof m.droppedAt === 'number' && m.droppedAt > 0 ? m.droppedAt : now,
@@ -7738,6 +7757,13 @@ export class MatchmakerDO {
         bot: isAutomated(roster, i),
         team: live.teams[i] ?? 0,
         difficulty: difficultyFor(roster, i),
+        /* Real seat metadata, relayed from the authenticated member — bots hold no member record,
+           so their card shows only the honest BOT label and this difficulty, never a fake profile. */
+        avatar: live.members[i]?.avatar ?? '',
+        tiq: live.members[i]?.tiq ?? 0,
+        flag: live.members[i]?.flag ?? '',
+        nation: live.members[i]?.flag ?? '',
+        guild: live.members[i]?.guild ?? '',
         /* a chair already struck from the race: a returning spectator paints it inert at once */
         left: !!live.driver && isLeft(live.driver.state, i),
         /* the seat's entitlement, as the room judged it — bots and empty chairs are never VIP */

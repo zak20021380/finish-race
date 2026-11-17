@@ -3626,9 +3626,10 @@ interface StartSetup {
 }
 
 /**
- * The seats the face-off puts on the other side of the crest. A live pairing brings its own rival;
- * a room's machine seats and a plain bot race are dressed by the clash itself, because "Hard bot"
- * is a setting and "Kestrel of the Obsidian Cortex, IR" is a reason to win.
+ * The seats the face-off puts on the other side of the crest. Every field here is metadata the
+ * room or the matchmaker already holds in memory — a person's real profile or a machine's real
+ * difficulty. Nothing is synthesised for the card: a bot is labelled BOT, a missing guild or
+ * nation is simply left off, and no name, flag or rating is ever invented.
  */
 function clashRivals(): VsRival[] {
   const out: VsRival[] = [];
@@ -3637,28 +3638,42 @@ function clashRivals(): VsRival[] {
       for (const seat of active.seats) {
         if (seat.side === localSide) continue;
         out.push(seat.bot
-          ? { id: `${active.code}:${seat.side}`, bot: room ? difficultyFor(room, seat.side) : difficulty }
-          : { id: seat.id, name: seat.name });
+          ? {
+            id: `${active.code}:${seat.side}`,
+            isBot: true,
+            difficulty: room ? difficultyFor(room, seat.side) : difficulty,
+          }
+          : {
+            id: seat.id, name: seat.name, avatarUrl: seat.avatarUrl,
+            nation: seat.nation, guild: seat.guild, tiq: seat.tiq,
+          });
       }
     }
     if (!out.length) {
       const o = active.opponent;
-      out.push({ id: o.id, name: o.name, avatarUrl: o.avatarUrl, country: o.flag ?? null, tiq: o.tiq });
+      out.push({
+        id: o.id, name: o.name, avatarUrl: o.avatarUrl,
+        nation: o.nation ?? o.flag ?? null, guild: o.guild, tiq: o.tiq, isBot: o.isBot === true,
+      });
     }
     return out;
   }
   if (room) {
     for (let p = 0; p < sizes.length; p++) {
       if (p === localSide) continue;
+      const seat = room.seats[p];
       out.push(isAutomated(room, p)
-        ? { id: `${room.code}:${p}`, bot: difficultyFor(room, p) }
-        : { id: `seat:${p}`, name: seatName(room, p) });
+        ? { id: `${room.code}:${p}`, isBot: true, difficulty: difficultyFor(room, p) }
+        : {
+          id: seat?.id || `seat:${p}`, name: seatName(room, p),
+          nation: seat?.nation, guild: seat?.guild, tiq: seat?.tiq,
+        });
     }
     return out;
   }
   for (let p = 0; p < sizes.length; p++) {
     if (p === localSide) continue;
-    out.push({ id: `bot:${p}`, bot: difficulty });
+    out.push({ id: `bot:${p}`, isBot: true, difficulty });
   }
   return out;
 }
@@ -3873,9 +3888,7 @@ function startGame(setup: StartSetup) {
   const rivals = wantsTutorial ? [] : clashRivals();
   showVsClash(rivals, {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
-    tier: rivals.find((r) => r.bot)?.bot ?? undefined,
     seats: sizes.length,
-    nonce: raceSeed,
   }, reveal);
 }
 
@@ -5605,7 +5618,10 @@ function watchPartyLabel(): void {
  */
 function roomFromRoster(
   code: string,
-  roster: ReadonlyArray<{ name: string; bot: boolean } | null>,
+  roster: ReadonlyArray<{
+    name: string; bot: boolean; avatarUrl?: string | null;
+    nation?: string | null; guild?: string | null; tiq?: number; difficulty?: string;
+  } | null>,
 ): Room {
   let last = roster.length - 1;
   while (last >= 0 && !roster[last]) last--;
@@ -5619,9 +5635,14 @@ function roomFromRoster(
         kind: s && !s.bot ? 'human' as const : 'bot' as const,
         id: s && !s.bot ? `seat:${i}` : `bot:${i}`,
         name: s ? s.name : `Bot${i > 1 ? ` ${i}` : ''}`,
-        difficulty: menuState.difficulty,
+        difficulty: s?.difficulty === 'easy' || s?.difficulty === 'normal' || s?.difficulty === 'hard'
+          ? s.difficulty : menuState.difficulty,
         takenOver: false,
         connected: true,
+        avatarUrl: s?.avatarUrl ?? null,
+        nation: s?.nation ?? null,
+        guild: s?.guild ?? null,
+        tiq: s?.tiq ?? null,
       };
     }),
     waitMs: ROOM_WAIT_MS,

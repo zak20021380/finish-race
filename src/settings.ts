@@ -161,6 +161,20 @@ export function onLang(w: LangWatcher): () => void {
    attributes so a language switch repaints without a reload. */
 export const STRINGS: Record<LangCode, Record<string, string>> = {
   en: {
+    /* ---- pre-match face-off: honest seats only — real people or a labelled machine ---- */
+    vsYou: 'YOU',
+    vsRival: 'RIVAL',
+    vsBot: 'BOT',
+    vsModeRanked: 'RANKED 1V1',
+    vsModeBot: 'BOT DUEL',
+    vsModeRoom: 'PRIVATE ROOM',
+    vsEasy: 'EASY',
+    vsNormal: 'MEDIUM',
+    vsHard: 'HARD',
+    vsTrio: '3-WAY CLASH',
+    vsQuad: 'FREE FOR ALL',
+    vsSkip: 'TAP TO SKIP',
+    vsVersus: 'Match face-off',
     /* ---- hands-on lesson: the 4-tap tactical combo and its free-play climax ---- */
     tutGoalTitle: 'GOAL: REACH FINISH',
     tutGoalBody: 'First pawn to reach the green FINISH line wins!',
@@ -1149,6 +1163,20 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'I Know the Rules',
   },
   fa: {
+    /* ---- رویارویی پیش از نبرد: فقط صندلی‌های صادق — انسان واقعی یا ماشین مشخص ---- */
+    vsYou: 'تو',
+    vsRival: 'حریف',
+    vsBot: 'ربات',
+    vsModeRanked: 'تک نبرد رنکد 1ضد1',
+    vsModeBot: 'نبرد با ربات',
+    vsModeRoom: 'اتاق خصوصی',
+    vsEasy: 'آسان',
+    vsNormal: 'متوسط',
+    vsHard: 'سخت',
+    vsTrio: 'نبرد سه نفره',
+    vsQuad: 'همه علیه همه',
+    vsSkip: 'برای رد شدن بزن',
+    vsVersus: 'رویارویی پیش از نبرد',
     /* ---- آموزش تعاملی: کمبو تاکتیکی چهار ضربه‌ای و اوج بازی آزاد ---- */
     tutGoalTitle: 'هدف: خط پایان',
     tutGoalBody: 'اولین نفری که مهره‌اش به خط سبز FINISH برسه برنده‌ست!',
@@ -2119,6 +2147,20 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'قوانین رو بلدم',
   },
   ru: {
+    /* ---- предматчевое противостояние: только честные места — человек или обозначенный бот ---- */
+    vsYou: 'ИГРОК',
+    vsRival: 'СОПЕРНИК',
+    vsBot: 'БОТ',
+    vsModeRanked: 'РЕЙТИНГ 1X1',
+    vsModeBot: 'ДУЭЛЬ С БОТОМ',
+    vsModeRoom: 'ЧАСТНАЯ КОМНАТА',
+    vsEasy: 'ЛЕГКО',
+    vsNormal: 'СРЕДНЕ',
+    vsHard: 'СЛОЖНО',
+    vsTrio: 'ТРОЙНОЕ СТОЛКНОВЕНИЕ',
+    vsQuad: 'КАЖДЫЙ ЗА СЕБЯ',
+    vsSkip: 'НАЖМИТЕ, ЧТОБЫ ПРОПУСТИТЬ',
+    vsVersus: 'Противостояние',
     /* ---- интерактивное обучение: тактическая связка из 4 нажатий и свободный финал ---- */
     tutGoalTitle: 'ЦЕЛЬ: ФИНИШ',
     tutGoalBody: 'Побеждает тот, кто первым доведёт фишку до зелёной линии FINISH!',
@@ -2387,6 +2429,20 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     relicHintHeisenberg: 'Выиграйте 60% из минимум 5 соревновательных гонок.',
   },
   ar: {
+    /* ---- المواجهة قبل المباراة: مقاعد صادقة فقط — إنسان حقيقي أو آلة مُعلنة ---- */
+    vsYou: 'أنت',
+    vsRival: 'الخصم',
+    vsBot: 'بوت',
+    vsModeRanked: 'مبارزة 1ضد1 مصنّفة',
+    vsModeBot: 'مبارزة الآلة',
+    vsModeRoom: 'غرفة خاصة',
+    vsEasy: 'سهل',
+    vsNormal: 'متوسط',
+    vsHard: 'صعب',
+    vsTrio: 'مواجهة ثلاثية',
+    vsQuad: 'الكل ضد الكل',
+    vsSkip: 'اضغط للتخطي',
+    vsVersus: 'مواجهة ما قبل المباراة',
     /* ---- التعليم التفاعلي: سلسلة تكتيكية من 4 نقرات ثم انطلاقة حرة ---- */
     tutGoalTitle: 'الهدف: خط النهاية',
     tutGoalBody: 'أول قطعة تصل إلى خط FINISH الأخضر تفوز!',
@@ -2655,6 +2711,20 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     relicHintHeisenberg: 'الفوز بنسبة 60% من 5 سباقات تنافسية على الأقل.',
   },
   es: {
+    /* ---- enfrentamiento previo: solo asientos honestos — persona real o máquina etiquetada ---- */
+    vsYou: 'JUGADOR',
+    vsRival: 'RIVAL',
+    vsBot: 'BOT',
+    vsModeRanked: '1VS1 RANKEADO',
+    vsModeBot: 'DUELO VS BOT',
+    vsModeRoom: 'SALA PRIVADA',
+    vsEasy: 'FÁCIL',
+    vsNormal: 'MEDIA',
+    vsHard: 'DIFÍCIL',
+    vsTrio: 'CHOQUE A TRES',
+    vsQuad: 'TODOS CONTRA TODOS',
+    vsSkip: 'TOCA PARA SALTAR',
+    vsVersus: 'Enfrentamiento de la partida',
     /* ---- tutorial interactivo: combo táctico de 4 toques y sprint final libre ---- */
     tutGoalTitle: 'META: LLEGA A FINISH',
     tutGoalBody: '¡Gana la primera ficha que llegue a la línea verde FINISH!',

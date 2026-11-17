@@ -646,15 +646,20 @@ form.banter-custom:focus-within {
   line-height: 1;
   white-space: nowrap;
 }
-/* the canonical #i-star-3d gem at 14px: block display kills the inline baseline gap, a fixed
-   flex basis stops the digits from ever squeezing it, and one cast shadow seats the gold on
-   the dark pill the way the tournament's star pod does */
-.vip-plan-star {
-  display: block;
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+/* the authentic Telegram Stars PNG: full-colour artwork bundled by Vite, never a glyph,
+   sprite or emoji, and never re-tinted by a grayscale/monochrome/colour filter */
+.vip-star-icon {
+  display: inline-block;
+  object-fit: contain;
+  flex-shrink: 0;
+  vertical-align: middle;
+  pointer-events: none;
+  user-select: none;
+}
+/* in the three dark price pills the currency mark sits at 15px beside the tabular digits */
+.vip-plan-price .vip-star-icon {
+  width: 15px;
+  height: 15px;
 }
 .vip-plan-price-n {
   color: #F5DFA6;
@@ -836,19 +841,16 @@ form.banter-custom:focus-within {
   pointer-events: none;
 }
 .vip-cta .ico { flex: none; width: 15px; height: 15px; }
-/* the same gem that crowns the Cup header, one notch above the label's caps. Block display
-   plus a fixed flex basis mean the label can never resize or baseline-shift it: the star sits
-   dead on the button's text line at every width, and only the busy spinner animates it. */
-.vip-cta .vip-cta-star {
-  display: block;
-  flex: 0 0 auto;
+/* on the brushed-gold CTA the authentic Star rides one notch above the label's caps: full
+   colour, lifted off the metal by a soft contact shadow so its golden edges stay crisp. */
+.vip-cta .vip-star-icon {
   width: 18px;
   height: 18px;
-  filter: drop-shadow(0 1px 1px rgba(80, 46, 0, .35));
+  filter: drop-shadow(0 1px 2px rgba(18, 16, 12, 0.38));
 }
 .vip-cta:not(:disabled):active { transform: scale(.975); filter: brightness(1.05); }
 .vip-cta:disabled { cursor: default; filter: saturate(.72) brightness(.94); }
-.vip-cta.is-busy .ico { animation: vip-busy 1.1s linear infinite; }
+.vip-cta.is-busy .vip-star-icon { animation: vip-busy 1.1s linear infinite; }
 .vip-close {
   position: absolute;
   top: 8px;
@@ -953,7 +955,7 @@ html.reduced-motion .result-banter.is-denied .banter-gate,
 html.reduced-motion .vip-card,
 html.reduced-motion .vip-sheet.is-open,
 html.reduced-motion .vip-cta::after,
-html.reduced-motion .vip-cta.is-busy .ico,
+html.reduced-motion .vip-cta.is-busy .vip-star-icon,
 html.reduced-motion .vip-scrim {
   animation: none;
 }

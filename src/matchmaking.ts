@@ -39,7 +39,7 @@ import {
   isPostChatPreset, type PostChatLine, type PostChatPresetId,
 } from './data/postchat';
 import { isPremiumUser } from './premium';
-import { menuState, motionReduced, settings } from './settings';
+import { menuState, motionReduced, settings, t } from './settings';
 import { audioContext } from './sound';
 import { guestId, ladderTally, payout, profile } from './storage';
 import { getMySquad } from './squads';
@@ -87,6 +87,12 @@ export interface OpponentData {
   initial: string;
   /** ISO alpha-2, when the seat carries one: the pod's corner flag. */
   flag?: string | null;
+  /** The same real nation, named explicitly for the face-off card. */
+  nation?: string | null;
+  /** The real guild/squad, only when the player bound one. */
+  guild?: string | null;
+  /** True only for a machine seat, which the face-off labels BOT. */
+  isBot?: boolean;
   /** The room's word on this seat's VIP entitlement, used for the gold pawn aura. */
   vip?: boolean;
 }
@@ -100,53 +106,25 @@ export interface MatchSourceOptions {
 /** What a transport looks like: resolve with a match, or reject (abort/offline). */
 export type MatchSource = (signal: AbortSignal, opts: MatchSourceOptions) => Promise<OpponentData>;
 
-/* ---------- the waiting room: a seeded pool, no server required ---------- */
-
-/** The waiting room: a seeded pool, no server required. `flag` is the pod's corner badge. */
-const RIVALS: ReadonlyArray<{ id: string; name: string; tiq: number; flag: string }> = [
-  { id: 'r-nadia', name: 'Nadia K.', tiq: 1240, flag: 'PL' },
-  { id: 'r-rune', name: 'Rune', tiq: 1875, flag: 'NO' },
-  { id: 'r-ivo', name: 'Ivo Petrov', tiq: 2140, flag: 'BG' },
-  { id: 'r-mira', name: 'Mira', tiq: 2680, flag: 'KZ' },
-  { id: 'r-sable', name: 'Sable', tiq: 3150, flag: 'GB' },
-  { id: 'r-kenji', name: 'Kenji', tiq: 980, flag: 'JP' },
-  { id: 'r-lior', name: 'Lior', tiq: 1545, flag: 'IL' },
-  { id: 'r-ada', name: 'Ada W.', tiq: 2360, flag: 'DE' },
-];
-
-const asOpponent = (r: { id: string; name: string; tiq: number; flag: string }): OpponentData => ({
-  id: r.id,
-  name: r.name,
-  tiq: r.tiq,
-  tier: tierOf(r.tiq),
-  avatarUrl: null,
-  initial: (r.name.charAt(0) || '?').toUpperCase(),
-  flag: r.flag,
-});
+/* ---------- the offline fallback: an honest machine seat, never a fabricated person ---------- */
 
 /**
- * The closest three minds to your own — a believable queue, never a random blowout.
- * `wide` is the radius the stage asks for once the queue has gone quiet: every
- * rival is fair game, and a wobble the size of the wide radius keeps a widened
- * search from landing on the same nearest-three answer twice.
+ * With no matchmaker behind the page, the search answers with a labelled machine opponent. It
+ * carries no invented name, flag, guild or TIQ — the face-off paints it as BOT with its real
+ * difficulty, and the searching stage never pretends a human candidate was found.
  */
-export function pickRival(mine: number = myTiq(), wide = false): OpponentData {
-  if (wide) {
-    const spread = Math.max(100, runtime.radiusWide);
-    const pool = RIVALS.map((r) => ({ ...r, tiq: Math.max(0, r.tiq + Math.round((Math.random() - 0.5) * spread * 2)) }));
-    return asOpponent(pool[Math.floor(Math.random() * pool.length)]);
-  }
-  /* the ordinary band, as the admin set it: only minds inside it, nearest first */
-  const band = runtime.radiusNormal;
-  const near = RIVALS.filter((r) => Math.abs(r.tiq - mine) <= band)
-    .sort((a, b) => Math.abs(a.tiq - mine) - Math.abs(b.tiq - mine))
-    .slice(0, 3);
-  if (!near.length) {
-    /* nobody inside the band: the closest mind still takes the seat, so a queue is never empty */
-    const closest = [...RIVALS].sort((a, b) => Math.abs(a.tiq - mine) - Math.abs(b.tiq - mine));
-    return asOpponent(closest[0]);
-  }
-  return asOpponent(near[Math.floor(Math.random() * near.length)]);
+export function pickRival(): OpponentData {
+  return {
+    id: `offline-bot:${menuState.difficulty}`,
+    name: t('vsBot'),
+    tiq: 0,
+    tier: tierOf(0),
+    avatarUrl: null,
+    initial: '',
+    nation: null,
+    guild: null,
+    isBot: true,
+  };
 }
 
 const aborted = (): Error => {
@@ -164,7 +142,7 @@ export const simulatedSearch = (waitMs = 4000): MatchSource => (signal, opts) =>
       fn();
     };
     const onAbort = () => done(() => reject(aborted()));
-    const timer = window.setTimeout(() => done(() => resolve(pickRival(myTiq(), opts.wide))), waitMs);
+    const timer = window.setTimeout(() => done(() => resolve(pickRival())), waitMs);
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
   });
@@ -277,7 +255,8 @@ export interface OnlineSession extends OnlineMatch {
 export type RaceFrame =
   | { type: 'MATCH_FOUND'; matchId: string; seed: number; side: 0 | 1; sizes: [number, number];
       mode: 'pvp' | 'arena';
-      opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string; vip?: boolean };
+      opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string;
+        nation?: string; guild?: string; isBot?: boolean; vip?: boolean };
       /** True when the frame arrived as `DUEL_START`: a relic challenge accepted in-game. */
       duel?: true }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
@@ -474,7 +453,8 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
     const side: 0 | 1 = msg.side === 1 ? 1 : 0;
     if (msg.type === 'MATCH_FOUND' || msg.type === 'DUEL_START') {
       const o = msg.opponent as
-        { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown; avatar?: unknown; vip?: unknown } | null;
+        { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown; avatar?: unknown;
+          nation?: unknown; guild?: unknown; isBot?: unknown; vip?: unknown } | null;
       const matchId = msg.type === 'DUEL_START'
         ? (typeof msg.roomId === 'string' ? msg.roomId : msg.matchId)
         : msg.matchId;
@@ -492,6 +472,9 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
           tiq: o.tiq,
           tier: typeof o.tier === 'string' ? o.tier : '',
           flag: typeof o.flag === 'string' ? o.flag : '',
+          nation: typeof o.nation === 'string' ? o.nation : '',
+          guild: typeof o.guild === 'string' ? o.guild : '',
+          isBot: o.isBot === true,
           avatar: typeof o.avatar === 'string' ? o.avatar : '',
           vip: o.vip === true,
         },
@@ -749,7 +732,8 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
 /** The matchmaker's payload, in the shape the stage paints. */
 function onlineOpponent(msg: {
   matchId: string;
-  opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string; vip?: boolean };
+  opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string;
+    nation?: string; guild?: string; isBot?: boolean; vip?: boolean };
 }): OpponentData {
   const name = msg.opponent.name.trim() || 'Rival';
   const avatar = /^https:\/\/[^\s"'<>\\]+$/i.test(msg.opponent.avatar ?? '') ? msg.opponent.avatar! : null;
@@ -761,6 +745,9 @@ function onlineOpponent(msg: {
     avatarUrl: avatar,
     initial: name.charAt(0).toUpperCase(),
     flag: msg.opponent.flag,
+    nation: msg.opponent.nation || msg.opponent.flag || null,
+    guild: msg.opponent.guild || null,
+    isBot: msg.opponent.isBot === true,
     vip: msg.opponent.vip === true,
   };
 }
@@ -1257,10 +1244,10 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   function scanTick(): void {
     if (!rivalTiq) return;
     scanIdx++;
-    const near = pickRival(myTiq(), widenings > 0);
-    const roll = Math.max(0, near.tiq + Math.round((Math.random() - 0.5) * 260));
-    rivalTiq.textContent = roll.toLocaleString('en-US');
-    paintFlag(rivalFlag, RIVALS[scanIdx % RIVALS.length].flag);
+    /* no fabricated candidate: the pod pulses while the room searches, and prints no made-up
+       name, flag or rating. Only the scanning glyph animates. */
+    rivalTiq.textContent = '';
+    paintFlag(rivalFlag, null);
     scanGlyph?.setAttribute('href', SCAN_FACES[scanIdx % SCAN_FACES.length]);
   }
 
