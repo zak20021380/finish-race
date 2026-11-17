@@ -3,7 +3,7 @@ import './result.css';
 import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, hasPathToFinish,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
-  steps as teamSteps,
+  sideOf, steps as teamSteps,
   view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
@@ -682,10 +682,30 @@ const CHECKMATE_SPLASH_MS = 1100;
 const CHECKMATE_SPLASH_DELAY_MS = 380;
 let cmTimer = 0;
 let cmVisible = false;
+/** The seats the trap just took out: the splash's copy is written from the viewer's own role. */
+let cmSplashSeats: Player[] = [];
 
+/**
+ * The verdict in the viewer's own voice. This screen's chair comes first — a sealed pawn is its
+ * own news before anybody else's. A duel names no one (the far side is simply the opponent), while
+ * a party names the seat, because "opponent" is ambiguous once four chairs share the board.
+ */
 function paintCheckmateSplash(): void {
   setText(cmTitle, t('checkmateTitle'));
-  setText(cmSub, t('checkmateSubtitle'));
+  const seats = cmSplashSeats;
+  if (seats.includes(localSide)) { setText(cmSub, t('checkmateSubtitleSelf')); return; }
+  const named = state.teams.length > 2 ? seats[0] : undefined;
+  if (named === undefined) { setText(cmSub, t('checkmateSubtitle')); return; }
+  /* The name goes in a `<bdi>` as a text node, so a mixed-direction handle keeps its own order
+     inside the sentence and is never parsed as markup. */
+  const template = t('checkmateSubtitleSeat');
+  const name = seatFullName(named);
+  cmSub.textContent = '';
+  const at = name ? template.indexOf('{name}') : -1;
+  if (at < 0) { cmSub.textContent = template; return; }
+  const bdi = document.createElement('bdi');
+  bdi.textContent = name;
+  cmSub.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
 }
 
 /**
@@ -695,8 +715,9 @@ function paintCheckmateSplash(): void {
  * the banner itself only enters after `CHECKMATE_SPLASH_DELAY_MS`, so the canvas flare and the
  * first finisher burst are seen before the verdict covers them.
  */
-function showCheckmateSplash(): void {
+function showCheckmateSplash(seats: readonly Player[]): void {
   window.clearTimeout(cmTimer);
+  cmSplashSeats = [...seats];
   cmVisible = true;
   checkmateSplash.hidden = false;
   paintCheckmateSplash();
@@ -710,6 +731,7 @@ function showCheckmateSplash(): void {
 function hideCheckmateSplash(): void {
   window.clearTimeout(cmTimer);
   cmTimer = 0;
+  cmSplashSeats = [];
   if (!cmVisible && checkmateSplash.hidden) return;
   cmVisible = false;
   checkmateSplash.classList.remove('is-on');
@@ -1195,10 +1217,11 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
   if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
   if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
-  /* Only the placer's own live pawns can refuse a wall now: sealing a rival is a checkmate,
-     resolved by the rules the moment the bar lands. */
+  /* Only the placer's own SIDE can refuse a wall now — its live pawns and its partner's in a 2v2.
+     Sealing a rival is a checkmate, resolved by the rules the moment the bar lands. */
   const d = distField([...s.walls, w], s.cols, s.rows);
-  const blocked = s.balls.some((b) => b.team === w.owner && !b.isCheckmated
+  const side = new Set(sideOf(s, w.owner));
+  const blocked = s.balls.some((b) => side.has(b.team) && !b.isCheckmated
     && d[b.pos.r * s.cols + b.pos.c] < 0);
   return blocked ? 'blocked' : 'overlap';
 }
@@ -1246,6 +1269,38 @@ let state: GameState = newGame(sizes);
  * fixed pair `[0, 1]` walks this instead.
  */
 const roster = (): Player[] => Array.from({ length: state.teams.length }, (_t, i) => i);
+
+/* ---------- the side this screen plays for ----------
+   A 2v2 is won by a TEAM: the worker pays every chair on the winning colour (`onWinningSide`), and
+   the board's `winner` names the seat that took the line, not the side that took the race. These
+   three readers are the one place that distinction is resolved, so the capsule, the standings and
+   the finisher can never disagree about who won. Every other format names a seat, and `sideOf`
+   collapses to that seat alone. */
+
+/**
+ * The room's seat → colour plan for the engine, or undefined when this race names seats rather than
+ * teams. Read off `sizes`, not the board: `restart()` asks for it while the previous board is still
+ * in `state`.
+ */
+function seatTeamMap(): number[] | undefined {
+  if (!active || !('seats' in active) || active.mode !== 'team') return undefined;
+  const seats = active.seats;
+  return sizes.map((_n, seat) => seats.find((s) => s.side === seat)?.team ?? 0);
+}
+
+/** Did this screen's SIDE take the race? A partner who crossed the line wins this seat too. */
+function localWon(): boolean {
+  const winner = state.winner;
+  return winner !== null && sideOf(state, winner).includes(localSide);
+}
+
+/** The seats that took the race, champion first: both partners in a 2v2, the lone winner elsewhere. */
+function winningSeats(): Player[] {
+  const winner = state.winner;
+  if (winner === null) return [];
+  return [winner, ...sideOf(state, winner).filter((seat) => seat !== winner)];
+}
+
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
  * survive across frames and restarts reset them, so the frame loop never allocates.
@@ -1258,6 +1313,8 @@ let autoPicked: Player | null = null;
 /** Your chip's mine key: armed, the whole board becomes the placement band. Direct play otherwise. */
 let mineArmed = false;
 let hints: Pos[] = [];
+/** The subset of `hints` whose cell has no route to FINISH: a step there seals the pawn that takes it. */
+let trapHints: Pos[] = [];
 let mineHints: Cell[] = [];
 /** The cell tapped once in the two-tap mine flow, waiting for its confirm tap. */
 let mineGhost: Cell | null = null;
@@ -1275,7 +1332,7 @@ const DRAG_SLOP = 6;                             // css px before a press become
 const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
-  state, balls: ballViews, hints, ghost, last: marks, thinking: null,
+  state, balls: ballViews, hints, trapHints, ghost, last: marks, thinking: null,
   human: localSide, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
@@ -1352,12 +1409,24 @@ const mode = (): BoardMode<Ghost> => ({ selected, preview: ghost, mine: mineArme
  */
 const dotsFor = (m: BoardMode<Ghost>): Pos[] =>
   canAct() && moveDots(m) && m.selected !== null ? reachableBall(state, m.selected) : [];
+/**
+ * Publish the move dots, and mark the ones that walk into a dead end. A step onto a cell with no
+ * route to FINISH seals the pawn that takes it, so the dot carries a warning rather than being
+ * hidden: the move is legal, and the player is still the one who decides to take it.
+ */
+function setHints(next: Pos[]): void {
+  hints = next;
+  trapHints = [];
+  if (!next.length) return;
+  const d = distField(state.walls, state.cols, state.rows);
+  for (const h of next) if (pathOn(d, h, state.cols) === Infinity) trapHints.push(h);
+}
 function setMode(next: BoardMode<Ghost>) {
   selected = next.selected;
   ghost = next.preview;
   mineArmed = next.mine;
   if (!next.preview) wallDrag = null;   // no bar to carry once the ghost is gone
-  hints = dotsFor(next);         // derived, so it is rebuilt the moment the mode moves — never stale
+  setHints(dotsFor(next));       // derived, so it is rebuilt the moment the mode moves — never stale
   armCapsules();                 // the floating keys hang off the preview, so they follow it
   /* A wall hover, a drag slide or a cancelled ghost changes only the canvas. With the loop parked
      between transitions it must be woken here, or the preview would never be painted. */
@@ -1641,17 +1710,18 @@ function paintLeftSeats(): void {
  * the seats that never crossed are ordered by how far their leading ball climbed and then by the
  * field behind it — a final standing the player can read straight off the board they just left.
  * A seat checkmated out of a party fell further than any runner: it owns the bottom of the ladder,
- * later falls ranked above earlier ones.
+ * later falls ranked above earlier ones. A 2v2 is won by a side, so both partners take the top of
+ * the ladder together — the seat that crossed the line first, its team-mate beside it.
  */
 function finalStandings(): Player[] {
-  const winner = state.winner;
+  const champions = winningSeats();
   const fallen = state.eliminated ?? [];
   const progress = (seat: Player): [number, number] => {
     const rows = state.balls.filter((ball) => ball.team === seat).map((ball) => ball.pos.r);
     if (!rows.length) return [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
     return [Math.min(...rows), rows.reduce((sum, row) => sum + row, 0)];
   };
-  const rest = roster().filter((seat) => seat !== winner);
+  const rest = roster().filter((seat) => !champions.includes(seat));
   rest.sort((a, b) => {
     /* a checkmated seat owns the bottom of the ladder; the later it fell, the higher it ranks */
     const ai = fallen.indexOf(a), bi = fallen.indexOf(b);
@@ -1664,7 +1734,7 @@ function finalStandings(): Player[] {
     const [bLead, bField] = progress(b);
     return aLead - bLead || aField - bField || a - b;
   });
-  return winner === null ? rest : [winner, ...rest];
+  return [...champions, ...rest];
 }
 
 /** The gold #1 badge: the same crown the winner used to wear over a podium portrait. */
@@ -2303,7 +2373,7 @@ function showOverlay() {
   resultStakeSaved.hidden = true;
   closeAdConfirm(false);
   hideAdToast();
-  const won = state.winner === localSide;
+  const won = localWon();
   /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
      rematch and banter already dead: there is nobody on the far side of that socket. */
   if (active && 'goneSides' in active && active.goneSides().includes(rivalSide())) resultLocked = true;
@@ -2472,8 +2542,10 @@ function armGoalBeat() {
   const deciding = state.checkmate?.decided ? state.checkmate : null;
   const justSealed = (b: Ball): boolean =>
     deciding?.cells.some((cell) => cell.c === b.pos.c && cell.r === b.pos.r) ?? false;
+  /* A 2v2 shatters the losing SIDE only: the winner's partner ran the same race and is not a rival. */
+  const champions = new Set(sideOf(state, winner));
   const losers = state.balls
-    .filter((b) => b.team !== winner && (!b.isCheckmated || justSealed(b)))
+    .filter((b) => !champions.has(b.team) && (!b.isCheckmated || justSealed(b)))
     .sort((a, b) => b.pos.r - a.pos.r)
     .map((b) => ({ id: b.id, cell: b.pos }));
   /* The crowned pawn: the winning seat's leading ball, which is the one that crossed the line. */
@@ -2593,11 +2665,11 @@ function ui() {
   }
   /* the dots belong to the ball in hand and to nothing else: a wall preview or the mine key
      suppresses them outright, so a dashed bar is never drawn under a selection ring */
-  hints = dotsFor(mode());
+  setHints(dotsFor(mode()));
   /* the pick step is the player's own: no dots until they choose. The forward step keeps every
      legal dot the rules offer — three directions off the starting row — exactly as a real match
      draws them. The spotlight and the action gate, not the dots, name the one tile that advances. */
-  if (stage === 'select' || stage === 'advance-select') hints = [];
+  if (stage === 'select' || stage === 'advance-select') setHints([]);
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   if (mineArmed && (stage === 'mine-place' || stage === 'mine-confirm')) {
     /* the staged square stays placeable through its own confirmation, so the ✓/✕ pair the lesson
@@ -2642,7 +2714,7 @@ function ui() {
   paintLeftSeats();
   /* the flags and the XP pills ride along: both are diffed, so this is a comparison per seat */
   paintSeatIdentity();
-  const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === localSide ? '' : 's'}`
+  const spoken = state.winner !== null ? (localWon() ? 'You win' : `${TEAM_NAME[seat]} wins`)
     : seat === localSide ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
   if (spoken !== saidTurn) { saidTurn = spoken; announce.textContent = spoken; }
 
@@ -2663,10 +2735,12 @@ function ui() {
   }
   if (state.winner !== null) {
     /* A settled board has no live opponent to reconnect: the pill would be a promise with no
-       match left to keep it. The same goes for the checkmate banner — a verdict about a race that
-       is already over has nothing left to announce. */
+       match left to keep it. */
     hidePeerPill();
-    hideCheckmateBanner();
+    /* The deciding trap's banner is NOT stale news: it names the seat the final move took out, and
+       a party still has to read who fell. Only a board with no verdict left to give takes the pill
+       down — otherwise the queue keeps its own clock and steps through every seat it holds. */
+    if (!cmBannerUp && !cmBannerQueue.length) hideCheckmateBanner();
     armGoalBeat();
   }
   /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
@@ -2866,7 +2940,7 @@ function play(a: Action, remote = false): boolean {
       }
     }
     if (trap.teams.length) {
-      showCheckmateSplash();
+      showCheckmateSplash(trap.teams);
       /* A PARTY match does not end on a trap: the seat is out, the race plays on, and the top
          banner names the seat and the reason. A duel is already decided by the splash and the
          result card, so it never raises one. */
@@ -2885,7 +2959,7 @@ function play(a: Action, remote = false): boolean {
     concedeOnboarding();
     return true;
   }
-  if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
+  if (state.winner !== null) notify(localWon() ? 'success' : 'error');
   else if (wantsOpponent() && !tutorialActive) void runOpponent();
   return true;
 }
@@ -3110,7 +3184,7 @@ function restart() {
   /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
      uses the seed the matchmaker handed both sides. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
-  state = newGame(sizes);
+  state = newGame(sizes, seatTeamMap());
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
   renderer.setPerspective(currentPerspective());
@@ -3251,12 +3325,9 @@ function opponentForfeited(info: { side: number; name: string; deltas: Record<st
   if (state.teams[side] && !isLeft(state, side)) strikeSeat(side, name);
   else showSeatLeftPill(side, name);
   if (info.winner === null || state.winner !== null) return;
-  /* A 2v2 is won by a TEAM: the room's verdict names a team, so the local seat rides it when the
-     roster puts both chairs on that colour. Every other format names a seat. */
-  const localTeam = active && 'seats' in active
-    ? active.seats.find((s) => s.side === localSide)?.team ?? null
-    : null;
-  const won = localTeam === null ? info.winner === localSide : info.winner === localTeam;
+  /* A 2v2 is won by a TEAM: the room's verdict names a seat on the winning colour, and this screen
+     rides it when the board's own side map puts both chairs there. Every other format names a seat. */
+  const won = sideOf(state, info.winner as Player).includes(localSide);
   if (!won) return;                           // the local seat is out: the board's own verdict lands
   /* The chair that left took the rematch with it. */
   resultLocked = true;
@@ -3807,7 +3878,12 @@ function endOnline(end: RaceEnd): void {
   /* A resignation is a forfeit on the wire: the survivor's capsule pays the same +15 stake a
      friends room's PLAYER_FORFEITED pays. */
   if (end.win && end.why === 'resign') forfeitMatch = true;
-  state = { ...state, winner: end.win ? localSide : rivalSide() };
+  /* The verdict is this screen's own: a win names this seat, a loss names a chair on the far SIDE.
+     `rivalSide()` is the duel's opposite number and can be a PARTNER in a 2v2, so the loser is
+     picked off the board's colour plan — a duel and a free-for-all still land on the same seat. */
+  const mine = sideOf(state, localSide);
+  const far = roster().find((seat) => !mine.includes(seat)) ?? rivalSide();
+  state = { ...state, winner: end.win ? localSide : far };
   /* Only a resignation leaves the rival's socket open long enough to taunt. A dropped or
      abandoned connection, or an operator abort, has nobody on the far side of a rematch. */
   if (end.why !== 'resign') resultLocked = true;
@@ -5009,7 +5085,7 @@ $('pause-tutorial').addEventListener('click', () => {
 
 again.addEventListener('click', () => {
   /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
-  impact(state.winner === localSide ? 'medium' : 'heavy');
+  impact(localWon() ? 'medium' : 'heavy');
   clearResultMotion();
   /* Play again and Rematch both leave this result behind: the celebration (or the defeat sting)
      goes with it */
@@ -5162,6 +5238,7 @@ function frame(now: number) {
     view.state = state;
     view.balls = ballViews;
     view.hints = hints;
+    view.trapHints = trapHints;
     view.ghost = ghost;
     view.mineHints = mineHints;
     view.mineGhost = mineGhost;

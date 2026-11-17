@@ -37172,6 +37172,8 @@ html:not(.game-live) .screen:not(.game) *::after,
   word-break: normal;
   text-shadow: 0 1px 0 rgba(30, 4, 8, .8);
 }
+/* a named seat keeps its own direction inside the verdict, whatever the UI language is */
+.cm-sub bdi { unicode-bidi: isolate; font-weight: 800; }
 @keyframes cm-veil {
   0% { opacity: 0; }
   10% { opacity: 1; }
@@ -37195,9 +37197,10 @@ html[data-lang="ar"] :is(.cm-title, .cm-sub) {
 }
 html[data-lang="fa"] .cm-title,
 html[data-lang="ar"] .cm-title { font-size: clamp(1.4rem, 7.8vw, 2rem); }
-/* a checkmated seat's strip is a struck record, not a live player */
+/* a checkmated seat's strip is a struck record, not a live player: no clock, no dots, and no
+   ammo or mine key that still reads as playable — the same inert furniture a LEFT chair wears */
 .chip.is-out { opacity: .5; }
-.chip.is-out :is(.timer, .dots) { visibility: hidden; }
+.chip.is-out :is(.timer, .dots, .mine-pod, .walls) { visibility: hidden; }
 /* a seat whose player disconnected is struck for good: ash, inert, and never wearing the turn.
    It wins over `.is-out` — the same chair is both eliminated and LEFT, and LEFT is the reason. */
 .chip.is-left {

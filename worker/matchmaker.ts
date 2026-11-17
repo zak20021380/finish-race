@@ -43,7 +43,8 @@
  * `room_1909` are one room — and a code is only ever refused when it was genuinely spent.
  */
 import {
-  CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, isEliminated, isLeft, newGame, steps,
+  CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, distField, isEliminated, isLeft,
+  newGame, pathOn, steps,
   type Action, type GameState,
 } from '../src/rules';
 import {
@@ -7530,11 +7531,17 @@ export class MatchmakerDO {
     }
   }
 
-  /** A legal action for a seat whose clock ran out: the first step the board accepts, then a pass. */
+  /**
+   * A legal action for a seat whose clock ran out: the first step the board accepts that still has
+   * a route to FINISH, then any step at all, then a pass. The machine is keeping the chair warm, not
+   * playing it into a trap — a sealed pocket would checkmate the very seat it was substituting for.
+   */
   private roomFallbackAction(state: GameState, seat: number): Action {
     const legal = this.legalSteps(state, seat);
-    if (legal.length) return { kind: 'move', ball: legal[0].ball, to: legal[0].to };
-    return { kind: 'pass' };
+    if (!legal.length) return { kind: 'pass' };
+    const d = distField(state.walls, state.cols, state.rows);
+    const pick = legal.find((st) => pathOn(d, st.to, state.cols) < Infinity) ?? legal[0];
+    return { kind: 'move', ball: pick.ball, to: pick.to };
   }
 
   /** The engine's steps for a seat, narrowed to actions this exact board accepts. */
@@ -7653,7 +7660,7 @@ export class MatchmakerDO {
     live.seed = hash(`${live.room.code}|${live.members.map((m) => m?.id ?? 'bot').join('|')}|${this.paired}`);
     live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
     live.startedAt = Date.now();
-    live.driver = createRoomDriver(live.room);
+    live.driver = createRoomDriver(live.room, live.mode === 'team' ? live.teams : undefined);
     this.openRooms = this.openRooms.filter((r) => r !== live);
     this.lobbies.delete(lobbyKey(live.room.code));
     /* the code did its job: the board is running, so the invite is spent from this moment on */
@@ -7919,6 +7926,16 @@ export class MatchmakerDO {
         this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
       }
     }
+    /* A trap can empty a whole team in one sweep, and the board then holds two contenders on one
+       colour: a finished 2v2, exactly as a forfeit is. Judged before the substitute tally so a
+       chair is never charged the stake for a race that has already been won. The award is the
+       ROOM's verdict, not a board action — no MOVE carries it, and a client's own replica only
+       ends a party when one seat is left — so every screen reads the settled board from here. */
+    if (this.collapseLoneTeam(live)) {
+      for (const m of live.members) {
+        if (m && m.connected) this.postTo(m.ws, this.roomSyncMessage(live));
+      }
+    }
     /* Every batch the driver played lands here, so this is the one place the substitute allowance
        is counted. It runs AFTER the relay: a client must apply the moves before the verdict that
        follows from them. */
@@ -7968,6 +7985,23 @@ export class MatchmakerDO {
       this.eliminateSeat({ live, seat: i });
       if (driver.state.winner !== null) return;
     }
+  }
+
+  /**
+   * A 2v2 is won by a TEAM, not by a seat: once every chair still in the race wears one colour the
+   * match is over, even though two contenders remain. A forfeit empties a chair and so does a trap,
+   * so both paths read this one verdict — the engine's own sweep only ends a party when a single
+   * seat is left, and two partners on one colour are not that. True when it settled the race.
+   */
+  private collapseLoneTeam(live: LiveRoom): boolean {
+    const driver = live.driver;
+    if (!driver || driver.state.winner !== null || live.mode !== 'team') return false;
+    const alive: number[] = [];
+    for (let i = 0; i < driver.state.teams.length; i++) {
+      if (!isEliminated(driver.state, i)) alive.push(i);
+    }
+    if (!alive.length || !alive.every((i) => live.teams[i] === live.teams[alive[0]])) return false;
+    return driver.award(alive[0]);
   }
 
   /**
@@ -8022,17 +8056,7 @@ export class MatchmakerDO {
       this.verdict(member.id, false);
     }
     driver.leave(ref.seat);
-    /* A 2v2 is won by a team, not by a seat: once every chair still in the race wears one colour,
-       the match is over even though two contenders remain. */
-    if (driver.state.winner === null && live.mode === 'team') {
-      const alive: number[] = [];
-      for (let i = 0; i < driver.state.teams.length; i++) {
-        if (!isEliminated(driver.state, i)) alive.push(i);
-      }
-      if (alive.length && alive.every((i) => live.teams[i] === live.teams[alive[0]])) {
-        driver.award(alive[0]);
-      }
-    }
+    this.collapseLoneTeam(live);
     /* The hand-off can land on a machine chair: play it at once, exactly as a human's action would,
        so a party never stalls behind a bot that nobody is waiting for. */
     if (driver.state.winner === null && driver.botTurn) {

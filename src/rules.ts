@@ -185,6 +185,12 @@ export interface GameState {
   checkmate?: Checkmate | null;
   /** The anti-oscillation ledger. Public to every seat — it carries no hidden information. */
   repeat?: RepeatTrack;
+  /**
+   * Seat → colour in a team race, indexed by seat. Absent in every other format, where a seat IS
+   * the side it plays for. Public, like the shuffle ledger: it carries no hidden information, and
+   * it is what lets a wall refuse to seal the placer's own partner. Constant for the whole race.
+   */
+  seatTeam?: number[];
 }
 
 /* ---------- anti-oscillation ---------- */
@@ -329,7 +335,7 @@ export function startLayout(sizes: readonly number[], cols: number = COLS, rows:
   return out;
 }
 
-export function newGame(sizes: readonly number[] = [1, 1]): GameState {
+export function newGame(sizes: readonly number[] = [1, 1], seatTeam?: readonly number[]): GameState {
   const n = sizes.slice(0, MAX_TEAMS).map(clampSize);
   const contenders = n.reduce((a, b) => a + b, 0);
   const { cols, rows } = dimsFor(contenders);
@@ -355,6 +361,7 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
     left: [],
     checkmate: null,
   };
+  if (seatTeam) s.seatTeam = seatTeam.slice(0, n.length);
   s.repeat = { seen: [boardFingerprint(s)], streak: 0 };
   return s;
 }
@@ -366,6 +373,20 @@ export const isEliminated = (s: GameState, team: Player): boolean =>
 /** A seat whose player disconnected and was removed from the race. Always also `eliminated`. */
 export const isLeft = (s: GameState, team: Player): boolean =>
   s.left?.includes(team) ?? false;
+
+/**
+ * Every seat riding the same colour as `seat`, itself included — the side a team race is won and
+ * protected by. A format with no `seatTeam` map plays one seat per side, so this is `[seat]` and
+ * every caller downstream reads the same answer it always did.
+ */
+export function sideOf(s: GameState, seat: Player): Player[] {
+  const map = s.seatTeam;
+  const colour = map?.[seat];
+  if (colour === undefined) return [seat];
+  const out: Player[] = [];
+  for (let t = 0; t < s.teams.length; t++) if (map?.[t] === colour) out.push(t);
+  return out.length ? out : [seat];
+}
 
 /**
  * Remove a seat whose player is gone for good. The chair is skipped by every turn hand-off, its
@@ -565,16 +586,26 @@ export function finishRoute(s: GameState, from: Pos): Pos[] {
 /**
  * Does every pawn that still matters have a route to FINISH with `walls` standing?
  *
- * Named `own`, only that seat's live pawns are judged: a wall may seal a RIVAL in — that is the
- * checkmate this ruleset resolves — but never its own author, so no wall can ever freeze the seat
- * that placed it. A pawn already flagged `isCheckmated` is out of the race and no longer has a say.
+ * Named `own`, only that seat's side is judged: a wall may seal a RIVAL in — that is the checkmate
+ * this ruleset resolves — but never its own author, so no wall can ever freeze the seat that placed
+ * it. In a team race the side is both partners, so a wall may not seal the placer's team-mate
+ * either. A pawn already flagged `isCheckmated` is out of the race and no longer has a say.
  */
 export function hasPathToFinish(
   s: GameState, walls: readonly Wall[] = s.walls, own?: Player,
 ): boolean {
   const d = distField(walls, s.cols, s.rows);
+  const map = s.seatTeam;
+  /* No colour plan: a seat IS its side. This is the duel and the free-for-all, and the bot prices
+     every wall on the board through here — so the common case stays allocation-free. */
+  if (!map) {
+    return s.balls.every((b) => b.isCheckmated
+      || (own !== undefined && b.team !== own)
+      || d[b.pos.r * s.cols + b.pos.c] >= 0);
+  }
+  const colour = own === undefined ? undefined : map[own];
   return s.balls.every((b) => b.isCheckmated
-    || (own !== undefined && b.team !== own)
+    || (own !== undefined && map[b.team] !== colour)
     || d[b.pos.r * s.cols + b.pos.c] >= 0);
 }
 
@@ -839,9 +870,9 @@ export function wallsRemaining(s: GameState, team: Player): number {
 
 /**
  * Is this wall legal? Within the owner's budget, in bounds for THIS board, clear of every wall
- * already standing (no shared edge segment, no `+` through a vertex) — and no wall of the owner's
- * own live pawns may lose its route. A rival MAY be sealed: that is a checkmate, resolved by
- * `resolveCheckmates` the moment the wall lands.
+ * already standing (no shared edge segment, no `+` through a vertex) — and no pawn on the owner's
+ * own SIDE may lose its route: its own live pawns, and its partner's in a team race. A rival MAY
+ * be sealed: that is a checkmate, resolved by `resolveCheckmates` the moment the wall lands.
  */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
@@ -978,14 +1009,19 @@ function noteBoard(s: GameState): RepeatTrack {
  * The stalemate backstop. A race that has repeated itself this long has stopped being a race, and
  * the board still says who was winning it: the team whose nearest ball stands closest to FINISH
  * takes it. Deterministic and instant — no clock, no random, no seat can argue with it.
+ *
+ * Only seats still racing are judged. A chair struck by a trap or by its player's departure keeps
+ * its frozen pawn on the tile it died on, and that pawn may well be the nearest thing to FINISH on
+ * the board — letting it claim the verdict would hand the race to somebody who is no longer in it.
  */
 function adjudicate(s: GameState, track: RepeatTrack): GameState {
   if (track.streak < REPEAT_ADJUDICATE || s.winner !== null) return s;
   const d = distField(s.walls, s.cols, s.rows);
   let best: Player | null = null, bestV = Infinity;
   for (let t = 0; t < s.teams.length; t++) {
+    if (isEliminated(s, t) || isLeft(s, t)) continue;
     let v = Infinity;
-    for (const b of s.balls) if (b.team === t) v = Math.min(v, pathOn(d, b.pos, s.cols));
+    for (const b of s.balls) if (b.team === t && !b.isCheckmated) v = Math.min(v, pathOn(d, b.pos, s.cols));
     if (v < bestV) { bestV = v; best = t; }
   }
   return best === null ? s : { ...s, winner: best, adjudicated: true };
@@ -1120,6 +1156,7 @@ function detached(s: GameState): GameState {
   };
   if (s.eliminated) base.eliminated = s.eliminated.slice();
   if (s.left) base.left = s.left.slice();
+  if (s.seatTeam) base.seatTeam = s.seatTeam.slice();
   if (s.repeat) base.repeat = { seen: s.repeat.seen.slice(), streak: s.repeat.streak };
   return base;
 }

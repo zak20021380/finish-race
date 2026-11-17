@@ -50,6 +50,12 @@ export interface View {
   balls: BallView[];
   /** legal move cells — the chosen ball's only */
   hints: Pos[];
+  /**
+   * The hint cells with no route to FINISH: stepping there seals the pawn. A subset of `hints`,
+   * painted with a warning tint rather than withheld — the move is legal, just fatal. Absent on the
+   * decorative boards, which have no race to lose.
+   */
+  trapHints?: Pos[];
   ghost: Ghost | null;      // wall preview / armed ghost
   /** one entry per seat: what that seat did last */
   last: (Mark | null)[];
@@ -1301,6 +1307,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let vipHaloSprite: HTMLCanvasElement | null = null;
   let vipRingSprite: HTMLCanvasElement | null = null;
   let dotSpritePad = 0;
+  /** The dot's baked core radius: the warning ring a sealed destination wears is sized off it. */
+  let dotCoreR = 0;
   /** The wall toolbar's glass and its three keys: fixed-size chrome, baked once. */
   let toolKeySprites: Partial<Record<'cancel' | 'rotate' | 'confirm', HTMLCanvasElement>> = {};
   let toolbarSprite: HTMLCanvasElement | null = null;
@@ -2114,6 +2122,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /* The animated dot sits at pulse 0.5 when baked; the frame still gets its soft halo and its
        white keyline, and no longer rebuilds either. */
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * 0.5);
+    dotCoreR = dotR;
     dotSpritePad = Math.max(c * 0.7, dotR * 1.75 + c * 0.02);
 
     for (let i = 0; i < MAX_TEAMS; i++) {
@@ -3691,6 +3700,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         const h = v.hints[i];
         const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
         ctx.drawImage(dotSprite, x - d, y - d, d * 2, d * 2);
+      }
+      ctx.restore();
+    }
+
+    /* A destination with no route to FINISH keeps its dot — the step is legal — but the core takes a
+       crimson wash and a thin ring, so a sealed pocket reads as a dead end before the pawn walks in.
+       One ring, no halo: the warning is a tint on the dot the player already has, not a new light. */
+    if (v.trapHints?.length) {
+      ctx.save();
+      ctx.fillStyle = '#ff2d55';
+      ctx.strokeStyle = '#ff2d55';
+      ctx.lineWidth = Math.max(1.25, c * 0.03);
+      for (const h of v.trapHints) {
+        const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
+        ctx.globalAlpha = 0.26 + 0.1 * pulse;
+        ctx.beginPath(); ctx.arc(x, y, dotCoreR, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 0.55 + 0.2 * pulse;
+        ctx.beginPath(); ctx.arc(x, y, dotCoreR * 1.45, 0, TAU); ctx.stroke();
       }
       ctx.restore();
     }

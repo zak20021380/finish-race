@@ -532,11 +532,11 @@ export const BOT_TURN_BUDGET = 8;
  * never has to hand the turn back to a timer, a socket or a client to keep moving, and the clock
  * that governs a person's turn is never charged for the machine's.
  */
-export function createRoomDriver(room: Room): RoomDriver {
+export function createRoomDriver(room: Room, seatTeam?: readonly number[]): RoomDriver {
   /* Launching here is deliberate: a driver is only ever asked for by a room that is about to be
      played, and a seat nobody took must be the machine's before a turn can land on it. */
   let current = backfill(launch(room));
-  let state = newGame(sizesOf(current));
+  let state = newGame(sizesOf(current), seatTeam);
 
   const mineSeat = (seat: Player) => !isHuman(current, seat);
 
