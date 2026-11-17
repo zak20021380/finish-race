@@ -900,6 +900,14 @@
       <symbol id="i-star" viewBox="0 0 24 24">
         <polygon points="12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- the XP emblem: a struck hexagon badge carrying a bold double upward chevron — a rank-up
+           mark, deliberately NOT a five-point star, so it never reads as a Telegram Star. Thin
+           currentColor strokes keep it crisp at 16px inside the profile's XP pill. -->
+      <symbol id="i-xp-emblem" viewBox="0 0 24 24">
+        <path d="M12 2 20.66 7 20.66 17 12 22 3.34 17 3.34 7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+        <path d="m7.5 14 4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="m7.5 9.3 4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
       <!-- ==== The Telegram Star, cut as a gem ============================================
            Ten facets — a lit and a shaded triangle per point — share one light ramp that is
            mapped in the star's own user space, not each triangle's box. That is what makes
@@ -1817,6 +1825,15 @@
                     </button>
                   </form>
                 </div>
+                <!-- the drawer key: a compact glass control pinned to the header's inline-end
+                     corner, mirrored by logical insets in RTL so it never crowds the name or pencil -->
+                <button class="pf-hero-toggle" type="button" id="pf-hero-toggle"
+                  aria-expanded="false" aria-controls="pf-hero-drawer"
+                  aria-label="Toggle Details" data-i18n-aria="pfToggleDetails">
+                  <span class="profile-hero-toggle-icon" aria-hidden="true">
+                    <svg class="ico"><use href="#i-chevron-down" /></svg>
+                  </span>
+                </button>
               </div>
 
               <!-- quick-stats strip: the three readings a glance actually needs -->
@@ -1834,10 +1851,10 @@
                   <b id="pf-coins" dir="ltr">0</b>
                   <span class="sr-only" data-i18n="coins">Coins</span>
                 </span>
-                <!-- the lifetime XP pool, carried by the same star the result strip pays with -->
+                <!-- the lifetime XP pool, carried by its own hexagon rank-up emblem, never a star -->
                 <span class="pf-quick-pill pf-quick-xp" id="pf-quick-xp">
                   <span class="pf-quick-ico pf-quick-ico-xp" aria-hidden="true">
-                    <svg class="ico"><use href="#i-star" /></svg>
+                    <svg class="ico"><use href="#i-xp-emblem" /></svg>
                   </span>
                   <b id="pf-xp-mini" dir="ltr">0</b>
                   <span class="pf-quick-k" aria-hidden="true">XP</span>
@@ -1854,15 +1871,6 @@
                   <span class="pf-quick-squad" id="pf-quick-squad" dir="auto">—</span>
                 </span>
               </div>
-
-              <!-- the drawer key: one centred micro-chevron, the only mark the drawer needs -->
-              <button class="pf-hero-toggle" type="button" id="pf-hero-toggle"
-                aria-expanded="false" aria-controls="pf-hero-drawer"
-                aria-label="Toggle Details" data-i18n-aria="pfToggleDetails">
-                <span class="profile-hero-toggle-icon" aria-hidden="true">
-                  <svg class="ico"><use href="#i-chevron-down" /></svg>
-                </span>
-              </button>
               </div>
 
               <!-- the inline drawer: the heavy readings, revealed in place. A collapsed drawer is
