@@ -1082,11 +1082,10 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-/* The two moves are taught by the pawn's OWN legal-move dots as much as by the ring. A .32 veil
+/* The forward taps are taught by the pawn's OWN legal-move dots as much as by the ring. A .32 veil
    would mute the ones the ring is not on, so here the scrim only whispers: the dots stay luminous
    across the whole slab while the ring and the ghost hand name the single tile the gate accepts. */
-.tutorial[data-stage="advance"] .tut-scrim,
-.tutorial[data-stage="sidestep"] .tut-scrim { background: rgba(8, 12, 22, .15); }
+.tutorial[data-tone="move"] .tut-scrim { background: rgba(8, 12, 22, .15); }
 
 /* the input guard: present everywhere EXCEPT the cut-out, so the spotlight is a real door */
 .tut-block {
@@ -1155,6 +1154,12 @@ body.tutorial-live .g-round { opacity: 0; }
 .tutorial[data-tone="wall"] .tut-spot {
   --tut-ring: rgba(245, 158, 11, .98);
   --tut-ring-soft: rgba(56, 189, 248, .55);
+}
+/* the setback: the ambush crater wears the board's alarm rose — the one beat of the lesson that
+   reads as a hit taken, not a move made */
+.tutorial[data-tone="setback"] .tut-spot {
+  --tut-ring: rgba(251, 113, 133, .98);
+  --tut-ring-soft: rgba(244, 63, 94, .5);
 }
 
 /* ---- the secondary aid: gold FINISH band, cyan/gold groove, gold mine tile ---- */
@@ -1242,6 +1247,22 @@ body.tutorial-live .g-round { opacity: 0; }
 @keyframes tut-tile-pulse {
   0%, 100% { opacity: .62; transform: scale(.985); }
   50%      { opacity: 1; transform: scale(1.015); }
+}
+/* ---- the funnel's detour marker: the tile the rival is forced to take once the bar drops ----
+   A quiet dashed cyan footprint, clearly secondary to the amber groove the ghost hand names. It
+   is decoration only: the input guard never cuts out for it, so it can never steal a tap. */
+.tut-detour {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border: 2px dashed rgba(56, 189, 248, .72);
+  background: radial-gradient(ellipse at center, rgba(56, 189, 248, .16), rgba(56, 189, 248, .04) 62%, transparent 78%);
+  box-shadow: 0 0 18px rgba(56, 189, 248, .26), inset 0 0 14px rgba(56, 189, 248, .14);
+  animation: tut-detour-pulse 1.5s ease-in-out infinite;
+}
+@keyframes tut-detour-pulse {
+  0%, 100% { opacity: .5; }
+  50%      { opacity: .95; }
 }
 /* a mis-tap: both rings snap out once and the hand bounces on the target — no words anywhere */
 .tut-spot.nudge,
@@ -1457,6 +1478,10 @@ body.tutorial-live .g-round { opacity: 0; }
 .tutorial[data-tone="mine"] .tut-cue {
   --cue-accent: #fcd34d;
   --cue-accent-soft: rgba(252, 211, 77, .15);
+}
+.tutorial[data-tone="setback"] .tut-cue {
+  --cue-accent: #fb7185;
+  --cue-accent-soft: rgba(244, 63, 94, .16);
 }
 .tut-cue-ico {
   flex: none;
@@ -1722,6 +1747,7 @@ body.tutorial-live .g-round { opacity: 0; }
   .tut-cue.lang-swap .tut-cue-t,
   .tutorial.lang-swap .tut-skip { animation: none; }
   .tut-pointer.nudge .tut-tap { animation: none; }
+  .tut-detour { animation: none; }
   .tut-climax.is-live, .tut-climax.is-out { animation-duration: .01s; }
 }
 @media (max-height: 620px) {

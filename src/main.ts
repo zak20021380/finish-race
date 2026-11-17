@@ -3,7 +3,7 @@ import './result.css';
 import {
   CONFIG, MAX_TEAMS, REPEAT_LIMIT, apply, ballById, distField, firstBall, getAutoMove,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
-  sideOf, steps as teamSteps,
+  sideOf, startLayout, steps as teamSteps,
   view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
@@ -427,6 +427,9 @@ function shake(micro = false) {
 let noteTimer = 0;
 let toastMsg = '';
 function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
+  /* The guided lesson narrates in its own tongue through the cue banner: the board's generic
+     English toasts (the blast report above all) would talk over the story, so they stay quiet. */
+  if (tutorialActive) return;
   toastMsg = msg;
   for (const el of noteEls) {
     if (el.closest<HTMLElement>('.screen')?.hidden) continue;
@@ -1363,17 +1366,17 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 /**
- * FREE-PLAY CLIMAX. The four-tap combo has detonated, the overlay is gone and the board is the
+ * FREE-PLAY CLIMAX. The eight-tap comeback has detonated, the overlay is gone and the board is the
  * player's own. The match is still the lesson's, so the rival stays handicapped (no walls, no
  * mines, no row 0) and chat stays silent until the race settles. This is what makes the tutorial
  * impossible to lose rather than merely easy.
  */
 let tutorialClimax = false;
-/** The whole tutorial match — guided combo plus climax. Chat and banter read this, never the stage. */
+/** The whole tutorial match — guided lesson plus climax. Chat and banter read this, never the stage. */
 const tutorialMatchLive = (): boolean => tutorialActive || tutorialClimax;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
 /* The lesson draws NO line across the board — no route, no threat run, no reroute. It points with
-   the spotlight, the ghost hand and the board's own local highlights only. */
+   the spotlight, the ghost hand, the single-tile detour marker and the board's own local highlights. */
 
 /* ---- invite-first onboarding: per-match session state ----
    All four are reset by `restart()`, so "first two turns" means the first two turns of THIS
@@ -2679,7 +2682,7 @@ function ui() {
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   /* the mine step offers exactly ONE square — the rival's forced detour — so the placement band
      reads as a single glowing target rather than a board full of options */
-  if (tutorialActive && stage === 'mine') {
+  if (tutorialActive && stage === 'trap') {
     const target = tutorialMineTarget();
     mineHints = target ? [target.cell] : [];
   }
@@ -4279,7 +4282,7 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 /**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
- * canvas receives this tap exactly as it would after the lesson. Each of the four steps is ONE
+ * canvas receives this tap exactly as it would after the lesson. Each of the eight steps is ONE
  * tap: the pawn is already in hand, the wall commits without a ghost toolbar, and the mine buries
  * without an arm key or a confirm disc.
  */
@@ -4301,15 +4304,15 @@ function tutorialTap(p: Vec) {
   let action = tutorialHitAction(at(p));
   /* The groove is a hairline and the detour is one tile: a tap anywhere inside the ring the lesson
      paints counts as a tap on the thing it is pointing at. */
-  if (stage === 'advance' || stage === 'sidestep') {
-    const target = stage === 'advance' ? tutorialAdvanceTarget() : tutorialSidestepTarget();
+  if (stage === 'rush1' || stage === 'rush2' || stage === 'rush3' || stage === 'sprint') {
+    const target = tutorialAdvanceTarget();
     if (target && tutorialSpotHas(target.spot, vx, vy)) {
       action = { kind: 'move', ball: target.ball, to: target.to };
     }
-  } else if (stage === 'wall') {
-    const target = tutorialWallTarget();
+  } else if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
+    const target = tutorialWallTarget(stage === 'wall1' ? 1 : stage === 'wall2' ? 2 : 3);
     if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'wall', spec: target.spec };
-  } else if (stage === 'mine') {
+  } else if (stage === 'trap') {
     const target = tutorialMineTarget();
     if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'mine', cell: target.cell };
   }
@@ -4520,7 +4523,7 @@ function tutorialForwardStep(): { ball: Ball; to: Pos } | null {
   return { ball, to };
 }
 
-/** STEP 1 — the single square directly ahead of the player's pawn. */
+/** STEPS 1-3 and 8 — the single square directly ahead of the player's pawn. */
 function tutorialAdvanceTarget(): TutorialTargetMove | null {
   const step = tutorialForwardStep();
   return step
@@ -4528,26 +4531,56 @@ function tutorialAdvanceTarget(): TutorialTargetMove | null {
     : null;
 }
 
+/* ---------- the deterministic comeback script ---------- */
+
 /**
- * STEP 2 — the sideways square that lines the pawn up with the rival's lane. Of the two lateral
- * steps the rules offer, the one nearer the rival's column wins (ties break toward the centre of
- * the board), so the sidestep reads as taking up position beside the enemy rather than wandering.
+ * The seeded opening the whole lesson is choreographed against: the hidden ambush cell (the
+ * player's third forward step) and the funnel's anchor — the rival's column and the row the three
+ * walls bend it along. Null whenever the board is not the lesson's own 1v1 opening (a party replay,
+ * a refused seed), and every scripted target then falls back to the live-board finders below.
  */
-function tutorialSidestepTarget(): TutorialTargetMove | null {
-  if (state.turn !== localSide || state.winner !== null) return null;
-  const ball = selected !== null ? ballById(state, selected) : firstBall(state, localSide);
-  if (!ball) return null;
-  const side = reachableBall(state, ball.id).filter((p) => p.r === ball.pos.r);
-  if (!side.length) return null;
-  const rival = tutorialRival();
-  const aim = rival ? rival.pos.c : (state.cols - 1) / 2;
-  const centre = (state.cols - 1) / 2;
-  const to = side.reduce((a, b) => {
-    const da = Math.abs(a.c - aim), db = Math.abs(b.c - aim);
-    if (db !== da) return db < da ? b : a;
-    return Math.abs(b.c - centre) < Math.abs(a.c - centre) ? b : a;
-  });
-  return { ball: ball.id, to, spot: { rect: boardRect(to.c, to.r), radius: 18 } };
+let tutScript: { ambush: Cell; rivalCol: number; funnelRow: number } | null = null;
+
+/**
+ * The funnel's three bars, in order, derived from the seeded opening:
+ *   1. the groove directly in front of the leading rival — its straight rush to FINISH closes;
+ *   2. the next groove along the same seam — the rival is bent into the narrow corridor;
+ *   3. the vertical bar on the corridor's open flank — the side escape is sealed, so the only
+ *      route left runs straight through the ambush square.
+ * The bars touch end to end (legal: no shared segment, no `+`), and the player's own lane stays
+ * clear of all three, so the comeback sprint is a straight run.
+ */
+function scriptedWall(n: 1 | 2 | 3): WallSpec | null {
+  if (!tutScript) return null;
+  const { rivalCol: c, funnelRow: r } = tutScript;
+  return n === 1 ? { o: 'h', x: c - 1, y: r }
+    : n === 2 ? { o: 'h', x: c + 1, y: r }
+      : { o: 'v', x: c - 2, y: r - 1 };
+}
+
+/**
+ * The funnel's quiet detour marker: dry-run the live wall on a throwaway board, then read the
+ * rival's forced answer there — the exact tile it must take once the bar drops. Decoration only;
+ * the tap gate never consults it.
+ */
+function tutorialDetourTarget(): TutorialSpot | null {
+  const stage = tutorialStage();
+  const n = stage === 'wall1' ? 1 : stage === 'wall2' ? 2 : stage === 'wall3' ? 3 : null;
+  if (!n || state.turn !== localSide || state.winner !== null) return null;
+  const target = tutorialWallTarget(n);
+  if (!target) return null;
+  const next = apply(state, { kind: 'wall', wall: { ...target.spec, owner: localSide } });
+  if (!next) return null;
+  const step = tutorialRivalStep(next);
+  return step ? { rect: boardRect(step.to.c, step.to.r), radius: 14 } : null;
+}
+
+/** The ambush crater: the rival charge the opening sprint just spent, read from the ledger. */
+function tutorialSetbackTarget(): TutorialTargetMine | null {
+  const crater = state.mines.find((m) => m.triggered && m.owner !== localSide);
+  return crater
+    ? { cell: crater.cell, spot: { rect: boardRect(crater.cell.c, crater.cell.r), radius: 16 } }
+    : null;
 }
 
 /** The groove under the spotlight: two cells wide, a band high, centred on the wall line. */
@@ -4565,19 +4598,23 @@ const tutorialRival = (): Ball | null =>
   firstBall(state, rivalSide()) ?? state.balls.find((b) => b.team !== localSide) ?? null;
 
 /**
- * The wall lesson's real target: a legal horizontal groove directly above the rival's pawn. The
- * candidates are tried nearest-first, then the whole lattice, so a crowded party board still finds
- * a groove that is genuinely legal instead of pointing at a refused slot.
- *
- * One rule the lesson adds on top of `wallOk`, which already keeps every live pawn's route open:
- * a groove that actually lengthens the rival's run wins over one that does not — the detour it
- * forces is the whole point of the step, even with no line drawn on the board to show it.
+ * The wall lesson's real target for bar n. On the seeded opening the script names the exact groove
+ * the comeback is choreographed against, validated by the engine's own `wallOk` (budget, lattice,
+ * no clash, every live pawn keeps a route). If the board has drifted off the script — or the lesson
+ * is replayed on a party board — the live-board finder takes over: candidates nearest the rival
+ * first, then the whole lattice, preferring a groove that actually lengthens the rival's run, so
+ * the step always points at a legal bar that forces a detour.
  */
-function tutorialWallTarget(): TutorialTargetWall | null {
+function tutorialWallTarget(n: 1 | 2 | 3): TutorialTargetWall | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   if (wallsRemaining(state, localSide) <= 0) return null;
   const rival = tutorialRival();
   if (!rival) return null;
+  const scripted = scriptedWall(n);
+  if (scripted && tutScript && state.walls.length === n - 1 && rival.pos.r === tutScript.funnelRow) {
+    const wall: Wall = { ...scripted, owner: localSide };
+    if (wallOk(state, wall)) return { spec: scripted, spot: grooveSpot(scripted) };
+  }
   const seen = new Set<string>();
   const candidates: WallSpec[] = [];
   const push = (spec: WallSpec) => {
@@ -4607,12 +4644,13 @@ function tutorialWallTarget(): TutorialTargetWall | null {
 }
 
 /**
- * STEP 4's real target: the tile the rival is about to step onto. `tutorialRivalStep()` reads the
+ * STEP 7's real target: the tile the rival is about to step onto. `tutorialRivalStep()` reads the
  * LIVE board and the rules' own step query, so the tile is one the rival can actually reach in one
  * move — straight ahead when that edge is open, the nearest sidestep/forward tile on its shortest
  * route when a wall turns it aside — and it must also be a legal mine cell, so the lesson never
- * points at a square the placement would refuse. The rival is then scripted onto exactly this tile
- * the moment the charge is buried.
+ * points at a square the placement would refuse. On the seeded funnel this is the choke point the
+ * three walls forced open; the rival is then scripted onto exactly this tile after the player's
+ * step-8 advance.
  */
 function tutorialMineTarget(): TutorialTargetMine | null {
   if (state.turn !== localSide || state.winner !== null) return null;
@@ -4644,16 +4682,23 @@ function tutorialMineTarget(): TutorialTargetMine | null {
 const tutorialFinishTarget = (): TutorialSpot | null =>
   state.winner === null ? { rect: boardRect(0, 0, state.cols, 1), radius: 18 } : null;
 
-/** The lesson's one bot beat: the rival's scripted step, then the board is the player's again. */
-async function tutorialReply(): Promise<void> {
+/** The lesson's one bot beat: the rival's scripted answer, then the board is the player's again. */
+async function tutorialReply(stage: TutorialStage): Promise<void> {
+  /* Step 7's beat: the trap is buried and the rival HOLDS POSITION — passing keeps the funnel's
+     forced step intact, so the player's step-8 advance is what sends it walking onto the charge. */
+  if (stage === 'trap') {
+    if (tutorialActive && state.winner === null && state.turn !== localSide) play({ kind: 'pass' });
+    return;
+  }
   for (let guard = 0; guard < 8; guard++) {
     if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
     const seat = state.turn;
     await new Promise<void>((res) => window.setTimeout(res, 50));
     if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
-    /* The choreography is a walk, not a search: the rival takes the same forward lane the
-       spotlight is teaching, so the pair climbs the board in lockstep. A party board — or a rival
-       that does not hold the scripted ball — still falls back to the brain's own answer. */
+    /* The choreography is a walk, not a search: the rival takes the shortest route the rules offer,
+       which on the seeded opening is the exact sidestep the funnel forces — and the straight lane
+       the spotlight teaches during the opening sprint. A party board — or a rival that does not
+       hold the scripted ball — still falls back to the brain's own answer. */
     const scripted = tutorialRivalStep();
     const auto = scripted && scripted.ball.team === seat
       ? { kind: 'move' as const, ball: scripted.ball.id, to: scripted.to }
@@ -4671,9 +4716,9 @@ async function tutorialReply(): Promise<void> {
 
 /**
  * Stage change from the lesson: give the board exactly the furniture the step needs and nothing
- * else. The two moves hold the pawn so its legal dots light up; the wall step stands a real ghost
- * bar in the glowing groove (unarmed, so no ✓/✕ toolbar is ever raised); the mine step puts the
- * placement band down with a single placeable square. `refresh(null)` takes all of it away.
+ * else. The four forward taps hold the pawn so its legal dots light up; each wall step stands a
+ * real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is ever raised); the trap step
+ * puts the placement band down with a single placeable square. `refresh(null)` takes it all away.
  */
 function syncTutorialUI(stage: TutorialStage | null = null) {
   if (!tutorialActive) {
@@ -4681,15 +4726,15 @@ function syncTutorialUI(stage: TutorialStage | null = null) {
     return;
   }
   mineGhost = null;
-  if (stage === 'advance' || stage === 'sidestep') {
+  if (stage === 'rush1' || stage === 'rush2' || stage === 'rush3' || stage === 'sprint') {
     const ball = state.turn === localSide ? firstBall(state, localSide) : null;
     setMode({ selected: ball ? ball.id : null, preview: null, mine: false });
-  } else if (stage === 'wall') {
-    const target = tutorialWallTarget();
+  } else if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
+    const target = tutorialWallTarget(stage === 'wall1' ? 1 : stage === 'wall2' ? 2 : 3);
     setMode(previewWall(BOARD_IDLE, target
       ? { spec: target.spec, ok: true, armed: false, p: localSide }
       : null));
-  } else if (stage === 'mine') {
+  } else if (stage === 'trap') {
     setMode(holdMineKey(BOARD_IDLE, true));
   } else {
     setMode(BOARD_IDLE);
@@ -4700,19 +4745,20 @@ function syncTutorialUI(stage: TutorialStage | null = null) {
 /* ---------- the lesson's own bot beats ---------- */
 
 /**
- * The rival's next step, read from the live board: straight ahead whenever that edge is open, and
- * otherwise the sidestep/forward tile nearest FINISH on its shortest route. `reachableBall()` is
- * the rules' own step query, so a walled edge is never pointed at, and `distField()` is the same
- * route the board measures, so the tile the lesson names is the tile the rival actually takes.
+ * The rival's next step, read from a board (the live one by default): straight ahead whenever that
+ * edge is open, and otherwise the sidestep/forward tile nearest FINISH on its shortest route.
+ * `reachableBall()` is the rules' own step query, so a walled edge is never pointed at, and
+ * `distField()` is the same route the board measures, so the tile the lesson names is the tile the
+ * rival actually takes. The detour marker opens it on a throwaway post-wall board.
  */
-function tutorialRivalStep(): { ball: Ball; to: Pos } | null {
-  const rival = tutorialRival();
+function tutorialRivalStep(s: GameState = state): { ball: Ball; to: Pos } | null {
+  const rival = firstBall(s, rivalSide()) ?? s.balls.find((b) => b.team !== localSide) ?? null;
   if (!rival) return null;
-  const opts = reachableBall(state, rival.id);
+  const opts = reachableBall(s, rival.id);
   if (!opts.length) return null;
-  const d = distField(state.walls, state.cols, state.rows);
+  const d = distField(s.walls, s.cols, s.rows);
   const dist = (p: Pos): number => {
-    const v = d[p.r * state.cols + p.c];
+    const v = d[p.r * s.cols + p.c];
     return v < 0 ? Number.POSITIVE_INFINITY : v;
   };
   const straight = (p: Pos): boolean => p.c === rival.pos.c && p.r === rival.pos.r - 1;
@@ -4804,7 +4850,7 @@ function showClimaxCallout(): void {
   const el = $<HTMLElement>('tut-climax');
   const text = $<HTMLElement>('tut-climax-t');
   /* the hand-off speaks the lesson's own tongue, not the shell's: the switcher in the top bar is
-     the language the player just read four prompts in */
+     the language the player just read eight prompts in */
   const tongue = tutorialLang();
   text.textContent = tIn(tongue, 'tutClimax');
   el.dir = tutorialDir(tongue);
@@ -4853,24 +4899,32 @@ function endTutorialMatch(): void {
 }
 
 /**
- * The combo's deterministic opening. Both pawns are placed so the four taps land exactly where the
- * lesson says they will: the player ends the sidestep three rows from FINISH, the rival is turned
- * aside by the wall and then thrown two more rows back by the charge buried in its detour. The
- * budgets, the fog and the seat colours are the race's own — only the opening position is scripted.
+ * The comeback's deterministic opening: the FULL match start. Both pawns keep their true spawn
+ * tiles — the exact layout a real 1v1 opens on — and one hidden rival mine is buried on the
+ * player's third forward step, so the opening sprint walks straight into the ambush. The budgets,
+ * the fog and the seat colours are the race's own; only the hidden charge is scripted, and it is
+ * invisible until it fires, exactly like any rival mine in a real race.
  */
 function seedTutorialBoard(): void {
+  tutScript = null;
   if (state.balls.length !== 2 || state.cols < 6 || state.rows < 8) return;
   const mine = firstBall(state, localSide);
   const foe = firstBall(state, rivalSide());
   if (!mine || !foe) return;
-  const c = Math.floor(state.cols / 2);
+  const layout = startLayout([1, 1], state.cols, state.rows);
+  const home = layout[localSide]?.[0];
+  const away = layout[rivalSide()]?.[0];
+  if (!home || !away || home.r < 4) return;
+  /* the ambush: the player's third forward step, on the player's own lane */
+  const ambush: Cell = { c: home.c, r: home.r - 3 };
+  tutScript = { ambush, rivalCol: away.c, funnelRow: ambush.r };
   state = {
     ...state,
     balls: state.balls.map((b) => (b.id === mine.id
-      ? { ...b, pos: { c: c - 2, r: 4 }, isCheckmated: false }
-      : { ...b, pos: { c, r: 6 }, isCheckmated: false })),
+      ? { ...b, pos: { ...home }, isCheckmated: false }
+      : { ...b, pos: { ...away }, isCheckmated: false })),
     walls: [],
-    mines: [],
+    mines: [{ cell: { ...ambush }, owner: rivalSide(), triggered: false }],
     wallsLeft: state.teams.map(() => wallBudget(state.balls.length)),
     turn: localSide,
     winner: null,
@@ -4878,7 +4932,7 @@ function seedTutorialBoard(): void {
     eliminated: [],
     repeat: { seen: [], streak: 0 },
   };
-  /* the tokens are born on their scripted tiles, never tweened in from the start line */
+  /* the tokens are born on their true start tiles, never tweened in from elsewhere */
   ballViews.length = 0;
   snapBalls();
   marks.fill(null);
@@ -4944,7 +4998,7 @@ function joinPendingDuelRoom(): void {
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
- * board the four steps were written against. It is a standalone lesson: `end` returns to Home.
+ * board the eight steps were written against. It is a standalone lesson: `end` returns to Home.
  */
 function startTutorial() {
   if (sheets.isOpen) sheets.close();
@@ -5121,9 +5175,10 @@ function cancelTutorial() {
 tutorial = createTutorial({
   goal: tutorialFinishTarget,
   advance: tutorialAdvanceTarget,
-  sidestep: tutorialSidestepTarget,
   wall: tutorialWallTarget,
   mine: tutorialMineTarget,
+  detour: tutorialDetourTarget,
+  setback: tutorialSetbackTarget,
   blast: tutorialMineBlastTarget,
   reply: tutorialReply,
   detonate: tutorialDetonate,
@@ -5143,10 +5198,10 @@ tutorial = createTutorial({
        returning profile can never be auto-routed into the lesson again. */
     completeTutorial();
     if (result === 'finished') {
-      /* THE FREE-PLAY CLIMAX. The charge has gone off, the rival is thrown back and the player
-         stands three rows from FINISH with a decisive lead. Every gate comes off the board: the
-         pawn, the walls, the mines and the clock are all the player's own again, and one callout
-         says so. The rival stays handicapped until the line is crossed, so the race cannot be lost. */
+      /* THE FREE-PLAY CLIMAX. The counter-mine has gone off, the rival is thrown back and the lead
+         is the player's again. Every gate comes off the board: the pawn, the walls, the mines and
+         the clock are all the player's own again, and one callout says so. The rival stays
+         handicapped until the line is crossed, so the race cannot be lost. */
       tutorialStandalone = false;
       if (bootLesson) firstRunSprint = true;
       if (state.winner === null) {

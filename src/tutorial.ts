@@ -1,15 +1,25 @@
 /**
- * tutorial.ts — the first-match hands-on lesson: a four-tap tactical combo.
+ * tutorial.ts — the first-match hands-on lesson: an eight-tap comeback narrative.
  *
- * The lesson is one opening card and then four single taps, each of them a real move on the real
- * board. The board is seeded by `main.ts` so the choreography is deterministic:
+ * The lesson is one opening card and then eight single taps, each of them a real move on the real
+ * board. `main.ts` seeds the FULL match opening — both pawns on their true start tiles, one hidden
+ * rival mine buried on the player's third forward step — so the choreography is deterministic:
  *
- *   1. advance  — the square directly ahead. One tap walks the pawn.
- *   2. sidestep — the square beside it. One tap lines the pawn up with the rival's lane.
- *   3. wall     — the glowing groove directly in front of the rival. One tap raises the bar; the
- *                 rival's straight path closes and it is forced into the detour lane.
- *   4. mine     — the square the rival must take next. One tap buries the charge, the rival walks
- *                 onto it, and the engine's own detonation throws it KNOCKBACK rows back.
+ *   PHASE 1 — opening sprint & dramatic setback (steps 1-3)
+ *   1-3. advance — three taps straight ahead. The third lands on the rival's hidden charge: the
+ *        engine's own detonation throws the player KNOCKBACK rows back while the rival climbs
+ *        ahead. The `setback` beat holds the crater under the ambush callout.
+ *
+ *   PHASE 2 — the three-wall funnel (steps 4-6)
+ *   4-6. wall — three pulsing ghost grooves, one tap each. The first cuts the leader's straight
+ *        rush, the second bends it into a narrow corridor, the third seals the side escape so the
+ *        only route left runs through the ambush square. A soft detour marker names the tile the
+ *        rival is forced to take after each bar drops.
+ *
+ *   PHASE 3 — counter-mine & comeback sprint (steps 7-8)
+ *   7. trap — one tap buries the player's charge on the choke point; the rival holds its breath.
+ *   8. sprint — one tap forward, and the rival's own answer walks it onto the charge. The blast
+ *      throws it two rows back and hands the lead to the player.
  *
  * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
  * one target per stage and `main.ts` commits it through the same `play()` a real race uses. Between
@@ -20,8 +30,8 @@
  * from `settings.ts`), a step counter in Latin digits, the pulsing spotlight and the ghost hand on
  * the exact pixel to tap. Nothing is ever stroked across the board: no route, no threat beam.
  *
- * When the blast settles the lesson closes as `finished` and `main.ts` hands the player the wheel
- * for the free-play climax, under handicaps that make the race impossible to lose.
+ * When the counter-blast settles the lesson closes as `finished` and `main.ts` hands the player the
+ * wheel for the free-play climax, under handicaps that make the race impossible to lose.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one. The scrim and the input blocker
@@ -41,8 +51,13 @@ export interface TutorialSpot {
   radius?: number;
 }
 
-/** `blast` is the lesson's last breath: the spotlight holds the crater while the engine detonates. */
-export type TutorialStage = 'goal' | 'advance' | 'sidestep' | 'wall' | 'mine' | 'blast';
+/**
+ * The comeback arc, stage by stage. `setback` holds the ambush crater after the opening mine, and
+ * `blast` holds the player's own charge while the rival walks into it — neither owns a board action.
+ */
+export type TutorialStage =
+  | 'goal' | 'rush1' | 'rush2' | 'rush3' | 'setback'
+  | 'wall1' | 'wall2' | 'wall3' | 'trap' | 'sprint' | 'blast';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 export type TutorialLang = LangCode;
@@ -78,18 +93,20 @@ export interface TutorialTargetMine { spot: TutorialSpot; cell: Cell }
 export interface TutorialHooks {
   /** The goal card's own target: the FINISH band across the top of the board. */
   goal(): TutorialSpot | null;
-  /** Step 1: the square directly ahead of the player's pawn. */
+  /** Steps 1-3 and 8: the square directly ahead of the player's pawn. */
   advance(): TutorialTargetMove | null;
-  /** Step 2: the sideways square that lines the pawn up with the rival's lane. */
-  sidestep(): TutorialTargetMove | null;
-  /** Step 3: the groove directly in front of the rival, committed by one tap. */
-  wall(): TutorialTargetWall | null;
-  /** Step 4: the detour square the rival is forced to take, mined by one tap. */
+  /** Steps 4-6: the glowing groove for wall n, committed by one tap. */
+  wall(n: 1 | 2 | 3): TutorialTargetWall | null;
+  /** Step 7: the choke-point square the rival is forced to take, mined by one tap. */
   mine(): TutorialTargetMine | null;
+  /** The rival's forced next tile once the live wall drops: the funnel's soft detour marker. */
+  detour(): TutorialSpot | null;
+  /** The ambush crater: the spotlight holds it while the setback callout reads. */
+  setback(): TutorialTargetMine | null;
   /** The buried charge's own square: the spotlight holds it while the rival walks into it. */
   blast(cell: Cell | null): TutorialTargetMine | null;
-  /** One scripted rival step; resolves when the local seat is on turn again. */
-  reply(): Promise<void>;
+  /** One scripted rival beat for the stage just committed; resolves when the local seat is up again. */
+  reply(stage: TutorialStage): Promise<void>;
   /** Walk the rival onto the buried charge and resolve once the real detonation has played out. */
   detonate(cell: Cell): Promise<void>;
   /** The parting cue: one gold breath over the FINISH row, drawn by the board itself. */
@@ -118,42 +135,61 @@ export interface Tutorial {
 export interface TutorialStepDef {
   stage: TutorialStage;
   icon: string;
-  tone: 'goal' | 'move' | 'wall' | 'mine';
-  /** 1..4 on the combo's own steps; 0 on the card and the blast, which wear no counter. */
+  tone: 'goal' | 'move' | 'wall' | 'mine' | 'setback';
+  /** 1..8 on the comeback's own steps; 0 on the card and the two blast beats, which wear no counter. */
   step: number;
   /** The cue banner's i18n key, or null on the stages that teach with light alone. */
   cue: string | null;
 }
 
-/** The whole lesson, in order: one card, four taps, one detonation. */
+/** The whole lesson, in order: one card, eight taps, two detonations. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'goal', icon: '#i-flag', tone: 'goal', step: 0, cue: null },
-  { stage: 'advance', icon: '#i-move', tone: 'move', step: 1, cue: 'tutStep1' },
-  { stage: 'sidestep', icon: '#i-move', tone: 'move', step: 2, cue: 'tutStep2' },
-  { stage: 'wall', icon: '#i-wall', tone: 'wall', step: 3, cue: 'tutStep3' },
-  { stage: 'mine', icon: '#i-mine-tactical', tone: 'mine', step: 4, cue: 'tutStep4' },
+  { stage: 'rush1', icon: '#i-move', tone: 'move', step: 1, cue: 'tutStep1' },
+  { stage: 'rush2', icon: '#i-move', tone: 'move', step: 2, cue: 'tutStep2' },
+  { stage: 'rush3', icon: '#i-move', tone: 'move', step: 3, cue: 'tutStep3' },
+  { stage: 'setback', icon: '#i-bolt', tone: 'setback', step: 3, cue: 'tutSetback' },
+  { stage: 'wall1', icon: '#i-wall', tone: 'wall', step: 4, cue: 'tutStep4' },
+  { stage: 'wall2', icon: '#i-wall', tone: 'wall', step: 5, cue: 'tutStep5' },
+  { stage: 'wall3', icon: '#i-wall', tone: 'wall', step: 6, cue: 'tutStep6' },
+  { stage: 'trap', icon: '#i-mine-tactical', tone: 'mine', step: 7, cue: 'tutStep7' },
+  { stage: 'sprint', icon: '#i-move', tone: 'move', step: 8, cue: 'tutStep8' },
   { stage: 'blast', icon: '#i-mine-tactical', tone: 'mine', step: 0, cue: null },
 ];
 
 /** What comes after each successful action. The rival answers between every pair of taps. */
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
-  goal: 'advance',
-  advance: 'sidestep',
-  sidestep: 'wall',
-  wall: 'mine',
-  mine: 'blast',
+  goal: 'rush1',
+  rush1: 'rush2',
+  rush2: 'rush3',
+  rush3: 'setback',
+  setback: 'wall1',
+  wall1: 'wall2',
+  wall2: 'wall3',
+  wall3: 'trap',
+  trap: 'sprint',
+  sprint: 'blast',
   blast: 'done',
 };
 
-/** The action each stage answers to. The card and the blast own no board action. */
+/** The action each stage answers to. The card and the two blast beats own no board action. */
 const STAGE_KIND: Readonly<Record<TutorialStage, TutorialAction['kind'] | null>> = {
   goal: null,
-  advance: 'move',
-  sidestep: 'move',
-  wall: 'wall',
-  mine: 'mine',
+  rush1: 'move',
+  rush2: 'move',
+  rush3: 'move',
+  setback: null,
+  wall1: 'wall',
+  wall2: 'wall',
+  wall3: 'wall',
+  trap: 'mine',
+  sprint: 'move',
   blast: null,
 };
+
+/** The four forward taps share one target hook: the square directly ahead, read from the live board. */
+const MOVE_STAGES: ReadonlySet<TutorialStage> = new Set(['rush1', 'rush2', 'rush3', 'sprint']);
+const WALL_N: Readonly<Partial<Record<TutorialStage, 1 | 2 | 3>>> = { wall1: 1, wall2: 2, wall3: 3 };
 
 /**
  * STRICT FIRST-TIME-ONLY rule. Only a local, single-human bot race may auto-route into the lesson,
@@ -182,17 +218,16 @@ export function tutorialAllows(
   action: TutorialAction,
 ): boolean {
   if (stage === null || stage === 'done') return false;
-  switch (stage) {
-    case 'advance':
-    case 'sidestep':
-      return action.kind === 'move' && sameCell(action.to, targets.move);
-    case 'wall':
-      return action.kind === 'wall' && sameWall(action.spec, targets.wall);
-    case 'mine':
-      return action.kind === 'mine' && sameCell(action.cell, targets.mine);
-    default:
-      return false;
+  if (MOVE_STAGES.has(stage)) {
+    return action.kind === 'move' && sameCell(action.to, targets.move);
   }
+  if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
+    return action.kind === 'wall' && sameWall(action.spec, targets.wall);
+  }
+  if (stage === 'trap') {
+    return action.kind === 'mine' && sameCell(action.cell, targets.mine);
+  }
+  return false;
 }
 
 const byId = <T extends Element>(id: string): T => document.getElementById(id) as unknown as T;
@@ -249,6 +284,10 @@ const setBox = (el: HTMLElement, r: TutorialRect) => {
 };
 
 const REPLY_BEAT_MS = 260;      // let the player's own move read, then the rival answers at once
+/** The ambush needs a longer breath: the blast, the knockback and the callout all land first. */
+const SETBACK_BEAT_MS = 1650;
+/** The buried charge gets its own beat before the rival holds position over it. */
+const TRAP_BEAT_MS = 420;
 /** The top bar the lesson itself owns: the language segment and Skip both live in it. */
 const BAR_BOTTOM = 66;
 
@@ -260,7 +299,7 @@ function writeStoredLang(value: TutorialLang): void {
 }
 
 /** The tongue the lesson is speaking right now — the climax callout reads it too, so the hand-off
- *  lands in the same language as the four prompts that led to it. */
+ *  lands in the same language as the eight prompts that led to it. */
 let liveLang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
 export const tutorialLang = (): TutorialLang => liveLang;
 
@@ -269,6 +308,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const clipPath = byId<SVGPathElement>('tut-clip-path');
   const spotEl = byId<HTMLElement>('tut-spot');
   const aidEl = byId<HTMLElement>('tut-aid');
+  const detourEl = byId<HTMLElement>('tut-detour');
   const pointer = byId<HTMLElement>('tut-pointer');
   const card = byId<HTMLElement>('tut-card');
   const titleEl = byId<HTMLElement>('tut-title');
@@ -302,32 +342,33 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const targets = (): TutorialTargets => {
     const s = stage();
+    const wn = s ? WALL_N[s] : undefined;
     return {
-      move: s === 'advance' ? hooks.advance()?.to ?? null
-        : s === 'sidestep' ? hooks.sidestep()?.to ?? null : null,
-      wall: s === 'wall' ? hooks.wall()?.spec ?? null : null,
-      mine: s === 'mine' ? hooks.mine()?.cell ?? null : null,
+      move: s && MOVE_STAGES.has(s) ? hooks.advance()?.to ?? null : null,
+      wall: wn ? hooks.wall(wn)?.spec ?? null : null,
+      mine: s === 'trap' ? hooks.mine()?.cell ?? null : null,
     };
   };
 
   const targetFor = (s: TutorialStage): { spot: TutorialSpot } | null => {
-    switch (s) {
-      case 'goal': { const g = hooks.goal(); return g ? { spot: g } : null; }
-      case 'advance': return hooks.advance();
-      case 'sidestep': return hooks.sidestep();
-      case 'wall': return hooks.wall();
-      case 'mine': return hooks.mine();
-      case 'blast': return hooks.blast(blastCell);
-    }
+    if (s === 'goal') { const g = hooks.goal(); return g ? { spot: g } : null; }
+    if (MOVE_STAGES.has(s)) return hooks.advance();
+    const wn = WALL_N[s];
+    if (wn) return hooks.wall(wn);
+    if (s === 'trap') return hooks.mine();
+    if (s === 'setback') return hooks.setback();
+    return hooks.blast(blastCell);
   };
 
   /**
    * The secondary highlight under the ring: the FINISH band on the goal card, the luminous ghost
-   * bar on the wall step, the charged square on the mine step, the target's own footprint on the
-   * two moves. The blast gets the mine marker too — the crater is the thing being watched.
+   * bar on the wall steps, the charged square on the mine step and both blast beats, the target's
+   * own footprint on the four moves.
    */
   const aidKind = (s: TutorialStage): string =>
-    s === 'goal' ? 'finish' : s === 'wall' ? 'wall' : s === 'mine' || s === 'blast' ? 'mine' : 'tile';
+    s === 'goal' ? 'finish'
+      : WALL_N[s] ? 'wall'
+        : s === 'trap' || s === 'blast' || s === 'setback' ? 'mine' : 'tile';
 
   const paintLang = () => {
     const dir = tutorialDir(lang);
@@ -361,7 +402,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     } else if (def.cue) {
       const line = tIn(lang, def.cue);
       cueText.textContent = line;
-      cueNum.textContent = `${def.step}/4`;
+      cueNum.textContent = `${def.step}/8`;
       cue.setAttribute('aria-label', tIn(lang, 'tutStepAria').replace('{n}', String(def.step)));
       liveEl.textContent = line;
     } else {
@@ -433,6 +474,16 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;
   };
 
+  /** The funnel's quiet second marker: the tile the rival is forced to take once the bar drops.
+   *  Decoration only — it never owns a tap, and the ghost hand stays on the wall itself. */
+  const placeDetour = (s: TutorialStage) => {
+    const spot = WALL_N[s] ? hooks.detour() : null;
+    detourEl.hidden = !spot;
+    if (!spot) return;
+    setBox(detourEl, spot.rect);
+    detourEl.style.borderRadius = `${spot.radius ?? 14}px`;
+  };
+
   /** The goal card parks low: its target is the top of the screen and the hand hangs below it. */
   const placeCard = () => {
     const vw = window.innerWidth, vh = window.innerHeight;
@@ -484,6 +535,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       drawMask(null, 0);
       placeRing(null, 0);
       aidEl.hidden = true;
+      detourEl.hidden = true;
       pointer.style.display = 'none';
       if (s === 'goal') placeCard();
       placeCue(null);
@@ -494,6 +546,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     drawMask(ring, radius);
     placeRing(ring, radius);
     placeAid(s, target.spot);
+    placeDetour(s);
     pointer.style.display = '';
     placePointer(ring);
     if (s === 'goal') placeCard();
@@ -570,14 +623,14 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const advance = () => {
     if (!open) return;
     if (TUTORIAL_STEPS[stepIndex].stage !== 'goal') return;
-    go('advance');
+    go('rush1');
   };
 
   /**
    * One bot beat, then the next stage. Token-guarded like every other transition, so a skip, a
    * close or a stale reply can never advance a lesson that has already moved on.
    */
-  const awaiting = (beat: () => Promise<void>, next: () => void) => {
+  const awaiting = (beatMs: number, beat: () => Promise<void>, next: () => void) => {
     const token = ++flow;
     transitionTimer = window.setTimeout(() => {
       transitionTimer = 0;
@@ -587,7 +640,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           if (!open || token !== flow) return;
           next();
         });
-    }, REPLY_BEAT_MS);
+    }, beatMs);
   };
 
   const attach = () => {
@@ -623,6 +676,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     drawMask(null, 0);
     placeRing(null, 0);
     aidEl.hidden = true;
+    detourEl.hidden = true;
     pointer.style.display = 'none';
     detach();
     hooks.refresh(null);
@@ -674,24 +728,41 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
          fail every move/wall/mine: the action itself changed whose turn it is. Kind is enough. */
       if (action.kind !== STAGE_KIND[now]) return;
       switch (now) {
-        case 'advance':
-        case 'sidestep':
+        case 'rush1':
+        case 'rush2':
           /* the rival answers the step at once, then the next tap is lit */
-          awaiting(hooks.reply, () => go(NEXT_STAGE[now] as TutorialStage));
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
           return;
-        case 'wall':
-          /* the bar closes the straight path; the rival is forced into the detour lane, and the
-             mine step then names the exact square it must take next */
-          awaiting(hooks.reply, () => go('mine'));
+        case 'rush3':
+          /* The hidden charge already went off inside `play()`: the flash, the KNOCKBACK throw and
+             the bang are the engine's own. Hold the crater under the ambush callout, let it read,
+             then the rival's answer climbs into the lead. */
+          go('setback');
+          awaiting(SETBACK_BEAT_MS, () => hooks.reply('setback'), () => go('wall1'));
           return;
-        case 'mine': {
+        case 'wall1':
+        case 'wall2':
+        case 'wall3':
+          /* each bar bends the rival's route one notch deeper into the funnel; the detour marker
+             and the next ghost groove are re-derived from the live board on the next stage */
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
+          return;
+        case 'trap': {
           if (action.kind !== 'mine') { close('finished'); return; }
-          /* The charge is buried. The spotlight holds that square while the board walks the rival
-             onto it: the blast, the knockback, the shake and the bang are the engine's own. */
+          /* The charge is buried on the choke point. The rival holds position for one beat — the
+             player's forward tap is what sends it walking onto the square. */
           blastCell = action.cell;
+          awaiting(TRAP_BEAT_MS, () => hooks.reply('trap'), () => go('sprint'));
+          return;
+        }
+        case 'sprint': {
+          /* The player stepped; the spotlight holds the buried square while the board walks the
+             rival onto it: the blast, the knockback, the shake and the bang are the engine's own. */
+          const cell = blastCell;
           go('blast');
+          if (!cell) { close('finished'); return; }
           const token = ++flow;
-          void hooks.detonate(action.cell)
+          void hooks.detonate(cell)
             .catch(() => undefined)
             .then(() => {
               if (!open || token !== flow) return;

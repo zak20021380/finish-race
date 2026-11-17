@@ -2508,10 +2508,12 @@
       </nav>
 
       <!-- ---------------- first-match hands-on tutorial ----------------
-           ONE card, then four single taps. The GOAL card (title, one line, Start) opens the
-           lesson; after it every stage is a 1-tap action on the real board — advance, sidestep,
-           wall funnel, mine ambush — named by one short localized prompt in the cue banner, a
-           Latin-digit step counter, the pulsing spotlight and the ghost hand on the exact pixel.
+           ONE card, then eight single taps: a comeback narrative. The GOAL card (title, one line,
+           Start) opens the lesson; after it every stage is a 1-tap action on the real board —
+           a 3-step opening sprint that walks into a hidden rival mine, a 3-wall funnel that stops
+           the leading rival, a counter-mine on its forced path and the sprint that detonates it —
+           named by one short localized prompt in the cue banner, a Latin-digit step counter, the
+           pulsing spotlight and the ghost hand on the exact pixel.
            No wall-mode toggle, no rotation, no confirm pair: the gate names one target and
            main.ts commits it through the same play() a real race uses. The rival answers between
            taps, walks onto the buried charge, and the engine's own blast throws it back. The
@@ -2538,6 +2540,9 @@
           </svg>
         </div>
         <span class="tut-spot" id="tut-spot" aria-hidden="true" hidden></span>
+        <!-- the funnel's quiet second marker: the tile the rival is forced to take once the glowing
+             wall drops. Decoration only — it never owns a tap and never wears the ghost hand. -->
+        <span class="tut-detour" id="tut-detour" aria-hidden="true" hidden></span>
         <div class="tut-block" aria-hidden="true"></div>
         <div class="tut-pointer" id="tut-pointer" aria-hidden="true">
           <span class="tut-sonar" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -2565,12 +2570,12 @@
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
           </button>
         </div>
-        <!-- the four taps: one counter, one icon, one short prompt. Never over the live ring. -->
+        <!-- the eight taps: one counter, one icon, one short prompt. Never over the live ring. -->
         <div class="tut-cue" id="tut-cue" role="status" hidden>
           <span class="tut-cue-ico" aria-hidden="true">
             <svg class="ico" focusable="false"><use id="tut-cue-use" href="#i-move" /></svg>
           </span>
-          <span class="tut-cue-n" id="tut-cue-n" aria-hidden="true">1/4</span>
+          <span class="tut-cue-n" id="tut-cue-n" aria-hidden="true">1/8</span>
           <p class="tut-cue-t" id="tut-cue-t"></p>
         </div>
         <button class="tut-skip" id="tut-skip" type="button">Skip</button>
