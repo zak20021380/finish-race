@@ -297,6 +297,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     profileBornOn: 'Born {date}',
     /* ---- the competitive profile card (src/menu.ts): level, arena bracket, PvP career ---- */
     pfLevelShort: 'LV.',
+    /* the expanded XP rail: the exact step to the next level and the quiet lifetime pool */
+    pfXpRemaining: '{n} XP to LVL {level}',
+    pfXpTotal: 'Total: {n} XP',
     pfArenaPlaque: 'Arena {n}: {name}',
     pfArenaCrucible: 'Crucible',
     pfTacticalIq: 'Tactical Intelligence',
@@ -1304,6 +1307,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     profileBornOn: 'متولد {date}',
     /* ---- کارت رقابتی پروفایل (src/menu.ts): لول، آرنا، کارنامه واقعی ---- */
     pfLevelShort: 'LV.',
+    /* نوار XP: فاصله دقیق تا لول بعدی و مجموع درجه‌ها */
+    pfXpRemaining: '{n} XP تا لول {level}',
+    pfXpTotal: 'کل: {n} XP',
     pfArenaPlaque: 'آرنا {n}: {name}',
     pfArenaCrucible: 'بوته آزمایش',
     pfTacticalIq: 'هوش تاکتیکی',
@@ -2249,6 +2255,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     beatsRivalsToast: 'Ваш тактический IQ выше, чем у {pct}% игроков мира.',
     nationLockTitle: 'Национальная верность закреплена',
     nationLockBody: 'Ваш флаг — ваша постоянная честь на арене.',
+    /* шкала XP: точный шаг до следующего уровня и общая сумма очков */
+    pfXpRemaining: '{n} XP до УРОВНЯ {level}',
+    pfXpTotal: 'Всего: {n} XP',
     /* ---- интерактивный урок: четыре темы и шаг с миной ---- */
     tutorialLessonMove: 'Движение — выбери фишку и шагни к линии FINISH.',
     tutorialLessonWall: 'Стены — поставь стену на пути соперника.',
@@ -2548,6 +2557,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     beatsRivalsToast: 'ذكاؤك التكتيكي يتجاوز {pct}% من لاعبي العالم.',
     nationLockTitle: 'الولاء الوطني مقفل',
     nationLockBody: 'علمك يمثل شرفك الدائم في الساحة.',
+    /* شريط XP: الخطوة المتبقية إلى المستوى التالي والمجموع التراكمي */
+    pfXpRemaining: '{n} XP إلى المستوى {level}',
+    pfXpTotal: 'الإجمالي: {n} XP',
     /* ---- الدرس التفاعلي: أربع مراحل وخطوة الألغام ---- */
     tutorialLessonMove: 'الحركة — اختر قطعتك وتقدّم نحو صف FINISH.',
     tutorialLessonWall: 'وضع الجدران — ضع جداراً في طريق الخصم.',
@@ -2835,6 +2847,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     beatsRivalsToast: 'Tu IQ táctico supera al {pct}% de los jugadores del mundo.',
     nationLockTitle: 'Lealtad nacional bloqueada',
     nationLockBody: 'Tu bandera representa tu honor permanente en la arena.',
+    /* barra de XP: el paso exacto al siguiente nivel y el total acumulado */
+    pfXpRemaining: '{n} XP para el NIVEL {level}',
+    pfXpTotal: 'Total: {n} XP',
     /* ---- lección interactiva: cuatro temas y el paso de las minas ---- */
     tutorialLessonMove: 'Movimiento — elige tu ficha y avanza hacia la fila FINISH.',
     tutorialLessonWall: 'Colocar muros — levanta un muro en el camino del rival.',

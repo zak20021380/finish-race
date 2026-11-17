@@ -43,7 +43,7 @@
  *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..cols-1), covers rows y and y+1.
  * A wall owns both of its edge segments and the vertex they hinge on, so two walls may meet at an
  * L-corner or a T-junction but never share an edge segment, and never cross through one shared
- * vertex into a `+`. See `wallsOverlap` / `wallsCross`.
+ * vertex into a `+`. `wallsConflict` is the one canonical test for both refusals.
  *
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
  * in the bottom two start rows. Every row above them is legal, the finish line included — a charge
@@ -430,7 +430,7 @@ const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
 
 /**
  * The lattice wall edges and wall segments are keyed on: the largest board the rules lay out.
- * A key is then unique on every board, so the pure geometry predicates (`wallsClash` and friends)
+ * A key is then unique on every board, so the pure geometry predicates (`wallsConflict` and friends)
  * need no dimensions at all — they compare walls that were always drawn on the same board.
  */
 const LATTICE_C = Math.max(COLS, WIDE_COLS);
@@ -671,6 +671,7 @@ export function wallsOverlap(a: WallSpec, b: WallSpec): boolean {
  * Do two perpendicular walls cross through the same vertex? Sharing a pivot is the illegal `+`:
  * both walls would run straight through the point instead of stopping at it. A T-junction and an
  * L-corner share a vertex but never a pivot — one wall ends where the other passes — so they stand.
+ * Kept as a geometry primitive; app code calls `wallsConflict`, the one canonical test.
  */
 export function wallsCross(a: WallSpec, b: WallSpec): boolean {
   if (a.o === b.o) return false;
@@ -678,8 +679,34 @@ export function wallsCross(a: WallSpec, b: WallSpec): boolean {
   return p.x === q.x && p.y === q.y;
 }
 
-/** May these two walls stand on the board together? No shared edge, and no `+` through a vertex. */
-export const wallsClash = (a: WallSpec, b: WallSpec): boolean => wallsOverlap(a, b) || wallsCross(a, b);
+/**
+ * The ONE test the engine, the UI, the bot and the server all use for wall legality between two
+ * walls. `Wall` names its start vertex (x, y), not its centre, so the comparison runs on each wall's
+ * centre anchor (c, r) — the hinge vertex: (x + 1, y) for a horizontal bar, (x, y + 1) for a
+ * vertical one.
+ *
+ *   - same orientation, same line, anchors one apart or closer -> shared edge (duplicate or a
+ *     one-segment parallel overlap), illegal;
+ *   - perpendicular, same centre anchor -> the `+` cross, one bar slicing through the other's
+ *     midpoint, illegal;
+ *   - anything else, including a perpendicular end-tip touching a midpoint (a T-junction) or two
+ *     end tips meeting (an L-corner) -> legal.
+ */
+export function wallsConflict(a: Wall, b: Wall): boolean {
+  const ac = a.o === 'h' ? a.x + 1 : a.x;
+  const ar = a.o === 'h' ? a.y : a.y + 1;
+  const bc = b.o === 'h' ? b.x + 1 : b.x;
+  const br = b.o === 'h' ? b.y : b.y + 1;
+  if (a.o === b.o) {
+    return a.o === 'h'
+      ? ar === br && Math.abs(ac - bc) <= 1
+      : ac === bc && Math.abs(ar - br) <= 1;
+  }
+  return ac === bc && ar === br;
+}
+
+/** @deprecated Use `wallsConflict`, the single canonical wall-conflict test. */
+export const wallsClash = (a: Wall, b: Wall): boolean => wallsConflict(a, b);
 
 /* ---------- queries ---------- */
 
@@ -871,7 +898,7 @@ export function wallOk(s: GameState, w: Wall): boolean {
     if (w.x < 0 || w.x > s.cols - 2 || w.y < 1 || w.y > s.rows - 1) return false;
   } else if (w.x < 1 || w.x > s.cols - 1 || w.y < 0 || w.y > s.rows - 2) return false;
 
-  for (const o of s.walls) if (wallsClash(o, w)) return false;
+  for (const o of s.walls) if (wallsConflict(o, w)) return false;
   return hasPathToFinish(s, [...s.walls, w]);
 }
 

@@ -38061,8 +38061,8 @@ html[data-lang="ar"] #s-profile :is(.pf-sec-h, .eq-h) {
   text-transform: none;
   line-height: 1.4;
 }
-html[data-lang="fa"] #s-profile :is(.pf-sec-sub, .pf-chip-k, .pf-xp-lvl, .pf-quest-kicker),
-html[data-lang="ar"] #s-profile :is(.pf-sec-sub, .pf-chip-k, .pf-xp-lvl, .pf-quest-kicker) {
+html[data-lang="fa"] #s-profile :is(.pf-sec-sub, .pf-chip-k, .pf-xp-lvl, .pf-xp-remaining, .pf-xp-total, .pf-quest-kicker),
+html[data-lang="ar"] #s-profile :is(.pf-sec-sub, .pf-chip-k, .pf-xp-lvl, .pf-xp-remaining, .pf-xp-total, .pf-quest-kicker) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   font-weight: 500;
   letter-spacing: 0;
@@ -38782,6 +38782,56 @@ html[data-lang="fa"] #s-home .car-card.nations-cup #home-nation-pct {
   width: 16px;
   height: 16px;
   filter: drop-shadow(0 0 5px rgba(245, 158, 11, .6));
+}
+/* the exact step to the next level: a high-contrast emerald pill on the end of the progress line.
+   Every figure is Latin, isolated and tabular, so no locale can re-order "4 XP to LVL 8". */
+#s-profile .pf-xp-remaining {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 9px;
+  border: 1px solid rgba(52, 211, 153, .3);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(52, 211, 153, .16) 0%, rgba(52, 211, 153, .04) 100%),
+    rgba(8, 14, 20, .72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 0 12px -6px rgba(52, 211, 153, .85);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .01em;
+  color: #6EE7B7;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+/* the quiet lifetime figure, opposite the purse on the second line */
+#s-profile .pf-xp-next-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+#s-profile .pf-xp-total {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .02em;
+  color: #8FA0B8;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 #s-profile .pf-xp-bar.bar {
   width: 100%;
@@ -40508,41 +40558,18 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
 }
 
-/* earned XP: the lifetime pool in one gold pill, carried by its own hexagon rank-up emblem —
-   never a five-point star — set in Latin tabular figures so no locale can mirror the number */
-#s-profile .pf-quick-xp { direction: ltr; flex: none; }
-#s-profile .pf-quick-ico-xp {
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  color: #F5C85B;
-  background: rgba(245, 200, 91, .1);
-  box-shadow: inset 0 0 0 1px rgba(245, 200, 91, .28);
-}
-#s-profile .pf-quick-ico-xp .ico {
-  width: 16px;
-  height: 16px;
-  filter: drop-shadow(0 0 3px rgba(245, 200, 91, .45));
-}
-#s-profile .pf-quick-xp b {
-  font-family: var(--font-numeric);
-  font-size: 13.5px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: .01em;
-  color: #FDE68A;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
-}
-#s-profile .pf-quick-xp .pf-quick-k { color: #FDE68A; }
-
-/* the affiliation: the flag (or its globe) and the squad shield share one pill */
-#s-profile .pf-quick-aff {
+/* the nation: the crisp flag and the FULL country name share the one growable pill. The TIQ and
+   coin pills keep their width; this one takes the remainder and gives it all to the name. The name
+   is one isolated <bdi> run, so an RTL sheet can never mirror it or re-order the Latin code. */
+#s-profile .pf-quick-nation-pill {
   flex: 1 1 auto;
+  min-width: 0;
   gap: 5px;
-  padding: 0 8px;
+  padding: 0 8px 0 6px;
   overflow: hidden;
 }
 #s-profile .pf-quick-ico-flag {
+  flex: none;
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -40552,18 +40579,18 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
 #s-profile .pf-quick-flag { display: block; width: 16px; height: 16px; line-height: 0; }
 #s-profile .pf-quick-ico-flag:not(.has-flag) .pf-quick-flag { display: none; }
 #s-profile .pf-quick-ico-flag.has-flag .pf-quick-globe { display: none; }
-#s-profile .pf-quick-ico-shield { color: #38BDF8; }
-#s-profile .pf-quick-ico-shield .ico { filter: drop-shadow(0 0 4px rgba(56, 189, 248, .3)); }
-#s-profile .pf-quick-squad {
+#s-profile .pf-quick-nation-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  unicode-bidi: isolate;
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0;
   color: #E2E8F0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6);
 }
 
 /* ---- the drawer key: a compact glass control in the header's inline-end corner ----
@@ -40658,21 +40685,15 @@ html:lang(fa) .vf-summary-t, html:lang(ar) .vf-summary-t { direction: rtl; }
 .fp-mini { --fp-d: 16px; }
 .fp-mini .fp-chip { border-radius: 50%; font-size: 6px; }
 
-/* ---- RTL: the strip reads from the right, its figures stay LTR ---- */
+/* ---- RTL: the strip reads from the right; the rating, purse and nation name stay LTR ---- */
 html[data-lang="fa"] #s-profile .pf-quick-strip,
 html[data-lang="ar"] #s-profile .pf-quick-strip { direction: rtl; }
 html[data-lang="fa"] #s-profile .pf-quick-tiq,
 html[data-lang="ar"] #s-profile .pf-quick-tiq,
 html[data-lang="fa"] #s-profile .pf-quick-coins,
 html[data-lang="ar"] #s-profile .pf-quick-coins,
-html[data-lang="fa"] #s-profile .pf-quick-xp,
-html[data-lang="ar"] #s-profile .pf-quick-xp { direction: ltr; }
-html[data-lang="fa"] #s-profile .pf-quick-squad,
-html[data-lang="ar"] #s-profile .pf-quick-squad {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-weight: 600;
-  text-align: start;
-}
+html[data-lang="fa"] #s-profile .pf-quick-nation-pill,
+html[data-lang="ar"] #s-profile .pf-quick-nation-pill { direction: ltr; }
 html[data-lang="fa"] #s-profile .pf-quick-tiq b,
 html[data-lang="ar"] #s-profile .pf-quick-tiq b,
 html[data-lang="fa"] #s-profile #pf-coins,
@@ -40688,26 +40709,22 @@ html[data-lang="ar"] #s-profile .pf-quick-pct { direction: ltr; unicode-bidi: is
   #s-profile .pf-quick-pill { height: 30px; padding: 0 7px; gap: 4px; }
   #s-profile .pf-quick-tiq b { font-size: 12.5px; }
   #s-profile .pf-quick-coins b { font-size: 12.5px; }
-  #s-profile .pf-quick-squad { font-size: 10.5px; }
+  #s-profile .pf-quick-nation-name { font-size: 11px; }
   #s-profile .pf-quick-pct { padding: 2px 4px; font-size: 8px; }
 }
 @media (max-width: 359px) {
-  #s-profile .pf-quick-strip { gap: 4px; padding: 3px; }
-  #s-profile .pf-quick-pill { height: 28px; padding: 0 6px; gap: 4px; border-radius: 9px; }
+  /* 320px: trim both fixed pills first, so an everyday name still reads in full and only a
+     genuinely ultra-long one reaches the ellipsis. Never wrap — the strip stays one clean row. */
+  #s-profile .pf-quick-strip { gap: 3px; padding: 2px; }
+  #s-profile .pf-quick-pill { height: 28px; padding: 0 4px; gap: 2px; border-radius: 9px; }
   #s-profile .pf-quick-ico { width: 15px; height: 15px; }
   #s-profile .pf-quick-ico-tiq .ico { width: 14px; height: 14px; }
   #s-profile .pf-quick-tiq b,
-  #s-profile .pf-quick-coins b,
-  #s-profile .pf-quick-xp b { font-size: 12px; }
-  #s-profile .pf-quick-k { padding: 2px 3px; font-size: 6.5px; letter-spacing: .1em; }
-  #s-profile .pf-quick-pct { padding: 2px 3px; font-size: 7.5px; }
-  #s-profile .pf-quick-aff { padding: 0 6px; gap: 4px; }
-  #s-profile .pf-quick-squad { font-size: 10px; }
-}
-/* the narrowest phones give the affiliation its own row instead of squeezing a name */
-@media (max-width: 340px) {
-  #s-profile .pf-quick-strip { flex-wrap: wrap; }
-  #s-profile .pf-quick-aff { flex: 1 1 100%; }
+  #s-profile .pf-quick-coins b { font-size: 10.5px; }
+  #s-profile .pf-quick-k { padding: 2px 2px; font-size: 5.5px; letter-spacing: .06em; }
+  #s-profile .pf-quick-pct { padding: 2px 2px; font-size: 6.5px; }
+  #s-profile .pf-quick-nation-pill { padding: 0 4px; gap: 3px; }
+  #s-profile .pf-quick-nation-name { font-size: 10px; }
 }
 
 /* reduced motion: the drawer still lands, it just does not travel */

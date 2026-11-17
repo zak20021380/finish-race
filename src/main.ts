@@ -4,7 +4,7 @@ import {
   CONFIG, MAX_TEAMS, REPEAT_LIMIT, apply, ballById, distField, firstBall, getAutoMove,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
   sideOf, startLayout, steps as teamSteps,
-  view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
+  view as fogOfWar, wallBudget, wallOk, wallsConflict, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
@@ -1213,14 +1213,14 @@ const REASON = {
 };
 
 /**
- * Why a wall slot was refused: the budget is spent, a clash with a wall already standing (a shared
- * edge segment, or a `+` through a vertex) or a sealed path. `wallOk` only answers yes/no, so the
- * reason stays a UI-layer concern.
+ * Why a wall slot was refused: the budget is spent, a clash with a wall already standing (the same
+ * `wallsConflict` predicate the engine, bot and server use — a shared edge segment or a `+` through
+ * a centre vertex) or a sealed path. `wallOk` only answers yes/no, so the reason stays a UI concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
-  if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
-  if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
+  const clash = s.walls.find((o) => wallsConflict(o, w));
+  if (clash) return clash.o !== w.o ? 'cross' : 'overlap';
   /* EVERY live pawn can refuse a wall — yours, your partner's and your rivals'. Sealing an empty
      pocket is legal; sealing a runner is not, whoever owns it. Checkmates come from the walk and
      the mine's throw, never from the bar. */

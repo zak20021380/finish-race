@@ -1851,24 +1851,14 @@
                   <b id="pf-coins" dir="ltr">0</b>
                   <span class="sr-only" data-i18n="coins">Coins</span>
                 </span>
-                <!-- the lifetime XP pool, carried by its own hexagon rank-up emblem, never a star -->
-                <span class="pf-quick-pill pf-quick-xp" id="pf-quick-xp">
-                  <span class="pf-quick-ico pf-quick-ico-xp" aria-hidden="true">
-                    <svg class="ico"><use href="#i-xp-emblem" /></svg>
-                  </span>
-                  <b id="pf-xp-mini" dir="ltr">0</b>
-                  <span class="pf-quick-k" aria-hidden="true">XP</span>
-                </span>
-                <span class="pf-quick-pill pf-quick-aff" id="pf-quick-aff">
+                <!-- the nation: a crisp flag beside the FULL country name, isolated in a <bdi> so an
+                     RTL sheet can never scramble it. The XP pool now lives only in the drawer. -->
+                <span class="pf-quick-pill pf-quick-nation-pill" id="pf-quick-nation-pill">
                   <span class="pf-quick-ico pf-quick-ico-flag" id="pf-quick-nation" aria-hidden="true">
                     <svg class="ico pf-quick-globe"><use href="#i-globe" /></svg>
                     <span class="pf-quick-flag" id="pf-quick-flag"></span>
                   </span>
-                  <span class="pf-quick-ico pf-quick-ico-shield" aria-hidden="true">
-                    <svg class="ico"><use href="#i-shield" /></svg>
-                  </span>
-                  <span class="sr-only" data-i18n="squadWord">Squad</span>
-                  <span class="pf-quick-squad" id="pf-quick-squad" dir="auto">—</span>
+                  <bdi class="pf-quick-nation-name" id="pf-quick-nation-name" dir="auto">Add country</bdi>
                 </span>
               </div>
               </div>
@@ -1906,11 +1896,16 @@
                 </button>
               </div>
 
-              <!-- tier 3 · the XP rail, with the purse as a quiet chip on the same line -->
+              <!-- tier 3 · the XP rail: level progress on the start side, the exact step to the next
+                   level on the end side, and the lifetime pool kept quiet below — all above the bar. -->
               <div class="pf-xp-block">
                 <div class="pf-xp-meta-row">
                   <span class="pf-xp-lvl" id="pf-xp-lvl" aria-label="Level 1">LVL <b id="pf-level">1</b></span>
                   <span class="pf-xp-meta" id="pf-xp">0 / 10 XP</span>
+                  <span class="pf-xp-remaining" id="pf-xp-remaining" dir="ltr">0 XP to LVL 2</span>
+                </div>
+                <div class="pf-xp-next-row">
+                  <span class="pf-xp-total" id="pf-xp-total" dir="ltr">Total: 0 XP</span>
                   <span class="pf-wallet" id="pf-wallet" aria-label="Coin balance">
                     <span class="pf-wallet-token" aria-hidden="true"><span class="coin" data-coin></span></span>
                     <b id="pf-coins-drawer" dir="ltr">0</b>

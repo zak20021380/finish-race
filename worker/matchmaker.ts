@@ -44,8 +44,8 @@
  */
 import {
   CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, distField, isEliminated, isLeft,
-  newGame, pathOn, steps,
-  type Action, type GameState,
+  newGame, pathOn, steps, wallsConflict,
+  type Action, type GameState, type Wall,
 } from '../src/rules';
 import {
   FORMAT_CAPACITY, FORMAT_MODE, ROOM_IDLE_TTL_MS, ROOM_SEAT_HOLD_MS, ROOM_WAIT_MS, assignTeam,
@@ -90,6 +90,17 @@ import {
 } from '../src/data/postchat';
 import countryRegistry from '../src/data/countries.json';
 import type { Env } from './env';
+
+/**
+ * The server's own wall gate. `apply()` already funnels a wall through `wallOk`, but checking at the
+ * door makes the authority explicit: a crossing bar is rejected before it reaches either replica,
+ * through the very same `wallsConflict` predicate the client previews and the bot filters with.
+ * Two perpendicular walls conflict only when their centre anchors coincide — the illegal `+`. An
+ * end tip meeting a midpoint (a T-junction) or another end tip (an L-corner) stays legal.
+ */
+function wallClashesWithState(state: GameState, w: Wall): boolean {
+  return state.walls.some((existing) => wallsConflict(existing, w));
+}
 
 /* ---------- protocol ---------- */
 
@@ -7914,7 +7925,12 @@ export class MatchmakerDO {
     }
     if (msg.type !== 'MOVE') return;
     const before = live.driver.state;
-    const result = live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
+    /* Authoritative crossing gate: a perpendicular bar through another wall's centre anchor is
+       refused before it can reach the driver, using the same predicate as the client and the bot. */
+    const preRejected = msg.action.kind === 'wall' && wallClashesWithState(before, msg.action.wall);
+    const result = preRejected
+      ? { ok: false as const, reason: 'illegal' as const }
+      : live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
     if (!result.ok) {
       const member = live.members[ref.seat];
       if (member) {
@@ -8364,6 +8380,12 @@ export class MatchmakerDO {
     }
 
     const before = race.state;
+    /* The paired lane owns the same authority: the crossing gate runs before apply(), so neither
+       replica can ever receive a `+` wall even if a client sends one on purpose. */
+    if (msg.action.kind === 'wall' && wallClashesWithState(before, msg.action.wall)) {
+      this.refuse(seat, 'illegal_action');
+      return;
+    }
     let next: GameState | null = null;
     try {
       next = apply(before, msg.action);

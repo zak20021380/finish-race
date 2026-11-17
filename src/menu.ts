@@ -2482,6 +2482,23 @@ export function createMenu(api: MenuApi): Menu {
   /* TIQ is the only competitive reading: the league divisions were removed from the design,
      so nothing on this card names a band any more. */
 
+  /**
+   * The collapsed strip's one nation pill: a crisp flag beside the FULL country name, wrapped in
+   * an isolated <bdi> so an RTL sheet can never scramble it. With no flag chosen, the globe and the
+   * localized "Add country" stand in. The name is never a `data-i18n` node: a chosen country must
+   * survive a language switch, which is why `paintLangLive` repaints this explicitly.
+   */
+  const paintQuickNation = (code: string | null): void => {
+    const label = code ? nameOf(code) : t('addCountry');
+    const name = document.getElementById('pf-quick-nation-name');
+    if (name) name.textContent = label;
+    const pill = document.getElementById('pf-quick-nation-pill');
+    if (pill) {
+      pill.setAttribute('aria-label', label);
+      pill.setAttribute('title', label);
+    }
+  };
+
   const paintHeroExtras = (lv: { n: number; got: number; need: number }) => {
     /* recessed profile XP bar mirrors Home's bar (same levelInfo source). */
     const pfBar = document.getElementById('pf-bar');
@@ -2492,6 +2509,21 @@ export function createMenu(api: MenuApi): Menu {
       pfBar.setAttribute('aria-valuemax', String(lv.need));
       pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
     }
+    /* the exact step to the next level, plus the quiet lifetime pool. `en()` stamps every figure
+       in Latin tabular digits; the localized template only supplies the surrounding words. */
+    const remaining = Math.max(0, lv.need - lv.got);
+    const xpTotal = Math.max(0, Math.floor(profile.xp));
+    const xpRemainingEl = document.getElementById('pf-xp-remaining');
+    if (xpRemainingEl) {
+      const label = t('pfXpRemaining')
+        .replace('{n}', en(remaining))
+        .replace('{level}', en(lv.n + 1));
+      xpRemainingEl.textContent = label;
+      xpRemainingEl.setAttribute('aria-label', label);
+      xpRemainingEl.setAttribute('title', label);
+    }
+    const xpTotalEl = document.getElementById('pf-xp-total');
+    if (xpTotalEl) xpTotalEl.textContent = t('pfXpTotal').replace('{n}', en(xpTotal));
     /* the level plate on the avatar's lip: the same figure the XP rail fills toward, struck in
        Latin numerals and never localised into Persian glyphs */
     const lvlN = document.getElementById('pf-lvl-n');
@@ -3578,17 +3610,8 @@ export function createMenu(api: MenuApi): Menu {
     }
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
     $('pf-xp').textContent = `${lv.got} / ${lv.need} XP`;
-    /* The earned pool: every settled win's XP, banked in `profile.xp`. It is a lifetime total, not
-       the level rail's progress, so it gets its own gold pill rather than sharing that figure. */
-    const xpTotal = Math.max(0, Math.floor(profile.xp));
-    const xpMini = document.getElementById('pf-xp-mini');
-    if (xpMini) xpMini.textContent = en(xpTotal);
-    const xpPill = document.getElementById('pf-quick-xp');
-    if (xpPill) {
-      const label = `${en(xpTotal)} XP earned`;
-      xpPill.setAttribute('aria-label', label);
-      xpPill.setAttribute('title', label);
-    }
+    /* The lifetime XP pool is no longer a pill in the collapsed strip — it now sits as a quiet
+       figure under the XP rail in the drawer, alongside the exact step to the next level. */
     /* Home XP ring (r=22 in a 48 viewBox, round caps, cyan→emerald gradient on a dark track):
        the arc replaces the level pill + XP bar. Circumference comes from the node itself, so a
        resize of the orb can never desync the dash math from the painted circle. */
@@ -3612,6 +3635,7 @@ export function createMenu(api: MenuApi): Menu {
     paintVault();
 
     const c = profile.country;
+    paintQuickNation(c);
     // Header country pill was decluttered — Profile owns country now. Guard for legacy DOM.
     document.getElementById('country-chip')?.classList.toggle('unset', !c);
     const countryName = document.getElementById('country-name');
@@ -3721,8 +3745,6 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-team').setAttribute('aria-label', squad
       ? `${squadName}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
       : t('joinASquad'));
-    const quickSquad = document.getElementById('pf-quick-squad');
-    if (quickSquad) quickSquad.textContent = squad ? squadName : t('pfNoSquad');
   };
   /* ---- Career tile → Play with Friends ----
      The tile is the human-only record's front door. Its sheet paints one live room from the
@@ -4589,6 +4611,10 @@ export function createMenu(api: MenuApi): Menu {
   const paintLangLive = () => {
     paintLang();
     paintSquadPill();
+    /* These two are dynamic (a chosen country and the computed XP step), so `data-i18n` cannot
+       own them — repaint their localized text explicitly on every language switch. */
+    paintQuickNation(profile.country);
+    paintHeroExtras(levelInfo());
     if (!pfScreen.hidden) paintProfile();
     if (badgeDraft && document.getElementById('sheet-badge')?.classList.contains('open')) paintBadgeSheet(badgeDraft);
     if (badgeDraft && ownersOpen()) paintOwners();
