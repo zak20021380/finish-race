@@ -1,7 +1,7 @@
 /**
- * tutorial.ts — the first-match hands-on lesson: a nine-tap comeback narrative.
+ * tutorial.ts — the first-match hands-on lesson: a twelve-tap comeback narrative.
  *
- * The lesson is one opening card and then nine single taps, each of them a real move on the real
+ * The lesson is one opening card and then twelve single taps, each of them a real move on the real
  * board. `main.ts` seeds the FULL match opening — both pawns on their true start tiles, no rival
  * mine and no knockback — so the choreography is deterministic:
  *
@@ -21,7 +21,14 @@
  *   8. placeMine — one tap on the glowing choke-point square buries the charge; the rival holds its
  *      breath. Mine mode is locked at this stage so it can never be toggled off by a stray tap.
  *   9. sprint — one tap forward, and the rival's own answer walks it onto the charge. The blast
- *      throws it two rows back and hands the lead to the player.
+ *      throws it two rows back and hands the lead to the player. Every overlay marker is cleared
+ *      the instant that beat begins, so no ring or hand is left over the empty crater.
+  *
+  *   PHASE 4 — the rival's counter-wall and the left/right dodge (steps 10-12)
+  *   After the blast the rival drops one cheap bar across the player's straight lane, and the last
+  *   three taps teach the way around it: left to (1, 7), forward past its edge to (1, 6), then right
+  *   back into the centre lane at (2, 6). The rival answers the first dodge with a harmless sideways
+  *   shuffle. The final tap closes the lesson and hands the player the free-play climax.
  *
  * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
  * one target per stage and `main.ts` commits it through the same `play()` a real race uses. The one
@@ -33,7 +40,7 @@
  * from `settings.ts`), a step counter in Latin digits, the pulsing spotlight and the ghost hand on
  * the exact pixel to tap. Nothing is ever stroked across the board: no route, no threat beam.
  *
- * When the counter-blast settles the lesson closes as `finished` and `main.ts` hands the player the
+ * When the final dodge lands the lesson closes as `finished` and `main.ts` hands the player the
  * wheel for the free-play climax, under handicaps that make the race impossible to lose.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
@@ -60,7 +67,10 @@ export interface TutorialSpot {
  */
 export type TutorialStage =
   | 'goal' | 'rush1' | 'rush2' | 'rush3'
-  | 'wall1' | 'wall2' | 'wall3' | 'selectMine' | 'placeMine' | 'sprint' | 'blast';
+  | 'wall1' | 'wall2' | 'wall3' | 'selectMine' | 'placeMine' | 'sprint' | 'blast'
+  | 'dodgeLeft' | 'clearWall' | 'dodgeRight';
+/** The three last taps: one square each, never the live-board forward finder. */
+export type DodgeStage = 'dodgeLeft' | 'clearWall' | 'dodgeRight';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 export type TutorialLang = LangCode;
@@ -110,6 +120,10 @@ export interface TutorialHooks {
   detour(): TutorialSpot | null;
   /** The buried charge's own square: the spotlight holds it while the rival walks into it. */
   blast(cell: Cell | null): TutorialTargetMine | null;
+  /** Steps 10-12: the one lateral/forward square a dodge lesson wants, read from the live board. */
+  dodge(stage: DodgeStage): TutorialTargetMove | null;
+  /** After the blast: the rival's own counter-wall drops across the player's straight lane. */
+  counterWall(): Promise<void>;
   /** One scripted rival beat for the stage just committed; resolves when the local seat is up again. */
   reply(stage: TutorialStage): Promise<void>;
   /** Walk the rival onto the buried charge and resolve once the real detonation has played out. */
@@ -141,13 +155,13 @@ export interface TutorialStepDef {
   stage: TutorialStage;
   icon: string;
   tone: 'goal' | 'move' | 'wall' | 'mine';
-  /** 1..9 on the comeback's own steps; 0 on the card and the blast beat, which wear no counter. */
+  /** 1..12 on the comeback's own steps; 0 on the card and the blast beat, which wear no counter. */
   step: number;
   /** The cue banner's i18n key, or null on the stages that teach with light alone. */
   cue: string | null;
 }
 
-/** The whole lesson, in order: one card, nine taps, one detonation. */
+/** The whole lesson, in order: one card, twelve taps, one detonation beat between step 9 and 10. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'goal', icon: '#i-flag', tone: 'goal', step: 0, cue: null },
   { stage: 'rush1', icon: '#i-move', tone: 'move', step: 1, cue: 'tutStep1' },
@@ -160,6 +174,9 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'placeMine', icon: '#i-mine-tactical', tone: 'mine', step: 8, cue: 'tutStep8' },
   { stage: 'sprint', icon: '#i-move', tone: 'move', step: 9, cue: 'tutStep9' },
   { stage: 'blast', icon: '#i-mine-tactical', tone: 'mine', step: 0, cue: null },
+  { stage: 'dodgeLeft', icon: '#i-move', tone: 'move', step: 10, cue: 'tutStep10' },
+  { stage: 'clearWall', icon: '#i-move', tone: 'move', step: 11, cue: 'tutStep11' },
+  { stage: 'dodgeRight', icon: '#i-move', tone: 'move', step: 12, cue: 'tutStep12' },
 ];
 
 /** What comes after each successful action. The rival answers between every pair of taps. */
@@ -174,7 +191,10 @@ export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>>
   selectMine: 'placeMine',
   placeMine: 'sprint',
   sprint: 'blast',
-  blast: 'done',
+  blast: 'dodgeLeft',
+  dodgeLeft: 'clearWall',
+  clearWall: 'dodgeRight',
+  dodgeRight: 'done',
 };
 
 /** The action each stage answers to. The card and the blast beat own no board action. */
@@ -190,11 +210,18 @@ const STAGE_KIND: Readonly<Record<TutorialStage, TutorialAction['kind'] | null>>
   placeMine: 'mine',
   sprint: 'move',
   blast: null,
+  dodgeLeft: 'move',
+  clearWall: 'move',
+  dodgeRight: 'move',
 };
 
-/** The four forward taps share one target hook: the square directly ahead, read from the live board. */
+/** The forwarding taps share one target hook: the square directly ahead, read from the live board. */
 const MOVE_STAGES: ReadonlySet<TutorialStage> = new Set(['rush1', 'rush2', 'rush3', 'sprint']);
+/** The last three taps point at three FIXED squares, never at the live forward finder. */
+const DODGE_STAGES: ReadonlySet<DodgeStage> = new Set(['dodgeLeft', 'clearWall', 'dodgeRight']);
 const WALL_N: Readonly<Partial<Record<TutorialStage, 1 | 2 | 3>>> = { wall1: 1, wall2: 2, wall3: 3 };
+
+const isDodge = (s: TutorialStage): s is DodgeStage => DODGE_STAGES.has(s as DodgeStage);
 
 /**
  * STRICT FIRST-TIME-ONLY rule. Only a local, single-human bot race may auto-route into the lesson,
@@ -305,7 +332,7 @@ function writeStoredLang(value: TutorialLang): void {
 }
 
 /** The tongue the lesson is speaking right now — the climax callout reads it too, so the hand-off
- *  lands in the same language as the nine prompts that led to it. */
+ *  lands in the same language as the twelve prompts that led to it. */
 let liveLang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
 export const tutorialLang = (): TutorialLang => liveLang;
 
@@ -335,6 +362,13 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let stepIndex = 0;
   /** The square the lesson's own charge was buried on: the spotlight holds it through the blast. */
   let blastCell: Cell | null = null;
+  /**
+   * The detonation beat is the one stage that owns NO marker: the instant the rival walks onto the
+   * charge every ring, hand, mine silhouette and detour ghost comes off, so nothing is left hanging
+   * over the empty crater while the blast plays. `targetFor('blast')` still answers (the render
+   * guard must not skip the stage) — this flag only suppresses what `place()` paints.
+   */
+  let blastCleared = false;
   let trackId = 0;
   let trackUntil = 0;
   let transitionTimer = 0;
@@ -350,7 +384,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     const s = stage();
     const wn = s ? WALL_N[s] : undefined;
     return {
-      move: s && MOVE_STAGES.has(s) ? hooks.advance()?.to ?? null : null,
+      move: s && isDodge(s) ? hooks.dodge(s)?.to ?? null
+        : s && MOVE_STAGES.has(s) ? hooks.advance()?.to ?? null : null,
       wall: wn ? hooks.wall(wn)?.spec ?? null : null,
       mine: s === 'placeMine' ? hooks.mine()?.cell ?? null : null,
     };
@@ -358,6 +393,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const targetFor = (s: TutorialStage): { spot: TutorialSpot } | null => {
     if (s === 'goal') { const g = hooks.goal(); return g ? { spot: g } : null; }
+    if (isDodge(s)) return hooks.dodge(s);
     if (MOVE_STAGES.has(s)) return hooks.advance();
     const wn = WALL_N[s];
     if (wn) return hooks.wall(wn);
@@ -409,7 +445,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     } else if (def.cue) {
       const line = tIn(lang, def.cue);
       cueText.textContent = line;
-      cueNum.textContent = `${def.step}/9`;
+      cueNum.textContent = `${def.step}/12`;
       cue.setAttribute('aria-label', tIn(lang, 'tutStepAria').replace('{n}', String(def.step)));
       liveEl.textContent = line;
     } else {
@@ -536,19 +572,30 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     cue.style.top = `${clamp(top, 8, Math.max(8, vh - ch - 8))}px`;
   };
 
+  /** Strip every overlay marker in one shot — the shared body for the detonation beat and close(). */
+  const clearMarkers = () => {
+    drawMask(null, 0);
+    placeRing(null, 0);
+    aidEl.hidden = true;
+    detourEl.hidden = true;
+    pointer.style.display = 'none';
+  };
+
   const place = () => {
     if (!open) return;
     const def = TUTORIAL_STEPS[stepIndex];
     const s = def.stage;
     card.hidden = s !== 'goal';
     cue.hidden = !def.cue;
+    if (blastCleared) {
+      clearMarkers();
+      if (s === 'goal') placeCard();
+      placeCue(null);
+      return;
+    }
     const target = targetFor(s);
     if (!target) {
-      drawMask(null, 0);
-      placeRing(null, 0);
-      aidEl.hidden = true;
-      detourEl.hidden = true;
-      pointer.style.display = 'none';
+      clearMarkers();
       if (s === 'goal') placeCard();
       placeCue(null);
       return;
@@ -600,6 +647,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       stepIndex++;
     }
     const def = TUTORIAL_STEPS[stepIndex];
+    /* Entering the blast is the exact moment the mine tile is emptied: clear once here and keep
+       every following tracked frame clear until the stage moves on to the first dodge. */
+    blastCleared = def.stage === 'blast';
     flow++;
     root.dataset.stage = def.stage;
     root.dataset.tone = def.tone;
@@ -672,6 +722,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     if (!open) return;
     open = false;
     blastCell = null;
+    blastCleared = false;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -685,11 +736,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     cue.classList.remove('lang-swap', 'pop');
     root.classList.remove('lang-swap');
     document.body.classList.remove('tutorial-live');
-    drawMask(null, 0);
-    placeRing(null, 0);
-    aidEl.hidden = true;
-    detourEl.hidden = true;
-    pointer.style.display = 'none';
+    clearMarkers();
     detach();
     hooks.refresh(null);
     hooks.end(result);
@@ -720,6 +767,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       open = true;
       stepIndex = 0;
       blastCell = null;
+      blastCleared = false;
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -768,23 +816,36 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           return;
         }
         case 'sprint': {
-          /* The player stepped; the spotlight holds the buried square while the board walks the
-             rival onto it: the blast, the knockback, the shake and the bang are the engine's own. */
+          /* The player stepped. `go('blast')` clears every marker BEFORE the board walks the rival
+             onto the charge, so the empty crater wears no ring, hand or mine silhouette while the
+             blast, the knockback, the shake and the bang play out. */
           const cell = blastCell;
           go('blast');
           if (!cell) { close('finished'); return; }
           const token = ++flow;
           void hooks.detonate(cell)
             .catch(() => undefined)
+            .then(() => hooks.counterWall())
+            .catch(() => undefined)
             .then(() => {
               if (!open || token !== flow) return;
               hooks.finishPulse();
               impact('medium');
               audio.play('swoosh', { gain: 0.5 });
-              close('finished');
+              go('dodgeLeft');
             });
           return;
         }
+        case 'dodgeLeft':
+        case 'clearWall':
+          /* one rival beat between the sidesteps, then the next fixed square lights up alone */
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
+          return;
+        case 'dodgeRight':
+          /* Step 12 lands on (2, 6). `close()` strips the ring and the hand before the hand-off;
+             main.ts's `end()` unlocks the wheel and keeps the anti-loss safeguard on to FINISH. */
+          close('finished');
+          return;
         default:
           return;
       }
