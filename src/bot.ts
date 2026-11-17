@@ -35,7 +35,7 @@
  */
 import {
   allWalls, apply, ballById, distField, mineCells, pathOn, stepField, steps,
-  wallBudget, wallOk, wallsConflict, wallsRemaining,
+  wallBudget, wallConflict, wallOk, wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type Player, type Pos, type Wall,
 } from './rules';
 
@@ -355,7 +355,7 @@ function wallCandidates(
   const slots: number[] = [];
   for (const o of ['h', 'v'] as const) {
     /* x is the column and y the row for BOTH orientations (`Wall` names them that way, and so do
-       wallOk / wallsConflict / sidestepCells). A vertical wall spans rows y..y+1 at column x, so its
+       wallOk / wallConflict / sidestepCells). A vertical wall spans rows y..y+1 at column x, so its
        row runs to rows-2 and its column to cols-1. The old swapped ranges built out-of-bounds
        vertical walls that the distance field could not even see. */
     const y0 = o === 'h' ? 1 : 0, yEnd = rows - 1;
@@ -380,9 +380,7 @@ function wallCandidates(
     const o: 'h' | 'v' = (slot >> 10) & 1 ? 'v' : 'h';
     const y = (slot >> 6) & 15, x = slot & 63;
     const w: Wall = { o, x, y, owner: me };
-    let clash = false;
-    for (const p of s.walls) if (wallsConflict(p, w)) { clash = true; break; }
-    if (clash) continue;
+    if (wallConflict(s.walls, w) !== null) continue;
     /* push/pop on the private scratch: the same loop owns both, and no live state is ever written */
     trial.push(w);
     const d1 = distField(trial, cols, rows);

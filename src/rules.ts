@@ -43,7 +43,9 @@
  *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..cols-1), covers rows y and y+1.
  * A wall owns both of its edge segments and the vertex they hinge on, so two walls may meet at an
  * L-corner or a T-junction but never share an edge segment, and never cross through one shared
- * vertex into a `+`. `wallsConflict` is the one canonical test for both refusals.
+ * vertex into a `+` — not even the composite `+` a perpendicular wall completes when it hinges
+ * exactly on the seam where two collinear walls meet tip to tip. `wallConflict` is the one
+ * canonical test for every refusal.
  *
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
  * in the bottom two start rows. Every row above them is legal, the finish line included — a charge
@@ -630,10 +632,15 @@ export function wallVertices(w: WallSpec): [Vertex, Vertex, Vertex] {
 
 /**
  * The vertex a wall's two segments hinge on — its midpoint, and the one point a perpendicular wall
- * could cross it at. An 'h' wall at (x, y) hinges on (x + 1, y); a 'v' wall at (x, y) on (x, y + 1).
+ * could cross it at. An 'h' wall at (x, y) spans (x, y)-(x + 2, y) and hinges on (x + 1, y); a 'v'
+ * wall at (x, y) spans (x, y)-(x, y + 2) and hinges on (x, y + 1). Every conflict test compares
+ * these vertices, never the raw (x, y) anchors.
  */
-export const wallPivot = (w: WallSpec): Vertex =>
+export const wallHinge = (w: WallSpec): Vertex =>
   (w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 });
+
+/** Legacy name for `wallHinge` — the hinge is the wall's pivot. */
+export const wallPivot = wallHinge;
 
 /**
  * The same wall turned 90° about its centre vertex. The centre and the pivot stay put, so a
@@ -668,44 +675,89 @@ export function wallsOverlap(a: WallSpec, b: WallSpec): boolean {
 }
 
 /**
- * Do two perpendicular walls cross through the same vertex? Sharing a pivot is the illegal `+`:
+ * Do two perpendicular walls cross through the same vertex? Sharing a hinge is the illegal `+`:
  * both walls would run straight through the point instead of stopping at it. A T-junction and an
- * L-corner share a vertex but never a pivot — one wall ends where the other passes — so they stand.
- * Kept as a geometry primitive; app code calls `wallsConflict`, the one canonical test.
+ * L-corner share a vertex but never a hinge — one wall ends where the other passes — so they stand.
+ * Kept as a geometry primitive; app code calls `wallConflict`, the one canonical test.
  */
 export function wallsCross(a: WallSpec, b: WallSpec): boolean {
   if (a.o === b.o) return false;
-  const p = wallPivot(a), q = wallPivot(b);
+  const p = wallHinge(a), q = wallHinge(b);
   return p.x === q.x && p.y === q.y;
 }
 
 /**
- * The ONE test the engine, the UI, the bot and the server all use for wall legality between two
- * walls. `Wall` names its start vertex (x, y), not its centre, so the comparison runs on each wall's
- * centre anchor (c, r) — the hinge vertex: (x + 1, y) for a horizontal bar, (x, y + 1) for a
- * vertical one.
+ * The ONE pairwise test the engine, the UI, the bot and the server all use, run on the hinge
+ * vertices of both walls:
  *
- *   - same orientation, same line, anchors one apart or closer -> shared edge (duplicate or a
- *     one-segment parallel overlap), illegal;
- *   - perpendicular, same centre anchor -> the `+` cross, one bar slicing through the other's
- *     midpoint, illegal;
- *   - anything else, including a perpendicular end-tip touching a midpoint (a T-junction) or two
- *     end tips meeting (an L-corner) -> legal.
+ *   - parallel, same line, hinges one apart or closer -> a shared edge segment (duplicate or a
+ *     one-segment overlap), illegal;
+ *   - perpendicular, the SAME hinge vertex -> the direct `+`, one bar slicing through the other's
+ *     midpoint, illegal. In raw anchors: h.x + 1 === v.x && h.y === v.y + 1;
+ *   - anything else — a tip meeting a midpoint (a T-junction) or two tips meeting (an L-corner) —
+ *     stays legal.
+ *
+ * A THREE-wall composite `+` is invisible to any pair; `wallsCompositeCross` catches it, and
+ * `wallConflict` is the set-aware gate that runs both.
  */
-export function wallsConflict(a: Wall, b: Wall): boolean {
-  const ac = a.o === 'h' ? a.x + 1 : a.x;
-  const ar = a.o === 'h' ? a.y : a.y + 1;
-  const bc = b.o === 'h' ? b.x + 1 : b.x;
-  const br = b.o === 'h' ? b.y : b.y + 1;
+export function wallsConflict(a: WallSpec, b: WallSpec): boolean {
+  const p = wallHinge(a), q = wallHinge(b);
   if (a.o === b.o) {
     return a.o === 'h'
-      ? ar === br && Math.abs(ac - bc) <= 1
-      : ac === bc && Math.abs(ar - br) <= 1;
+      ? p.y === q.y && Math.abs(p.x - q.x) <= 1
+      : p.x === q.x && Math.abs(p.y - q.y) <= 1;
   }
-  return ac === bc && ar === br;
+  return p.x === q.x && p.y === q.y;
 }
 
-/** @deprecated Use `wallsConflict`, the single canonical wall-conflict test. */
+const wallAt = (walls: readonly WallSpec[], o: 'h' | 'v', x: number, y: number): boolean =>
+  walls.some((w) => w.o === o && w.x === x && w.y === y);
+
+/**
+ * Does `w` complete a composite `+` against the walls already standing? Two collinear walls may
+ * meet tip-to-tip on a vertex where neither hinges — h(2, 5) ends exactly where h(4, 5) starts —
+ * and a perpendicular wall hinged on that same vertex then slices through the seam: a `+` no pair
+ * of walls reveals on its own. The parallel halves are the only two walls touching the seam, and
+ * the slicer is the wall whose hinge lands on it, so each side of the shape is one exact anchor.
+ *
+ * Only the wall that COMPLETES the shape is refused, so a board carrying one from an older build
+ * keeps every unrelated slot open. A single-sided T-junction (├ ┤ ┬ ┴) leaves the seam to one
+ * side only and never matches.
+ */
+export function wallsCompositeCross(walls: readonly WallSpec[], w: WallSpec): boolean {
+  const h = wallHinge(w);
+  if (w.o === 'v') {
+    /* `w` is the slicer: horizontal halves tip-to-tip on its hinge vertex. */
+    if (wallAt(walls, 'h', h.x - 2, h.y) && wallAt(walls, 'h', h.x, h.y)) return true;
+    /* `w` is one half: a standing vertical hinges on the seam at either of its two tips. */
+    return (wallAt(walls, 'v', w.x, w.y - 2) && wallAt(walls, 'h', w.x - 1, w.y))
+      || (wallAt(walls, 'v', w.x, w.y + 2) && wallAt(walls, 'h', w.x - 1, w.y + 2));
+  }
+  /* `w` is the slicer: vertical halves tip-to-tip on its hinge vertex. */
+  if (wallAt(walls, 'v', h.x, h.y - 2) && wallAt(walls, 'v', h.x, h.y)) return true;
+  /* `w` is one half: a standing horizontal hinges on the seam at either of its two tips. */
+  return (wallAt(walls, 'h', w.x - 2, w.y) && wallAt(walls, 'v', w.x, w.y - 1))
+    || (wallAt(walls, 'h', w.x + 2, w.y) && wallAt(walls, 'v', w.x + 2, w.y - 1));
+}
+
+/** How a candidate wall clashes with the board: a shared segment or a `+` through a vertex. */
+export type WallClash = 'overlap' | 'cross';
+
+/**
+ * The ONE set-aware wall test: how `candidate` clashes with the walls already standing, or null
+ * when it is geometrically clear. `wallOk` gates on it, the placement preview names its refusal
+ * from it, the bot filters its slots with it, and the server refuses a message that fails it — so
+ * no preview, bot or replica can ever place a single-wall or composite `+`.
+ */
+export function wallConflict(walls: readonly WallSpec[], candidate: WallSpec): WallClash | null {
+  for (const w of walls) {
+    if (!wallsConflict(w, candidate)) continue;
+    return w.o === candidate.o ? 'overlap' : 'cross';
+  }
+  return wallsCompositeCross(walls, candidate) ? 'cross' : null;
+}
+
+/** @deprecated Use `wallConflict`, the single canonical wall-conflict test. */
 export const wallsClash = (a: Wall, b: Wall): boolean => wallsConflict(a, b);
 
 /* ---------- queries ---------- */
@@ -885,8 +937,9 @@ export function wallsRemaining(s: GameState, team: Player): number {
 
 /**
  * Is this wall legal? Within the owner's budget, in bounds for THIS board, clear of every wall
- * already standing (no shared edge segment, no `+` through a vertex) — and EVERY live pawn on the
- * board keeps a route to FINISH: the placer's, its partner's in a team race, and every rival's.
+ * already standing (`wallConflict`: no shared edge segment, no `+` through a hinge vertex, no
+ * composite `+` through a tip-to-tip seam) — and EVERY live pawn on the board keeps a route to
+ * FINISH: the placer's, its partner's in a team race, and every rival's.
  * A wall may seal an EMPTY pocket — the bunker a mine's throw can later fill — but never one with
  * a live pawn inside. Checkmates come from the walk and the blast, never from the bar; the sweep
  * in `resolveCheckmates` still runs after every committed action as the board's safety net.
@@ -898,7 +951,7 @@ export function wallOk(s: GameState, w: Wall): boolean {
     if (w.x < 0 || w.x > s.cols - 2 || w.y < 1 || w.y > s.rows - 1) return false;
   } else if (w.x < 1 || w.x > s.cols - 1 || w.y < 0 || w.y > s.rows - 2) return false;
 
-  for (const o of s.walls) if (wallsConflict(o, w)) return false;
+  if (wallConflict(s.walls, w) !== null) return false;
   return hasPathToFinish(s, [...s.walls, w]);
 }
 

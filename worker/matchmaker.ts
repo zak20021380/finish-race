@@ -44,7 +44,7 @@
  */
 import {
   CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, distField, isEliminated, isLeft,
-  newGame, pathOn, steps, wallsConflict,
+  newGame, pathOn, steps, wallConflict,
   type Action, type GameState, type Wall,
 } from '../src/rules';
 import {
@@ -94,12 +94,13 @@ import type { Env } from './env';
 /**
  * The server's own wall gate. `apply()` already funnels a wall through `wallOk`, but checking at the
  * door makes the authority explicit: a crossing bar is rejected before it reaches either replica,
- * through the very same `wallsConflict` predicate the client previews and the bot filters with.
- * Two perpendicular walls conflict only when their centre anchors coincide — the illegal `+`. An
- * end tip meeting a midpoint (a T-junction) or another end tip (an L-corner) stays legal.
+ * through the very same `wallConflict` test the client previews and the bot filters with — the
+ * direct `+` where two hinges coincide, the shared edge segment, and the composite `+` a bar
+ * completes across the seam where two collinear walls meet tip to tip. An end tip meeting a
+ * midpoint (a T-junction) or another end tip (an L-corner) stays legal.
  */
 function wallClashesWithState(state: GameState, w: Wall): boolean {
-  return state.walls.some((existing) => wallsConflict(existing, w));
+  return wallConflict(state.walls, w) !== null;
 }
 
 /* ---------- protocol ---------- */
