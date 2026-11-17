@@ -356,12 +356,13 @@ function digits(n: number): string {
   return n.toLocaleString('en-US');
 }
 
-/** The four promises, in the order a player weighs them: a bold title and one line of value each. */
-const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string; sub: string }> = [
-  { ico: '#i-chat', key: 'vipFeatChat', sub: 'vipFeatChatSub' },
-  { ico: '#i-shield', key: 'vipFeatRecovery', sub: 'vipFeatRecoverySub' },
-  { ico: '#i-coins', key: 'vipFeatBoost', sub: 'vipFeatBoostSub' },
-  { ico: '#i-bolt', key: 'vipFeatDouble', sub: 'vipFeatDoubleSub' },
+/** The four promises, in the order a player weighs them: a title, one crisp line and a value pill.
+ *  `ltr` pins the numeric/symbol pills so 4/4, +50% and ×2 never mirror in a RTL store. */
+const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string; sub: string; val: string; ltr: boolean }> = [
+  { ico: '#i-chat', key: 'vipFeatChat', sub: 'vipFeatChatSub', val: 'vipFeatChatVal', ltr: false },
+  { ico: '#i-shield', key: 'vipFeatRecovery', sub: 'vipFeatRecoverySub', val: 'vipFeatRecoveryVal', ltr: true },
+  { ico: '#i-coins', key: 'vipFeatBoost', sub: 'vipFeatBoostSub', val: 'vipFeatBoostVal', ltr: true },
+  { ico: '#i-bolt', key: 'vipFeatDouble', sub: 'vipFeatDoubleSub', val: 'vipFeatDoubleVal', ltr: true },
 ];
 
 interface StoreDom {
@@ -495,7 +496,9 @@ function paintFeatures(): void {
     mark.append(ico(feature.ico));
     const copy = el('span', 'vip-feat-copy');
     copy.append(el('b', 'vip-feat-t', t(feature.key)), el('span', 'vip-feat-d', t(feature.sub)));
-    row.append(mark, copy);
+    const val = el('span', 'vip-feat-val', t(feature.val));
+    if (feature.ltr) val.setAttribute('dir', 'ltr');
+    row.append(mark, copy, val);
     return row;
   }));
 }

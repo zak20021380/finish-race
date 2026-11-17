@@ -5712,15 +5712,17 @@
       aria-labelledby="vip-sheet-title" aria-describedby="vip-sub">
       <div class="vip-scrim" id="vip-scrim" aria-hidden="true"></div>
       <div class="vip-card" id="vip-card">
-        <span class="vip-crest" aria-hidden="true">
-          <svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
-        </span>
+        <header class="vip-head">
+          <span class="vip-crest" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
+          </span>
+          <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
+          <h3 class="vip-title" id="vip-sheet-title">Own the Arena</h3>
+          <p class="vip-sub" id="vip-sub" hidden></p>
+        </header>
         <button class="vip-close" id="vip-close" type="button" aria-label="Close VIP">
           <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
-        <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
-        <h3 class="vip-title" id="vip-sheet-title">Own the Arena</h3>
-        <p class="vip-sub" id="vip-sub" hidden></p>
 
         <!-- three Stars plans. The hero tier is 30 days; every card is rebuilt and re-priced by
              src/premium.ts from the shared table, so a price can never drift from the invoice. -->
