@@ -69,12 +69,19 @@ import type { Sheets } from './sheets';
 import { impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
 import { CHANNEL_URL, telegramShareLink } from '../shared/config';
 import { REFERRAL_CONFIG } from '../shared/referralConfig';
-import telegramStarsImg from './assets/images/telegram_stars.png';
+import telegramStarsUrl from './assets/images/telegram_stars.png';
 
 /** The authentic Telegram Stars asset — never a sprite, glyph or emoji, in any locale. */
 export function renderStarAsset(size: number = 20, extraClass: string = ''): string {
-  return `<img src="${telegramStarsImg}" class="ico-star-img ${extraClass}" width="${size}" height="${size}" alt="Stars" loading="eager" draggable="false" />`;
+  return `<img src="${telegramStarsUrl}" class="ico-star-img ${extraClass}" width="${size}" height="${size}" alt="Stars" loading="eager" draggable="false" />`;
 }
+
+/**
+ * The full-colour Telegram Star used everywhere inside the Stars Vault: static markup and dynamic
+ * rows point at this one Vite-hashed URL, with no tint or grayscale filter over the golden PNG.
+ */
+const vaultStarAsset = (size: number, extraClass: string = ''): string =>
+  `<img src="${telegramStarsUrl}" class="vault-star-icon ${extraClass}" width="${size}" height="${size}" alt="" aria-hidden="true" decoding="async" draggable="false" />`;
 
 export interface MenuApi {
   router: Router;
@@ -2006,6 +2013,11 @@ export function createMenu(api: MenuApi): Menu {
   const guideModal = guideModalEl ? createModal(guideModalEl) : null;
   const svFriendsOpenEl = document.getElementById('sv-friends-open');
   const svGuideOpenEl = document.getElementById('sv-guide-open');
+  /* The static vault markup carries only the class: stamp the one bundled, hashed asset onto every
+     star image in the modal and its two sub-sheets, so HTML and dynamic rows are pixel-identical. */
+  for (const img of document.querySelectorAll<HTMLImageElement>('.vault-modal .vault-star-icon')) {
+    img.src = telegramStarsUrl;
+  }
   /* The feed is rebuilt only when the verdict or the language actually changed, so a poll landing
      while the player is reading a friend's row never throws their scroll position away. */
   let svFriendsSig = '';
@@ -2134,7 +2146,7 @@ export function createMenu(api: MenuApi): Menu {
         total: en(C.TOTAL_PER_FRIEND_STARS),
       })),
     );
-    total.insertAdjacentHTML('beforeend', renderStarAsset(16));
+    total.insertAdjacentHTML('beforeend', vaultStarAsset(16));
     if (complete) total.append(svIcon('#i-check', 'sv-check'));
     total.dataset.complete = String(complete);
 
@@ -2248,10 +2260,19 @@ export function createMenu(api: MenuApi): Menu {
       svPayoutBtn.dataset.state = vault.waiting ? 'waiting' : vault.canPayout ? 'ready' : 'locked';
       svPayoutBtn.setAttribute('aria-label', label);
       const showStar = vault.canPayout && !vault.waiting;
+      /* The state glyph stays an outline sprite for lock/clock; the READY state is the full-colour
+         Telegram Star instead of the old #i-star outline. */
       document.getElementById('sv-payout-ic')?.setAttribute(
         'href',
-        vault.waiting ? '#i-clock' : showStar ? '#i-star' : '#i-lock',
+        vault.waiting ? '#i-clock' : '#i-lock',
       );
+      const payoutSvg = document.getElementById('sv-payout-glyph');
+      const payoutStar = document.getElementById('sv-payout-star');
+      if (payoutSvg) payoutSvg.hidden = showStar;
+      if (payoutStar) {
+        payoutStar.hidden = !showStar;
+        if (showStar) (payoutStar as HTMLImageElement).src = telegramStarsUrl;
+      }
     }
 
     const notice = document.getElementById('sv-notice');

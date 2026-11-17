@@ -2727,7 +2727,7 @@
 
           <div class="vault-modal-body" data-scroll>
             <header class="vm-head">
-              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-star" /></svg></span>
+              <span class="vm-head-i" aria-hidden="true"><img class="vault-star-icon" alt="" aria-hidden="true" width="22" height="22" decoding="async" draggable="false" /></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vm-title" data-i18n="vaultTitle">Stars Vault</h2>
                 <p class="vm-sub" id="vm-sub" data-i18n="vaultSub">Invite friends · Fill the vault · Cash out</p>
@@ -2748,7 +2748,7 @@
                   <span class="vault-card-balance-label" data-i18n="vault_card_balance_label">VAULT BALANCE</span>
                   <p class="vault-card-balance" dir="ltr">
                     <b id="sv-bal">5</b><span class="vault-card-target">/ <span id="sv-target">50</span></span>
-                    <svg class="ico vault-card-star" aria-hidden="true"><use href="#i-star" /></svg>
+                    <img class="vault-star-icon vault-card-star" alt="" aria-hidden="true" width="24" height="24" decoding="async" draggable="false" />
                   </p>
                 </div>
                 <div class="vault-card-track" id="sv-bar" role="progressbar" data-i18n-aria="vaultMeterAria" aria-label="Vault balance"
@@ -2786,7 +2786,7 @@
                       <b class="sv-quest-title" id="sv-quest-title" data-i18n="quest_card_title">Earn +5 Stars Per Friend</b>
                       <span class="sv-quest-meta" data-i18n="quest_card_meta">When your friend completes either goal vs Hard AI within 72h:</span>
                     </span>
-                    <b class="sv-quest-reward" dir="ltr"><span id="sv-quest-reward-n">+5</span><svg class="ico" aria-hidden="true"><use href="#i-star" /></svg></b>
+                    <b class="sv-quest-reward" dir="ltr"><span id="sv-quest-reward-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                   </div>
                   <!-- the two ways to unlock the Stars, side by side, split by one OR pill -->
                   <div class="sv-quest-paths">
@@ -2822,7 +2822,8 @@
               </div>
               <button class="sv-payout" type="button" id="sv-payout" disabled>
                 <span class="sv-payout-i" aria-hidden="true">
-                  <svg class="ico"><use id="sv-payout-ic" href="#i-lock" /></svg>
+                  <svg class="ico" id="sv-payout-glyph"><use id="sv-payout-ic" href="#i-lock" /></svg>
+                  <img class="vault-star-icon" id="sv-payout-star" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" hidden />
                 </span>
                 <span class="sv-payout-t" id="sv-payout-t">Locked · Reach 50 Stars to cash out</span>
               </button>
@@ -2927,7 +2928,7 @@
                     <b class="vg-t" id="vg-1-t">Starter Gift</b>
                     <span class="vg-b" id="vg-1-b">5 Stars are already waiting in your vault!</span>
                   </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-1-n">+5</span><svg class="ico vg-star" aria-hidden="true"><use href="#i-star" /></svg></b>
+                  <b class="vg-n" dir="ltr"><span id="vg-1-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="plays">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
@@ -2935,7 +2936,7 @@
                     <b class="vg-t" id="vg-2-t">Play vs Hard AI</b>
                     <span class="vg-b" id="vg-2-b">Friend plays 10 matches vs Hard AI within 72h. The sponsor ad after each match verifies it.</span>
                   </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><svg class="ico vg-star" aria-hidden="true"><use href="#i-star" /></svg></b>
+                  <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="rivals">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
@@ -2943,15 +2944,15 @@
                     <b class="vg-t" id="vg-3-t">Win vs Hard AI</b>
                     <span class="vg-b" id="vg-3-b">Friend wins 5 matches vs Hard AI within 72h. Either goal unlocks 5 Stars once.</span>
                   </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><svg class="ico vg-star" aria-hidden="true"><use href="#i-star" /></svg></b>
+                  <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="cash">
-                  <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-star" /></svg></span>
+                  <span class="vg-ico" aria-hidden="true"><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></span>
                   <span class="vg-txt">
                     <b class="vg-t" id="vg-4-t">Cash Out</b>
                     <span class="vg-b" id="vg-4-b">Reach 50 Stars and withdraw directly!</span>
                   </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><svg class="ico vg-star" aria-hidden="true"><use href="#i-star" /></svg></b>
+                  <b class="vg-n" dir="ltr"><span id="vg-4-n">50</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
               </ol>
 
