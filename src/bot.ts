@@ -8,10 +8,9 @@
  * than on one deterministic line.
  *
  * Difficulty decides how the same evaluation is played, never the anti-stalemate invariant, which
- * every level obeys: it prices only walls that leave every live pawn a path to FINISH, so a bot
- * never freezes its own race — and, for the same reason, never plays the checkmating wall by
- * accident. (A person may: `wallOk` lets a wall seal a rival, and the rules turn that into the
- * checkmate verdict.)
+ * every level obeys: it prices only walls that leave every live pawn a path to FINISH — the same
+ * rule `wallOk` enforces for people — so a bot never freezes its own race, or anybody else's.
+ * Checkmates come from the walk and the mine's throw, never from the bar.
  *   easy   — races greedily, walls rarely, wanders on a plain random step.
  *   normal — full multi-contender evaluation, softmax over near-optimal actions.
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
@@ -692,9 +691,10 @@ function select(pool: Cand[], p: Profile): Action {
   return band[band.length - 1].a;
 }
 
-/** A uniformly random legal step — Easy's dive off the shortest path. */
-function randomStep(s: GameState, me: Player): Action | null {
-  const opts = steps(s, me);
+/** A uniformly random legal step that keeps a route to FINISH — Easy's dive off the shortest
+ *  path, never a walk into a sealed pocket. */
+function randomStep(s: GameState, me: Player, d: Int16Array): Action | null {
+  const opts = steps(s, me).filter((st) => pathOn(d, st.to, s.cols) < Infinity);
   if (!opts.length) return null;
   const st = opts[(Math.random() * opts.length) | 0];
   return { kind: 'move', ball: st.ball, to: st.to };
@@ -740,7 +740,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
 
   /* Easy wanders: a plain random legal step, exactly as it always has, keeps it forgiving */
   if (p.noise > 0 && Math.random() < p.noise) {
-    const wander = randomStep(s, me);
+    const wander = randomStep(s, me, d);
     if (wander) return wander;
   }
 
@@ -817,7 +817,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
 
   if (!pool.length) {
     if (mine) return mine.a;
-    const st = randomStep(s, me);
+    const st = randomStep(s, me, d);
     if (st) return st;
     for (const w of allWalls(me, s.cols, s.rows)) if (wallOk(s, w)) return { kind: 'wall', wall: w };
     return { kind: 'pass' };

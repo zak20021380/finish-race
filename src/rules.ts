@@ -30,13 +30,13 @@
  * cycle, the race is adjudicated — the ball nearest FINISH takes it. Both are pure functions of the
  * state, so every seat and the server reach the same verdict from the same board.
  *
- * Checkmate: a wall may seal a RIVAL's pawn (never the placer's own live pawns). After every
- * committed action the board is swept for pawns with no legal route to FINISH; each is flagged and
- * taken out of the race — the token stays on the tile it died on, frozen, but it never blocks
- * anybody's lane again. A duel is decided on the spot for the seat that closed the trap, while a
- * party loses that seat from the rotation and plays on. Only a WALL can close a trap now: a mine's
- * throw refuses any landing square with no route to FINISH, so a blast can never checkmate the
- * player who walked onto it. See `resolveCheckmates` and `blownTo`.
+ * Checkmate: no wall may ever cut off a live pawn's route — EVERY runner on the board keeps a way
+ * to FINISH, rivals included, so an empty sealed pocket is legal but an occupied one is not. After
+ * every committed action the board is swept for pawns with no legal route to FINISH; each is
+ * flagged and taken out of the race — the token stays on the tile it died on, frozen, but it never
+ * blocks anybody's lane again. A duel is decided on the spot, while a party loses that seat from
+ * the rotation and plays on. A pawn meets this verdict by walking into a pocket the walls already
+ * built, or by a mine's aerial throw landing it in one. See `resolveCheckmates` and `blownTo`.
  *
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..rows-1), covers columns x and x+1.
@@ -53,9 +53,9 @@
  * square never shortens it: the ball is set down on the free flank directly beside that body, and
  * only when walls, bodies or the board's edge close both flanks does it settle for the nearest
  * free square further back. So a detonation never leaves the ball standing on the charge and never
- * stacks it on a team-mate. The LANDING square itself is judged before the ball is set down: it
- * must still have a route to FINISH, and a throw that would drop the ball into a sealed pocket
- * stops one row short of the barrier instead — a blast can never seal the pawn that set it off.
+ * stacks it on a team-mate. The landing is judged by board bounds and live bodies alone — never by
+ * the route map — so a throw CAN drop the ball into a pocket the walls have sealed empty, and the
+ * checkmate sweep takes it the moment the move settles.
  * The mine is spent, and the LANDING square is then checked again: a second live charge there goes
  * off too, throwing the ball onward, and so on until it comes to rest on a mine-free cell. That
  * chain is a bounded pure loop (`MAX_CHAIN`), so both clients and
@@ -586,27 +586,15 @@ export function finishRoute(s: GameState, from: Pos): Pos[] {
 /**
  * Does every pawn that still matters have a route to FINISH with `walls` standing?
  *
- * Named `own`, only that seat's side is judged: a wall may seal a RIVAL in — that is the checkmate
- * this ruleset resolves — but never its own author, so no wall can ever freeze the seat that placed
- * it. In a team race the side is both partners, so a wall may not seal the placer's team-mate
- * either. A pawn already flagged `isCheckmated` is out of the race and no longer has a say.
+ * EVERY live pawn on the board is judged — the placer's, its partner's in a team race, and every
+ * rival's alike: a wall may never cut off any runner's route. Sealing an EMPTY pocket is still
+ * legal, because no live pawn stands inside it — that pocket is the bunker a mine's throw can
+ * later fill. A pawn already flagged `isCheckmated` (struck, eliminated or left) is out of the
+ * race and no longer has a say.
  */
-export function hasPathToFinish(
-  s: GameState, walls: readonly Wall[] = s.walls, own?: Player,
-): boolean {
+export function hasPathToFinish(s: GameState, walls: readonly Wall[] = s.walls): boolean {
   const d = distField(walls, s.cols, s.rows);
-  const map = s.seatTeam;
-  /* No colour plan: a seat IS its side. This is the duel and the free-for-all, and the bot prices
-     every wall on the board through here — so the common case stays allocation-free. */
-  if (!map) {
-    return s.balls.every((b) => b.isCheckmated
-      || (own !== undefined && b.team !== own)
-      || d[b.pos.r * s.cols + b.pos.c] >= 0);
-  }
-  const colour = own === undefined ? undefined : map[own];
-  return s.balls.every((b) => b.isCheckmated
-    || (own !== undefined && map[b.team] !== colour)
-    || d[b.pos.r * s.cols + b.pos.c] >= 0);
+  return s.balls.every((b) => b.isCheckmated || d[b.pos.r * s.cols + b.pos.c] >= 0);
 }
 
 /** The checkmate guard under the brief's own name; there is one implementation, not two. */
@@ -870,9 +858,11 @@ export function wallsRemaining(s: GameState, team: Player): number {
 
 /**
  * Is this wall legal? Within the owner's budget, in bounds for THIS board, clear of every wall
- * already standing (no shared edge segment, no `+` through a vertex) — and no pawn on the owner's
- * own SIDE may lose its route: its own live pawns, and its partner's in a team race. A rival MAY
- * be sealed: that is a checkmate, resolved by `resolveCheckmates` the moment the wall lands.
+ * already standing (no shared edge segment, no `+` through a vertex) — and EVERY live pawn on the
+ * board keeps a route to FINISH: the placer's, its partner's in a team race, and every rival's.
+ * A wall may seal an EMPTY pocket — the bunker a mine's throw can later fill — but never one with
+ * a live pawn inside. Checkmates come from the walk and the blast, never from the bar; the sweep
+ * in `resolveCheckmates` still runs after every committed action as the board's safety net.
  */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
@@ -882,7 +872,7 @@ export function wallOk(s: GameState, w: Wall): boolean {
   } else if (w.x < 1 || w.x > s.cols - 1 || w.y < 0 || w.y > s.rows - 2) return false;
 
   for (const o of s.walls) if (wallsClash(o, w)) return false;
-  return hasPathToFinish(s, [...s.walls, w], w.owner);
+  return hasPathToFinish(s, [...s.walls, w]);
 }
 
 /** Every wall position on the board (legal or not) for the given owner. */
@@ -1071,8 +1061,8 @@ function recordTurn(s: GameState, played: Player): GameState {
 /**
  * The checkmate sweep, run once after every committed board change.
  *
- * A pawn with no route to FINISH — a wall may now close a rival's last lane, and a pawn that walks
- * into a pocket the walls already built seals itself — is sealed for good, so it is
+ * A pawn with no route to FINISH — it walked into a pocket the walls already built, or a mine's
+ * throw dropped it into one — is sealed for good, so it is
  * flagged and removed from the race instead of being left to stall it. A seat that loses its last
  * live pawn is out. In a duel that ends the match immediately for the seat that sprung the trap.
  * In a party the seat is added to `eliminated`, its turn is skipped by `endTurn`, and the rest of
@@ -1081,8 +1071,9 @@ function recordTurn(s: GameState, played: Player): GameState {
  *
  * The sealed pawn KEEPS its tile: it is flagged, not deleted, so the board can still show where it
  * was trapped. It casts no body and blocks nothing — `cellFree`, `rawSteps` and `stepField` all
- * skip it — so it never stands in anybody's lane to FINISH. A mine's throw never seals one: the
- * landing square is judged before the pawn is set down (see `blownTo`).
+ * skip it — so it never stands in anybody's lane to FINISH. A mine's throw can seal one too: the
+ * landing is judged by bounds and bodies alone, so a ball dropped into a sealed pocket is swept
+ * here the moment the move settles (see `blownTo`).
  */
 function resolveCheckmates(s: GameState, by: Player): GameState {
   if (s.winner !== null) return s;
@@ -1233,53 +1224,38 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
  * the landing square for the NEXT charge is `doMove()`'s chain loop, not this helper's job: one
  * function resolves one throw, so a chain and a lone blast can never disagree about the physics.
  *
- * THE SOFT TRAP, CLOSED. A player may legally wall a pocket off BEHIND their own runner — the
- * walls may never seal the placer's own pawn — and the aerial throw used to drop that pawn
- * straight into the sealed pocket, so the blast itself checkmated the very player who set it off.
- * So the landing square is judged before the ball is set down: it must still have a route to
- * FINISH, judged on the WALLS ALONE (a sealed, struck or live pawn is never a wall, so it never
- * blocks the route this map records). A backward row that has no route is a barrier: the throw
- * stops one row short of it instead of burying the ball inside, and only a WALL can ever close a
- * trap now. The route field is the very one `resolveCheckmates()` judges a seat by, so the two
- * can never disagree about which squares are sealed.
+ * THE SEALED POCKET IS A REAL LANDING. The wall rule keeps every live pawn's route open, so a
+ * pocket the walls have closed is always EMPTY — but the aerial throw can still drop the blast's
+ * own victim into it. Landings are judged by board bounds and live bodies alone, never by the
+ * route map: a ball thrown into a pocket with no route to FINISH is checkmated on the spot by
+ * `resolveCheckmates()`, which sweeps the board the moment the move settles.
  */
 function blownTo(s: GameState, from: Pos, ballId: number): Pos {
   const last = s.rows - 1;
-  /* The route field: the walls alone. Read it BEFORE the edge set — `blocks()` hands out one
-     shared scratch, and `distField()` refills it on its way through. */
-  const d = distField(s.walls, s.cols, s.rows);
-  /** Does this square still have a route to FINISH? */
-  const open = (c: number, r: number): boolean =>
-    c >= 0 && c < s.cols && r >= 0 && r < s.rows && d[r * s.cols + c] >= 0;
+  /** A landing square: on the board and free of live bodies. Routes are not judged here. */
   const free = (c: number, r: number): boolean =>
     c >= 0 && c < s.cols && r >= 0 && r < s.rows
     && !s.balls.some((o) => !o.isCheckmated && o.id !== ballId && o.pos.c === c && o.pos.r === r);
-  /** A landing square: free of bodies AND still on the board's map of routes. */
-  const lands = (c: number, r: number): boolean => free(c, r) && open(c, r);
 
   const target = Math.min(from.r + CONFIG.KNOCKBACK, last);
-  /* The throw walks BACK one row at a time and stops at the first row it may not enter: a sealed
-     row behind the pawn is the barrier, and the blast stops one row short of it. */
-  let row = target;
-  while (row > from.r && !open(from.c, row)) row--;
-  if (lands(from.c, row)) return { c: from.c, r: row };
+  if (free(from.c, target)) return { c: from.c, r: target };
 
   /* the landing row is taken: the wave still carries the ball its two rows and sets it beside the
-     body, on whichever flank the board leaves both open and unwalled. Left first, then right, so
-     every client and the server name the same square. */
+     body, on whichever flank the board leaves unwalled. Left first, then right, so every client
+     and the server name the same square. */
   const b = blocks(s.walls);
   for (const dc of [-1, 1]) {
     const c = from.c + dc;
-    if (lands(c, row) && canStep(b, from.c, row, dc, 0, s.cols, s.rows)) return { c, r: row };
+    if (free(c, target) && canStep(b, from.c, target, dc, 0, s.cols, s.rows)) return { c, r: target };
   }
 
   /* both flanks are closed: the nearest free square at or below the landing row, same column
      first, then outward by column */
-  for (let r = row; r <= last; r++) {
-    if (lands(from.c, r)) return { c: from.c, r };
+  for (let r = target; r <= last; r++) {
+    if (free(from.c, r)) return { c: from.c, r };
     for (let dc = 1; dc < s.cols; dc++) {
-      if (lands(from.c - dc, r)) return { c: from.c - dc, r };
-      if (lands(from.c + dc, r)) return { c: from.c + dc, r };
+      if (free(from.c - dc, r)) return { c: from.c - dc, r };
+      if (free(from.c + dc, r)) return { c: from.c + dc, r };
     }
   }
   return from;

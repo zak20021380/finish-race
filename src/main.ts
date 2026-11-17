@@ -1,7 +1,7 @@
 import './style.css';
 import './result.css';
 import {
-  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, hasPathToFinish,
+  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
   sideOf, steps as teamSteps,
   view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
@@ -1218,11 +1218,11 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
   if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
   if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
-  /* Only the placer's own SIDE can refuse a wall now — its live pawns and its partner's in a 2v2.
-     Sealing a rival is a checkmate, resolved by the rules the moment the bar lands. */
+  /* EVERY live pawn can refuse a wall — yours, your partner's and your rivals'. Sealing an empty
+     pocket is legal; sealing a runner is not, whoever owns it. Checkmates come from the walk and
+     the mine's throw, never from the bar. */
   const d = distField([...s.walls, w], s.cols, s.rows);
-  const side = new Set(sideOf(s, w.owner));
-  const blocked = s.balls.some((b) => side.has(b.team) && !b.isCheckmated
+  const blocked = s.balls.some((b) => !b.isCheckmated
     && d[b.pos.r * s.cols + b.pos.c] < 0);
   return blocked ? 'blocked' : 'overlap';
 }
@@ -4570,11 +4570,9 @@ const tutorialRival = (): Ball | null =>
  * candidates are tried nearest-first, then the whole lattice, so a crowded party board still finds
  * a groove that is genuinely legal instead of pointing at a refused slot.
  *
- * Two rules the lesson adds on top of `wallOk`, which only guards its OWN author's route: every
- * live pawn must still have a way to FINISH (a wall that checkmated the rival would end the race
- * inside the tutorial), and a groove that actually lengthens the rival's run wins over one that
- * does not — the detour it forces is the whole point of the step, even with no line drawn on the
- * board to show it.
+ * One rule the lesson adds on top of `wallOk`, which already keeps every live pawn's route open:
+ * a groove that actually lengthens the rival's run wins over one that does not — the detour it
+ * forces is the whole point of the step, even with no line drawn on the board to show it.
  */
 function tutorialWallTarget(): TutorialTargetWall | null {
   if (state.turn !== localSide || state.winner !== null) return null;
@@ -4601,7 +4599,6 @@ function tutorialWallTarget(): TutorialTargetWall | null {
     const wall: Wall = { ...spec, owner: localSide };
     if (!wallOk(state, wall)) continue;
     const walls = [...state.walls, wall];
-    if (!hasPathToFinish(state, walls)) continue;
     if (pathOn(distField(walls, state.cols, state.rows), rival.pos, state.cols) > before) {
       return { spec, spot: grooveSpot(spec) };
     }
