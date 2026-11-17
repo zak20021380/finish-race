@@ -384,6 +384,15 @@ export function createChat(o: ChatOptions): Chat {
     px: number, py: number, radius: number,
   ) {
     const bubble = bubbles[side];
+    /* A floating emote has no chassis to hang a pointer from: never arm the wedge, so no box or
+       tail can appear behind the sticker. Reset the hinge to its centre as well — a previous text
+       message may have left an inline transform-origin on this same reused node. chat.css also
+       forces the tail off for .is-emote as a second line of defence. */
+    if (bubble.classList.contains('is-emote')) {
+      bubble.classList.remove('has-tail');
+      bubble.style.transformOrigin = '50% 50%';
+      return;
+    }
     const inset = Math.min(TAIL_FACE_INSET_PX, w / 2, h / 2);
     const dx = px - clamp(px, left + inset, left + w - inset);
     const dy = py - clamp(py, top + inset, top + h - inset);
