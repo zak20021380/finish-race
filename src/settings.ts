@@ -121,6 +121,16 @@ export function t(key: string): string {
   return table[key] ?? STRINGS.en[key] ?? key;
 }
 
+/**
+ * One key in a named locale, independent of the app's active language. The hands-on lesson keeps
+ * its own tongue (the top-bar switcher), so it paints its prompts through this door rather than
+ * dragging the whole shell into a language the player only wanted to read the lesson in.
+ */
+export function tIn(code: LangCode, key: string): string {
+  const table = STRINGS[code] ?? STRINGS.en;
+  return table[key] ?? STRINGS.en[key] ?? key;
+}
+
 export function setLang(code: LangCode) {
   if (!LANG_SET.has(code)) return;
   const changed = code !== lang;
@@ -151,6 +161,18 @@ export function onLang(w: LangWatcher): () => void {
    attributes so a language switch repaints without a reload. */
 export const STRINGS: Record<LangCode, Record<string, string>> = {
   en: {
+    /* ---- hands-on lesson: the 4-tap tactical combo and its free-play climax ---- */
+    tutGoalTitle: 'GOAL: REACH FINISH',
+    tutGoalBody: 'First pawn to reach the green FINISH line wins!',
+    tutGoalAction: 'Start',
+    tutSkip: 'Skip',
+    tutLangAria: 'Tutorial language',
+    tutStepAria: 'Step {n} of 4',
+    tutStep1: 'Tap the glowing square ahead to advance.',
+    tutStep2: 'Tap the glowing side square to line up your trap.',
+    tutStep3: "Tap the glowing line to block the enemy's straight path with a wall.",
+    tutStep4: 'Now tap the glowing square to plant a hidden mine in their detour.',
+    tutClimax: 'Direct hit! Take the wheel and race to FINISH to win!',
     /* ---- friendship quest: lobby, rewarded ads and vault progress ---- */
     quest_banner_title: 'Friendship Quest: Defeat Hard Bot',
     quest_banner_cta: 'Battle Hard Bot ⚔️',
@@ -1127,6 +1149,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'I Know the Rules',
   },
   fa: {
+    /* ---- آموزش تعاملی: کمبو تاکتیکی چهار ضربه‌ای و اوج بازی آزاد ---- */
+    tutGoalTitle: 'هدف: خط پایان',
+    tutGoalBody: 'اولین نفری که مهره‌اش به خط سبز FINISH برسه برنده‌ست!',
+    tutGoalAction: 'بزن بریم',
+    tutSkip: 'رد کردن',
+    tutLangAria: 'زبان آموزش',
+    tutStepAria: 'مرحله {n} از 4',
+    tutStep1: 'روی خانه نورانیِ روبه‌رو بزن تا حرکت کنی.',
+    tutStep2: 'روی خانه نورانیِ کناری بزن تا مسیر را برای تله آماده کنی.',
+    tutStep3: 'روی خطِ نورانی بزن تا با دیوار مسیر مستقیم حریف را ببندی.',
+    tutStep4: 'حالا روی خانه نورانی بزن تا دقیقاً سر راهِ انحرافی حریف مین بکاری.',
+    tutClimax: 'ضربه دقیق! حالا فرمون دست خودته، تا خط پایان بتاز و بازی رو ببر!',
     /* ---- مأموریت رفاقت: لابی، تبلیغات جایزه‌دار و پیشرفت صندوق ---- */
     quest_banner_title: 'مأموریت رفاقت: شکست ربات سخت',
     quest_banner_cta: 'نبرد با ربات سخت ⚔️',
@@ -2085,6 +2119,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     trainingUpsellSkip: 'قوانین رو بلدم',
   },
   ru: {
+    /* ---- интерактивное обучение: тактическая связка из 4 нажатий и свободный финал ---- */
+    tutGoalTitle: 'ЦЕЛЬ: ФИНИШ',
+    tutGoalBody: 'Побеждает тот, кто первым доведёт фишку до зелёной линии FINISH!',
+    tutGoalAction: 'Поехали',
+    tutSkip: 'Пропустить',
+    tutLangAria: 'Язык обучения',
+    tutStepAria: 'Шаг {n} из 4',
+    tutStep1: 'Нажми на светящуюся клетку впереди, чтобы сделать ход.',
+    tutStep2: 'Нажми на светящуюся клетку сбоку, чтобы подготовить ловушку.',
+    tutStep3: 'Нажми на светящуюся линию и перекрой стеной прямой путь врага.',
+    tutStep4: 'Теперь нажми на светящуюся клетку и заложи скрытую мину на его обходном пути.',
+    tutClimax: 'Точное попадание! Теперь руль у тебя — мчись к FINISH и побеждай!',
     /* ---- главная кнопка PLAY: одно действие, без наград внутри ---- */
     play: 'ИГРАТЬ',
     searching: 'ПОИСК',
@@ -2341,6 +2387,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     relicHintHeisenberg: 'Выиграйте 60% из минимум 5 соревновательных гонок.',
   },
   ar: {
+    /* ---- التعليم التفاعلي: سلسلة تكتيكية من 4 نقرات ثم انطلاقة حرة ---- */
+    tutGoalTitle: 'الهدف: خط النهاية',
+    tutGoalBody: 'أول قطعة تصل إلى خط FINISH الأخضر تفوز!',
+    tutGoalAction: 'ابدأ',
+    tutSkip: 'تخطي',
+    tutLangAria: 'لغة التعليم',
+    tutStepAria: 'الخطوة {n} من 4',
+    tutStep1: 'اضغط على المربع المضيء أمامك للتقدم.',
+    tutStep2: 'اضغط على المربع المضيء الجانبي لتهيئة الفخ.',
+    tutStep3: 'اضغط على الخط المضيء لتسد بجدار المسار المباشر للخصم.',
+    tutStep4: 'الآن اضغط على المربع المضيء لتزرع لغمًا خفيًا في مسار انحرافه.',
+    tutClimax: 'إصابة مباشرة! المقود بيدك الآن، انطلق إلى خط FINISH وافز!',
     /* ---- زر البدء في الرئيسية: فعل واحد بلا مكافآت داخله ---- */
     play: 'ابدأ اللعب',
     searching: 'جارٍ البحث',
@@ -2597,6 +2655,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     relicHintHeisenberg: 'الفوز بنسبة 60% من 5 سباقات تنافسية على الأقل.',
   },
   es: {
+    /* ---- tutorial interactivo: combo táctico de 4 toques y sprint final libre ---- */
+    tutGoalTitle: 'META: LLEGA A FINISH',
+    tutGoalBody: '¡Gana la primera ficha que llegue a la línea verde FINISH!',
+    tutGoalAction: 'Empezar',
+    tutSkip: 'Omitir',
+    tutLangAria: 'Idioma del tutorial',
+    tutStepAria: 'Paso {n} de 4',
+    tutStep1: 'Toca la casilla brillante de enfrente para avanzar.',
+    tutStep2: 'Toca la casilla brillante lateral para preparar tu trampa.',
+    tutStep3: 'Toca la línea brillante y bloquea con un muro el camino recto del rival.',
+    tutStep4: 'Ahora toca la casilla brillante y mina su desvío con una carga oculta.',
+    tutClimax: '¡Impacto directo! Toma el volante y corre hasta FINISH para ganar.',
     /* ---- el botón PLAY de la portada: una sola acción, sin recompensas dentro ---- */
     play: 'JUGAR',
     searching: 'BUSCANDO',

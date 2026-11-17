@@ -1,44 +1,37 @@
 /**
- * tutorial.ts — the first-match hands-on lesson.
+ * tutorial.ts — the first-match hands-on lesson: a four-tap tactical combo.
  *
- * ONE card, then light. The opening GOAL card is the only words the lesson ever prints: a title,
- * one line and a Start key, dismissed by that key or by tapping the FINISH band itself. Every
- * stage after it is silent — a spotlight cut into the scrim, a pulsing ghost hand on the exact
- * pixel to tap, the board's own local furniture (the pawn's legal-move dots, the staged ghost bar
- * and its ✓/✕ pair), sound and haptics. NO line is ever drawn across the board: no route, no
- * threat run, no beam. Nothing to read, nothing to dismiss.
+ * The lesson is one opening card and then four single taps, each of them a real move on the real
+ * board. The board is seeded by `main.ts` so the choreography is deterministic:
  *
- * The curriculum is the real game, performed on the real board:
- *   goal → select → move → wall-stage → wall-confirm → (rival reply) → advance × ADVANCE_TURNS →
- *   mine-arm → mine-place → mine-confirm → mine-blast → the race itself.
- * Both placements are the REAL two-tap flow: the first tap stages a ghost and raises the board's
- * own ✓/✕ controls, the second commits it. The spotlight moves onto the green ✓ while the input
- * cut-out stays wide enough for the ✕ beside it, so cancelling is a genuine way back rather than a
- * dead disc under the guard.
+ *   1. advance  — the square directly ahead. One tap walks the pawn.
+ *   2. sidestep — the square beside it. One tap lines the pawn up with the rival's lane.
+ *   3. wall     — the glowing groove directly in front of the rival. One tap raises the bar; the
+ *                 rival's straight path closes and it is forced into the detour lane.
+ *   4. mine     — the square the rival must take next. One tap buries the charge, the rival walks
+ *                 onto it, and the engine's own detonation throws it KNOCKBACK rows back.
  *
- * After the wall locks in the rival answers it, and then both pawns climb: a run of guided
- * forward-advance turns — the same spotlight, the same gate, no line on the board — carries them
- * into the middle of the board, where the mine lesson begins. The charge is buried on the exact
- * tile the rival is about to take, and the rival walks onto it while the spotlight holds that
- * square: the detonation the player watches is the engine's own. One gold breath over the FINISH
- * row is the parting "run" cue.
+ * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
+ * one target per stage and `main.ts` commits it through the same `play()` a real race uses. Between
+ * the taps the rival answers with its own scripted step, so the combo reads as a duel rather than a
+ * slideshow.
+ *
+ * Each stage carries one short localized prompt in the cue banner (EN / FA / RU / AR / ES, painted
+ * from `settings.ts`), a step counter in Latin digits, the pulsing spotlight and the ghost hand on
+ * the exact pixel to tap. Nothing is ever stroked across the board: no route, no threat beam.
+ *
+ * When the blast settles the lesson closes as `finished` and `main.ts` hands the player the wheel
+ * for the free-play climax, under handicaps that make the race impossible to lose.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
- * the action gate here is what told it the tap was the right one.
- *
- * The top bar survives every stage: the EN / فارسی / RU switcher on the left, Skip on the right.
- * The choice persists as `tactix_tut_lang` and flips the card to RTL with Vazirmatn for Persian.
- *
- * The scrim and the input blocker share one SVG cut-out, so the spotlight is sharp and — just as
- * important — the blocker is physically absent inside it. Taps land on the real canvas or the real
- * mine key. Everything outside the hole is swallowed, and `main.ts` repeats the check at the action
- * layer for keyboard and programmatic doors.
+ * the action gate here is what told it the tap was the right one. The scrim and the input blocker
+ * share one SVG cut-out, so the spotlight is sharp and the blocker is physically absent inside it.
  */
 
 import type { Cell, Pos, WallSpec } from './rules';
 import { audio } from './audio';
 import { impact } from './telegram';
-import { lang as appLang, onLang } from './settings';
+import { lang as appLang, onLang, tIn, type LangCode } from './settings';
 
 export interface TutorialRect { left: number; top: number; width: number; height: number }
 
@@ -48,101 +41,60 @@ export interface TutorialSpot {
   radius?: number;
 }
 
-export type TutorialStage =
-  | 'goal' | 'select' | 'move'
-  | 'wall-stage' | 'wall-confirm'
-  | 'advance-select' | 'advance-move'
-  | 'mine-arm' | 'mine-place' | 'mine-confirm' | 'mine-blast';
+/** `blast` is the lesson's last breath: the spotlight holds the crater while the engine detonates. */
+export type TutorialStage = 'goal' | 'advance' | 'sidestep' | 'wall' | 'mine' | 'blast';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
-export type TutorialLang = 'en' | 'fa' | 'ru';
+export type TutorialLang = LangCode;
 
-export const TUTORIAL_LANGS: readonly TutorialLang[] = ['en', 'fa', 'ru'];
+export const TUTORIAL_LANGS: readonly TutorialLang[] = ['en', 'fa', 'ru', 'ar', 'es'];
 export const TUT_LANG_KEY = 'tactix_tut_lang';
 
-/** The goal card's three lines. No kicker: this is a one-second intro, not page one of four. */
-export interface TutorialStepCopy {
-  title: string;
-  body: string;
-  action: string;
-}
-
-export const TUTORIAL_CHROME: Readonly<Record<TutorialLang, { skip: string }>> = {
-  en: { skip: 'Skip' },
-  fa: { skip: 'رد کردن آموزش' },
-  ru: { skip: 'Пропустить' },
-};
-
-/** Anything unknown (missing save, stale value) falls back to English. */
+/** Anything unknown (missing save, stale value) falls back to the app's own tongue, then English. */
 export function normalizeTutLang(value: string | null | undefined): TutorialLang {
-  return value === 'fa' || value === 'ru' || value === 'en' ? value : 'en';
+  return TUTORIAL_LANGS.includes(value as TutorialLang) ? (value as TutorialLang) : 'en';
 }
 
 export const tutorialDir = (lang: TutorialLang): 'rtl' | 'ltr' =>
-  lang === 'fa' ? 'rtl' : 'ltr';
+  lang === 'fa' || lang === 'ar' ? 'rtl' : 'ltr';
 
-/** What a tap asked the board to do, in the tutorial's own vocabulary. */
+/** What a tap asked the board to do. Every one of them is a single, complete action. */
 export type TutorialAction =
-  | { kind: 'select'; ball: number }
-  | { kind: 'move'; to: Pos }
-  /** first tap of the wall flow: raise the ghost and its ✓/✕ toolbar */
-  | { kind: 'wall-stage'; spec: WallSpec }
-  /** second tap: the green key spends the wall */
+  | { kind: 'move'; ball: number; to: Pos }
   | { kind: 'wall'; spec: WallSpec }
-  | { kind: 'wall-cancel' }
-  | { kind: 'mine-arm' }
-  /** first tap of the mine flow: stage the charge and its ✓/✕ discs */
-  | { kind: 'mine-stage'; cell: Cell }
-  /** second tap: the green key buries it */
-  | { kind: 'mine'; cell: Cell }
-  | { kind: 'mine-cancel' };
+  | { kind: 'mine'; cell: Cell };
 
 /** The live target of every stage, as values — the pure half of the action gate. */
 export interface TutorialTargets {
-  select: number | null;
   move: Pos | null;
   wall: WallSpec | null;
-  wallConfirm: WallSpec | null;
-  mineArm: boolean;
   mine: Cell | null;
-  mineConfirm: Cell | null;
 }
 
-export interface TutorialTargetSelect { spot: TutorialSpot; ball: number }
-export interface TutorialTargetMove { spot: TutorialSpot; to: Pos }
-export interface TutorialTargetWall {
-  spot: TutorialSpot;
-  spec: WallSpec;
-  /** A wider input door than the ring: the whole ✓/✕ pair, so cancel stays reachable. */
-  door?: TutorialRect;
-}
-export interface TutorialTargetMine { spot: TutorialSpot; cell: Cell; door?: TutorialRect }
+export interface TutorialTargetMove { spot: TutorialSpot; ball: number; to: Pos }
+export interface TutorialTargetWall { spot: TutorialSpot; spec: WallSpec }
+export interface TutorialTargetMine { spot: TutorialSpot; cell: Cell }
 
 export interface TutorialHooks {
   /** The goal card's own target: the FINISH band across the top of the board. */
   goal(): TutorialSpot | null;
-  select(): TutorialTargetSelect | null;
-  move(): TutorialTargetMove | null;
-  /** The groove to stage a wall on. */
+  /** Step 1: the square directly ahead of the player's pawn. */
+  advance(): TutorialTargetMove | null;
+  /** Step 2: the sideways square that lines the pawn up with the rival's lane. */
+  sidestep(): TutorialTargetMove | null;
+  /** Step 3: the groove directly in front of the rival, committed by one tap. */
   wall(): TutorialTargetWall | null;
-  /** The staged wall's green ✓, with the whole toolbar as its door. */
-  wallConfirm(): TutorialTargetWall | null;
-  mineArm(): TutorialSpot | null;
-  minePlace(): TutorialTargetMine | null;
-  /** The staged charge's green ✓, with the whole pair as its door. */
-  mineConfirm(): TutorialTargetMine | null;
+  /** Step 4: the detour square the rival is forced to take, mined by one tap. */
+  mine(): TutorialTargetMine | null;
   /** The buried charge's own square: the spotlight holds it while the rival walks into it. */
-  mineBlast(cell: Cell | null): TutorialTargetMine | null;
-  /** One fast, deterministic reply per bot seat; resolves when the local seat is on turn again. */
+  blast(cell: Cell | null): TutorialTargetMine | null;
+  /** One scripted rival step; resolves when the local seat is on turn again. */
   reply(): Promise<void>;
-  /**
-   * The charge is buried on `cell`. The board scripts the rival's very next step onto that square
-   * and resolves once the real detonation has played out, so the lesson closes on the crater.
-   */
-  mineBait(cell: Cell): Promise<void>;
+  /** Walk the rival onto the buried charge and resolve once the real detonation has played out. */
+  detonate(cell: Cell): Promise<void>;
   /** The parting cue: one gold breath over the FINISH row, drawn by the board itself. */
   finishPulse(): void;
-  /** A stage began (or the lesson closed, with null): re-derive hints, routes and the mine key. */
+  /** A stage began (or the lesson closed, with null): re-derive hints, ghosts and the mine key. */
   refresh(stage: TutorialStage | null): void;
   end(result: TutorialResult): void;
 }
@@ -166,87 +118,42 @@ export interface Tutorial {
 export interface TutorialStepDef {
   stage: TutorialStage;
   icon: string;
-  tone: 'goal' | 'select' | 'move' | 'wall' | 'mine' | 'confirm';
-  /** Present on the opening stage ONLY. Every later stage teaches with light alone. */
-  copy?: Readonly<Record<TutorialLang, TutorialStepCopy>>;
+  tone: 'goal' | 'move' | 'wall' | 'mine';
+  /** 1..4 on the combo's own steps; 0 on the card and the blast, which wear no counter. */
+  step: number;
+  /** The cue banner's i18n key, or null on the stages that teach with light alone. */
+  cue: string | null;
 }
 
-/** The whole lesson, in order. One card at the top of it, and nothing else to read. */
+/** The whole lesson, in order: one card, four taps, one detonation. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
-  {
-    stage: 'goal', icon: '#i-flag', tone: 'goal',
-    copy: {
-      en: {
-        title: 'GOAL: REACH FINISH',
-        body: 'First pawn to reach the green FINISH line wins!',
-        action: 'Start',
-      },
-      fa: {
-        title: 'هدف: خط پایان',
-        body: 'اولین نفری که مهره‌اش به خط سبز FINISH برسه برنده‌ست!',
-        action: 'بزن بریم',
-      },
-      ru: {
-        title: 'ЦЕЛЬ: ФИНИШ',
-        body: 'Побеждает тот, кто первым доведёт фишку до линии FINISH!',
-        action: 'Поехали',
-      },
-    },
-  },
-  { stage: 'select', icon: '#i-target', tone: 'select' },
-  { stage: 'move', icon: '#i-move', tone: 'move' },
-  { stage: 'wall-stage', icon: '#i-wall', tone: 'wall' },
-  { stage: 'wall-confirm', icon: '#i-wall', tone: 'confirm' },
-  { stage: 'advance-select', icon: '#i-target', tone: 'select' },
-  { stage: 'advance-move', icon: '#i-move', tone: 'move' },
-  { stage: 'mine-arm', icon: '#i-mine-tactical', tone: 'mine' },
-  { stage: 'mine-place', icon: '#i-mine-tactical', tone: 'mine' },
-  { stage: 'mine-confirm', icon: '#i-mine-tactical', tone: 'confirm' },
-  { stage: 'mine-blast', icon: '#i-mine-tactical', tone: 'mine' },
+  { stage: 'goal', icon: '#i-flag', tone: 'goal', step: 0, cue: null },
+  { stage: 'advance', icon: '#i-move', tone: 'move', step: 1, cue: 'tutStep1' },
+  { stage: 'sidestep', icon: '#i-move', tone: 'move', step: 2, cue: 'tutStep2' },
+  { stage: 'wall', icon: '#i-wall', tone: 'wall', step: 3, cue: 'tutStep3' },
+  { stage: 'mine', icon: '#i-mine-tactical', tone: 'mine', step: 4, cue: 'tutStep4' },
+  { stage: 'blast', icon: '#i-mine-tactical', tone: 'mine', step: 0, cue: null },
 ];
 
-/** What comes after each successful action; the wall's green key waits for the rival's reply. */
+/** What comes after each successful action. The rival answers between every pair of taps. */
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
-  goal: 'select',
-  select: 'move',
-  move: 'wall-stage',
-  'wall-stage': 'wall-confirm',
-  'wall-confirm': 'advance-select',
-  'advance-select': 'advance-move',
-  'advance-move': 'mine-arm',
-  'mine-arm': 'mine-place',
-  'mine-place': 'mine-confirm',
-  'mine-confirm': 'mine-blast',
-  'mine-blast': 'done',
+  goal: 'advance',
+  advance: 'sidestep',
+  sidestep: 'wall',
+  wall: 'mine',
+  mine: 'blast',
+  blast: 'done',
 };
 
-/** A confirm stage whose controls vanished falls BACK to its own first tap, never forward. */
-const CONFIRM_BACK: Partial<Record<TutorialStage, TutorialStage>> = {
-  'wall-confirm': 'wall-stage',
-  'mine-confirm': 'mine-place',
-};
-
-/** The action each stage answers to. Cancels are accepted by the two confirm stages on top. */
+/** The action each stage answers to. The card and the blast own no board action. */
 const STAGE_KIND: Readonly<Record<TutorialStage, TutorialAction['kind'] | null>> = {
   goal: null,
-  select: 'select',
-  move: 'move',
-  'wall-stage': 'wall-stage',
-  'wall-confirm': 'wall',
-  'advance-select': 'select',
-  'advance-move': 'move',
-  'mine-arm': 'mine-arm',
-  'mine-place': 'mine-stage',
-  'mine-confirm': 'mine',
-  'mine-blast': null,
+  advance: 'move',
+  sidestep: 'move',
+  wall: 'wall',
+  mine: 'mine',
+  blast: null,
 };
-
-/**
- * How many guided forward-advance turns sit between the wall and the mine. Three rows carry both
- * pawns off their starting row and into the middle of the board, which is what makes the mine
- * lesson read as a trap laid in open ground rather than a placement on the start line.
- */
-export const TUTORIAL_ADVANCE_TURNS = 3;
 
 /**
  * STRICT FIRST-TIME-ONLY rule. Only a local, single-human bot race may auto-route into the lesson,
@@ -276,27 +183,13 @@ export function tutorialAllows(
 ): boolean {
   if (stage === null || stage === 'done') return false;
   switch (stage) {
-    case 'goal':
-      /* the card goes by its own key or by the FINISH band: no board action belongs to it */
-      return false;
-    case 'select':
-    case 'advance-select':
-      return action.kind === 'select' && targets.select !== null && action.ball === targets.select;
-    case 'move':
-    case 'advance-move':
+    case 'advance':
+    case 'sidestep':
       return action.kind === 'move' && sameCell(action.to, targets.move);
-    case 'wall-stage':
-      return action.kind === 'wall-stage' && sameWall(action.spec, targets.wall);
-    case 'wall-confirm':
-      if (action.kind === 'wall-cancel') return true;
-      return action.kind === 'wall' && sameWall(action.spec, targets.wallConfirm);
-    case 'mine-arm':
-      return action.kind === 'mine-arm' && targets.mineArm;
-    case 'mine-place':
-      return action.kind === 'mine-stage' && sameCell(action.cell, targets.mine);
-    case 'mine-confirm':
-      if (action.kind === 'mine-cancel') return true;
-      return action.kind === 'mine' && sameCell(action.cell, targets.mineConfirm);
+    case 'wall':
+      return action.kind === 'wall' && sameWall(action.spec, targets.wall);
+    case 'mine':
+      return action.kind === 'mine' && sameCell(action.cell, targets.mine);
     default:
       return false;
   }
@@ -355,7 +248,9 @@ const setBox = (el: HTMLElement, r: TutorialRect) => {
   el.style.height = `${Math.max(0, r.height)}px`;
 };
 
-const REPLY_BEAT_MS = 200;      // let the player's own move read, then the rival answers at once
+const REPLY_BEAT_MS = 260;      // let the player's own move read, then the rival answers at once
+/** The top bar the lesson itself owns: the language segment and Skip both live in it. */
+const BAR_BOTTOM = 66;
 
 function readStoredLang(): string | null {
   try { return window.localStorage.getItem(TUT_LANG_KEY); } catch { return null; }
@@ -363,6 +258,11 @@ function readStoredLang(): string | null {
 function writeStoredLang(value: TutorialLang): void {
   try { window.localStorage.setItem(TUT_LANG_KEY, value); } catch { /* storage is optional */ }
 }
+
+/** The tongue the lesson is speaking right now — the climax callout reads it too, so the hand-off
+ *  lands in the same language as the four prompts that led to it. */
+let liveLang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
+export const tutorialLang = (): TutorialLang => liveLang;
 
 export function createTutorial(hooks: TutorialHooks): Tutorial {
   const root = byId<HTMLElement>('tutorial');
@@ -379,12 +279,14 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const nextLabel = byId<HTMLElement>('tut-next-label');
   const liveEl = byId<HTMLElement>('tut-live');
   const langEl = byId<HTMLElement>('tut-lang');
+  const cue = byId<HTMLElement>('tut-cue');
+  const cueNum = byId<HTMLElement>('tut-cue-n');
+  const cueText = byId<HTMLElement>('tut-cue-t');
+  const cueUse = byId<SVGUseElement>('tut-cue-use');
   const langBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-tut-lang]'));
 
   let open = false;
   let stepIndex = 0;
-  /** Guided advance turns still to run between the wall and the mine. */
-  let advanceLeft = TUTORIAL_ADVANCE_TURNS;
   /** The square the lesson's own charge was buried on: the spotlight holds it through the blast. */
   let blastCell: Cell | null = null;
   let trackId = 0;
@@ -393,7 +295,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let nudgeTimer = 0;
   /** Every stage change and close bumps this, so a stale bot reply can never advance the lesson. */
   let flow = 0;
-  let lang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
+  let lang: TutorialLang = liveLang;
 
   const stage = (): TutorialStage | null =>
     open ? TUTORIAL_STEPS[stepIndex].stage : null;
@@ -401,86 +303,84 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const targets = (): TutorialTargets => {
     const s = stage();
     return {
-      select: s === 'select' || s === 'advance-select' ? hooks.select()?.ball ?? null : null,
-      move: s === 'move' || s === 'advance-move' ? hooks.move()?.to ?? null : null,
-      wall: s === 'wall-stage' ? hooks.wall()?.spec ?? null : null,
-      wallConfirm: s === 'wall-confirm' ? hooks.wallConfirm()?.spec ?? null : null,
-      mineArm: s === 'mine-arm' && hooks.mineArm() !== null,
-      mine: s === 'mine-place' ? hooks.minePlace()?.cell ?? null : null,
-      mineConfirm: s === 'mine-confirm' ? hooks.mineConfirm()?.cell ?? null : null,
+      move: s === 'advance' ? hooks.advance()?.to ?? null
+        : s === 'sidestep' ? hooks.sidestep()?.to ?? null : null,
+      wall: s === 'wall' ? hooks.wall()?.spec ?? null : null,
+      mine: s === 'mine' ? hooks.mine()?.cell ?? null : null,
     };
   };
 
-  /** The ring's own box, plus the (possibly wider) door the input guard leaves open. */
-  const targetFor = (s: TutorialStage): { spot: TutorialSpot; door?: TutorialRect } | null => {
+  const targetFor = (s: TutorialStage): { spot: TutorialSpot } | null => {
     switch (s) {
       case 'goal': { const g = hooks.goal(); return g ? { spot: g } : null; }
-      case 'select':
-      case 'advance-select': return hooks.select();
-      case 'move':
-      case 'advance-move': return hooks.move();
-      case 'wall-stage': return hooks.wall();
-      case 'wall-confirm': return hooks.wallConfirm();
-      case 'mine-arm': { const m = hooks.mineArm(); return m ? { spot: m } : null; }
-      case 'mine-place': return hooks.minePlace();
-      case 'mine-confirm': return hooks.mineConfirm();
-      case 'mine-blast': return hooks.mineBlast(blastCell);
+      case 'advance': return hooks.advance();
+      case 'sidestep': return hooks.sidestep();
+      case 'wall': return hooks.wall();
+      case 'mine': return hooks.mine();
+      case 'blast': return hooks.blast(blastCell);
     }
   };
 
   /**
-   * The secondary highlight under the ring: the FINISH band on the goal card, the target's own
-   * footprint otherwise. The forward step gets none — the board is drawing the pawn's real legal
-   * dots, and a gold band at the far end of the slab only pulls the eye off them. A staged pair
-   * gets none either: the ghost bar or the charged square is already there.
+   * The secondary highlight under the ring: the FINISH band on the goal card, the luminous ghost
+   * bar on the wall step, the charged square on the mine step, the target's own footprint on the
+   * two moves. The blast gets the mine marker too — the crater is the thing being watched.
    */
-  const aidFor = (s: TutorialStage, target: { spot: TutorialSpot }): TutorialSpot | null => {
-    switch (s) {
-      case 'move':
-      case 'advance-move':
-      case 'wall-confirm':
-      case 'mine-confirm': return null;
-      default: return target.spot;
-    }
-  };
+  const aidKind = (s: TutorialStage): string =>
+    s === 'goal' ? 'finish' : s === 'wall' ? 'wall' : s === 'mine' || s === 'blast' ? 'mine' : 'tile';
 
   const paintLang = () => {
     const dir = tutorialDir(lang);
     card.dataset.lang = lang;
     card.dir = dir;
     card.lang = lang;
+    cue.dataset.lang = lang;
+    cue.dir = dir;
+    cue.lang = lang;
     skipBtn.dataset.lang = lang;
     skipBtn.dir = dir;
     skipBtn.lang = lang;
     root.dataset.lang = lang;
+    langEl.setAttribute('aria-label', tIn(lang, 'tutLangAria'));
     for (const btn of langBtns) {
       btn.setAttribute('aria-pressed', String(btn.dataset.tutLang === lang));
     }
   };
 
-  /** Repaint the goal card in the active language. Every later stage has nothing to repaint. */
+  /** Repaint the card and the cue in the active language. Both are short, joined-script safe. */
   const paintCopy = (animate = false) => {
-    const copy = TUTORIAL_STEPS[stepIndex].copy?.[lang];
-    skipBtn.textContent = TUTORIAL_CHROME[lang].skip;
-    if (copy) {
-      titleEl.textContent = copy.title;
-      bodyEl.textContent = copy.body;
-      nextLabel.textContent = copy.action;
-      liveEl.textContent = `${copy.title}. ${copy.body}`;
+    const def = TUTORIAL_STEPS[stepIndex];
+    skipBtn.textContent = tIn(lang, 'tutSkip');
+    if (def.stage === 'goal') {
+      const title = tIn(lang, 'tutGoalTitle');
+      const body = tIn(lang, 'tutGoalBody');
+      titleEl.textContent = title;
+      bodyEl.textContent = body;
+      nextLabel.textContent = tIn(lang, 'tutGoalAction');
+      liveEl.textContent = `${title}. ${body}`;
+    } else if (def.cue) {
+      const line = tIn(lang, def.cue);
+      cueText.textContent = line;
+      cueNum.textContent = `${def.step}/4`;
+      cue.setAttribute('aria-label', tIn(lang, 'tutStepAria').replace('{n}', String(def.step)));
+      liveEl.textContent = line;
     } else {
       liveEl.textContent = '';
     }
     if (!animate) return;
     card.classList.remove('lang-swap');
+    cue.classList.remove('lang-swap');
     root.classList.remove('lang-swap');
     void card.offsetWidth;
     card.classList.add('lang-swap');
+    cue.classList.add('lang-swap');
     root.classList.add('lang-swap');
   };
 
   const switchLang = (next: TutorialLang, animate: boolean) => {
     if (next === lang && animate) return;
     lang = next;
+    liveLang = next;
     paintLang();
     paintCopy(animate);
     if (animate) {
@@ -497,7 +397,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     clipPath.setAttribute('d', hole ? `${fullPath()} ${roundRectPath(hole, radius)}` : fullPath());
   };
 
-  /** The neon ring keeps its own box: on a staged pair it rings the green key, not the whole door. */
   const placeRing = (rect: TutorialRect | null, radius: number) => {
     spotEl.hidden = !rect;
     if (!rect) return;
@@ -529,8 +428,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const placeAid = (s: TutorialStage, spot: TutorialSpot | null) => {
     aidEl.hidden = !spot;
     if (!spot) return;
-    aidEl.dataset.kind = s === 'goal' ? 'finish'
-      : s === 'wall-stage' || s === 'wall-confirm' ? 'wall' : 'tile';
+    aidEl.dataset.kind = aidKind(s);
     setBox(aidEl, spot.rect);
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;
   };
@@ -545,11 +443,42 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     card.style.top = `${clamp(vh * 0.56, edge, Math.max(edge, vh - ch - edge))}px`;
   };
 
+  /**
+   * The cue banner never covers the thing it is talking about. It takes whichever daylight the
+   * board leaves — above the slab or below it. On a phone too short for either it sits INSIDE the
+   * slab at the edge farthest from the live ring, over empty start rows: the dock, its seat chips
+   * and its counters stay readable, and the ring stays clear.
+   */
+  const placeCue = (ring: TutorialRect | null) => {
+    if (cue.hidden) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const ch = cue.offsetHeight || 54;
+    const cw = Math.min(cue.offsetWidth || 300, vw - 24);
+    const slab = document.getElementById('board-wrap')?.getBoundingClientRect();
+    const dock = document.getElementById('chips')?.getBoundingClientRect();
+    let top: number;
+    if (slab && dock && slab.height > 1) {
+      const below = dock.top - slab.bottom;
+      const above = slab.top - BAR_BOTTOM;
+      if (below >= ch + 10) top = slab.bottom + (below - ch) / 2;
+      else if (above >= ch + 10) top = BAR_BOTTOM + (above - ch) / 2;
+      else {
+        const focus = ring ? ring.top + ring.height / 2 : slab.top + slab.height / 2;
+        top = focus < slab.top + slab.height / 2 ? slab.bottom - ch - 8 : slab.top + 8;
+      }
+    } else {
+      top = vh - ch - 10;
+    }
+    cue.style.left = `${clamp((vw - cw) / 2, 12, Math.max(12, vw - cw - 12))}px`;
+    cue.style.top = `${clamp(top, 8, Math.max(8, vh - ch - 8))}px`;
+  };
+
   const place = () => {
     if (!open) return;
-    const s = TUTORIAL_STEPS[stepIndex].stage;
-    /* THE rule of this lesson: the goal card is the only text surface it ever shows. */
+    const def = TUTORIAL_STEPS[stepIndex];
+    const s = def.stage;
     card.hidden = s !== 'goal';
+    cue.hidden = !def.cue;
     const target = targetFor(s);
     if (!target) {
       drawMask(null, 0);
@@ -557,20 +486,18 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       aidEl.hidden = true;
       pointer.style.display = 'none';
       if (s === 'goal') placeCard();
+      placeCue(null);
       return;
     }
-    const pad = s === 'mine-arm' ? 8 : TUTORIAL_SPOT_PAD;
     const radius = target.spot.radius ?? 16;
-    const ring = clampRect(atLeast(padRect(target.spot.rect, pad), 48, 48));
-    /* A staged pair opens its WHOLE box to input — the cancel key beside the green one is a real
-       way back — while the ring and the ghost hand stay on the confirm key alone. */
-    const door = target.door ? clampRect(padRect(target.door, pad)) : ring;
-    drawMask(door, target.door ? 14 : radius);
+    const ring = clampRect(atLeast(padRect(target.spot.rect, TUTORIAL_SPOT_PAD), 48, 48));
+    drawMask(ring, radius);
     placeRing(ring, radius);
-    placeAid(s, aidFor(s, target));
+    placeAid(s, target.spot);
     pointer.style.display = '';
     placePointer(ring);
     if (s === 'goal') placeCard();
+    placeCue(ring);
   };
 
   const track = () => {
@@ -600,15 +527,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const render = () => {
     if (!open) return;
-    /* A target can disappear with the board (a rival walked, a corner sealed, a pair with no room
-       to draw). A confirm stage falls back to its own first tap; anything else steps past it, and
-       the lesson finishes rather than freezing on a spotlight asking for an impossible tap. */
+    /* A target can disappear with the board (a rival walked, a corner sealed). Step past it rather
+       than freezing on a spotlight asking for an impossible tap; the lesson finishes instead. */
     for (let guard = 0; guard < TUTORIAL_STEPS.length; guard++) {
-      const here = TUTORIAL_STEPS[stepIndex];
-      if (targetFor(here.stage)) break;
-      const back = CONFIRM_BACK[here.stage];
-      const at = back ? TUTORIAL_STEPS.findIndex((s) => s.stage === back) : -1;
-      if (at >= 0 && at < stepIndex && targetFor(TUTORIAL_STEPS[at].stage)) { stepIndex = at; break; }
+      if (targetFor(TUTORIAL_STEPS[stepIndex].stage)) break;
       if (stepIndex >= TUTORIAL_STEPS.length - 1) { close('finished'); return; }
       stepIndex++;
     }
@@ -617,6 +539,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.dataset.stage = def.stage;
     root.dataset.tone = def.tone;
     iconUse.setAttribute('href', def.icon);
+    cueUse.setAttribute('href', def.icon);
     skipBtn.hidden = false;
     langEl.hidden = false;
     paintCopy();
@@ -627,6 +550,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       void card.offsetWidth;
       card.classList.add('pop');
       card.focus({ preventScroll: true });
+    } else if (!cue.hidden) {
+      cue.classList.remove('pop');
+      void cue.offsetWidth;
+      cue.classList.add('pop');
     }
     trackFor(420);       // the screen may still be sliding in: follow the target's real box
   };
@@ -643,7 +570,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const advance = () => {
     if (!open) return;
     if (TUTORIAL_STEPS[stepIndex].stage !== 'goal') return;
-    go('select');
+    go('advance');
   };
 
   /**
@@ -676,7 +603,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     document.removeEventListener('keydown', onKeydown, true);
   };
 
-
   function close(result: TutorialResult) {
     if (!open) return;
     open = false;
@@ -689,7 +615,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.removeAttribute('data-stage');
     root.removeAttribute('data-tone');
     card.hidden = true;
-    card.classList.remove('lang-swap');
+    cue.hidden = true;
+    card.classList.remove('lang-swap', 'pop');
+    cue.classList.remove('lang-swap', 'pop');
     root.classList.remove('lang-swap');
     document.body.classList.remove('tutorial-live');
     drawMask(null, 0);
@@ -712,9 +640,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     });
   }
   switchLang(lang, false);
-  /* the app language is the lesson's language: a switch in Settings re-reads the card in place */
+  /* the app language is the lesson's language: a switch in Settings re-reads the copy in place */
   onLang((code) => {
-    const next: TutorialLang = code === 'fa' || code === 'ru' ? code : 'en';
+    const next = normalizeTutLang(code);
     if (next !== lang) switchLang(next, true);
   });
 
@@ -725,7 +653,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       if (open) return;
       open = true;
       stepIndex = 0;
-      advanceLeft = TUTORIAL_ADVANCE_TURNS;
       blastCell = null;
       root.hidden = false;
       document.body.classList.add('tutorial-live');
@@ -745,55 +672,26 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       const now = TUTORIAL_STEPS[stepIndex].stage;
       /* The exact target was gated BEFORE the action ran. Re-running that target check here would
          fail every move/wall/mine: the action itself changed whose turn it is. Kind is enough. */
-      const cancel = (now === 'wall-confirm' && action.kind === 'wall-cancel')
-        || (now === 'mine-confirm' && action.kind === 'mine-cancel');
-      if (!cancel && action.kind !== STAGE_KIND[now]) return;
+      if (action.kind !== STAGE_KIND[now]) return;
       switch (now) {
-        case 'goal':
+        case 'advance':
+        case 'sidestep':
+          /* the rival answers the step at once, then the next tap is lit */
+          awaiting(hooks.reply, () => go(NEXT_STAGE[now] as TutorialStage));
           return;
-        case 'select':
-          go('move');
+        case 'wall':
+          /* the bar closes the straight path; the rival is forced into the detour lane, and the
+             mine step then names the exact square it must take next */
+          awaiting(hooks.reply, () => go('mine'));
           return;
-        case 'wall-stage':
-          /* the ghost stands in its groove with the real toolbar up: the ring walks onto the key */
-          go('wall-confirm');
-          return;
-        case 'wall-confirm':
-          if (cancel) { go('wall-stage'); return; }
-          /* The wall is locked in and the rival answers it at once. Then both pawns climb the board
-             together — one guided advance at a time, the spotlight moving from pawn to forward
-             tile — until they stand in the middle of the board, where the mine is buried. */
-          advanceLeft = TUTORIAL_ADVANCE_TURNS;
-          awaiting(hooks.reply, () => go('advance-select'));
-          return;
-        case 'advance-select':
-          go('advance-move');
-          return;
-        case 'advance-move':
-          /* The player's pawn is a row further on: the rival takes its own step before the next
-             pick, so the pair stays level and the run reads as a race, not a solo walk. */
-          awaiting(hooks.reply, () => {
-            advanceLeft -= 1;
-            if (advanceLeft > 0) { go('advance-select'); return; }
-            go('mine-arm');
-          });
-          return;
-        case 'mine-arm':
-          go('mine-place');
-          return;
-        case 'mine-place':
-          go('mine-confirm');
-          return;
-        case 'mine-confirm': {
-          if (cancel) { go('mine-place'); return; }
+        case 'mine': {
           if (action.kind !== 'mine') { close('finished'); return; }
           /* The charge is buried. The spotlight holds that square while the board walks the rival
-             onto it: the blast, the knockback, the shake and the bang are the engine's own, and the
-             lesson only lets go — one gold breath over FINISH — once they have played. */
+             onto it: the blast, the knockback, the shake and the bang are the engine's own. */
           blastCell = action.cell;
-          go('mine-blast');
+          go('blast');
           const token = ++flow;
-          void hooks.mineBait(action.cell)
+          void hooks.detonate(action.cell)
             .catch(() => undefined)
             .then(() => {
               if (!open || token !== flow) return;
@@ -804,12 +702,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
             });
           return;
         }
-        case 'mine-blast':
-          return;
-        case 'move':
-          /* the forward step hands the turn to the machine: one reply through the normal door,
-             then the player is up again with the wall groove spotlit */
-          awaiting(hooks.reply, () => go('wall-stage'));
+        default:
           return;
       }
     },

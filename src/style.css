@@ -1074,20 +1074,19 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   -webkit-backdrop-filter: blur(4px);
   clip-path: url(#tut-clip);
 }
-/* From the first visual stage on, the BOARD is the lesson: the pawns, the ghost bar and the
-   spotlight's local highlights are the whole instruction, so the scrim only quietens the chrome
-   around the slab. Nothing is ever stroked across the board: no route, no threat line, no beam.
-   A heavy dim or a live blur here would bury the very things the player is meant to read. */
+/* From the first tap on, the BOARD is the lesson: the pawns, the ghost bar and the spotlight's
+   local highlights are the whole instruction, so the scrim only quietens the chrome around the
+   slab. Nothing is ever stroked across the board: no route, no threat line, no beam. */
 .tutorial:not([data-tone="goal"]) .tut-scrim {
-  background: rgba(8, 12, 22, .38);
+  background: rgba(8, 12, 22, .32);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-/* The forward step is taught by the pawn's OWN legal-move dots — all three directions off the
-   starting row, sitting outside the cut-out. A .38 veil would mute the two the ring is not on, so
-   here the scrim only whispers: the dots stay luminous across the whole slab while the ring and
-   the ghost hand still name the single tile the gate accepts. */
-.tutorial[data-stage="move"] .tut-scrim { background: rgba(8, 12, 22, .14); }
+/* The two moves are taught by the pawn's OWN legal-move dots as much as by the ring. A .32 veil
+   would mute the ones the ring is not on, so here the scrim only whispers: the dots stay luminous
+   across the whole slab while the ring and the ghost hand name the single tile the gate accepts. */
+.tutorial[data-stage="advance"] .tut-scrim,
+.tutorial[data-stage="sidestep"] .tut-scrim { background: rgba(8, 12, 22, .15); }
 
 /* the input guard: present everywhere EXCEPT the cut-out, so the spotlight is a real door */
 .tut-block {
@@ -1098,8 +1097,20 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   touch-action: none;
   clip-path: url(#tut-clip);
 }
-/* the chat key sits beside the mine pod, close enough that a generous mine cut-out could reach it */
-body.tutorial-live #chat-toggle { pointer-events: none; }
+/* THE SILENT BOARD. The whole tutorial match — guided combo and free-play climax — mutes the chat
+   key: no press, no hover, no unread ping, and a third of its presence so the eye never lands on
+   it. chat.ts drops every inbound line behind the same flag, so this is the look of a real gate. */
+body.tutorial-live #chat-toggle,
+body.tut-match #chat-toggle {
+  pointer-events: none;
+  opacity: .35;
+  filter: saturate(.25);
+}
+body.tutorial-live #chat-toggle .chat-ping,
+body.tut-match #chat-toggle .chat-ping { display: none; }
+/* the lesson's own step counter replaces the round caption: the language segment owns that band,
+   and a caption peeking out from under it reads as a collision rather than as chrome */
+body.tutorial-live .g-round { opacity: 0; }
 
 /* ---- spotlight: a dual neon ring around the exact live target ---- */
 .tut-spot {
@@ -1131,19 +1142,19 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   70%, 100% { transform: scale(1.08); opacity: 0; }
 }
 .tutorial[data-tone="goal"] .tut-spot,
-.tutorial[data-tone="select"] .tut-spot,
 .tutorial[data-tone="mine"] .tut-spot {
   --tut-ring: rgba(252, 211, 77, .98);
   --tut-ring-soft: rgba(245, 158, 11, .45);
 }
-.tutorial[data-tone="wall"] .tut-spot {
-  --tut-ring: rgba(252, 211, 77, .98);
-  --tut-ring-soft: rgba(56, 189, 248, .5);
+/* the two moves wear the board's own cyan: the ring is a move dot grown up, not a new language */
+.tutorial[data-tone="move"] .tut-spot {
+  --tut-ring: rgba(56, 189, 248, .98);
+  --tut-ring-soft: rgba(56, 189, 248, .48);
 }
-/* a staged pair: the ring turns emerald, the same green as the ✓ it is standing on */
-.tutorial[data-tone="confirm"] .tut-spot {
-  --tut-ring: rgba(110, 231, 183, .98);
-  --tut-ring-soft: rgba(16, 185, 129, .55);
+/* the funnel: amber core, cyan spill — the same two hues the ghost bar itself is drawn in */
+.tutorial[data-tone="wall"] .tut-spot {
+  --tut-ring: rgba(245, 158, 11, .98);
+  --tut-ring-soft: rgba(56, 189, 248, .55);
 }
 
 /* ---- the secondary aid: gold FINISH band, cyan/gold groove, gold mine tile ---- */
@@ -1161,10 +1172,17 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
     inset 0 0 24px rgba(245, 158, 11, .2);
   animation: tut-finish-pulse 1.5s ease-in-out infinite;
 }
+/* THE GHOST WALL. A luminous bar standing in the exact groove one tap will fill: amber core
+   (#F59E0B), cyan spill (#38BDF8), two glowing end studs so it reads as a piece of board furniture
+   waiting to be dropped rather than a highlight painted on the seam. */
 .tut-aid[data-kind="wall"] {
-  background: linear-gradient(90deg, rgba(56, 189, 248, .05), rgba(252, 211, 77, .32), rgba(56, 189, 248, .05));
-  box-shadow: 0 0 0 1px rgba(252, 211, 77, .72), 0 0 26px rgba(56, 189, 248, .48);
-  animation: tut-wall-pulse 1.3s ease-in-out infinite;
+  background: linear-gradient(90deg, rgba(56, 189, 248, .1), rgba(245, 158, 11, .42) 50%, rgba(56, 189, 248, .1));
+  box-shadow:
+    0 0 0 1.5px rgba(245, 158, 11, .92),
+    0 0 22px rgba(245, 158, 11, .55),
+    0 0 42px rgba(56, 189, 248, .45),
+    inset 0 0 14px rgba(255, 247, 214, .3);
+  animation: tut-wall-pulse 1.15s ease-in-out infinite;
 }
 /* the seam itself: a bright ruled line on the gap between two tiles, so the wall's home reads
    as a LINE, never as a square */
@@ -1178,13 +1196,44 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   margin-top: -1.5px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(252, 211, 77, 0), #fcd34d 14%, #fff7d6 50%, #fcd34d 86%, rgba(252, 211, 77, 0));
-  box-shadow: 0 0 12px rgba(252, 211, 77, .9), 0 0 3px rgba(255, 255, 255, .9);
+  box-shadow: 0 0 14px rgba(252, 211, 77, .95), 0 0 4px rgba(255, 255, 255, .95);
+}
+.tut-aid[data-kind="wall"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 0 50%, #fff7d6 0 2px, rgba(252, 211, 77, .95) 2.6px, transparent 4px),
+    radial-gradient(circle at 100% 50%, #fff7d6 0 2px, rgba(252, 211, 77, .95) 2.6px, transparent 4px);
 }
 .tut-aid[data-kind="tile"] {
-  background: radial-gradient(ellipse at center, rgba(252, 211, 77, .3), rgba(245, 158, 11, .07) 62%, transparent 75%);
-  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, .78), 0 0 26px rgba(245, 158, 11, .4);
+  background: radial-gradient(ellipse at center, rgba(56, 189, 248, .26), rgba(56, 189, 248, .06) 62%, transparent 75%);
+  box-shadow: inset 0 0 0 2px rgba(56, 189, 248, .8), 0 0 26px rgba(56, 189, 248, .38);
   animation: tut-tile-pulse 1.25s ease-in-out infinite;
 }
+/* THE MINE TARGET. The detour square the rival is forced to take, wearing one crisp tinted
+   silhouette of the charge itself — no pictograph, no second label, just the thing about to bury. */
+.tut-aid[data-kind="mine"] {
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgba(245, 158, 11, .34), rgba(244, 63, 94, .12) 58%, transparent 76%);
+  box-shadow:
+    inset 0 0 0 2px rgba(252, 211, 77, .88),
+    0 0 26px rgba(245, 158, 11, .48),
+    0 0 46px rgba(244, 63, 94, .22);
+  animation: tut-tile-pulse 1.05s ease-in-out infinite;
+}
+.tut-aid-mine { display: none; }
+.tut-aid[data-kind="mine"] .tut-aid-mine {
+  display: block;
+  width: 62%;
+  height: 62%;
+  overflow: visible;
+  filter: drop-shadow(0 0 7px rgba(252, 211, 77, .8));
+}
+.tut-aid-mine .tut-aid-body { fill: rgba(9, 14, 26, .78); stroke: #fcd34d; stroke-width: 1.7; }
+.tut-aid-mine path { fill: none; stroke: #fcd34d; stroke-width: 1.9; stroke-linecap: round; }
+.tut-aid-mine .tut-aid-core { fill: #fff7d6; stroke: none; }
 @keyframes tut-finish-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @keyframes tut-wall-pulse {
   0%, 100% { opacity: .62; filter: brightness(1); }
@@ -1373,6 +1422,81 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
 .tut-next:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .tut-next[hidden] { display: none; }
 
+/* ---- the cue banner: one counter, one icon, one short prompt ----
+   The four taps each say their piece here and nowhere else. It is deliberately quiet furniture —
+   a hairline edge, one readable line, no second button and no glow stack — because the focal point
+   of every step is the ring on the board, not the sentence about it. main.ts parks it in whichever
+   daylight the slab leaves, so it never sits on the thing it is naming. */
+.tut-cue {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(368px, calc(100vw - 24px));
+  padding: 9px 12px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(18, 25, 40, .97), rgba(10, 15, 27, .97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 18px 34px -24px rgba(0, 0, 0, .95);
+  pointer-events: none;
+  --cue-accent: #38bdf8;
+  --cue-accent-soft: rgba(56, 189, 248, .14);
+}
+.tut-cue[hidden] { display: none; }
+.tut-cue.pop { animation: tut-cue-in .24s cubic-bezier(.2, 1.1, .4, 1) both; }
+@keyframes tut-cue-in {
+  from { opacity: 0; transform: translateY(5px); }
+}
+.tutorial[data-tone="wall"] .tut-cue {
+  --cue-accent: #f59e0b;
+  --cue-accent-soft: rgba(245, 158, 11, .16);
+}
+.tutorial[data-tone="mine"] .tut-cue {
+  --cue-accent: #fcd34d;
+  --cue-accent-soft: rgba(252, 211, 77, .15);
+}
+.tut-cue-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--cue-accent-soft);
+  color: var(--cue-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.tut-cue-ico .ico { width: 16px; height: 16px; }
+.tut-cue-n {
+  flex: none;
+  min-width: 30px;
+  padding: 3px 5px;
+  border-radius: 7px;
+  background: rgba(2, 6, 16, .6);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .18);
+  color: var(--cue-accent);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+.tut-cue-t {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.42;
+  color: var(--ink);
+  /* joined scripts must wrap, never widen the banner past the viewport */
+  overflow-wrap: anywhere;
+}
+.tut-cue[dir="rtl"] .tut-cue-t { text-align: right; }
+
 /* ---- skip: quiet, top-right, still a 48px target ---- */
 .tut-skip {
   position: absolute;
@@ -1424,9 +1548,9 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   position: relative;
   display: grid;
   place-items: center;
-  min-width: 38px;
+  min-width: 32px;
   height: 40px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -1450,56 +1574,135 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
     0 6px 12px -10px rgba(0, 0, 0, .9);
 }
 .tut-lang-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
-.tut-lang-btn[data-tut-lang="fa"] {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-size: 11.5px;
-  letter-spacing: 0;
-}
-
-/* ---- live language typography: Vazirmatn + true RTL for Persian, Cyrillic stack for Russian ---- */
+/* ---- live language typography: Vazirmatn + true RTL for Persian and Arabic, Cyrillic for
+   Russian, the shell's own Latin stack for English and Spanish. Every surface the lesson owns —
+   card, cue and Skip — reads in the same tongue and the same direction. ---- */
 .tut-card[data-lang="fa"],
-.tutorial[data-lang="fa"] .tut-skip {
+.tut-card[data-lang="ar"],
+.tut-cue[data-lang="fa"],
+.tut-cue[data-lang="ar"],
+.tutorial[data-lang="fa"] .tut-skip,
+.tutorial[data-lang="ar"] .tut-skip {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
-.tut-card[data-lang="fa"] { text-align: right; }
+.tut-card[data-lang="fa"],
+.tut-card[data-lang="ar"] { text-align: right; }
 .tut-card[data-lang="fa"] .tut-title,
-.tut-card[data-lang="fa"] .tut-body { letter-spacing: 0; }
-.tut-card[data-lang="fa"] .tut-title { font-weight: 800; line-height: 1.45; }
-.tut-card[data-lang="fa"] .tut-body { font-weight: 500; line-height: 1.65; }
-.tut-card[data-lang="fa"] .tut-next .ico { transform: scaleX(-1); }
+.tut-card[data-lang="fa"] .tut-body,
+.tut-card[data-lang="ar"] .tut-title,
+.tut-card[data-lang="ar"] .tut-body,
+.tut-cue[data-lang="fa"] .tut-cue-t,
+.tut-cue[data-lang="ar"] .tut-cue-t { letter-spacing: 0; }
+.tut-card[data-lang="fa"] .tut-title,
+.tut-card[data-lang="ar"] .tut-title { font-weight: 800; line-height: 1.45; }
+.tut-card[data-lang="fa"] .tut-body,
+.tut-card[data-lang="ar"] .tut-body { font-weight: 500; line-height: 1.65; }
+.tut-cue[data-lang="fa"] .tut-cue-t,
+.tut-cue[data-lang="ar"] .tut-cue-t { font-weight: 500; line-height: 1.62; }
+.tut-card[data-lang="fa"] .tut-next .ico,
+.tut-card[data-lang="ar"] .tut-next .ico { transform: scaleX(-1); }
+/* the counter stays a Latin ratio in every tongue: digits never mirror, so it keeps its own box */
+.tut-cue-n { direction: ltr; unicode-bidi: isolate; }
 
 .tut-card[data-lang="ru"],
+.tut-cue[data-lang="ru"],
 .tutorial[data-lang="ru"] .tut-skip {
   font-family: 'Inter', 'Rubik', system-ui, sans-serif;
 }
 .tut-card[data-lang="ru"] .tut-body { line-height: 1.5; }
+.tut-cue[data-lang="ru"] .tut-cue-t { line-height: 1.45; }
+.tut-cue[data-lang="es"] .tut-cue-t { line-height: 1.45; }
 
-/* switching language is a 180ms re-read of the same card, never a stage transition */
+/* switching language is a 180ms re-read of the same surfaces, never a stage transition */
 .tut-card.lang-swap .tut-title,
 .tut-card.lang-swap .tut-body,
 .tut-card.lang-swap .tut-next,
+.tut-cue.lang-swap .tut-cue-t,
 .tutorial.lang-swap .tut-skip { animation: tut-lang-swap .18s ease-out both; }
 @keyframes tut-lang-swap {
   from { opacity: .2; transform: translateY(2px); }
 }
 
-/* ---- the mine ARM step: ring the mine key AND its inventory counter together. The ID keeps this
-   ahead of the later HUD pod rules, and a glow adds no layout box (no horizontal overflow). ---- */
-#mine-btn.tut-arm-target {
-  border-color: rgba(252, 211, 77, .8);
-  box-shadow: 0 0 0 2px rgba(252, 211, 77, .9), 0 0 22px rgba(245, 158, 11, .55);
+/* ---- THE CLIMAX HAND-OFF ----
+   The lesson is over and the board is the player's. One callout says so, in the same obsidian-and-
+   gold clay as the rest of the lesson, then leaves on its own. It is pointer-transparent and owns
+   no button: the very next tap belongs to the board. main.ts parks it in the daylight the slab
+   leaves, exactly as it does the cue banner, so it never covers the pawn's own move dots. */
+.tut-climax {
+  position: fixed;
+  z-index: 54;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(380px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid rgba(252, 211, 77, .4);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(38, 26, 6, .97), rgba(12, 18, 32, .97) 62%),
+    rgba(10, 15, 27, .97);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 22px 44px -26px rgba(0, 0, 0, .95),
+    0 0 34px -18px rgba(245, 158, 11, .7);
+  pointer-events: none;
+  opacity: 0;
 }
-#mine-btn.tut-arm-target .mine-n {
+.tut-climax[hidden] { display: none; }
+.tut-climax.is-live { animation: tut-climax-in .34s cubic-bezier(.2, 1.15, .35, 1) both; }
+.tut-climax.is-out { animation: tut-climax-out .3s ease-in both; }
+@keyframes tut-climax-in {
+  from { opacity: 0; transform: translateY(9px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes tut-climax-out {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-5px); }
+}
+.tut-climax-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(252, 211, 77, .26), rgba(245, 158, 11, .1));
   color: var(--gold-ink);
-  text-shadow: 0 0 10px rgba(252, 211, 77, .75);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34);
 }
+.tut-climax-ico .ico { width: 18px; height: 18px; }
+.tut-climax-t {
+  margin: 0;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.42;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tut-climax[dir="rtl"] {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+.tut-climax[dir="rtl"] .tut-climax-t { text-align: right; font-weight: 600; line-height: 1.62; }
+.tut-climax[lang="ru"] .tut-climax-t { line-height: 1.45; }
 
-/* the shortest phones: the same card, a tighter vertical rhythm */
+/* the shortest phones: the same surfaces, a tighter vertical rhythm */
 @media (max-width: 380px) {
   .tut-card { width: calc(100vw - 24px); padding: 10px 12px 11px; border-radius: 15px; }
   .tut-title { font-size: 13px; }
   .tut-body { margin-top: 6px; font-size: 12px; line-height: 1.38; }
-  .tut-card[data-lang="fa"] .tut-body { line-height: 1.65; }
+  .tut-card[data-lang="fa"] .tut-body,
+  .tut-card[data-lang="ar"] .tut-body { line-height: 1.65; }
+  .tut-cue { gap: 8px; padding: 8px 10px; border-radius: 13px; }
+  .tut-cue-ico { width: 25px; height: 25px; border-radius: 8px; }
+  .tut-cue-ico .ico { width: 14px; height: 14px; }
+  .tut-cue-n { min-width: 27px; font-size: 11px; padding: 2px 4px; }
+  .tut-cue-t { font-size: 12.5px; line-height: 1.4; }
+  .tut-cue[data-lang="fa"] .tut-cue-t,
+  .tut-cue[data-lang="ar"] .tut-cue-t { line-height: 1.58; }
+  .tut-climax { gap: 9px; padding: 10px 12px; border-radius: 15px; }
+  .tut-climax-ico { width: 28px; height: 28px; }
+  .tut-climax-t { font-size: 12.5px; }
   .tut-tap {
     left: -15.333px;          /* 11.5 / 24 × 32 */
     top: -6.667px;            /* 5 / 24 × 32 */
@@ -1508,23 +1711,27 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
     transform-origin: 15.333px 6.667px;
   }
   .tut-sonar { left: -26px; top: -26px; width: 52px; height: 52px; }
-  .tut-skip { padding: 0 12px; font-size: 10.5px; }
-  .tut-lang { height: 46px; padding: 3px; border-radius: 13px; }
-  .tut-lang-btn { min-width: 34px; height: 38px; padding: 0 6px; font-size: 10px; }
-  .tut-lang-btn[data-tut-lang="fa"] { font-size: 11px; }
+  .tut-skip { padding: 0 11px; font-size: 10.5px; }
+  .tut-lang { height: 46px; padding: 3px; gap: 1px; border-radius: 13px; }
+  .tut-lang-btn { min-width: 30px; height: 38px; padding: 0 4px; font-size: 10px; letter-spacing: .03em; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tut-card.lang-swap .tut-title,
   .tut-card.lang-swap .tut-body,
   .tut-card.lang-swap .tut-next,
+  .tut-cue.lang-swap .tut-cue-t,
   .tutorial.lang-swap .tut-skip { animation: none; }
   .tut-pointer.nudge .tut-tap { animation: none; }
+  .tut-climax.is-live, .tut-climax.is-out { animation-duration: .01s; }
 }
 @media (max-height: 620px) {
   .tut-card { padding-top: 9px; padding-bottom: 10px; }
   .tut-ico { width: 24px; height: 24px; border-radius: 8px; }
   .tut-body { margin-top: 5px; line-height: 1.35; }
   .tut-next { min-height: 36px; margin-top: 8px; }
+  .tut-cue { padding: 7px 10px; }
+  .tut-cue-t { font-size: 12.5px; line-height: 1.36; }
+  .tut-climax { padding: 9px 12px; }
 }
 
 /* ==========================================================================

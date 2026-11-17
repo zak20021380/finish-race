@@ -66,6 +66,11 @@ export interface ChatOptions {
   busy: () => boolean;
   /** The race screen is up, unpaused, with no result card over it. */
   live: () => boolean;
+  /**
+   * The hands-on lesson owns this match: every rival line, emote, phrase and unread ping is
+   * dropped and the key is dead, so a first-time player has exactly one thing to look at.
+   */
+  silent?: () => boolean;
   /** The wire: an emote this player sent, for an online race to relay. Absent offline. */
   onEmote?: (id: ChatEmoteId) => void;
   /** The wire: a phrase this player sent, as its `(lang, index)`. Absent offline. */
@@ -423,7 +428,7 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   function setBubble(side: Side, content: Node, emote = false, lang: ChatLang = 'EN', from?: Player, vip = false) {
-    if (side === 'foe' && muted) return;
+    if (side === 'foe' && (muted || o.silent?.())) return;
     const node = bubbles[side];
     const seat = side === 'me' ? o.localSide() : senderSeat(from);
     bubbleSeats[side] = seat;
@@ -464,7 +469,7 @@ export function createChat(o: ChatOptions): Chat {
    * it. A muted opponent is as silent as they are invisible, so the whole call is dropped while muted.
    */
   function inboundEmote(id: ChatEmoteId, seat?: Player): void {
-    if (!o.live() || muted) return;
+    if (!o.live() || muted || o.silent?.()) return;
     const emote = EMOTES.find((e) => e.id === id);
     if (!emote) return;
     if (id === 'laugh') playLaugh();
@@ -479,7 +484,7 @@ export function createChat(o: ChatOptions): Chat {
    * while muted.
    */
   function inboundPhrase(lang: ChatLang, index: number, seat?: Player): void {
-    if (!o.live() || muted) return;
+    if (!o.live() || muted || o.silent?.()) return;
     const line = phraseLine(lang, index);
     if (!line) return;
     setBubble('foe', document.createTextNode(line), false, lang, seat);
@@ -491,7 +496,7 @@ export function createChat(o: ChatOptions): Chat {
    * opponent is as silent as they are invisible, so the whole call is dropped while muted.
    */
   function inboundCustom(text: string, seat?: Player, vip = false): void {
-    if (!o.live() || muted) return;
+    if (!o.live() || muted || o.silent?.()) return;
     const clean = clipCustom(text);
     if (!clean) return;
     setBubble('foe', document.createTextNode(clean), false, 'EN', seat, vip);
@@ -652,7 +657,7 @@ export function createChat(o: ChatOptions): Chat {
      the pill is exactly where the player left it the next time the sheet opens. */
   let activeChatLang: ChatLang = readChatLang();
 
-  const canChat = (): boolean => o.live() && !o.busy();
+  const canChat = (): boolean => o.live() && !o.busy() && !o.silent?.();
   const isCooling = (): boolean => Date.now() < lastSentAt + SEND_GAP_MS;
 
   /* ---------- the tongue ---------- */
@@ -784,7 +789,7 @@ export function createChat(o: ChatOptions): Chat {
 
   /** The machine's side — one line, eight seconds apart, silence while muted. */
   function botSay(line: string, now: number) {
-    if (muted || !o.live()) return;
+    if (muted || !o.live() || o.silent?.()) return;
     if (now - lastBotAt < BOT_GAP_MS) return;
     lastBotAt = now;
     setBubble('foe', document.createTextNode(line), false, activeChatLang);
@@ -958,13 +963,19 @@ export function createChat(o: ChatOptions): Chat {
   /* ---------- the watcher ---------- */
 
   function syncKey() {
-    const off = !o.live() || o.busy();
+    const off = !canChat();
     if (off === keyOff) return;
     keyOff = off;
     o.key.disabled = off;
   }
 
   function tick() {
+    /* the lesson's silence is absolute: a line that landed before it started leaves too, and the
+       unread ping never warms a key the player cannot press */
+    if (o.silent?.()) {
+      if (!bubbles.foe.hidden) hideBubble('foe');
+      o.key.classList.remove('is-ping');
+    }
     scan(o.state());
     syncKey();
     paintCool();

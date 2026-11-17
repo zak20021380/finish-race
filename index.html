@@ -2508,18 +2508,17 @@
       </nav>
 
       <!-- ---------------- first-match hands-on tutorial ----------------
-           ONE card, then light. The GOAL card (title, one line, Start) is the only text the
-           lesson ever shows; it goes on its own key or on a tap on the FINISH band. Every
-           stage after it is silent: select the pawn, step forward, STAGE a wall and press
-           its real green key, play two live turns, then ARM a mine, stage it and press its
-           green key. Guidance is the spotlight, the ghost hand, the board's own local
-           highlights, sound and haptics — never a tooltip, a banner or a line drawn across
-           the board. No route, no threat beam, no reroute path exists in any stage.
+           ONE card, then four single taps. The GOAL card (title, one line, Start) opens the
+           lesson; after it every stage is a 1-tap action on the real board — advance, sidestep,
+           wall funnel, mine ambush — named by one short localized prompt in the cue banner, a
+           Latin-digit step counter, the pulsing spotlight and the ghost hand on the exact pixel.
+           No wall-mode toggle, no rotation, no confirm pair: the gate names one target and
+           main.ts commits it through the same play() a real race uses. The rival answers between
+           taps, walks onto the buried charge, and the engine's own blast throws it back. The
+           lesson then closes and main.ts hands over the free-play climax.
            The scrim and the .tut-block guard share one SVG cut-out, so the live target is
-           sharp AND receives the tap; on a staged ✓/✕ pair the hole covers BOTH keys while
-           the ring sits on the green one, so cancel is a real way back. The top bar keeps the
-           EN / فارسی / RU switcher and Skip through every stage. Copy lives in src/tutorial.ts;
-           geometry and the action gate are handed in by main.ts. -->
+           sharp AND receives the tap. Copy lives in src/settings.ts (EN/FA/RU/AR/ES); geometry
+           and the action gate are handed in by main.ts. -->
       <div class="tutorial" id="tutorial" role="dialog"
         aria-labelledby="tut-title" aria-describedby="tut-body" hidden>
         <svg class="tut-svg" aria-hidden="true" focusable="false">
@@ -2530,7 +2529,14 @@
           </defs>
         </svg>
         <div class="tut-scrim" aria-hidden="true"></div>
-        <div class="tut-aid" id="tut-aid" aria-hidden="true" hidden></div>
+        <div class="tut-aid" id="tut-aid" aria-hidden="true" hidden>
+          <!-- the mine step's own marker: one crisp tinted silhouette, never a pictograph -->
+          <svg class="tut-aid-mine" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <circle class="tut-aid-body" cx="12" cy="13.4" r="6.1" />
+            <path d="M12 2.6v3.1M12 21.2v-1.7M2.6 13.4h3.1M21.4 13.4h-3.1M5.4 6.8l2.2 2.2M18.6 6.8l-2.2 2.2M5.4 20l2.2-2.2M18.6 20l-2.2-2.2" />
+            <circle class="tut-aid-core" cx="10.1" cy="11.5" r="1.5" />
+          </svg>
+        </div>
         <span class="tut-spot" id="tut-spot" aria-hidden="true" hidden></span>
         <div class="tut-block" aria-hidden="true"></div>
         <div class="tut-pointer" id="tut-pointer" aria-hidden="true">
@@ -2545,7 +2551,7 @@
               stroke-linejoin="round" stroke-linecap="round" />
           </svg>
         </div>
-        <!-- the ONLY text surface in the lesson: shown on the goal stage, hidden on every other -->
+        <!-- the opening card: the lesson's one piece of long copy, in all five tongues -->
         <div class="tut-card" id="tut-card" tabindex="-1" data-tone="goal">
           <div class="tut-head">
             <span class="tut-ico" aria-hidden="true">
@@ -2559,13 +2565,31 @@
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
           </button>
         </div>
+        <!-- the four taps: one counter, one icon, one short prompt. Never over the live ring. -->
+        <div class="tut-cue" id="tut-cue" role="status" hidden>
+          <span class="tut-cue-ico" aria-hidden="true">
+            <svg class="ico" focusable="false"><use id="tut-cue-use" href="#i-move" /></svg>
+          </span>
+          <span class="tut-cue-n" id="tut-cue-n" aria-hidden="true">1/4</span>
+          <p class="tut-cue-t" id="tut-cue-t"></p>
+        </div>
         <button class="tut-skip" id="tut-skip" type="button">Skip</button>
         <div class="tut-lang" id="tut-lang" role="group" aria-label="Tutorial language">
           <button class="tut-lang-btn" type="button" data-tut-lang="en" aria-pressed="true">EN</button>
-          <button class="tut-lang-btn" type="button" data-tut-lang="fa" aria-pressed="false">فارسی</button>
+          <button class="tut-lang-btn" type="button" data-tut-lang="fa" aria-pressed="false">FA</button>
           <button class="tut-lang-btn" type="button" data-tut-lang="ru" aria-pressed="false">RU</button>
+          <button class="tut-lang-btn" type="button" data-tut-lang="ar" aria-pressed="false">AR</button>
+          <button class="tut-lang-btn" type="button" data-tut-lang="es" aria-pressed="false">ES</button>
         </div>
         <p class="sr-only" id="tut-live" role="status" aria-live="polite"></p>
+      </div>
+      <!-- the climax hand-off: the lesson is over, the board is the player's, and this one callout
+           says so. Pointer-transparent, self-dismissing, never a modal and never a second button. -->
+      <div class="tut-climax" id="tut-climax" role="status" aria-live="assertive" hidden>
+        <span class="tut-climax-ico" aria-hidden="true">
+          <svg class="ico" focusable="false"><use href="#i-flag" /></svg>
+        </span>
+        <p class="tut-climax-t" id="tut-climax-t"></p>
       </div>
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->

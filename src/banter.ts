@@ -42,6 +42,8 @@ export interface BanterWiring {
   wire: () => ((line: PostChatLine) => boolean) | null;
   /** The row bubble owned by a seat, or null when that seat is not on the ladder. */
   anchor: (side: number) => BanterAnchor | null;
+  /** The hands-on lesson owns this match: no rival line is placed while it is live. */
+  silent?: () => boolean;
 }
 
 export interface Banter {
@@ -303,10 +305,11 @@ export function createBanter(wiring: BanterWiring): Banter {
 
   function scheduleBotReply(): void {
     window.clearTimeout(botTimer);
+    if (wiring.silent?.()) return;
     const pick = (botTurn++ % BOT_LINES) + 1;
     botTimer = window.setTimeout(() => {
       botTimer = 0;
-      if (!open || locked || !view) return;
+      if (!open || locked || !view || wiring.silent?.()) return;
       showBubble(view.rivalSide, t(`banterBot${pick}`));
     }, BOT_MS);
   }
@@ -401,6 +404,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   }
 
   function inbound(line: PostChatLine, side: number, vip = false): void {
+    if (wiring.silent?.()) return;
     const text = line.preset ? presetLabel(line.preset) : clip(line.text ?? '');
     if (!text) return;
     if (!open || !view) {
