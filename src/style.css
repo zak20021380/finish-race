@@ -1155,13 +1155,6 @@ body.tutorial-live .g-round { opacity: 0; }
   --tut-ring: rgba(245, 158, 11, .98);
   --tut-ring-soft: rgba(56, 189, 248, .55);
 }
-/* the setback: the ambush crater wears the board's alarm rose — the one beat of the lesson that
-   reads as a hit taken, not a move made */
-.tutorial[data-tone="setback"] .tut-spot {
-  --tut-ring: rgba(251, 113, 133, .98);
-  --tut-ring-soft: rgba(244, 63, 94, .5);
-}
-
 /* ---- the secondary aid: gold FINISH band, cyan/gold groove, gold mine tile ---- */
 .tut-aid {
   position: absolute;
@@ -1478,10 +1471,6 @@ body.tutorial-live .g-round { opacity: 0; }
 .tutorial[data-tone="mine"] .tut-cue {
   --cue-accent: #fcd34d;
   --cue-accent-soft: rgba(252, 211, 77, .15);
-}
-.tutorial[data-tone="setback"] .tut-cue {
-  --cue-accent: #fb7185;
-  --cue-accent-soft: rgba(244, 63, 94, .16);
 }
 .tut-cue-ico {
   flex: none;
