@@ -1366,7 +1366,7 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 /**
- * FREE-PLAY CLIMAX. The eight-tap comeback has detonated, the overlay is gone and the board is the
+ * FREE-PLAY CLIMAX. The nine-tap comeback has detonated, the overlay is gone and the board is the
  * player's own. The match is still the lesson's, so the rival stays handicapped (no walls, no
  * mines, no row 0) and chat stays silent until the race settles. This is what makes the tutorial
  * impossible to lose rather than merely easy.
@@ -2680,9 +2680,9 @@ function ui() {
      suppresses them outright, so a dashed bar is never drawn under a selection ring */
   setHints(dotsFor(mode()));
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
-  /* the mine step offers exactly ONE square — the rival's forced detour — so the placement band
-     reads as a single glowing target rather than a board full of options */
-  if (tutorialActive && stage === 'trap') {
+  /* the board-placement mine step offers exactly ONE square — the rival's forced detour — so the
+     placement band reads as a single glowing target rather than a board full of options */
+  if (tutorialActive && stage === 'placeMine') {
     const target = tutorialMineTarget();
     mineHints = target ? [target.cell] : [];
   }
@@ -2700,9 +2700,11 @@ function ui() {
   setClass(dots, 'on', thinking);
 
   setAttr(mineBtn, 'aria-pressed', String(mineArmed));
-  /* the guided combo has no separate ARM door: the mine step's one tap on the board arms, stages
-     and buries the charge itself, so the pod stays quiet for the whole lesson */
-  setDisabled(mineBtn, tutorialActive || !live || minesLeft(state, localSide) <= 0);
+  /* Step 7 teaches the HUD arm key itself: the Mine button is live ONLY on that stage, so tapping it
+     runs the real armMine() toggle. Every other lesson stage (and a spent/foreign turn) keeps it
+     inert — in particular step 8 locks mine mode on so a stray tap can never toggle it back off. */
+  const canArmInLesson = stage === 'selectMine';
+  setDisabled(mineBtn, (tutorialActive && !canArmInLesson) || !live || minesLeft(state, localSide) <= 0);
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
@@ -4282,9 +4284,9 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 /**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
- * canvas receives this tap exactly as it would after the lesson. Each of the eight steps is ONE
- * tap: the pawn is already in hand, the wall commits without a ghost toolbar, and the mine buries
- * without an arm key or a confirm disc.
+ * canvas receives this tap exactly as it would after the lesson. Each of the nine steps is ONE
+ * tap: the pawn is already in hand, the wall commits without a ghost toolbar, and the step-8 mine
+ * buries on the tile the step-7 HUD arm key just prepared (no confirm disc).
  */
 function tutorialTap(p: Vec) {
   const stage = tutorialStage();
@@ -4312,7 +4314,7 @@ function tutorialTap(p: Vec) {
   } else if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
     const target = tutorialWallTarget(stage === 'wall1' ? 1 : stage === 'wall2' ? 2 : 3);
     if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'wall', spec: target.spec };
-  } else if (stage === 'trap') {
+  } else if (stage === 'placeMine') {
     const target = tutorialMineTarget();
     if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'mine', cell: target.cell };
   }
@@ -4476,8 +4478,19 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 mineBtn.addEventListener('click', () => {
-  /* the guided combo buries its charge with one tap on the board: the pod is not a door here */
-  if (tutorialActive) { tutorial?.nudge(); return; }
+  if (tutorialActive) {
+    /* Step 7 is the one lesson stage where this key is the live target. Gate the tap, run the REAL
+       toggle (so the key lights up exactly as it does in a match), then hand the lesson to step 8.
+       On every other stage — above all step 8 — the tap is refused, so mine mode cannot be turned
+       back off and the placement step can never be skipped. */
+    if (tutorialStage() === 'selectMine' && tutorial?.allows({ kind: 'armMine' })) {
+      armMine(true);
+      tutorial?.notify({ kind: 'armMine' });
+    } else {
+      tutorial?.nudge();
+    }
+    return;
+  }
   armMine(!mineArmed);
 });
 
@@ -4534,19 +4547,20 @@ function tutorialAdvanceTarget(): TutorialTargetMove | null {
 /* ---------- the deterministic comeback script ---------- */
 
 /**
- * The seeded opening the whole lesson is choreographed against: the hidden ambush cell (the
- * player's third forward step) and the funnel's anchor — the rival's column and the row the three
- * walls bend it along. Null whenever the board is not the lesson's own 1v1 opening (a party replay,
- * a refused seed), and every scripted target then falls back to the live-board finders below.
+ * The seeded opening the whole lesson is choreographed against: the funnel's anchor — the rival's
+ * column and the row the three walls bend it along. No rival mine is planted any more; the opening
+ * sprint is a clean, unbroken advance. Null whenever the board is not the lesson's own 1v1 opening
+ * (a party replay, a refused seed), and every scripted target then falls back to the live-board
+ * finders below.
  */
-let tutScript: { ambush: Cell; rivalCol: number; funnelRow: number } | null = null;
+let tutScript: { rivalCol: number; funnelRow: number } | null = null;
 
 /**
  * The funnel's three bars, in order, derived from the seeded opening:
  *   1. the groove directly in front of the leading rival — its straight rush to FINISH closes;
  *   2. the next groove along the same seam — the rival is bent into the narrow corridor;
  *   3. the vertical bar on the corridor's open flank — the side escape is sealed, so the only
- *      route left runs straight through the ambush square.
+ *      route left runs straight through the choke point.
  * The bars touch end to end (legal: no shared segment, no `+`), and the player's own lane stays
  * clear of all three, so the comeback sprint is a straight run.
  */
@@ -4573,14 +4587,6 @@ function tutorialDetourTarget(): TutorialSpot | null {
   if (!next) return null;
   const step = tutorialRivalStep(next);
   return step ? { rect: boardRect(step.to.c, step.to.r), radius: 14 } : null;
-}
-
-/** The ambush crater: the rival charge the opening sprint just spent, read from the ledger. */
-function tutorialSetbackTarget(): TutorialTargetMine | null {
-  const crater = state.mines.find((m) => m.triggered && m.owner !== localSide);
-  return crater
-    ? { cell: crater.cell, spot: { rect: boardRect(crater.cell.c, crater.cell.r), radius: 16 } }
-    : null;
 }
 
 /** The groove under the spotlight: two cells wide, a band high, centred on the wall line. */
@@ -4644,13 +4650,13 @@ function tutorialWallTarget(n: 1 | 2 | 3): TutorialTargetWall | null {
 }
 
 /**
- * STEP 7's real target: the tile the rival is about to step onto. `tutorialRivalStep()` reads the
+ * STEP 8's real target: the tile the rival is about to step onto. `tutorialRivalStep()` reads the
  * LIVE board and the rules' own step query, so the tile is one the rival can actually reach in one
  * move — straight ahead when that edge is open, the nearest sidestep/forward tile on its shortest
  * route when a wall turns it aside — and it must also be a legal mine cell, so the lesson never
  * points at a square the placement would refuse. On the seeded funnel this is the choke point the
  * three walls forced open; the rival is then scripted onto exactly this tile after the player's
- * step-8 advance.
+ * step-9 advance.
  */
 function tutorialMineTarget(): TutorialTargetMine | null {
   if (state.turn !== localSide || state.winner !== null) return null;
@@ -4684,9 +4690,9 @@ const tutorialFinishTarget = (): TutorialSpot | null =>
 
 /** The lesson's one bot beat: the rival's scripted answer, then the board is the player's again. */
 async function tutorialReply(stage: TutorialStage): Promise<void> {
-  /* Step 7's beat: the trap is buried and the rival HOLDS POSITION — passing keeps the funnel's
-     forced step intact, so the player's step-8 advance is what sends it walking onto the charge. */
-  if (stage === 'trap') {
+  /* Step 8's beat: the charge is buried and the rival HOLDS POSITION — passing keeps the funnel's
+     forced step intact, so the player's step-9 advance is what sends it walking onto the charge. */
+  if (stage === 'placeMine') {
     if (tutorialActive && state.winner === null && state.turn !== localSide) play({ kind: 'pass' });
     return;
   }
@@ -4717,8 +4723,9 @@ async function tutorialReply(stage: TutorialStage): Promise<void> {
 /**
  * Stage change from the lesson: give the board exactly the furniture the step needs and nothing
  * else. The four forward taps hold the pawn so its legal dots light up; each wall step stands a
- * real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is ever raised); the trap step
- * puts the placement band down with a single placeable square. `refresh(null)` takes it all away.
+ * real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is ever raised); step 7 leaves
+ * the board in ordinary move mode while the HUD key is taught; step 8 locks mine mode on with a
+ * single placeable square. `refresh(null)` takes it all away.
  */
 function syncTutorialUI(stage: TutorialStage | null = null) {
   if (!tutorialActive) {
@@ -4734,9 +4741,13 @@ function syncTutorialUI(stage: TutorialStage | null = null) {
     setMode(previewWall(BOARD_IDLE, target
       ? { spec: target.spec, ok: true, armed: false, p: localSide }
       : null));
-  } else if (stage === 'trap') {
+  } else if (stage === 'placeMine') {
+    /* Mine mode was armed by the real HUD key on step 7; keep it locked on for this one tap so a
+       stray press can never toggle it off, and show only the rival's forced square. */
     setMode(holdMineKey(BOARD_IDLE, true));
   } else {
+    /* includes step 7 (selectMine): the board stays in normal, unarmed move mode until the player
+       taps the HUD Mine button themselves. */
     setMode(BOARD_IDLE);
   }
   ui();
@@ -4900,10 +4911,9 @@ function endTutorialMatch(): void {
 
 /**
  * The comeback's deterministic opening: the FULL match start. Both pawns keep their true spawn
- * tiles — the exact layout a real 1v1 opens on — and one hidden rival mine is buried on the
- * player's third forward step, so the opening sprint walks straight into the ambush. The budgets,
- * the fog and the seat colours are the race's own; only the hidden charge is scripted, and it is
- * invisible until it fires, exactly like any rival mine in a real race.
+ * tiles — the exact layout a real 1v1 opens on — and NO rival charge is buried on the player's
+ * lane, so the opening sprint is a smooth, unbroken advance with no knockback setback. The budgets,
+ * the fog and the seat colours are all the race's own.
  */
 function seedTutorialBoard(): void {
   tutScript = null;
@@ -4915,16 +4925,16 @@ function seedTutorialBoard(): void {
   const home = layout[localSide]?.[0];
   const away = layout[rivalSide()]?.[0];
   if (!home || !away || home.r < 4) return;
-  /* the ambush: the player's third forward step, on the player's own lane */
-  const ambush: Cell = { c: home.c, r: home.r - 3 };
-  tutScript = { ambush, rivalCol: away.c, funnelRow: ambush.r };
+  /* the funnel anchor: the row the player reaches after three clean forward steps */
+  const funnelRow = home.r - 3;
+  tutScript = { rivalCol: away.c, funnelRow };
   state = {
     ...state,
     balls: state.balls.map((b) => (b.id === mine.id
       ? { ...b, pos: { ...home }, isCheckmated: false }
       : { ...b, pos: { ...away }, isCheckmated: false })),
     walls: [],
-    mines: [{ cell: { ...ambush }, owner: rivalSide(), triggered: false }],
+    mines: [],
     wallsLeft: state.teams.map(() => wallBudget(state.balls.length)),
     turn: localSide,
     winner: null,
@@ -4998,7 +5008,7 @@ function joinPendingDuelRoom(): void {
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
- * board the eight steps were written against. It is a standalone lesson: `end` returns to Home.
+ * board the nine steps were written against. It is a standalone lesson: `end` returns to Home.
  */
 function startTutorial() {
   if (sheets.isOpen) sheets.close();
@@ -5178,7 +5188,15 @@ tutorial = createTutorial({
   wall: tutorialWallTarget,
   mine: tutorialMineTarget,
   detour: tutorialDetourTarget,
-  setback: tutorialSetbackTarget,
+  mineButton: () => {
+    /* Step 7 spotlights the real HUD Mine button wherever seatChrome() parked it. The box is read
+       afresh on every track frame, so the ring, the input cut-out and the ghost hand stay locked to
+       the exact key the player must tap even while the board screen is still sliding in. */
+    const r = mineBtn.getBoundingClientRect();
+    return r.width > 1 && r.height > 1
+      ? { rect: { left: r.left, top: r.top, width: r.width, height: r.height }, radius: 14 }
+      : null;
+  },
   blast: tutorialMineBlastTarget,
   reply: tutorialReply,
   detonate: tutorialDetonate,
