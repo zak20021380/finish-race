@@ -1486,7 +1486,7 @@ body.tutorial-live .g-round { opacity: 0; }
 .tut-cue-ico .ico { width: 16px; height: 16px; }
 .tut-cue-n {
   flex: none;
-  /* "10/12" is wider than the old "1/9": keep the Latin ratio on one line at every width. */
+  /* "10/13" is wider than the old "1/9": keep the Latin ratio on one line at every width. */
   min-width: 40px;
   padding: 3px 5px;
   border-radius: 7px;

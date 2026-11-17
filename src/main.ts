@@ -1366,7 +1366,7 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 /**
- * FREE-PLAY CLIMAX. The twelve-tap comeback has detonated, the overlay is gone and the board is the
+ * FREE-PLAY CLIMAX. The thirteen-tap comeback has detonated, the overlay is gone and the board is the
  * player's own. The match is still the lesson's, so the rival stays handicapped (no walls, no
  * mines, no row 0) and chat stays silent until the race settles. This is what makes the tutorial
  * impossible to lose rather than merely easy.
@@ -4284,7 +4284,7 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 /**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
- * canvas receives this tap exactly as it would after the lesson. Each of the twelve steps is ONE
+ * canvas receives this tap exactly as it would after the lesson. Each of the thirteen steps is ONE
  * tap: the pawn is already in hand, the wall commits without a ghost toolbar, and the step-8 mine
  * buries on the tile the step-7 HUD arm key just prepared (no confirm disc).
  */
@@ -4317,9 +4317,9 @@ function tutorialTap(p: Vec) {
   } else if (stage === 'placeMine') {
     const target = tutorialMineTarget();
     if (target && tutorialSpotHas(target.spot, vx, vy)) action = { kind: 'mine', cell: target.cell };
-  } else if (stage === 'dodgeLeft' || stage === 'clearWall' || stage === 'dodgeRight') {
-    /* The fixed sidestep has no ball in hand, so hit-testing alone would offer nothing: the ring is
-       the input target, exactly as the wall groove is on steps 4-6. */
+  } else if (stage === 'dodgeLeft1' || stage === 'dodgeLeft2' || stage === 'clearWall' || stage === 'dodgeRight') {
+    /* The fixed dodge reads the ring as its input target too: a tap anywhere inside the spotlight
+       is the same move the lit tile offers, so the glowing square can never go inert. */
     const target = tutorialDodgeTarget(stage);
     if (target && tutorialSpotHas(target.spot, vx, vy)) {
       action = { kind: 'move', ball: target.ball, to: target.to };
@@ -4552,18 +4552,21 @@ function tutorialAdvanceTarget(): TutorialTargetMove | null {
 }
 
 /**
- * STEPS 10-12 — three FIXED squares, not the live forward finder. The rival's counter-wall owns the
- * straight lane, so the lesson teaches the way around it: left to (1, 7), forward past its edge to
- * (1, 6), then right back into the centre lane at (2, 6). Each is offered only when the rules say
- * the pawn can actually step there, so a replay on a drifted board can never spotlight a dead tile.
+ * STEPS 10-13 — four FIXED squares, not the live forward finder. The rival's counter-wall sits on
+ * the edge directly above the player's pawn, so the straight step out of (2, 7) is shut with zero
+ * gap. The lesson teaches the way around it and practises BOTH directions: left under the bar to
+ * (1, 7), left again to the open edge at (0, 7), forward past the wall's end to (0, 6), then right
+ * back into the centre lane at (1, 6). Each is offered only when the rules say the pawn can actually
+ * step there, so a replay on a drifted board can never spotlight a dead tile.
  */
 function tutorialDodgeTarget(stage: TutorialStage): TutorialTargetMove | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const ball = firstBall(state, localSide);
   if (!ball) return null;
-  const to: Pos | null = stage === 'dodgeLeft' ? { c: 1, r: 7 }
-    : stage === 'clearWall' ? { c: 1, r: 6 }
-      : stage === 'dodgeRight' ? { c: 2, r: 6 } : null;
+  const to: Pos | null = stage === 'dodgeLeft1' ? { c: 1, r: 7 }
+    : stage === 'dodgeLeft2' ? { c: 0, r: 7 }
+      : stage === 'clearWall' ? { c: 0, r: 6 }
+        : stage === 'dodgeRight' ? { c: 1, r: 6 } : null;
   if (!to) return null;
   if (!reachableBall(state, ball.id).some((p) => sameCell(p, to))) return null;
   return { ball: ball.id, to, spot: { rect: boardRect(to.c, to.r), radius: 18 } };
@@ -4721,10 +4724,10 @@ async function tutorialReply(stage: TutorialStage): Promise<void> {
     if (tutorialActive && state.winner === null && state.turn !== localSide) play({ kind: 'pass' });
     return;
   }
-  /* Step 10's answer: a harmless sideways shuffle at the bottom (c -> c + 1 on the same row). The
-     player's dodge has already handed the turn over; this keeps the rival out of the new lesson's
-     way while it teaches the forward step past the edge of its counter-wall. */
-  if (stage === 'dodgeLeft') {
+  /* Steps 10-12's answers: a harmless sideways shuffle at the bottom (c -> c + 1 on the same row).
+     The player's dodge has already handed the turn over; this keeps the rival out of the new
+     lesson's way while it teaches the way around its counter-wall. */
+  if (stage === 'dodgeLeft1' || stage === 'dodgeLeft2' || stage === 'clearWall') {
     for (let guard = 0; guard < 4; guard++) {
       if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
       const foe = firstBall(state, rivalSide());
@@ -4762,10 +4765,11 @@ async function tutorialReply(stage: TutorialStage): Promise<void> {
 
 /**
  * Stage change from the lesson: give the board exactly the furniture the step needs and nothing
- * else. The four forward taps hold the pawn so its legal dots light up; each wall step stands a
- * real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is ever raised); step 7 leaves
- * the board in ordinary move mode while the HUD key is taught; step 8 locks mine mode on with a
- * single placeable square. `refresh(null)` takes it all away.
+ * else. Every tap-the-square stage — the four forward taps and the four dodge taps — holds the pawn
+ * so its legal dots light up, which makes the lit square a plain live tap and not only a hole in the
+ * scrim; each wall step stands a real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is
+ * ever raised); step 7 leaves the board in ordinary move mode while the HUD key is taught; step 8
+ * locks mine mode on with a single placeable square. `refresh(null)` takes it all away.
  */
 function syncTutorialUI(stage: TutorialStage | null = null) {
   if (!tutorialActive) {
@@ -4781,7 +4785,10 @@ function syncTutorialUI(stage: TutorialStage | null = null) {
     ui();
     return;
   }
-  if (stage === 'rush1' || stage === 'rush2' || stage === 'rush3' || stage === 'sprint') {
+  if (stage === 'rush1' || stage === 'rush2' || stage === 'rush3' || stage === 'sprint'
+    || stage === 'dodgeLeft1' || stage === 'dodgeLeft2' || stage === 'clearWall' || stage === 'dodgeRight') {
+    /* the pawn in hand: its legal dots are the board's own answer to "where can I go?", so the
+       dodge square is clickable the instant it is painted */
     const ball = state.turn === localSide ? firstBall(state, localSide) : null;
     setMode({ selected: ball ? ball.id : null, preview: null, mine: false });
   } else if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
@@ -4863,23 +4870,30 @@ async function tutorialDetonate(cell: Cell): Promise<void> {
 }
 
 /**
- * STEP 10's setup. Once the blast has settled the rival drops one cheap horizontal bar across the
- * player's straight lane — h(2, 6) blocks (2, 7) -> (2, 6) — through the very same `wallOk` gate a
- * human placement uses. The engine keys a wall to whoever is on turn, so the rival's turn is borrowed
- * for this one committed action and handed straight back: the lesson stays the player's to finish.
+ * STEP 10's setup. Once the blast has settled the rival drops one cheap bar on the edge directly
+ * above the player's pawn — h(1, 7) covers columns 1-2 on the line above row 7, so it shuts the
+ * straight step out of (2, 7) with zero empty tiles in between and leaves the left flank open. It
+ * is committed through the very same `wallOk` gate a human placement uses (a legal corner against
+ * v(3, 7)), with the rival's turn borrowed for this one action and handed straight back. The board
+ * is then washed of every stale input mode — mine off, no ghost, no carried pick — so the pawn's own
+ * move dots light up the moment the first dodge target is painted.
  */
 async function tutorialCounterWall(): Promise<void> {
   const foe = rivalSide();
   if (state.winner !== null || state.turn !== localSide) return;
-  const spec: WallSpec = { o: 'h', x: 2, y: 6 };
+  /* the bar sits flush on the edge above the player's pawn: (2, 7) -> (2, 6) is walled off */
+  const spec: WallSpec = { o: 'h', x: 1, y: 7 };
   const wall: Wall = { ...spec, owner: foe };
-  if (wallsRemaining(state, foe) <= 0 || !wallOk(state, wall)) return;
-  state = { ...state, turn: foe };
-  if (!play({ kind: 'wall', wall })) {
-    state = { ...state, turn: localSide };
-    return;
+  if (wallsRemaining(state, foe) > 0 && wallOk(state, wall)) {
+    state = { ...state, turn: foe };
+    if (!play({ kind: 'wall', wall })) state = { ...state, turn: localSide };
   }
-  if (state.turn === foe) state = { ...state, turn: localSide };
+  /* A borrowed beat is not a turn: the lesson always hands the board straight back to the player. */
+  if (state.winner === null) state = { ...state, turn: localSide };
+  mineArmed = false;
+  mineGhost = null;
+  ghost = null;
+  setMode(BOARD_IDLE);
   ui();
 }
 
@@ -5077,7 +5091,7 @@ function joinPendingDuelRoom(): void {
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
- * board the twelve steps were written against. It is a standalone lesson: `end` returns to Home.
+ * board the thirteen steps were written against. It is a standalone lesson: `end` returns to Home.
  */
 function startTutorial() {
   if (sheets.isOpen) sheets.close();

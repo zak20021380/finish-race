@@ -1,7 +1,7 @@
 /**
- * tutorial.ts — the first-match hands-on lesson: a twelve-tap comeback narrative.
+ * tutorial.ts — the first-match hands-on lesson: a thirteen-tap comeback narrative.
  *
- * The lesson is one opening card and then twelve single taps, each of them a real move on the real
+ * The lesson is one opening card and then thirteen single taps, each of them a real move on the real
  * board. `main.ts` seeds the FULL match opening — both pawns on their true start tiles, no rival
  * mine and no knockback — so the choreography is deterministic:
  *
@@ -24,11 +24,13 @@
  *      throws it two rows back and hands the lead to the player. Every overlay marker is cleared
  *      the instant that beat begins, so no ring or hand is left over the empty crater.
   *
-  *   PHASE 4 — the rival's counter-wall and the left/right dodge (steps 10-12)
-  *   After the blast the rival drops one cheap bar across the player's straight lane, and the last
-  *   three taps teach the way around it: left to (1, 7), forward past its edge to (1, 6), then right
-  *   back into the centre lane at (2, 6). The rival answers the first dodge with a harmless sideways
-  *   shuffle. The final tap closes the lesson and hands the player the free-play climax.
+  *   PHASE 4 — the rival's counter-wall and the left/right dodge (steps 10-13)
+  *   After the blast the rival drops one cheap bar on the edge directly above the player's pawn, so
+  *   the straight step out of (2, 7) is walled off with zero gap. The last four taps teach the way
+  *   around it and practise BOTH directions: left under the bar to (1, 7), left again to the open
+  *   edge at (0, 7), forward past the wall's end to (0, 6), then right back into the centre lane at
+  *   (1, 6). The rival answers each dodge with a harmless sideways shuffle. The final tap closes the
+  *   lesson and hands the player the free-play climax.
  *
  * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
  * one target per stage and `main.ts` commits it through the same `play()` a real race uses. The one
@@ -68,9 +70,9 @@ export interface TutorialSpot {
 export type TutorialStage =
   | 'goal' | 'rush1' | 'rush2' | 'rush3'
   | 'wall1' | 'wall2' | 'wall3' | 'selectMine' | 'placeMine' | 'sprint' | 'blast'
-  | 'dodgeLeft' | 'clearWall' | 'dodgeRight';
-/** The three last taps: one square each, never the live-board forward finder. */
-export type DodgeStage = 'dodgeLeft' | 'clearWall' | 'dodgeRight';
+  | 'dodgeLeft1' | 'dodgeLeft2' | 'clearWall' | 'dodgeRight';
+/** The four last taps: one square each, never the live-board forward finder. */
+export type DodgeStage = 'dodgeLeft1' | 'dodgeLeft2' | 'clearWall' | 'dodgeRight';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 export type TutorialLang = LangCode;
@@ -120,7 +122,7 @@ export interface TutorialHooks {
   detour(): TutorialSpot | null;
   /** The buried charge's own square: the spotlight holds it while the rival walks into it. */
   blast(cell: Cell | null): TutorialTargetMine | null;
-  /** Steps 10-12: the one lateral/forward square a dodge lesson wants, read from the live board. */
+  /** Steps 10-13: the one lateral/forward square a dodge lesson wants, read from the live board. */
   dodge(stage: DodgeStage): TutorialTargetMove | null;
   /** After the blast: the rival's own counter-wall drops across the player's straight lane. */
   counterWall(): Promise<void>;
@@ -155,13 +157,16 @@ export interface TutorialStepDef {
   stage: TutorialStage;
   icon: string;
   tone: 'goal' | 'move' | 'wall' | 'mine';
-  /** 1..12 on the comeback's own steps; 0 on the card and the blast beat, which wear no counter. */
+  /** 1..13 on the comeback's own steps; 0 on the card and the blast beat, which wear no counter. */
   step: number;
   /** The cue banner's i18n key, or null on the stages that teach with light alone. */
   cue: string | null;
 }
 
-/** The whole lesson, in order: one card, twelve taps, one detonation beat between step 9 and 10. */
+/** The last step on the counter: the four dodge taps close a thirteen-tap lesson. */
+export const TUTORIAL_STEP_TOTAL = 13;
+
+/** The whole lesson, in order: one card, thirteen taps, one detonation beat between step 9 and 10. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'goal', icon: '#i-flag', tone: 'goal', step: 0, cue: null },
   { stage: 'rush1', icon: '#i-move', tone: 'move', step: 1, cue: 'tutStep1' },
@@ -174,9 +179,10 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   { stage: 'placeMine', icon: '#i-mine-tactical', tone: 'mine', step: 8, cue: 'tutStep8' },
   { stage: 'sprint', icon: '#i-move', tone: 'move', step: 9, cue: 'tutStep9' },
   { stage: 'blast', icon: '#i-mine-tactical', tone: 'mine', step: 0, cue: null },
-  { stage: 'dodgeLeft', icon: '#i-move', tone: 'move', step: 10, cue: 'tutStep10' },
-  { stage: 'clearWall', icon: '#i-move', tone: 'move', step: 11, cue: 'tutStep11' },
-  { stage: 'dodgeRight', icon: '#i-move', tone: 'move', step: 12, cue: 'tutStep12' },
+  { stage: 'dodgeLeft1', icon: '#i-move', tone: 'move', step: 10, cue: 'tutStep10' },
+  { stage: 'dodgeLeft2', icon: '#i-move', tone: 'move', step: 11, cue: 'tutStep11' },
+  { stage: 'clearWall', icon: '#i-move', tone: 'move', step: 12, cue: 'tutStep12' },
+  { stage: 'dodgeRight', icon: '#i-move', tone: 'move', step: 13, cue: 'tutStep13' },
 ];
 
 /** What comes after each successful action. The rival answers between every pair of taps. */
@@ -191,8 +197,9 @@ export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>>
   selectMine: 'placeMine',
   placeMine: 'sprint',
   sprint: 'blast',
-  blast: 'dodgeLeft',
-  dodgeLeft: 'clearWall',
+  blast: 'dodgeLeft1',
+  dodgeLeft1: 'dodgeLeft2',
+  dodgeLeft2: 'clearWall',
   clearWall: 'dodgeRight',
   dodgeRight: 'done',
 };
@@ -210,15 +217,18 @@ const STAGE_KIND: Readonly<Record<TutorialStage, TutorialAction['kind'] | null>>
   placeMine: 'mine',
   sprint: 'move',
   blast: null,
-  dodgeLeft: 'move',
+  dodgeLeft1: 'move',
+  dodgeLeft2: 'move',
   clearWall: 'move',
   dodgeRight: 'move',
 };
 
 /** The forwarding taps share one target hook: the square directly ahead, read from the live board. */
 const MOVE_STAGES: ReadonlySet<TutorialStage> = new Set(['rush1', 'rush2', 'rush3', 'sprint']);
-/** The last three taps point at three FIXED squares, never at the live forward finder. */
-const DODGE_STAGES: ReadonlySet<DodgeStage> = new Set(['dodgeLeft', 'clearWall', 'dodgeRight']);
+/** The last four taps point at four FIXED squares, never at the live forward finder. */
+const DODGE_STAGES: ReadonlySet<DodgeStage> = new Set(
+  ['dodgeLeft1', 'dodgeLeft2', 'clearWall', 'dodgeRight'],
+);
 const WALL_N: Readonly<Partial<Record<TutorialStage, 1 | 2 | 3>>> = { wall1: 1, wall2: 2, wall3: 3 };
 
 const isDodge = (s: TutorialStage): s is DodgeStage => DODGE_STAGES.has(s as DodgeStage);
@@ -242,6 +252,8 @@ export const sameWall = (a: WallSpec | null, b: WallSpec | null): boolean =>
 
 /**
  * The one rule the lesson enforces: a stage only accepts the exact target it is pointing at.
+ * The dodge stages are moves like any other — their fixed squares pass the same cell comparison,
+ * so the ring the overlay paints and the action this gate accepts are always the same coordinate.
  * Pure, so the whole flow and every mismatch can be asserted without a browser.
  */
 export function tutorialAllows(
@@ -250,7 +262,7 @@ export function tutorialAllows(
   action: TutorialAction,
 ): boolean {
   if (stage === null || stage === 'done') return false;
-  if (MOVE_STAGES.has(stage)) {
+  if (MOVE_STAGES.has(stage) || isDodge(stage)) {
     return action.kind === 'move' && sameCell(action.to, targets.move);
   }
   if (stage === 'wall1' || stage === 'wall2' || stage === 'wall3') {
@@ -332,7 +344,7 @@ function writeStoredLang(value: TutorialLang): void {
 }
 
 /** The tongue the lesson is speaking right now — the climax callout reads it too, so the hand-off
- *  lands in the same language as the twelve prompts that led to it. */
+ *  lands in the same language as the thirteen prompts that led to it. */
 let liveLang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
 export const tutorialLang = (): TutorialLang => liveLang;
 
@@ -445,7 +457,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     } else if (def.cue) {
       const line = tIn(lang, def.cue);
       cueText.textContent = line;
-      cueNum.textContent = `${def.step}/12`;
+      cueNum.textContent = `${def.step}/${TUTORIAL_STEP_TOTAL}`;
       cue.setAttribute('aria-label', tIn(lang, 'tutStepAria').replace('{n}', String(def.step)));
       liveEl.textContent = line;
     } else {
@@ -832,17 +844,18 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
               hooks.finishPulse();
               impact('medium');
               audio.play('swoosh', { gain: 0.5 });
-              go('dodgeLeft');
+              go('dodgeLeft1');
             });
           return;
         }
-        case 'dodgeLeft':
+        case 'dodgeLeft1':
+        case 'dodgeLeft2':
         case 'clearWall':
           /* one rival beat between the sidesteps, then the next fixed square lights up alone */
           awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
           return;
         case 'dodgeRight':
-          /* Step 12 lands on (2, 6). `close()` strips the ring and the hand before the hand-off;
+          /* Step 13 lands past the wall. `close()` strips the ring and the hand before the hand-off;
              main.ts's `end()` unlocks the wheel and keeps the anti-loss safeguard on to FINISH. */
           close('finished');
           return;
