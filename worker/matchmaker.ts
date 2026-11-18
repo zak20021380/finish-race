@@ -49,8 +49,9 @@ import {
 } from '../src/rules';
 import {
   FORMAT_CAPACITY, FORMAT_MODE, ROOM_IDLE_TTL_MS, ROOM_SEAT_HOLD_MS, ROOM_WAIT_MS, assignTeam,
-  backfill, createRoom, createRoomDriver, defaultTeam, difficultyFor, formatOfMode, isAutomated,
-  isLobbyFormat, launch, reflowRoom, seatHuman, sizesOf, takeover, unseat,
+  backfill, createRoom, createRoomDriver, defaultTeam, difficultyFor, foldRoomDigits, formatOfMode,
+  isAutomated, isLobbyFormat, launch, normalizeRoomCode, reflowRoom, seatHuman, sizesOf, takeover,
+  unseat,
   type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
@@ -141,6 +142,17 @@ type ClientMessage =
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
      seat sends is a MOVE or a RESIGN. */
   | { type: 'ROOM_START' }
+  /* ---- the Play with Friends room verbs -------------------------------------------------------
+     The same four operations a socket can already ask for at handshake time (`roomcode=`,
+     `host=1`, `format=`) expressed as frames, so one connected socket can mint, join, re-shape or
+     leave a room without ever opening a second handshake. `CREATE_ROOM` is answered with a
+     server-assigned code in `ROOM_STATE`; `JOIN_ROOM` is refused by name (`NOT_FOUND`,
+     `ROOM_FULL`) and never silently opens a fresh room. */
+  | { type: 'CREATE_ROOM'; format: LobbyFormat }
+  | { type: 'JOIN_ROOM'; code: string }
+  | { type: 'SET_ROOM_FORMAT'; format: LobbyFormat }
+  | { type: 'LEAVE_ROOM' }
+  | { type: 'START_ROOM_MATCH' }
   /* The seat is already in another board: the room still holds it, but nobody counts it down and
      nobody launches into it until it says otherwise. Persisted on the member, echoed in `LOBBY`. */
   | { type: 'BUSY'; busy: boolean }
@@ -1697,14 +1709,17 @@ function readRoomSize(raw: string | null): number {
 }
 
 /**
- * The one canonical room id, whatever spelling arrived: `1909`, `#1909`, `room_1909`, `ROOM-1909`
- * or an invite payload with junk after the digits all resolve to `room_1909`. Every route and every
- * map key goes through here, so a deep link can never address a different room than the one the
- * host minted.
+ * The one canonical room id, whatever spelling arrived: `1909`, `#1909`, `room_1909`, `ROOM-1909`,
+ * `r_1909`, a `https://t.me/...?startapp=room_1909` link, or the same digits typed on a Persian or
+ * Arabic keyboard (`۱۹۰۹` / `١٩٠٩`) all resolve to `room_1909`. Every route and every map key goes
+ * through here, so a deep link can never address a different room than the one the host minted.
+ *
+ * The grammar lives in `src/room.ts` — the same module the client folds its input with — so the
+ * two sides of the wire cannot drift apart about what a code is.
  */
 function canonicalRoomId(raw: string | null): string {
-  const digits = (raw ?? '').replace(/\D/g, '').slice(0, 4);
-  return digits.length === 4 ? `room_${digits}` : '';
+  const digits = normalizeRoomCode(raw ?? '');
+  return digits ? `room_${digits}` : '';
 }
 
 /** `roomcode=9786` from the query: the four digits of a friends lobby, or `''`. */
@@ -1719,7 +1734,7 @@ function readRoomCode(raw: string | null): string {
  * as somebody's lobby.
  */
 function readInviteRoomCode(raw: string | null): string {
-  const value = (raw ?? '').trim();
+  const value = foldRoomDigits((raw ?? '').trim());
   if (!value) return '';
   if (/^#?\s*\d{4}$/.test(value)) return readRoomCode(value);
   if (/^room[\s_-]*\d{4}(?:\D|$)/i.test(value)) return readRoomCode(value);
@@ -1729,6 +1744,23 @@ function readInviteRoomCode(raw: string | null): string {
 /** `bottier=hard` from the query: the level a room hands its backfilled bots. */
 function readBotTier(raw: string | null): BotTier {
   return raw === 'easy' || raw === 'normal' || raw === 'hard' ? raw : 'mixed';
+}
+
+/**
+ * The sentinel a create sends instead of digits: `roomcode=new`. It never reaches the room map —
+ * `joinLobby` mints a real code the moment it sees it — so no lobby can ever be keyed by it.
+ */
+const NEW_ROOM_CODE = 'new';
+
+/** Is this socket asking for a code to be minted, rather than naming one it already knows? */
+function isNewRoomQuery(raw: string | null): boolean {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === NEW_ROOM_CODE || v === 'create' || v === 'auto';
+}
+
+/** `format=3p` from the query: the shape a freshly created room opens on. The duel is the default. */
+function readLobbyFormat(raw: string | null): LobbyFormat {
+  return isLobbyFormat(raw) ? raw : 'duel';
 }
 
 const sameBoard = (a: Waiter, b: Waiter): boolean => a.sizes[0] === b.sizes[0] && a.sizes[1] === b.sizes[1];
@@ -1797,6 +1829,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
       preset?: unknown; targetUserId?: unknown; relicId?: unknown; relicSerial?: unknown; challengeId?: unknown;
+      code?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1810,6 +1843,22 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
        every shipped client still uses. They are the same tap and reach the same gate. */
     if (msg.type === 'ROOM_START' || msg.type === 'START_MATCH') return { type: 'ROOM_START' };
     if (msg.type === 'BUSY') return { type: 'BUSY', busy: msg.busy === true };
+    /* ---- the Play with Friends verbs -------------------------------------------------------- */
+    if (msg.type === 'CREATE_ROOM') {
+      /* a create with no shape asked for is the duel: the smallest room, and the one a code opens */
+      return { type: 'CREATE_ROOM', format: isLobbyFormat(msg.format) ? msg.format : 'duel' };
+    }
+    if (msg.type === 'JOIN_ROOM') {
+      /* the code is normalized here, once: `# 5923`, `room_5923`, a Telegram link and Persian
+         numerals all reach `joinLobby` as the same four ASCII digits */
+      const code = canonicalRoomId(typeof msg.code === 'string' ? msg.code : null);
+      return code ? { type: 'JOIN_ROOM', code } : null;
+    }
+    if (msg.type === 'SET_ROOM_FORMAT') {
+      return isLobbyFormat(msg.format) ? { type: 'SET_ROOM_FORMAT', format: msg.format } : null;
+    }
+    if (msg.type === 'LEAVE_ROOM') return { type: 'LEAVE_ROOM' };
+    if (msg.type === 'START_ROOM_MATCH') return { type: 'START_ROOM_MATCH' };
     if (msg.type === 'SET_FORMAT') {
       return isLobbyFormat(msg.format) ? { type: 'SET_FORMAT', format: msg.format } : null;
     }
@@ -2870,11 +2919,16 @@ export class MatchmakerDO {
        here, before the tournament gate, because that gate has to know whether this socket is a
        matchmaking search or somebody's private room. */
     const roomSize = readRoomSize(queryValue(url, 'room'));
-    const roomCode = readRoomCode(queryValue(url, 'roomcode'))
+    /* `roomcode=new` is the create door: the server mints the four digits, because the code a
+       friend is told has to be a code this registry already holds. A locally minted code is only
+       ever a guess — two hosts can guess the same one, and a guess the socket never reaches leaves
+       the friend who was given it with nowhere to land. */
+    const wantsNew = isNewRoomQuery(queryValue(url, 'roomcode'));
+    const roomCode = wantsNew ? NEW_ROOM_CODE : (readRoomCode(queryValue(url, 'roomcode'))
       || readInviteRoomCode(queryValue(url, 'startapp'))
       || readInviteRoomCode(queryValue(url, 'start_param'))
       || readInviteRoomCode(queryValue(url, 'code'))
-      || (roomSize ? '' : readRoomCode(queryValue(url, 'room')));
+      || (roomSize ? '' : readRoomCode(queryValue(url, 'room'))));
 
     /* The tournament gate sits before the queue, not inside the panel: a socket that connects
        while the arena is locked is told why and let go, while races already on a board resolve.
@@ -2910,9 +2964,9 @@ export class MatchmakerDO {
     try {
       /* `roomCode` / `roomSize` were resolved above, before the tournament gate. */
       if (roomCode) {
-        /* the friends lobby: a code the host minted, not a search for strangers */
+        /* the friends lobby: a code this registry holds, not a search for strangers */
         this.joinLobby(server, identity, roomCode, queryValue(url, 'host') === '1',
-          readBotTier(queryValue(url, 'bottier')));
+          readBotTier(queryValue(url, 'bottier')), readLobbyFormat(queryValue(url, 'format')));
       } else if (roomSize) {
         this.joinRoom(server, identity, roomSize, readBotTier(queryValue(url, 'bottier')));
       } else if (queryValue(url, 'session') === '1') {
@@ -6811,33 +6865,47 @@ export class MatchmakerDO {
   }
 
   /**
-   * Take a seat in a code-based friends lobby.
+   * Take a seat in a code-based friends lobby — the ONE door into a room, whether the code came
+   * from a create, a typed four digits or a Telegram deep link.
    *
-   * The code is the room, not the socket. A host who mints `room_1234` and steps into a Telegram
-   * chat to send the link still owns `room_1234` when they come back, and a friend who taps that
-   * link in the meantime is seated instead of being told the room does not exist. So:
+   * The registry is the truth, and it is the same map for everybody: a host who mints a code and
+   * steps into a Telegram chat to send the link still owns that code when they come back, and a
+   * friend who taps the link lands in that exact room — never in a fresh `1/2` copy of it. So:
    *
-   *   - a missing room is opened by whoever arrives first, host or guest — a guest's copy simply
-   *     waits with the crown's seat held open for the host;
-   *   - a room whose board has already launched, or a code that is spent, is refused as
-   *     `room_consumed` (the client says "this invite has already been used or expired");
-   *   - a player returning to a seat they still hold is reattached, never turned away;
+   *   - `roomcode=new` mints a code here, from the registry's own free list, and the creator is
+   *     seated at 0 with the crown. This is the only place a room is ever created;
+   *   - a guest naming a code nobody holds is refused by name (`NOT_FOUND`). Silently opening a
+   *     room under a stranger's code is what strands two players in two identical lobbies;
+   *   - a full room is refused as `ROOM_FULL`, before any seat is touched;
+   *   - a player returning to a seat they still hold is reattached, never duplicated;
+   *   - a room whose board has launched, or a code that is spent, is refused as `room_consumed`;
    *   - `host=1` reclaims the crown when it is empty or held by a dropped socket, and only a
    *     second *live* host on one code is refused (`room_exists`);
    *   - the arena's season lock is matchmaking's gate, never a private room's: a code two people
    *     already agreed on opens while the tournament is closed.
    */
-  private joinLobby(ws: WebSocket, identity: Identity, code: string, host: boolean, tier: BotTier): void {
+  private joinLobby(
+    ws: WebSocket,
+    identity: Identity,
+    code: string,
+    host: boolean,
+    tier: BotTier,
+    format: LobbyFormat = 'duel',
+  ): void {
     /* Only the operator's stop-the-world lock closes a private room. The arena lock belongs to
        matchmaking: a season that has ended must never tell two friends their own code is dead. */
     if (this.maintenance) { this.rejectSocket(ws, 'MAINTENANCE'); return; }
     this.sweepRetired();
-    /* The code the socket said, in its one canonical spelling. `1909`, `#1909` and `room_1909` all
-       land on the same key, so a link cannot address a room its host never minted. */
-    const digits = readRoomCode(code);
+    /* A create names no digits: the registry mints them. `roomcode=new` is a verb, not a code, and
+       it can never be a map key — `canonicalRoomId('new')` is empty by construction. */
+    const minting = isNewRoomQuery(code);
+    const digits = minting ? this.uniqueRoomCode() : readRoomCode(code);
     const key = lobbyKey(digits);
-    const live = key ? this.lobbies.get(key) ?? null : null;
-    if (!key) { this.rejectSocket(ws, 'room_not_found'); return; }
+    if (!key) { this.rejectRoom(ws, 'NOT_FOUND', 'room_not_found'); return; }
+    /* A create owns its crown by definition; a socket that asked for a new code and then joined as
+       a guest would leave the room it just minted without a host. */
+    const wantsCrown = host || minting;
+    const live = this.lobbies.get(key) ?? null;
     /* A launched race whose seat this socket already owns is a reconnect, not an invite. The code
        is spent for strangers, but the player whose identity still holds a seat walks back into
        the exact board they left — until the reconnect grace expires and the machine takes it. */
@@ -6860,12 +6928,16 @@ export class MatchmakerDO {
     }
     if (live?.driver || (!live && this.retired.has(key))) {
       /* the match this code opened is under way, or its host is done with it */
-      this.rejectSocket(ws, 'room_consumed');
+      this.rejectRoom(ws, 'CONSUMED', 'room_consumed');
       return;
     }
     let room = live;
     if (!room) {
-      const format: LobbyFormat = 'duel';
+      /* A guest cannot open a room. The only way a code comes into existence is a create — or a
+         host reclaiming a code this registry has never seen (a retry after an eviction). Anything
+         else is a typo, an expired link, or a friend whose host never made it; all three are the
+         same answer, and none of them is a private race against the machine. */
+      if (!wantsCrown) { this.rejectRoom(ws, 'NOT_FOUND', 'room_not_found'); return; }
       const size = FORMAT_CAPACITY[format];
       const now = Date.now();
       room = {
@@ -6884,15 +6956,17 @@ export class MatchmakerDO {
         teams: Array.from({ length: size }, (_, i) => defaultTeam(i)),
         code: true,
         lastSeenAt: now,
-        /* a guest opened it: the crown waits for the host, not for the next arrival */
-        hostPending: !host,
+        hostPending: false,
         disconnectBotMoves: Array.from({ length: size }, () => 0),
       };
       this.lobbies.set(key, room);
     }
 
-    const pick = this.seatFor(room, identity, host);
-    if (!pick.ok) { this.rejectSocket(ws, pick.reason); return; }
+    const pick = this.seatFor(room, identity, wantsCrown);
+    if (!pick.ok) {
+      this.rejectRoom(ws, pick.reason === 'room_full' ? 'ROOM_FULL' : 'ROOM_EXISTS', pick.reason);
+      return;
+    }
     const seat = pick.seat;
 
     /* The chair's previous socket, if any, is this same player's ghost: forget it before it can
@@ -6916,7 +6990,7 @@ export class MatchmakerDO {
     room.room = seatHuman(room.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
     });
-    if (host && seat === room.hostSeat) room.hostPending = false;
+    if (wantsCrown && seat === room.hostSeat) room.hostPending = false;
     room.lastSeenAt = Date.now();
     this.refs.set(ws, { live: room, seat });
     this.markActive(identity.player.id);
@@ -7135,6 +7209,7 @@ export class MatchmakerDO {
         name: m.name,
         avatar: m.avatar,
         flag: m.flag,
+        nation: m.flag,
         tiq: m.tiq,
         guild: m.guild,
         host: i === live.hostSeat,
@@ -7149,20 +7224,30 @@ export class MatchmakerDO {
       });
     }
     return JSON.stringify({
-      type: 'LOBBY',
+      /* `ROOM_STATE` is the name of this frame: one complete snapshot of the room, sent to every
+         connected socket on every change — a seat taken, a seat freed, a format pick, a crown
+         moving. `LOBBY` was the older spelling and is still read by the drawer; both name this. */
+      type: 'ROOM_STATE',
       /* `code` is the four digits every invite prints; `roomId` is the canonical id this object
          keys the room by. They name the same room, and a client may use either. */
       code: live.room.code,
       roomId: lobbyKey(live.room.code),
       host: live.hostSeat,
+      hostSeat: live.hostSeat,
       format: live.format,
       mode: live.mode,
       you: seat,
+      seat,
       capacity: live.size,
+      maxPlayers: live.size,
+      /* how many people are actually in the chairs right now: the `2/3` a counter prints */
+      taken: live.members.reduce((n, m) => n + (m ? 1 : 0), 0),
       /* A guest who landed first owns the room without owning the crown: the host's plate is
          reserved, not offered to the next arrival. */
       pendingHost: live.hostPending && !live.members[live.hostSeat],
       seats,
+      /* the same roster under the name the room verbs use, so one frame serves both readers */
+      players: seats,
     });
   }
 
@@ -7536,6 +7621,21 @@ export class MatchmakerDO {
     }
   }
 
+  /**
+   * A room operation the registry refused. The frame carries both spellings: `code` is the
+   * stable, upper-case verdict the Play with Friends sheet keys its own copy off (`NOT_FOUND`,
+   * `ROOM_FULL`, `CONSUMED`, `ROOM_EXISTS`), and `reason` is the older lower-case line the drawer
+   * has always read. One refusal, two readers, never a silent fallback to a fresh room.
+   */
+  private rejectRoom(ws: WebSocket, code: string, reason: string): void {
+    this.postTo(ws, JSON.stringify({ type: 'ROOM_ERROR', code, reason }));
+    try {
+      ws.close(1000, 'refused');
+    } catch {
+      /* the socket is already gone */
+    }
+  }
+
   /** The lowest seat nobody is holding. The crown's seat is not free while it is being held open. */
   private freeSeat(live: LiveRoom): number {
     return live.members.findIndex((m, i) => m === null
@@ -7545,6 +7645,29 @@ export class MatchmakerDO {
   /** A room's 4-digit invite code, minted from the pairing counter so two rooms never collide. */
   private mintRoomCode(): string {
     return String(1000 + ((++this.paired * 7919) % 9000));
+  }
+
+  /**
+   * The next four digits no room is using. A create asks for one, so the code a player is shown is
+   * always a code this registry already holds — the difference between an invite and a guess.
+   *
+   * Active lobbies, launched rooms, retired codes and forfeit verdicts all count as taken: a code
+   * whose match is still running must not be handed to a new room, and neither must one a stale
+   * link is about to ask for. The walk is deterministic from the pairing counter, so a burst of
+   * creates spreads across the space instead of clustering on 1000.
+   */
+  private uniqueRoomCode(): string {
+    const start = 1000 + ((++this.paired * 7919) % 9000);
+    for (let i = 0; i < 9000; i++) {
+      const candidate = String(1000 + ((start - 1000 + i) % 9000));
+      const key = lobbyKey(candidate);
+      /* A launched code is retired the moment its board starts, so `retired` already covers the
+         rooms this map no longer holds by code — the three maps together are every code in use. */
+      if (this.lobbies.has(key) || this.retired.has(key) || this.forfeited.has(key)) continue;
+      return candidate;
+    }
+    /* every code is taken: hand back the deterministic one rather than refusing a create outright */
+    return String(start);
   }
 
   /**
@@ -7832,7 +7955,8 @@ export class MatchmakerDO {
     if (!live.driver) {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
-      if (msg.type === 'CANCEL' || msg.type === 'LEAVE' || msg.type === 'FORFEIT') {
+      if (msg.type === 'CANCEL' || msg.type === 'LEAVE' || msg.type === 'LEAVE_ROOM'
+        || msg.type === 'FORFEIT') {
         this.leaveLobby(ref, true);
         return;
       }
@@ -7841,7 +7965,15 @@ export class MatchmakerDO {
         this.broadcastLobby(live);
         return;
       }
-      if (msg.type === 'ROOM_START') {
+      /* The create/join verbs are the handshake's own (`roomcode=new`, `roomcode=5923`): a socket
+         that is already seated and asks again is answered with the room it holds, never with a
+         second one. One registry, one room per socket — a frame can never mint a room beside it. */
+      if (msg.type === 'CREATE_ROOM' || msg.type === 'JOIN_ROOM') {
+        if (msg.type === 'CREATE_ROOM' && ref.seat === live.hostSeat) this.applyFormat(live, msg.format);
+        if (member) this.postTo(member.ws, this.lobbyMessage(live, ref.seat));
+        return;
+      }
+      if (msg.type === 'ROOM_START' || msg.type === 'START_ROOM_MATCH') {
         if (ref.seat !== live.hostSeat) return;
         /* A friends room launches the moment two people are actually at their sockets. A stale
            `busy` flag must never freeze the host's Start: being seated in this lobby is the whole
@@ -7858,7 +7990,7 @@ export class MatchmakerDO {
         this.broadcastLobby(live);
         return;
       }
-      if (msg.type === 'SET_FORMAT') {
+      if (msg.type === 'SET_FORMAT' || msg.type === 'SET_ROOM_FORMAT') {
         if (ref.seat === live.hostSeat) this.applyFormat(live, msg.format);
         return;
       }

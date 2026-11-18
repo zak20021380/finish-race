@@ -2574,7 +2574,7 @@
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
           </button>
         </div>
-        <!-- the twelve taps: one counter, one icon, one short prompt. Never over the live ring. -->
+        <!-- the thirteen taps: one counter, one icon, one short prompt. Never over the live ring. -->
         <div class="tut-cue" id="tut-cue" role="status" hidden>
           <span class="tut-cue-ico" aria-hidden="true">
             <svg class="ico" focusable="false"><use id="tut-cue-use" href="#i-move" /></svg>
@@ -3024,7 +3024,7 @@
               </div>
             </div>
 
-            <!-- the live room: one code, the native share, and the honest wait -->
+            <!-- the live room: one code, the live roster, the format, and the honest wait -->
             <div class="fd-room" id="fd-room" hidden>
               <div class="fd-code-card">
                 <span class="fd-code-k" data-i18n="fdRoomCodeLabel">ROOM CODE</span>
@@ -3037,6 +3037,9 @@
                   <span class="fd-code-hash" aria-hidden="true">#</span>
                   <b id="fd-room-code" dir="ltr">0000</b>
                 </button>
+                <!-- the seat counter: `1/2` .. `4/4`, Latin tabular digits, isolated LTR so it never
+                     mirrors in FA/AR -->
+                <span class="fd-count" id="fd-count" dir="ltr" role="status" aria-live="polite">1/2</span>
               </div>
 
               <div class="fd-room-actions">
@@ -3051,11 +3054,31 @@
                 </button>
               </div>
 
+              <!-- the room's shape: the host's pick, read-only for every guest -->
+              <div class="fd-formats" id="fd-formats" role="group" aria-label="Match format">
+                <button class="fd-fmt" type="button" data-format="duel" aria-pressed="true">1v1</button>
+                <button class="fd-fmt" type="button" data-format="3p" aria-pressed="false">3P</button>
+                <button class="fd-fmt" type="button" data-format="4p" aria-pressed="false">4P</button>
+                <button class="fd-fmt" type="button" data-format="2v2" aria-pressed="false">2v2</button>
+              </div>
+              <p class="fd-mode-sub" id="fd-mode-sub"></p>
+
+              <!-- exactly the chairs the format fields: 2, 3 or 4, with Team 1 / Team 2 in 2v2 -->
+              <div class="fd-slots" id="fd-slots" role="list" aria-label="Players in this room"></div>
+
               <p class="fd-wait" id="fd-wait" data-state="waiting" role="status" aria-live="polite">
                 <span class="fd-wait-dot" aria-hidden="true"></span>
                 <span class="fd-wait-t" id="fd-wait-t">Waiting for friend to join…</span>
               </p>
-              <p class="fd-fine" data-i18n="fdRealNote">Only a real friend can fill the other seat — this room never starts against bots.</p>
+
+              <!-- the one primary key: Start Match with a friend, practice alone, or the guest's
+                   status pill. Never a dead button. -->
+              <button class="fd-start" type="button" id="fd-start" aria-disabled="false">
+                <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
+                <span class="fd-start-t" id="fd-start-t">Start practice match</span>
+              </button>
+
+              <p class="fd-fine" data-i18n="fdRealNote">Only people you invite can take these seats — the host starts the match for the whole room.</p>
               <button class="fd-cancel" type="button" id="fd-cancel" data-i18n="fdCancelRoom">Cancel room</button>
             </div>
 

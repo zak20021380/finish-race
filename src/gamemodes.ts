@@ -31,10 +31,11 @@ import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomS
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
 import {
-  canStart, humans, isHost, nextTeam, occupied, openLobby,
+  MIN_START, canStart, humans, isHost, nextTeam, occupied, openLobby,
   type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat, type LobbySeat,
 } from './lobby';
-import { ROOM_IDLE_TTL_MS, isLobbyFormat, roomReady } from './room';
+import { NEW_ROOM } from './matchmaking';
+import { ROOM_IDLE_TTL_MS, isLobbyFormat, normalizeRoomCode, roomReady } from './room';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -170,7 +171,7 @@ function paintRewardPreview(pulse = false): void {
 const FORMAT_KEY: Record<LobbyFormat, string> = {
   duel: 'fmtDuel', '3p': 'fmt3p', '4p': 'fmt4p', '2v2': 'fmt2v2',
 };
-const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
+export const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
 
 /**
  * The caption an armed duel puts under the roster, or '' for the room's own reading. Set by the
@@ -233,10 +234,17 @@ function isGameModeId(v: unknown): v is GameModeId {
   return v === 'duel_1v1' || v === 'party_2v2' || v === 'bot' || v === 'room';
 }
 
+/**
+ * A room code in its one canonical form: four ASCII digits, or null.
+ *
+ * The grammar is `src/room.ts`'s, because the worker folds the same input with the same rule:
+ * `# 5923`, `room_5923`, `r_5923`, a full Telegram link and a code typed on a Persian keyboard
+ * all arrive as `5923`. A guest who types what they were given always lands in the room the host
+ * is sitting in, whatever keyboard produced it.
+ */
 function cleanRoomCode(v: unknown): string | null {
-  if (typeof v !== 'string') return null;
-  const digits = v.replace(/\D/g, '').slice(0, 4);
-  return /^\d{4}$/.test(digits) ? digits : null;
+  const digits = normalizeRoomCode(v);
+  return digits || null;
 }
 
 function load(): GameModeSelection {
@@ -601,12 +609,14 @@ const esc = (s: string): string =>
 const LOBBY_ERROR_KEY: Record<string, string> = {
   room_not_found: 'errRoomNotFound',
   ROOM_NOT_FOUND: 'errRoomNotFound',
+  NOT_FOUND: 'errRoomNotFound',
   room_full: 'errRoomFull',
   ROOM_FULL: 'errRoomFull',
   room_exists: 'errRoomExists',
   ROOM_EXISTS: 'errRoomExists',
   /* the code is spent: the match it opened has started, or its host disbanded it */
   room_consumed: 'errInviteExpired',
+  CONSUMED: 'errInviteExpired',
   room_started: 'errInviteExpired',
   ROOM_STARTED: 'errInviteExpired',
   /* the host closed a room we were already sitting in */
@@ -979,19 +989,22 @@ function paintLobbyPane(l: Lobby): void {
   /* A closed room has no screen: the caller is already walking this client out of it. */
   if (l.status === 'closed') return;
   /* The room on screen *is* the active room: every invite door below reads this one code, and
-     the badge prints it beside the link it would copy. */
+     the badge prints it beside the link it would copy. A create has no code until the registry
+     answers, so the surface holds the Latin placeholder and every invite key stays cold — nobody
+     is ever told a number the server is not holding a seat in. */
   if (l.code) activeCode = l.code;
   const url = inviteUrl(l.code);
   const codeEl = document.getElementById('lb-code');
-  if (codeEl) codeEl.textContent = l.code;
+  if (codeEl) codeEl.textContent = l.code || '0000';
   const codeTag = document.getElementById('lb-code-tag');
   if (codeTag) {
-    codeTag.setAttribute('aria-label', t('copyRoomCodeFor').replace('{code}', l.code));
+    codeTag.setAttribute('aria-label', t('copyRoomCodeFor').replace('{code}', l.code || '0000'));
     /* the badge carries the same URL the copy key writes: one room, one link */
     if (url) codeTag.setAttribute('data-invite', url);
     else codeTag.removeAttribute('data-invite');
+    codeTag.classList.toggle('is-pending', !l.code);
   }
-  document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor').replace('{code}', l.code));
+  document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor').replace('{code}', l.code || '0000'));
 
   const count = document.getElementById('lb-count');
   if (count) count.textContent = `${occupied(l)}/${l.capacity} ${t('players')}`;
@@ -1281,19 +1294,21 @@ export function takeAutoLaunch(): boolean {
  * The membership is recorded before the socket exists, so a room is never "open" in the UI and
  * forgotten by the session — the code survives the drawer closing, the app sleeping and a reload.
  */
-function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): void {
+function openRoom(code: string, host: boolean, opts?: { invite?: boolean; format?: LobbyFormat }): void {
   if (hooks.maintenance?.()) {
     hooks.onMaintenance?.();
     return;
   }
   /* a fresh room is a fresh promise: the caption belongs to the challenge that opened this one */
   armedDuelHint = '';
+  /* A create carries `NEW_ROOM`, not digits: the code does not exist until the registry mints it,
+     and the session is re-keyed on the first `ROOM_STATE` that names it. */
   saveSession({ code, host, invite: opts?.invite === true, at: Date.now() });
   resumeTries = 0;
   codeTries = 0;
   /* the socket first, the pane second: the drawer then paints the room it actually opened,
      never the one it is replacing */
-  connect(code, host, opts?.invite === true, false);
+  connect(code, host, opts?.invite === true, false, opts?.format ?? 'duel');
   showView('lobby');
 }
 
@@ -1302,7 +1317,13 @@ function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): voi
  * `resumeRoom` for one this client already holds. Every callback is guarded by the room token, so
  * a frame from a socket a later room replaced can never repaint the new one.
  */
-function connect(code: string, host: boolean, invite: boolean, resume: boolean): void {
+function connect(
+  code: string,
+  host: boolean,
+  invite: boolean,
+  resume: boolean,
+  format: LobbyFormat = 'duel',
+): void {
   /* One room, one socket. A deep link that lands while this screen already holds the very room
      it names is the same membership — opening a second handshake would replace the live socket
      on the server and knock the player out of the lobby they were already sitting in. */
@@ -1330,6 +1351,7 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
   handle = openLobby({
     code,
     host,
+    format,
     /* an invited guest has no solo fallback: the room exists or the invite is refused */
     mustExist: invite && !resume,
     /* a resumed room is never traded for a solo race: its guests can still join it */
@@ -1337,6 +1359,14 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
     onState: (l) => {
       if (token !== roomToken) return;
       resumeTries = 0;
+      /* The registry minted this room's code: adopt it here, once, so the session, the selection,
+         the badge, `Copy Link` and the Telegram invite all print the four digits the server is
+         actually holding a seat in. A guest's code never changes — theirs is the one they typed. */
+      if (l.code && l.code !== activeCode) {
+        if (host) rememberCode(l.code);
+        saveSession({ code: l.code, host, invite, at: Date.now() });
+        setGameMode('room', { roomCode: l.code });
+      }
       touchSession();
       /* A reconnect answers with the room's own memory of this seat: say the match status again
          whenever the echo disagrees, so a socket that slept through it cannot strand `busy`.
@@ -1492,6 +1522,17 @@ export interface FriendDuelSnapshot {
   racing: boolean;
   /** A localised refusal to print in the sheet; null while the room is healthy. */
   error: string | null;
+  /* ---- the live roster --------------------------------------------------------------------
+     The sheet paints the same grid the drawer does, from the same value: the format owns the
+     shape, the seats are the chairs, and `taken` is the `2/3` the counter prints. */
+  format: LobbyFormat;
+  capacity: number;
+  /** My own chair, or -1 while the registry has not seated us yet. */
+  you: number;
+  hostSeat: number;
+  seats: (LobbySeat | null)[];
+  /** Chairs somebody is actually sitting in. */
+  taken: number;
 }
 
 let friendDuelActive = false;
@@ -1525,6 +1566,12 @@ function snapshotOf(l: Lobby): FriendDuelSnapshot {
     launching: friendDuelLaunching,
     racing: friendDuelRacing,
     error: friendDuelError,
+    format: l.format,
+    capacity: l.capacity,
+    you: l.you,
+    hostSeat: l.hostSeat,
+    seats: l.seats,
+    taken: occupied(l),
   };
 }
 
@@ -1549,6 +1596,12 @@ function failFriendDuel(msg: string): void {
     launching: false,
     racing: false,
     error: msg,
+    format: base?.format ?? 'duel',
+    capacity: base?.capacity ?? 2,
+    you: -1,
+    hostSeat: -1,
+    seats: Array.from({ length: base?.capacity ?? 2 }, () => null),
+    taken: 0,
   });
 }
 
@@ -1600,10 +1653,12 @@ export function openFriendDuel(rawCode?: string): boolean {
     paintLobbyPane(handle.lobby);
     return true;
   }
-  const code = clean ?? createRoomCode();
+  /* A create names no digits: the registry mints them, and the sheet prints the four it gets back.
+     A client-side guess is exactly how two players end up sitting in two rooms with one number. */
+  const code = clean ?? NEW_ROOM;
   setGameMode('room', { roomCode: code });
   if (clean === null) {
-    openRoom(code, true);
+    openRoom(code, true, { format: 'duel' });
     return true;
   }
   /* A code this client already holds is walked back in, never opened as a second handshake. */
@@ -1636,6 +1691,66 @@ export function leaveFriendDuel(): void {
   friendDuelError = null;
   friendDuelLast = null;
   if (hadRoom) leaveRoom();
+}
+
+/**
+ * The sheet's format pick. The host re-shapes the room the same way the drawer does — through the
+ * one live socket — so the server's `ROOM_STATE` is what every other seat repaints from. False
+ * means the pick was not the host's to make, or nobody would fit in the smaller room.
+ */
+export function friendDuelSetFormat(format: LobbyFormat): boolean {
+  if (!handle || !isHost(handle.lobby)) return false;
+  const next = handle.setFormat(format);
+  if (!next) notify('warning');
+  return next;
+}
+
+/**
+ * The sheet's primary key.
+ *
+ * Two people are seated: the host asks the room to launch, and the room answers every seat at
+ * once. One person: the key is an honest practice race — the room is given up (a host's exit
+ * disbands the code) and the board opens against the machine, exactly as the drawer's own
+ * practice door does. It is never a fake multiplayer start: the server would refuse one, and a
+ * key that lies is worse than a key that says what it does.
+ */
+export function friendDuelStart(): void {
+  const l = handle?.lobby;
+  if (!l || !isHost(l)) { notify('warning'); return; }
+  if (occupied(l) < MIN_START) { friendDuelPractice(); return; }
+  if (l.status === 'connecting' || l.seats.some((s) => !!s && !s.bot && !s.connected)) {
+    notify('warning');
+    showToast(t('errStartOffline'), 'warning');
+    return;
+  }
+  friendDuelLaunching = true;
+  emitFriendDuel(l);
+  impact('medium');
+  if (handle?.start()) return;
+  friendDuelLaunching = false;
+  notify('warning');
+  showToast(t('errReconnecting'), 'warning');
+  emitFriendDuel(l);
+}
+
+/** Give up the room and put a practice race on the board. The one solo path this sheet has. */
+export function friendDuelPractice(): void {
+  impact('light');
+  notify('success');
+  leaveFriendDuel();
+  try {
+    saveMenu({ mode: 'bot', sizes: sizesForMode('bot') });
+  } catch {
+    /* stay in memory */
+  }
+  sheetHost?.close();
+  hooks.onStart?.();
+}
+
+/** The crown's remove key, on the sheet's own grid. Same door as the drawer's. */
+export function friendDuelKick(seat: number): boolean {
+  if (!handle || !isHost(handle.lobby)) return false;
+  return handle.kick(seat);
 }
 
 /** How long to wait before walking back into a room whose socket dropped, per attempt. */
@@ -2253,17 +2368,20 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
        invite, a seat that was struck from its race — belongs to the room being replaced, so the
        membership is dropped before the new code is minted: nothing here may resume or rejoin it. */
     if (inLobby() || session) leaveRoom();
-    const sel = createRoom();
+    /* The registry mints the digits — the same door the Play with Friends sheet uses. A code this
+       device invents is a guess until a socket claims it, and a friend who is told a guess has
+       nowhere to land. */
+    setGameMode('room', { roomCode: NEW_ROOM });
     notify('success');
-    openRoom(sel.roomCode ?? createRoomCode(), true);
+    openRoom(NEW_ROOM, true);
   });
 
   const joinInput = document.getElementById('gm-join-input') as HTMLInputElement | null;
   const joinBtn = document.getElementById('gm-join') as HTMLButtonElement | null;
-  /** Join only lights up once the field holds a full 4-digit code. */
+  /** Join only lights up once the field holds a full 4-digit code — in any numeral system. */
   const syncJoin = (): void => {
     if (!joinBtn) return;
-    joinBtn.disabled = (joinInput?.value ?? '').replace(/\D/g, '').length !== 4;
+    joinBtn.disabled = normalizeRoomCode(joinInput?.value ?? '').length !== 4;
   };
   syncJoin();
 

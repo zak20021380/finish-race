@@ -3,6 +3,7 @@
  * no-op, so the same build plays in a plain browser tab.
  */
 import { settings } from './settings';
+import { foldRoomDigits, normalizeRoomCode } from './room';
 import { botAppLink, duelAppLink, relicDuelAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
@@ -105,8 +106,8 @@ export { BOT_HANDLE } from '../shared/config';
  * reader above matches, which is what makes a round trip through Telegram land back on the room.
  */
 export function roomInviteUrl(code: string): string {
-  const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4);
-  return digits.length === 4 ? botAppLink(`room_${digits}`) : '';
+  const digits = normalizeRoomCode(code);
+  return digits ? botAppLink(`room_${digits}`) : '';
 }
 
 /** The same invite URL, wrapped in Telegram's native share page. '' when the code is unusable. */
@@ -211,7 +212,9 @@ const BARE_ROOM = /^#?\s*(\d{4})\s*$/;
 
 /** One payload, read through the room grammar only. Junk after the digits never leaks into the code. */
 function roomCodeOf(raw: string | null | undefined): string {
-  const value = (raw ?? '').trim();
+  /* Persian and Arabic keyboards type `۱۹۰۹` / `١٩٠٩`, and a link pasted out of a chat can arrive
+     in either. The fold happens before the grammar, so a code is one code whatever typed it. */
+  const value = foldRoomDigits((raw ?? '').trim());
   if (!value) return '';
   const match = ROOM_PREFIX.exec(value) ?? BARE_ROOM.exec(value);
   return match ? match[1] : '';

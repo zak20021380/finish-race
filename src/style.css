@@ -40931,7 +40931,16 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
 
 /* ---- the sheet ---- */
 #modal-friend-duel .fd-sheet { max-height: 90vh; max-height: 90dvh; }
-.fd-body { justify-content: flex-start; gap: 10px; overflow: hidden; }
+/* The room grew a roster, a format row and a start key: the body scrolls when a 320px-wide card
+   cannot hold all four at once, instead of clipping the key the player came here to press. */
+.fd-body {
+  justify-content: flex-start;
+  gap: 9px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .fd-head-i { color: var(--honey-ink); }
 
 .fd-real-pill {
@@ -41226,6 +41235,9 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
 }
 .fd-wait[data-state="ready"] { color: var(--honey-ink); }
 .fd-wait[data-state="ready"] .fd-wait-dot { background: #34D399; animation-duration: .9s; }
+/* the handshake: `Joining #5923…` / `Creating room…` — the dot runs at the ember's own beat */
+.fd-wait[data-state="joining"] { color: var(--honey-ink); }
+.fd-wait[data-state="joining"] .fd-wait-dot { animation-duration: 1.1s; }
 .fd-wait[data-state="offline"] { color: #FCA5A5; }
 .fd-wait[data-state="offline"] .fd-wait-dot { background: #F87171; animation: none; box-shadow: none; }
 @keyframes fd-ember {
@@ -41233,6 +41245,226 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
   70%  { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); opacity: .72; }
   100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); opacity: 1; }
 }
+
+/* ---- the seat counter: `1/2` .. `4/4`, Latin tabular digits, isolated LTR ---- */
+.fd-count {
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .22);
+  color: var(--honey-ink);
+  font-family: var(--font-numeric);
+  font-size: 10.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: .04em;
+  unicode-bidi: isolate;
+}
+
+/* ---- the room's shape: one row, four direct picks, the host's to make ---- */
+.fd-formats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.fd-fmt {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  transition: background-color var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.fd-fmt[aria-pressed="true"] {
+  background: linear-gradient(180deg, #FFC53D 0%, #E09A0E 100%);
+  box-shadow: 0 2px 0 #8A5604, inset 0 1px 0 rgba(255, 255, 255, .5);
+  color: #2B1B02;
+}
+.fd-fmt[aria-disabled="true"] { cursor: default; }
+.fd-fmt.is-locked[aria-pressed="false"] { opacity: .55; }
+.fd-fmt:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.fd-mode-sub {
+  margin: -2px 0 0;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+/* ---- the live seat grid: 2, 3 or 4 chairs, exactly as the format fields them ---- */
+.fd-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.fd-slots.is-3p { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Three across a 320px card is ~90px a chair: the plate turns vertical rather than squeezing the
+   name down to two letters. */
+.fd-slots.is-3p .fd-slot {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 4px;
+  text-align: center;
+}
+.fd-slots.is-3p .fd-slot-txt { align-items: center; flex: 0 0 auto; }
+.fd-slots.is-3p .fd-crown { position: absolute; inset-block-start: 4px; inset-inline-end: 5px; }
+.fd-slots.is-4p, .fd-slots.is-2v2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fd-slot {
+  position: relative;
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 14px;
+  text-align: start;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2px 0 rgba(0, 0, 0, .28);
+  color: var(--ink);
+  transition: background-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.fd-slot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.fd-slot.is-you {
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34), 0 2px 0 rgba(0, 0, 0, .28);
+}
+.fd-slot.is-away { opacity: .62; }
+.fd-slot.is-open {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, .02);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  color: var(--ink-soft);
+}
+.fd-slot.is-open:hover { background: rgba(245, 158, 11, .07); color: var(--honey-ink); }
+.fd-slot-plus { font-size: 17px; font-weight: 900; line-height: 1; }
+.fd-slot-t { font-size: 9px; font-weight: 800; line-height: 1.2; text-align: center; }
+.fd-slot-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(245, 158, 11, .16);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3);
+  color: var(--honey-ink);
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1;
+}
+.fd-slot-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fd-slot-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.fd-slot-name {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fd-slot-role {
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fd-crown {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--honey-ink);
+}
+.fd-crown .ico { width: 13px; height: 13px; }
+.fd-team {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 6px;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .8;
+}
+.fd-team.is-a { color: #60A5FA; }
+.fd-team.is-b { color: #FB923C; }
+
+/* ---- the one primary key: Start Match with a friend, practice alone, or the guest's pill ---- */
+.fd-start {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09), 0 2px 0 rgba(0, 0, 0, .3);
+  transition: transform var(--motion-fast), background-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.fd-start .ico { width: 14px; height: 14px; }
+.fd-start:active { transform: translateY(2px); }
+.fd-start:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* a host with a friend at the table: the glowing key */
+.fd-start.is-live {
+  color: #2B1B02;
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -3px 0 rgba(120, 53, 15, .55),
+    0 0 0 1px rgba(245, 158, 11, .5),
+    0 6px 20px rgba(245, 158, 11, .28);
+}
+/* a host alone: the honest practice door, quieter than a launch */
+.fd-start.is-solo {
+  color: var(--honey-ink);
+  background: rgba(245, 158, 11, .1);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3), 0 2px 0 rgba(0, 0, 0, .3);
+}
+/* a guest: a status pill, never a pretend action */
+.fd-start.is-guest {
+  cursor: default;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.fd-start[aria-disabled="true"] { opacity: .6; }
+.fd-start.is-guest:active { transform: none; }
 
 .fd-fine {
   margin: 0;

@@ -20,17 +20,24 @@
  *      board stays in normal move mode until that tap, so new players learn where the key lives.
  *   8. placeMine — one tap on the glowing choke-point square buries the charge; the rival holds its
  *      breath. Mine mode is locked at this stage so it can never be toggled off by a stray tap.
- *   9. sprint — one tap forward, and the rival's own answer walks it onto the charge. The blast
- *      throws it two rows back and hands the lead to the player. Every overlay marker is cleared
- *      the instant that beat begins, so no ring or hand is left over the empty crater.
+ *   9. sprint — one tap forward springs the trap: the player's pawn holds the funnel row at (2, 8)
+ *      while the rival's own sprint walks it onto the charge. The blast throws it two rows back and
+ *      hands the lead to the player. Every overlay marker is cleared the instant that beat begins,
+ *      so no ring or hand is left over the empty crater.
   *
   *   PHASE 4 — the rival's counter-wall and the left/right dodge (steps 10-13)
-  *   After the blast the rival drops one cheap bar on the edge directly above the player's pawn, so
-  *   the straight step out of (2, 7) is walled off with zero gap. The last four taps teach the way
-  *   around it and practise BOTH directions: left under the bar to (1, 7), left again to the open
-  *   edge at (0, 7), forward past the wall's end to (0, 6), then right back into the centre lane at
-  *   (1, 6). The rival answers each dodge with a harmless sideways shuffle. The final tap closes the
-  *   lesson and hands the player the free-play climax.
+  *   After the blast the rival drops one cheap bar flush on the edge directly above the player's
+  *   pawn — h(1, 8) meets the funnel's v(3, 7) in a legal T-junction — so the straight step out of
+  *   (2, 8) is walled off with zero gap. The last four taps teach the way around it and practise BOTH
+  *   directions: left under the bar to (1, 8), left again to the open edge at (0, 8), forward past the
+  *   wall's end to (0, 7), then right back into the centre lane at (1, 7). The rival answers each
+  *   dodge with a harmless sideways shuffle. The final tap closes the lesson and hands the player the
+  *   free-play climax.
+  *
+  * In a 3- or 4-player lesson the turn still cycles cleanly home after every tap: Seat 1 stays the
+  * scripted rival, while Seats 2 and 3 each take one fast, safe pawn move (never a wall, a mine, row
+  * 0, the player's charge or the funnel corridor) so the loop can never stall on a bot the lesson
+  * does not own. The cue banner therefore stays up across every bot sub-turn.
  *
  * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
  * one target per stage and `main.ts` commits it through the same `play()` a real race uses. The one
@@ -828,9 +835,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           return;
         }
         case 'sprint': {
-          /* The player stepped. `go('blast')` clears every marker BEFORE the board walks the rival
-             onto the charge, so the empty crater wears no ring, hand or mine silhouette while the
-             blast, the knockback, the shake and the bang play out. */
+          /* The tap sprang the trap: the player's pawn holds the funnel row while the rival sprints
+             onto the charge. `go('blast')` clears every marker BEFORE the board walks the rival onto
+             it, so the empty crater wears no ring, hand or mine silhouette while the blast, the
+             knockback, the shake and the bang play out. */
           const cell = blastCell;
           go('blast');
           if (!cell) { close('finished'); return; }

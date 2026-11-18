@@ -76,6 +76,46 @@ export const isLobbyFormat = (v: unknown): v is LobbyFormat =>
 /** How many seats a format fields. */
 export const FORMAT_CAPACITY: Record<LobbyFormat, number> = { duel: 2, '3p': 3, '4p': 4, '2v2': 4 };
 
+/* ---------- the code: one spelling, on both sides of the wire ---------- */
+
+/**
+ * Fold every numeral a Persian or Arabic keyboard produces onto ASCII `0-9`.
+ *
+ * A code is four digits a player reads off a friend's screen and types into a field. On a Persian
+ * or Arabic keyboard those keystrokes arrive as `۱۹۰۹` / `١٩٠٩`, and a naive `\D` strip deletes them
+ * outright — the invite then reads as "no room" for a code that is perfectly valid. So the fold
+ * happens first, everywhere, and the code has exactly one spelling on the wire.
+ */
+export function foldRoomDigits(raw: string): string {
+  let out = '';
+  for (const ch of raw) {
+    const cp = ch.codePointAt(0) ?? 0;
+    /* U+06F0..U+06F9 (Extended Arabic-Indic, Persian) and U+0660..U+0669 (Arabic-Indic) */
+    if (cp >= 0x06f0 && cp <= 0x06f9) out += String(cp - 0x06f0);
+    else if (cp >= 0x0660 && cp <= 0x0669) out += String(cp - 0x0660);
+    else out += ch;
+  }
+  return out;
+}
+
+/**
+ * A room code in its one canonical form: four ASCII digits, or `''` when the input names no room.
+ *
+ * Everything a friend might paste is accepted — `# 5923`, `room_5923`, `r_5923`, a full
+ * `https://t.me/<bot>/play?startapp=room_5923` link, a code typed on a Persian keyboard — because
+ * the digits are the identity and every wrapper is noise. The four-digit rule is what keeps a
+ * squad id, a referral code or a bare number from being mistaken for somebody's room.
+ */
+export function normalizeRoomCode(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  /* A link carries its payload in `startapp`/`start_param`; read that before the raw text, or the
+     digits of the bot's own handle would be the first four found. */
+  const payload = /[?&](?:startapp|start_param|tgWebAppStartParam)=([^&#]+)/i.exec(raw);
+  const source = payload ? decodeURIComponent(payload[1]) : raw;
+  const digits = foldRoomDigits(source).replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? digits : '';
+}
+
 /** What the board plays: the 2v2 shares teams, the duel and the free-for-alls do not. */
 export const FORMAT_MODE: Record<LobbyFormat, 'ffa' | 'team'> = {
   duel: 'ffa', '3p': 'ffa', '4p': 'ffa', '2v2': 'team',

@@ -48,9 +48,12 @@ import {
   type RequestDecision, type SquadChatPreview, type SquadVerifyResult,
 } from './squadRegister';
 import {
-  buildShareUrl, copyText, getFriendDuelSnapshot, leaveFriendDuel, onFriendDuelState,
+  buildShareUrl, copyText, formatLine, friendDuelKick, friendDuelSetFormat, friendDuelStart,
+  getFriendDuelSnapshot, leaveFriendDuel, onFriendDuelState,
   openFriendDuel, syncFriendDuelScreen, type FriendDuelSnapshot,
 } from './gamemodes';
+import type { LobbyFormat, LobbySeat } from './lobby';
+import { foldRoomDigits, normalizeRoomCode } from './room';
 import { myTiq } from './matchmaking';
 import { relicShelter, type RelicShelter } from './seize';
 import { isSelfPlayerId } from './players';
@@ -3784,32 +3787,137 @@ export function createMenu(api: MenuApi): Menu {
   const fdErr = document.getElementById('fd-err');
   const fdWait = document.getElementById('fd-wait');
   const fdWaitT = document.getElementById('fd-wait-t');
+  const fdCount = document.getElementById('fd-count');
+  const fdSlots = document.getElementById('fd-slots');
+  const fdModeSub = document.getElementById('fd-mode-sub');
+  const fdStart = document.getElementById('fd-start') as HTMLButtonElement | null;
+  const fdStartT = document.getElementById('fd-start-t');
 
-  /** One painter for every surface of the sheet: gateway, live room, wait line and refusal. */
+  /** The one escaping helper this sheet needs: a seat's name is somebody else's text. */
+  const fdEsc = (s: string): string =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+
+  /**
+   * One chair on the sheet's grid. Empty wells are the invite door; a held chair is the person,
+   * their role, and — in 2v2 — which side of the board they play. Nothing here is a bot: this
+   * sheet is human-only by construction, and a machine seat has no place on it.
+   */
+  const fdSlotMarkup = (snap: FriendDuelSnapshot, seat: number): string => {
+    const s: LobbySeat | null = snap.seats[seat] ?? null;
+    /* In 2v2 the badge names the side the seat actually plays — the room's own team map when a
+       chair is held, the format's default split while it is still open. */
+    const side = s ? s.team : (seat % 2 === 0 ? 0 : 1);
+    const team = snap.format === '2v2'
+      ? `<span class="fd-team is-${side === 0 ? 'a' : 'b'}">${fdEsc(side === 0 ? t('fdTeamA') : t('fdTeamB'))}</span>`
+      : '';
+    if (!s) {
+      return `<button class="fd-slot is-open" type="button" role="listitem" data-seat="${seat}"`
+        + ` aria-label="${fdEsc(t('openSeatInvite').replace('{n}', String(seat + 1)))}">`
+        + '<span class="fd-slot-plus" aria-hidden="true">+</span>'
+        + `<span class="fd-slot-t">${fdEsc(t('inviteFriendFull'))}</span>${team}</button>`;
+    }
+    const cls = ['fd-slot', 'is-held'];
+    if (seat === snap.you) cls.push('is-you');
+    if (s.host) cls.push('is-host');
+    if (!s.connected) cls.push('is-away');
+    const role = s.host
+      ? (s.connected ? t('host') : t('waitingForHost'))
+      : seat === snap.you ? t('you')
+        : s.connected ? t('rival') : t('seatReconnecting');
+    const photo = s.avatarUrl
+      ? `<img src="${fdEsc(s.avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+      : '';
+    return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+      + ` aria-label="${fdEsc(`${s.name}, ${role}`)}">`
+      + `<span class="fd-slot-av" aria-hidden="true">${photo}${photo ? '' : fdEsc(s.initial)}</span>`
+      + '<span class="fd-slot-txt">'
+      + `<span class="fd-slot-name">${fdEsc(s.name)}</span>`
+      + `<span class="fd-slot-role">${fdEsc(role)}</span>`
+      + '</span>'
+      + (s.host ? '<span class="fd-crown" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>' : '')
+      + team
+      + '</button>';
+  };
+
+  /** Rebuild the grid only when the roster actually moved: a paint must never steal a tap. */
+  let fdSlotsSig = '';
+  const paintFdSlots = (snap: FriendDuelSnapshot): void => {
+    if (!fdSlots) return;
+    const sig = `${snap.you}|${snap.hostSeat}|${snap.format}|${lang}|`
+      + snap.seats.map((s) => (s
+        ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.connected}`
+        : '-')).join(',');
+    if (sig === fdSlotsSig) return;
+    fdSlotsSig = sig;
+    fdSlots.className = `fd-slots is-${snap.format}`;
+    fdSlots.dataset.format = snap.format;
+    fdSlots.innerHTML = snap.seats.map((_s, i) => fdSlotMarkup(snap, i)).join('');
+    for (const img of fdSlots.querySelectorAll<HTMLImageElement>('.fd-slot-av img')) {
+      img.addEventListener('error', () => img.remove(), { once: true });
+    }
+  };
+
+  /** One painter for every surface of the sheet: gateway, live room, roster, wait line, refusal. */
   const paintFriendDuel = (snap: FriendDuelSnapshot | null): void => {
-    const live = !!snap && !!snap.code && snap.status !== 'closed';
+    /* A room is "held" from the moment its socket is up — including the beat before the registry
+       answers with the four digits — so the sheet never flashes the create/join gateway back at a
+       host who is already sitting in a chair. */
+    const live = !!snap && snap.status !== 'closed';
     if (fdGateway) fdGateway.hidden = live;
     if (fdRoom) fdRoom.hidden = !live;
     const codeEl = document.getElementById('fd-room-code');
-    if (codeEl && snap) codeEl.textContent = snap.code;
+    /* `0000` is the placeholder, never an invitation: the share and copy keys stay cold until the
+       registry has actually minted the digits. */
+    if (codeEl) codeEl.textContent = snap?.code || '0000';
     if (fdErr) {
       const msg = snap?.error ?? '';
       fdErr.textContent = msg;
       fdErr.hidden = !msg;
     }
     if (!live || !snap) return;
+
+    if (fdCount) fdCount.textContent = `${snap.taken}/${snap.capacity}`;
+    if (fdModeSub) fdModeSub.textContent = formatLine(snap.format);
+    /* No digits yet means nothing to hand out: both invite keys read as cold, not as broken. */
+    for (const id of ['fd-share', 'fd-copy']) {
+      document.getElementById(id)?.setAttribute('aria-disabled', String(!snap.code));
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#fd-formats [data-format]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.format === snap.format));
+      b.setAttribute('aria-disabled', String(!snap.host));
+      b.classList.toggle('is-locked', !snap.host);
+    }
+    paintFdSlots(snap);
+
     /* `ready` covers both sides of the last second before the countdown: the host has just seen
        the friend's seat light up, the guest has just seen the host's. */
-    const state = snap.status === 'solo' || !snap.online
-      ? 'offline'
-      : snap.launching || snap.racing || (snap.rival && snap.ready)
-        ? 'ready'
-        : 'waiting';
+    const joining = !snap.code && snap.status === 'connecting';
+    const state = snap.status === 'connecting' ? 'joining'
+      : snap.status === 'solo' || !snap.online ? 'offline'
+      : snap.launching || snap.racing || (snap.rival && snap.ready) ? 'ready'
+      : 'waiting';
     if (fdWait) fdWait.dataset.state = state;
     if (fdWaitT) {
-      fdWaitT.textContent = state === 'offline' ? t('fdOffline')
+      fdWaitT.textContent = state === 'joining'
+        ? (snap.code ? t('fdJoining').replace('{code}', snap.code) : t('fdCreating'))
+        : state === 'offline' ? t('fdOffline')
         : state === 'ready' ? t('fdStarting')
         : snap.host ? t('fdWaiting') : t('fdWaitingHost');
+    }
+
+    /* The one primary key. A host with a friend gets the glowing Start; a host alone gets the
+       honest practice door; a guest gets a status pill that never pretends to be an action. */
+    if (fdStart && fdStartT) {
+      const alone = snap.taken < 2;
+      const offline = snap.seats.some((s) => !!s && !s.bot && !s.connected);
+      fdStartT.textContent = snap.host
+        ? (alone ? t('fdStartPractice') : t('startMatch'))
+        : t('fdWaitingHostStart');
+      fdStart.setAttribute('aria-disabled', String(!snap.host || (!alone && (joining || offline))));
+      fdStart.classList.toggle('is-guest', !snap.host);
+      fdStart.classList.toggle('is-solo', snap.host && alone);
+      fdStart.classList.toggle('is-live', snap.host && !alone);
+      fdStart.dataset.state = snap.host ? (alone ? 'solo' : 'match') : 'guest';
     }
   };
 
@@ -3832,13 +3940,62 @@ export function createMenu(api: MenuApi): Menu {
     paintFriendDuel(getFriendDuelSnapshot());
   });
 
+  /* The room's shape. The host re-shapes it on the server; every seat repaints from `ROOM_STATE`,
+     so a 4P pick really is four chairs on the guest's screen and not a local guess. */
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#fd-formats [data-format]')) {
+    b.addEventListener('click', () => {
+      const raw = b.dataset.format as LobbyFormat | undefined;
+      if (!raw) return;
+      if (b.getAttribute('aria-disabled') === 'true') { notify('warning'); return; }
+      impact('light');
+      friendDuelSetFormat(raw);
+      paintFriendDuel(getFriendDuelSnapshot());
+    });
+  }
+
+  /* The grid: an empty well is an invite, a held chair is a person. The host may remove a guest,
+     exactly as the drawer's own plate does. */
+  fdSlots?.addEventListener('click', (e) => {
+    const seat = Number((e.target as HTMLElement | null)?.closest<HTMLElement>('[data-seat]')?.dataset.seat);
+    if (!Number.isInteger(seat) || seat < 0) return;
+    const snap = getFriendDuelSnapshot();
+    if (!snap) return;
+    if (!snap.seats[seat]) {
+      impact('light');
+      document.getElementById('fd-share')?.focus({ preventScroll: true });
+      return;
+    }
+    if (!snap.host || seat === snap.you || seat === snap.hostSeat) return;
+    impact('medium');
+    friendDuelKick(seat);
+    paintFriendDuel(getFriendDuelSnapshot());
+  });
+
+  /* The primary key. Host with a friend: launch. Host alone: an honest practice race. Guest: a
+     status pill, so the tap says who the room is waiting for instead of doing nothing. */
+  fdStart?.addEventListener('click', () => {
+    const snap = getFriendDuelSnapshot();
+    if (!snap || !fdStart) return;
+    if (!snap.host) { notify('warning'); return; }
+    if (fdStart.getAttribute('aria-disabled') === 'true') { notify('warning'); return; }
+    const solo = snap.taken < 2;
+    friendDuelStart();
+    const after = getFriendDuelSnapshot();
+    paintFriendDuel(after);
+    /* A solo start gives the room up for a practice race: there is no room left to paint, so the
+       sheet steps aside with it instead of sitting on an empty roster. */
+    if (solo && !after) friendDuelModal?.close();
+  });
+
+  /* The field takes whatever keyboard the player has: `۱۹۰۹`, `# 1909` and `room_1909` all read
+     as the same four digits, because the field is folded with the room grammar itself. */
   const fdSyncJoin = (): void => {
-    if (fdJoinBtn) fdJoinBtn.disabled = (fdCodeInput?.value ?? '').replace(/\D/g, '').length !== 4;
+    if (fdJoinBtn) fdJoinBtn.disabled = normalizeRoomCode(fdCodeInput?.value ?? '').length !== 4;
   };
   fdSyncJoin();
 
   const fdDoJoin = (): void => {
-    const raw = (fdCodeInput?.value ?? '').replace(/\D/g, '').slice(0, 4);
+    const raw = normalizeRoomCode(fdCodeInput?.value ?? '');
     if (raw.length !== 4) {
       if (fdErr) {
         fdErr.textContent = t('fdJoinInvalid');
@@ -3864,7 +4021,12 @@ export function createMenu(api: MenuApi): Menu {
     fdDoJoin();
   });
   fdCodeInput?.addEventListener('input', () => {
-    if (fdCodeInput) fdCodeInput.value = fdCodeInput.value.replace(/\D/g, '').slice(0, 4);
+    /* Only the digits stay in the field — folded, so a Persian keystroke lands as its Latin twin
+       and the player can read back exactly the code they will be joining. */
+    if (fdCodeInput) {
+      const digits = normalizeRoomCode(fdCodeInput.value);
+      fdCodeInput.value = digits.length === 4 ? digits : foldRoomDigits(fdCodeInput.value).replace(/\D/g, '').slice(0, 4);
+    }
     if (fdErr) {
       fdErr.hidden = true;
       fdErr.textContent = '';
@@ -3918,6 +4080,16 @@ export function createMenu(api: MenuApi): Menu {
     if (snap.launching || snap.racing) friendDuelModal?.close();
   });
   onLang(() => paintFriendDuel(getFriendDuelSnapshot()));
+
+  /* A Telegram room invite lands on this sheet: the guest sees the roster they were invited to,
+     not the drawer's mode list. The membership is already open by the time this fires — the event
+     only raises the surface, so it can never open a second socket on the room. */
+  window.addEventListener('detour:friend-duel', () => {
+    const snap = getFriendDuelSnapshot();
+    if (!snap || !friendDuelModal) return;
+    paintFriendDuel(snap);
+    friendDuelModal.open(friendDuelTile ?? null);
+  });
 
   /* One signature for the whole Profile panel. Coming back to the tab repaints
      only when something it shows actually moved; an unchanged tab keeps every

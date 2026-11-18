@@ -34,6 +34,7 @@
  * reduced-motion block stills the sweep, the pulses and the flash.
  */
 import { contendersIn, dimsFor, type Action } from './rules';
+import { normalizeRoomCode } from './room';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
 import {
   isPostChatPreset, type PostChatLine, type PostChatPresetId,
@@ -366,22 +367,34 @@ function socketParams(wide: boolean): string {
 
 /**
  * The friends lobby's socket: the same origin and the same identity as the 1v1 queue, but carrying
- * a room code instead of a search. The code is normalised to its four digits here, so `room_1909`,
- * `#1909` and `1909` all put the same value on the wire; the worker resolves that one spelling to
- * the same room every time.
+ * a room code instead of a search. The code is normalised to its four ASCII digits here, so
+ * `room_1909`, `#1909`, `۱۹۰۹` and `1909` all put the same value on the wire; the worker resolves
+ * that one spelling to the same room every time.
+ *
+ * `code === 'new'` is the create door: the socket asks the registry to mint a code, and the four
+ * digits arrive in the first `ROOM_STATE`. A client that mints its own code is guessing — and a
+ * guess is exactly how two players end up in two identical rooms. `format` shapes the room the
+ * registry opens, so a 3P invite is a 3-seat room from its first frame.
  */
-export function roomSocketUrl(code: string, host: boolean): string {
+export function roomSocketUrl(code: string, host: boolean, format?: string): string {
   const base = socketUrl();
   if (!base) return '';
-  const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4);
   const params = new URLSearchParams(socketParams(false));
-  params.set('roomcode', digits.length === 4 ? digits : String(code ?? ''));
+  const digits = normalizeRoomCode(code);
+  params.set('roomcode', digits || (code === NEW_ROOM ? NEW_ROOM : ''));
   if (host) params.set('host', '1');
+  if (format) params.set('format', format);
   params.delete('wide');
   params.delete('sizes');
   params.delete('mode');
   return `${base}?${params.toString()}`;
 }
+
+/** The sentinel a create puts on the wire instead of digits: "mint one for me". */
+export const NEW_ROOM = 'new';
+
+/** Is this the create sentinel rather than a real four-digit code? */
+export const isNewRoomCode = (code: string): boolean => code === NEW_ROOM;
 
 /**
  * The ambient relic-duel channel: the same socket origin and identity, with `session=1` telling

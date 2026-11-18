@@ -285,12 +285,21 @@ export interface LobbyOptions {
   code: string;
   /** True when this client minted the code and owns seat 0. */
   host: boolean;
+  /** The shape the room opens on: `1v1` (duel), `3p`, `4p` or `2v2`. */
+  format?: LobbyFormat;
   /** Repaints the sheet. Called on every roster change, including the fallback to solo. */
   onState: (lobby: Lobby) => void;
   /** The room launched: `main.ts` puts this on the board. */
   onRace: (race: LobbyRace) => void;
   /** The server refused us (a code that does not exist, a full room, maintenance). */
   onError: (reason: string) => void;
+  /**
+   * The same refusal, named. `code` is the registry's verdict (`NOT_FOUND`, `ROOM_FULL`,
+   * `CONSUMED`, `ROOM_EXISTS`) and `reason` is the lower-case line `onError` has always carried.
+   * A screen that wants to say "that room does not exist" instead of "the room could not be
+   * opened" reads this one; a screen that only needs a toast keeps reading `onError`.
+   */
+  onRefused?: (code: string, reason: string) => void;
   /**
    * The host asked the room to start and it could not: fewer than two people are at their
    * sockets, or the launch frame never left. The reason is the worker's (`player_offline`,
@@ -378,9 +387,10 @@ function myFace(): { name: string; avatarUrl: string | null } {
 
 const myName = (): string => myFace().name;
 
-/** A lobby with only the host in it: a 1v1 room, the challenger's well open. */
-export function hostLobby(code: string, name: string, online: boolean): Lobby {
+/** A lobby with only the host in it: the challenger's well open, in the shape the format fields. */
+export function hostLobby(code: string, name: string, online: boolean, format: LobbyFormat = 'duel'): Lobby {
   const face = myFace();
+  const capacity = FORMAT_CAPACITY[format];
   const host: LobbySeat = {
     seat: 0,
     id: 'you',
@@ -394,12 +404,15 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
     busy: false,
   };
   return {
-    code,
-    capacity: 2,
-    format: 'duel',
-    mode: 'ffa',
+    /* A create asks the server to mint the digits, so there is no code to print until the first
+       `ROOM_STATE` lands. `''` is the honest answer: the sheet shows its joining line, never a
+       number nobody has reserved. */
+    code: /^\d{4}$/.test(code) ? code : '',
+    capacity,
+    format,
+    mode: FORMAT_MODE[format],
     hostSeat: 0,
-    seats: [host, null],
+    seats: [host, ...Array.from({ length: capacity - 1 }, () => null)],
     you: 0,
     pendingHost: false,
     online,
@@ -407,7 +420,7 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
   };
 }
 
-/** One `LOBBY` frame, folded back into the model. Unknown seats are dropped, never trusted. */
+/** One `ROOM_STATE` frame, folded back into the model. Unknown seats are dropped, never trusted. */
 function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
   /* The format is the authority for the roster's shape; a frame without one (or an older server)
      falls back to what the seats and mode imply. */
@@ -416,7 +429,12 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     : raw.capacity === 2 ? 'duel'
     : raw.capacity === 3 ? '3p' : '4p';
   const capacity = FORMAT_CAPACITY[format];
-  const rows = Array.isArray(raw.seats) ? raw.seats : [];
+  /* A create is answered with the code the registry minted. Until this frame arrives the client
+     has no code at all — so the code the room actually holds is read here, once, and every invite
+     door downstream (`Copy Link`, `Invite`, the deep link) prints this one. */
+  const minted = typeof raw.code === 'string' && /^\d{4}$/.test(raw.code) ? raw.code : '';
+  const rows = Array.isArray(raw.players) ? raw.players
+    : Array.isArray(raw.seats) ? raw.seats : [];
   const seats: (LobbySeat | null)[] = Array.from({ length: capacity }, () => null);
   /* Which seat is mine is read before the roster, because my own face is the one thing this
      client already knows: a frame from a worker that predates the avatar relay must not blank it. */
@@ -449,6 +467,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
   const you = mine;
   return {
     ...l,
+    code: minted || l.code,
     capacity,
     format,
     seats,
@@ -465,7 +484,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
 let link: WebSocket | null = null;
 
 export function openLobby(opts: LobbyOptions): LobbyHandle {
-  let lobby = hostLobby(opts.code, myName(), true);
+  let lobby = hostLobby(opts.code, myName(), true, opts.format ?? 'duel');
   let sock: WebSocket | null = null;
   let settled = false;
   /** True once the screen has accepted that there is no socket: the close it causes is not a drop. */
@@ -602,7 +621,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       opts.onDrop?.();
       return;
     }
-    const offline = hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false);
+    const offline = hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false, lobby.format);
     lobby = setFormat(offline, lobby.format);
     paint();
   };
@@ -714,10 +733,40 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         opts.onEliminated?.();
         return;
       }
+      case 'ROOM_STATE':
       case 'LOBBY':
         settled = true;
         push(readLobby(lobby, msg));
         return;
+      case 'ROOM_ERROR': {
+        /* The registry refused a room operation, by name: `NOT_FOUND` (no such room — never a
+           fresh one opened in its place), `ROOM_FULL`, `CONSUMED` (the code's match already ran),
+           `ROOM_EXISTS` (somebody else holds the crown on that code). `reason` is the older
+           lower-case spelling; either one is enough to explain it. */
+        const code = typeof msg.code === 'string' ? msg.code : '';
+        const reason = typeof msg.reason === 'string' ? msg.reason : 'ERROR';
+        if (race) {
+          raceDead = true;
+          if (raceTimer) {
+            globalThis.clearTimeout(raceTimer);
+            raceTimer = 0;
+          }
+          outbox.length = 0;
+          markPostGone();
+          for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
+          return;
+        }
+        settled = true;
+        solo = true;
+        teardown();
+        try { sock?.close(); } catch { /* gone */ }
+        sock = null;
+        link = null;
+        push({ ...lobby, status: 'closed' });
+        opts.onError(reason);
+        opts.onRefused?.(code || reason, reason);
+        return;
+      }
       case 'START_FAILED':
         /* The host's tap reached a room that is not ready — a friend's socket went away between
            the paint and the press. Say why; the screen re-arms its countdown on the same news. */
@@ -1060,7 +1109,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     if (left || solo || raceDead || !race) return;
     let ws: WebSocket;
     try {
-      ws = new WebSocket(roomSocketUrl(opts.code, opts.host));
+      ws = new WebSocket(roomSocketUrl(lobby.code || opts.code, opts.host, lobby.format));
     } catch {
       scheduleRaceResume();
       return;
@@ -1104,7 +1153,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   };
 
   try {
-    attachSocket(new WebSocket(roomSocketUrl(opts.code, opts.host)));
+    attachSocket(new WebSocket(roomSocketUrl(lobby.code || opts.code, opts.host, lobby.format)));
   } catch {
     sock = null;
   }

@@ -3,7 +3,7 @@ import './result.css';
 import {
   CONFIG, MAX_TEAMS, REPEAT_LIMIT, apply, ballById, distField, firstBall, getAutoMove,
   isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
-  sideOf, startLayout, steps as teamSteps,
+  sideOf, steps as teamSteps,
   view as fogOfWar, wallBudget, wallConflict, wallOk, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
@@ -71,8 +71,8 @@ import {
 import { applyFlagSupport } from './countries';
 import {
   autoTutorialForLaunch, createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy,
-  onGameModeChange, openInviteRoom, rewardModeFor, resumeRoom, setGameMode, setRewardSeats,
-  takeAutoLaunch,
+  onGameModeChange, openFriendDuel, openInviteRoom, rewardModeFor, resumeRoom, setGameMode,
+  setRewardSeats, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
 import { initSeize, resetSeizeContext } from './seize';
@@ -4330,6 +4330,15 @@ function tutorialTap(p: Vec) {
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
   invalidate();           // a queued ripple is a finite transition: wake the parked loop
+  /* Step 9 springs the trap: the player's pawn holds the funnel row while the rival's own sprint
+     walks it onto the charge. The forward tap is the trigger, not a step — the blast hands the lead
+     over, and the counter-wall dodge begins from the square the pawn already holds. */
+  if (stage === 'sprint') {
+    disarmWall();
+    impact('light');
+    tutorial?.notify(action);
+    return;
+  }
   switch (action.kind) {
     case 'move':
       disarmWall();
@@ -4553,21 +4562,24 @@ function tutorialAdvanceTarget(): TutorialTargetMove | null {
 }
 
 /**
- * STEPS 10-13 — four FIXED squares, not the live forward finder. The rival's counter-wall sits on
- * the edge directly above the player's pawn, so the straight step out of (2, 7) is shut with zero
- * gap. The lesson teaches the way around it and practises BOTH directions: left under the bar to
- * (1, 7), left again to the open edge at (0, 7), forward past the wall's end to (0, 6), then right
- * back into the centre lane at (1, 6). Each is offered only when the rules say the pawn can actually
+ * STEPS 10-13 — four FIXED squares anchored on the player's pawn at the moment the rival's
+ * counter-wall dropped, not the live forward finder. The bar sits flush on the edge directly above
+ * that pawn — h(1, 8) shuts the straight step out of (2, 8) with zero gap and meets v(3, 7) in a
+ * legal T-junction — so the lesson teaches the way around it and practises BOTH directions: left
+ * under the bar to (1, 8), left again to the open edge at (0, 8), forward past the wall's end to
+ * (0, 7), then right back into the centre lane at (1, 7). The anchor is read once so the four tiles
+ * stay put as the pawn walks them; each is offered only when the rules say the pawn can actually
  * step there, so a replay on a drifted board can never spotlight a dead tile.
  */
 function tutorialDodgeTarget(stage: TutorialStage): TutorialTargetMove | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const ball = firstBall(state, localSide);
   if (!ball) return null;
-  const to: Pos | null = stage === 'dodgeLeft1' ? { c: 1, r: 7 }
-    : stage === 'dodgeLeft2' ? { c: 0, r: 7 }
-      : stage === 'clearWall' ? { c: 0, r: 6 }
-        : stage === 'dodgeRight' ? { c: 1, r: 6 } : null;
+  const a = tutDodgeAnchor ?? ball.pos;
+  const to: Pos | null = stage === 'dodgeLeft1' ? { c: a.c - 1, r: a.r }
+    : stage === 'dodgeLeft2' ? { c: a.c - 2, r: a.r }
+      : stage === 'clearWall' ? { c: a.c - 2, r: a.r - 1 }
+        : stage === 'dodgeRight' ? { c: a.c - 1, r: a.r - 1 } : null;
   if (!to) return null;
   if (!reachableBall(state, ball.id).some((p) => sameCell(p, to))) return null;
   return { ball: ball.id, to, spot: { rect: boardRect(to.c, to.r), radius: 18 } };
@@ -4578,11 +4590,19 @@ function tutorialDodgeTarget(stage: TutorialStage): TutorialTargetMove | null {
 /**
  * The seeded opening the whole lesson is choreographed against: the funnel's anchor — the rival's
  * column and the row the three walls bend it along. No rival mine is planted any more; the opening
- * sprint is a clean, unbroken advance. Null whenever the board is not the lesson's own 1v1 opening
- * (a party replay, a refused seed), and every scripted target then falls back to the live-board
- * finders below.
+ * sprint is a clean, unbroken advance. The seed holds on every board size — the player keeps column
+ * 2 and the primary rival column 5 on the baseline, party seats included — so the funnel and the
+ * relative dodge read the same in 1v1, 3P and 4P. Null only on a refused seed (a board too small to
+ * hold the lesson), and every scripted target then falls back to the live-board finders below.
  */
 let tutScript: { rivalCol: number; funnelRow: number } | null = null;
+
+/**
+ * The player's pawn square at the instant the rival's counter-wall dropped: the fixed anchor the
+ * four dodge tiles are measured from, so they stay put while the pawn walks them. Set by
+ * `tutorialCounterWall()`, cleared with the seed.
+ */
+let tutDodgeAnchor: Pos | null = null;
 
 /**
  * The funnel's three bars, in order, derived from the seeded opening:
@@ -4717,50 +4737,131 @@ function tutorialMineTarget(): TutorialTargetMine | null {
 const tutorialFinishTarget = (): TutorialSpot | null =>
   state.winner === null ? { rect: boardRect(0, 0, state.cols, 1), radius: 18 } : null;
 
-/** The lesson's one bot beat: the rival's scripted answer, then the board is the player's again. */
-async function tutorialReply(stage: TutorialStage): Promise<void> {
-  /* Step 8's beat: the charge is buried and the rival HOLDS POSITION — passing keeps the funnel's
-     forced step intact, so the player's step-9 advance is what sends it walking onto the charge. */
-  if (stage === 'placeMine') {
-    if (tutorialActive && state.winner === null && state.turn !== localSide) play({ kind: 'pass' });
-    return;
+/**
+ * The tiles the secondary bots must never touch during the lesson: the player's pawn and its guided
+ * forward square, the four fixed dodge tiles around the counter-wall anchor, and the primary rival's
+ * pawn plus the next step the funnel forces on it. Live charges are filtered separately in
+ * `tutorialSafeStep`, so a seat can never wander onto the player's buried mine either.
+ */
+function tutorialReservedCells(): Set<string> {
+  const out = new Set<string>();
+  const add = (p: Pos | null | undefined) => { if (p) out.add(`${p.c},${p.r}`); };
+  const mine = firstBall(state, localSide);
+  add(mine?.pos);
+  if (mine) {
+    add({ c: mine.pos.c, r: mine.pos.r - 1 });
+    const a = tutDodgeAnchor ?? mine.pos;
+    add({ c: a.c - 1, r: a.r });
+    add({ c: a.c - 2, r: a.r });
+    add({ c: a.c - 2, r: a.r - 1 });
+    add({ c: a.c - 1, r: a.r - 1 });
   }
-  /* Steps 10-12's answers: a harmless sideways shuffle at the bottom (c -> c + 1 on the same row).
-     The player's dodge has already handed the turn over; this keeps the rival out of the new
-     lesson's way while it teaches the way around its counter-wall. */
-  if (stage === 'dodgeLeft1' || stage === 'dodgeLeft2' || stage === 'clearWall') {
-    for (let guard = 0; guard < 4; guard++) {
+  const rival = firstBall(state, rivalSide());
+  add(rival?.pos);
+  add(tutorialRivalStep()?.to);
+  return out;
+}
+
+/**
+ * A fast, SAFE pawn move for a secondary bot (Seats 2 and 3) during the lesson. It is the whole of
+ * their vocabulary: never a wall, never a mine, never row 0 (FINISH is the player's alone), never the
+ * player's charge, the funnel corridor or a guided target tile. Every candidate is dry-run through
+ * the engine, so a step that would win the race, seal the player or invite the shuffle verdict is
+ * refused too — the same 100% anti-loss safeguard the climax runs on. A sideways shuffle is preferred
+ * to a forward gain so the extra seats stay out of the lesson's way; with nothing safe left, the seat
+ * passes and the turn still cycles home.
+ */
+function tutorialSafeStep(seat: Player): Action {
+  const reserved = tutorialReservedCells();
+  const live = state.mines.filter((m) => !m.triggered);
+  const ranked: { a: Action; cost: number }[] = [];
+  for (const st of teamSteps(state, seat)) {
+    if (st.to.r === 0) continue;
+    if (reserved.has(`${st.to.c},${st.to.r}`)) continue;
+    if (live.some((m) => sameCell(m.cell, st.to))) continue;
+    const t = apply(state, { kind: 'move', ball: st.ball, to: st.to });
+    if (!t || t.winner !== null) continue;
+    if (isEliminated(t, localSide)) continue;
+    const trap = t.checkmate !== state.checkmate ? t.checkmate : null;
+    if (trap && trap.teams.includes(localSide)) continue;
+    if ((t.repeat?.streak ?? 0) >= REPEAT_LIMIT) continue;
+    const ball = ballById(state, st.ball);
+    const lateral = ball !== null && st.to.r === ball.pos.r;
+    ranked.push({ a: { kind: 'move', ball: st.ball, to: st.to }, cost: lateral ? 0 : 1 });
+  }
+  ranked.sort((x, y) => x.cost - y.cost);
+  return ranked[0]?.a ?? { kind: 'pass' };
+}
+
+/**
+ * Walk the turn cleanly past the secondary bots (Seats 2 and 3) back to the player. Each takes one
+ * fast, safe step — or passes when nothing is safe — so a party tutorial can never stall on a bot the
+ * scripted lesson does not own. Stops the moment the player (or the primary rival, whose beats are
+ * scripted elsewhere) is up again.
+ */
+async function tutorialSecondaryBots(): Promise<void> {
+  for (let guard = 0; guard < 8; guard++) {
+    if (!tutorialActive || state.winner !== null) return;
+    const seat = state.turn;
+    if (seat === localSide || seat === rivalSide()) return;
+    await new Promise<void>((res) => window.setTimeout(res, 40));
+    if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
+    if (!play(tutorialSafeStep(seat)) && !play({ kind: 'pass' })) return;
+  }
+}
+
+/**
+ * The lesson's bot beat: the primary rival's scripted answer, the secondary bots' safe steps, and
+ * then the board is the player's again — in 1v1, 3P and 4P alike. The turn always cycles home, so the
+ * cue banner never vanishes mid-lesson and the player is never left waiting on a stalled bot.
+ */
+async function tutorialReply(stage: TutorialStage): Promise<void> {
+  /* Step 8's beat: the charge is buried and EVERY bot seat holds position — passing keeps the
+     funnel's forced step intact, so the player's step-9 tap is what sends the rival walking onto the
+     charge. In a party the turn still cycles cleanly past Seats 2 and 3 instead of stalling on them. */
+  if (stage === 'placeMine') {
+    for (let guard = 0; guard < 8; guard++) {
       if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
-      const foe = firstBall(state, rivalSide());
-      if (!foe || foe.team !== state.turn) return;
-      const lateral = reachableBall(state, foe.id).filter((p) => p.r === foe.pos.r);
-      const to = lateral.find((p) => p.c === foe.pos.c + 1) ?? lateral[0];
-      if (to && play({ kind: 'move', ball: foe.id, to })) return;
       if (!play({ kind: 'pass' })) return;
     }
     return;
   }
-  for (let guard = 0; guard < 8; guard++) {
+  const dodge = stage === 'dodgeLeft1' || stage === 'dodgeLeft2' || stage === 'clearWall';
+  for (let guard = 0; guard < 12; guard++) {
     if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
     const seat = state.turn;
     await new Promise<void>((res) => window.setTimeout(res, 50));
     if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
-    /* The choreography is a walk, not a search: the rival takes the shortest route the rules offer,
-       which on the seeded opening is the exact sidestep the funnel forces — and the straight lane
-       the spotlight teaches during the opening sprint. A party board — or a rival that does not
-       hold the scripted ball — still falls back to the brain's own answer. */
-    const scripted = tutorialRivalStep();
-    const auto = scripted && scripted.ball.team === seat
-      ? { kind: 'move' as const, ball: scripted.ball.id, to: scripted.to }
-      : getAutoMove(state, seat);
-    /* A lesson replayed from the Pause sheet inside a governed debut still answers to the gates:
-       a deterministic forward step may never become the move that wins the race or seals the
-       player. `hold` is false here, because these rows are the lesson's own choreography. */
-    const guarded = onboardingActive()
-      ? onboardingRivalAction(state, localSide, auto, false)
-      : auto;
-    if (onboardingActive() && guarded === null) { concedeOnboarding(); return; }
-    if (!play(guarded ?? auto) && !play({ kind: 'pass' })) return;
+    let a: Action;
+    if (seat !== rivalSide()) {
+      /* Seats 2 and 3: a fast, safe pawn move out of the lesson's way, never a wall or a mine. */
+      a = tutorialSafeStep(seat);
+    } else if (dodge) {
+      /* Steps 10-12's answer: the primary rival shuffles sideways (c -> c + 1 on the same row), out
+         of the way while the player learns the route around its counter-wall. */
+      const foe = firstBall(state, seat);
+      const lateral = foe ? reachableBall(state, foe.id).filter((p) => p.r === foe.pos.r) : [];
+      const to = lateral.find((p) => foe !== null && p.c === foe.pos.c + 1) ?? lateral[0];
+      a = foe && to ? { kind: 'move', ball: foe.id, to } : { kind: 'pass' };
+    } else {
+      /* The choreography is a walk, not a search: the rival takes the shortest route the rules offer,
+         which on the seeded opening is the exact sidestep the funnel forces — and the straight lane
+         the spotlight teaches during the opening sprint. A rival that does not hold the scripted ball
+         still falls back to the brain's own answer. */
+      const scripted = tutorialRivalStep();
+      const auto = scripted && scripted.ball.team === seat
+        ? { kind: 'move' as const, ball: scripted.ball.id, to: scripted.to }
+        : getAutoMove(state, seat);
+      /* A lesson replayed from the Pause sheet inside a governed debut still answers to the gates:
+         a deterministic forward step may never become the move that wins the race or seals the
+         player. `hold` is false here, because these rows are the lesson's own choreography. */
+      const guarded = onboardingActive()
+        ? onboardingRivalAction(state, localSide, auto, false)
+        : auto;
+      if (onboardingActive() && guarded === null) { concedeOnboarding(); return; }
+      a = guarded ?? auto;
+    }
+    if (!play(a) && !play({ kind: 'pass' })) return;
   }
 }
 
@@ -4850,40 +4951,57 @@ function tutorialMineBlastTarget(cell: Cell | null): TutorialTargetMine | null {
 /**
  * The combo's payoff. The charge is buried on `cell`, and the rival's very next move is the scripted
  * step onto that square — performed through `play()`, so the detonation, the KNOCKBACK throw, the
- * shake and the bang are the engine's real ones rather than a re-enactment. Resolves once the blast
- * has had its beat, so the hand-off lands on the crater and not over it.
+ * shake and the bang are the engine's real ones rather than a re-enactment. The player's pawn held
+ * the funnel row on the sprint tap, so the rival's turn is borrowed for this one walk and handed
+ * straight back; in a party the blast lands the turn on a secondary bot, which is stepped home too.
+ * Resolves once the blast has had its beat, so the hand-off lands on the crater and not over it.
  */
 async function tutorialDetonate(cell: Cell): Promise<void> {
   await new Promise<void>((res) => window.setTimeout(res, MINE_BAIT_BEAT_MS));
-  for (let guard = 0; guard < 4; guard++) {
-    if (state.winner !== null || state.turn === localSide) break;
+  if (state.winner === null) {
+    const foe = rivalSide();
     const rival = tutorialRival();
-    if (!rival || rival.team !== state.turn) break;
-    /* The named tile first: the rival steps onto the mined square itself whenever the rules still
-       offer it, which is what makes the blast certain rather than hoped for. */
-    const opts = reachableBall(state, rival.id);
-    const to = opts.find((p) => sameCell(p, cell)) ?? tutorialRivalStep()?.to ?? null;
-    if (!to) break;
-    if (play({ kind: 'move', ball: rival.id, to })) break;
-    if (!play({ kind: 'pass' })) break;
+    if (rival && rival.team === foe) {
+      /* The named tile first: the rival steps onto the mined square itself whenever the rules still
+         offer it, which is what makes the blast certain rather than hoped for. */
+      const opts = reachableBall(state, rival.id);
+      const to = opts.find((p) => sameCell(p, cell)) ?? tutorialRivalStep()?.to ?? null;
+      if (to) {
+        const saved = state.turn;
+        state = { ...state, turn: foe };
+        if (!play({ kind: 'move', ball: rival.id, to })) state = { ...state, turn: saved };
+      }
+    }
   }
+  /* The blast hands the turn down the table: step any secondary bots home and give the board back. */
+  await tutorialSecondaryBots();
+  if (state.winner === null && state.turn !== localSide) state = { ...state, turn: localSide };
   await new Promise<void>((res) => window.setTimeout(res, MINE_BLAST_READ_MS));
 }
 
 /**
- * STEP 10's setup. Once the blast has settled the rival drops one cheap bar on the edge directly
- * above the player's pawn — h(1, 7) covers columns 1-2 on the line above row 7, so it shuts the
- * straight step out of (2, 7) with zero empty tiles in between and leaves the left flank open. It
- * is committed through the very same `wallOk` gate a human placement uses (a legal corner against
- * v(3, 7)), with the rival's turn borrowed for this one action and handed straight back. The board
- * is then washed of every stale input mode — mine off, no ghost, no carried pick — so the pawn's own
- * move dots light up the moment the first dodge target is painted.
+ * STEP 10's setup. Once the blast has settled the rival drops one cheap bar flush on the edge directly
+ * above the player's pawn — h(1, 8) covers columns 1-2 on the line above row 8, so it shuts the
+ * straight step out of (2, 8) with zero empty tiles in between, meets v(3, 7) in a legal T-junction
+ * and leaves the left flank open. It is committed through the very same `wallOk` gate a human
+ * placement uses, with the rival's turn borrowed for this one action and handed straight back. The
+ * player's square is saved as the dodge anchor, and the board is washed of every stale input mode —
+ * mine off, no ghost, no carried pick — with the pawn already in hand, so its move dots light up the
+ * moment the first dodge target is painted and the highlighted square answers the very first tap.
  */
 async function tutorialCounterWall(): Promise<void> {
   const foe = rivalSide();
-  if (state.winner !== null || state.turn !== localSide) return;
-  /* the bar sits flush on the edge above the player's pawn: (2, 7) -> (2, 6) is walled off */
-  const spec: WallSpec = { o: 'h', x: 1, y: 7 };
+  if (state.winner !== null) return;
+  /* The borrowed beat starts from the player's turn: in a party the blast may have left it on a
+     secondary bot, so step them home first rather than skipping the wall. */
+  await tutorialSecondaryBots();
+  if (state.winner !== null) return;
+  if (state.turn !== localSide) state = { ...state, turn: localSide };
+  const ball = firstBall(state, localSide);
+  if (!ball) return;
+  /* The fixed anchor the four dodge tiles are measured from: the player's pawn square right now. */
+  tutDodgeAnchor = { ...ball.pos };
+  const spec: WallSpec = { o: 'h', x: ball.pos.c - 1, y: ball.pos.r };
   const wall: Wall = { ...spec, owner: foe };
   if (wallsRemaining(state, foe) > 0 && wallOk(state, wall)) {
     state = { ...state, turn: foe };
@@ -4894,7 +5012,8 @@ async function tutorialCounterWall(): Promise<void> {
   mineArmed = false;
   mineGhost = null;
   ghost = null;
-  setMode(BOARD_IDLE);
+  const pawn = firstBall(state, localSide);
+  setMode({ selected: pawn ? pawn.id : null, preview: null, mine: false });
   ui();
 }
 
@@ -4994,29 +5113,42 @@ function endTutorialMatch(): void {
 }
 
 /**
- * The comeback's deterministic opening: the FULL match start. Both pawns keep their true spawn
- * tiles — the exact layout a real 1v1 opens on — and NO rival charge is buried on the player's
- * lane, so the opening sprint is a smooth, unbroken advance with no knockback setback. The budgets,
- * the fog and the seat colours are all the race's own.
+ * The comeback's deterministic opening: the FULL match start, on every board size. The player holds
+ * column 2 and the primary rival column 5 on the baseline — the exact lanes the funnel and the
+ * relative left/right dodge are choreographed against — while any party seats keep their own spawn
+ * tiles. NO rival charge is buried on the player's lane, so the opening sprint is a smooth, unbroken
+ * advance with no knockback setback. The budgets, the fog and the seat colours are all the race's own.
  */
 function seedTutorialBoard(): void {
   tutScript = null;
-  if (state.balls.length !== 2 || state.cols < 6 || state.rows < 8) return;
+  tutDodgeAnchor = null;
+  if (state.balls.length < 2 || state.cols < 6 || state.rows < 8) return;
   const mine = firstBall(state, localSide);
   const foe = firstBall(state, rivalSide());
   if (!mine || !foe) return;
-  const layout = startLayout([1, 1], state.cols, state.rows);
-  const home = layout[localSide]?.[0];
-  const away = layout[rivalSide()]?.[0];
-  if (!home || !away || home.r < 4) return;
+  const homeRow = state.rows - 1;
+  if (homeRow < 4) return;
   /* the funnel anchor: the row the player reaches after three clean forward steps */
-  const funnelRow = home.r - 3;
-  tutScript = { rivalCol: away.c, funnelRow };
+  const funnelRow = homeRow - 3;
+  tutScript = { rivalCol: 5, funnelRow };
+  const used = new Set<number>([2, 5]);
+  const balls = state.balls.map((b) => {
+    if (b.id === mine.id) return { ...b, pos: { c: 2, r: homeRow }, isCheckmated: false };
+    if (b.id === foe.id) return { ...b, pos: { c: 5, r: homeRow }, isCheckmated: false };
+    /* A party seat keeps its spawn tile unless it already holds a seeded lane; then it slides to the
+       nearest free baseline column, so no two pawns ever share a square. */
+    let c = b.pos.c;
+    if (b.pos.r === homeRow && used.has(c)) {
+      c = 0;
+      while (c < state.cols && used.has(c)) c++;
+      if (c >= state.cols) c = b.pos.c;
+    }
+    used.add(c);
+    return { ...b, pos: { c, r: b.pos.r }, isCheckmated: false };
+  });
   state = {
     ...state,
-    balls: state.balls.map((b) => (b.id === mine.id
-      ? { ...b, pos: { ...home }, isCheckmated: false }
-      : { ...b, pos: { ...away }, isCheckmated: false })),
+    balls,
     walls: [],
     mines: [],
     wallsLeft: state.teams.map(() => wallBudget(state.balls.length)),
@@ -6090,6 +6222,16 @@ if (invitedRoom && !INVITE_FTUE) {
     if (inviteDoorDone) return;
     if (openInviteRoom(invitedRoom)) {
       inviteDoorDone = true;
+      /* The Play with Friends sheet is the front door for a room invite: the guest lands on the
+         roster — `Joining #5923…` on the wait line, the seats filling in — rather than on the
+         drawer's mode list. `openFriendDuel` reuses the membership `openInviteRoom` just took, so
+         this is one socket and one room, never a second handshake. The drawer's lobby stays behind
+         it as the fallback surface, and a shell without the sheet simply never opens it. */
+      if (openFriendDuel(invitedRoom)) {
+        try {
+          window.dispatchEvent(new CustomEvent('detour:friend-duel', { detail: { code: invitedRoom } }));
+        } catch { /* a shell without CustomEvent: the drawer's lobby is still up */ }
+      }
       return;
     }
     if (attempt < 12) window.setTimeout(() => openInvite(attempt + 1), 250);
