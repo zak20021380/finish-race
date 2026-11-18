@@ -82,7 +82,7 @@ import {
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
 import { initSeize, resetSeizeContext } from './seize';
-import type { Lobby, LobbyRace } from './lobby';
+import type { Lobby, LobbyRace, RematchState } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
 } from './matchmaking';
@@ -294,6 +294,10 @@ const againIco = document.getElementById('again-ico') as SVGUseElement | null;
 const shareBtn = $<HTMLButtonElement>('share');
 const shareLabel = $<HTMLSpanElement>('share-label');
 const toMenuLabel = $<HTMLSpanElement>('menu-label');
+/* the friends room's rematch consensus: one line of live progress and the decline key */
+const rematchBar = $<HTMLElement>('result-rematch');
+const rematchBarText = $<HTMLElement>('result-rematch-t');
+const rematchDeclineBtn = $<HTMLButtonElement>('result-rematch-decline');
 /* every toast on the page: the board's own, and the shop's copy of it. One message goes to all of
    them, so the note speaks on whichever screen is up; the hidden one costs nothing. */
 const noteEls = [...document.querySelectorAll<HTMLParagraphElement>('.note')];
@@ -1712,6 +1716,8 @@ let stakeMorphing = false;
 let resultTimers: number[] = [];
 /** The rival walked out of the settled race: the rematch key and the banter dock are dead. */
 let resultLocked = false;
+/** The friends room's live rematch consensus, or null outside a friends match. */
+let rematchState: RematchState | null = null;
 
 /** Stop every clock the result owns: the count-up and the haptic beats. */
 function clearResultMotion() {
@@ -1830,6 +1836,36 @@ function finalStandings(): Player[] {
   return [...champions, ...rest];
 }
 
+/**
+ * THE SEAT'S LIVE VERDICT. A friends capsule paints one pill per row: a green check when that
+ * player is ready for the rematch, a muted LEFT when their chair is gone. Stroke-only, tinted by
+ * CSS, never a pictograph.
+ */
+function statusCheck(): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'result-ready-ico');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const d = document.createElementNS(NS, 'path');
+  d.setAttribute('d', 'M4.5 12.6 9.6 17.7 19.5 6.9');
+  d.setAttribute('fill', 'none');
+  d.setAttribute('stroke', 'currentColor');
+  d.setAttribute('stroke-width', '3');
+  d.setAttribute('stroke-linecap', 'round');
+  d.setAttribute('stroke-linejoin', 'round');
+  svg.append(d);
+  return svg;
+}
+
+/** A friends / private-room match: its capsule votes a rematch, never random matchmaking. */
+const friendsMatch = (): boolean => !!active && 'seats' in active;
+
+/** The consensus says nothing more can happen: the key reads a reason and is dead. */
+const rematchDead = (): boolean => friendsMatch() && !!rematchState
+  && (rematchState.status === 'unavailable' || rematchState.requiredCount < 2);
+
 /** The gold #1 badge: the same crown the winner used to wear over a podium portrait. */
 function crownMark(): SVGElement {
   const NS = 'http://www.w3.org/2000/svg';
@@ -1908,6 +1944,11 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   placeEl.className = 'result-place';
   placeEl.textContent = placeLabel;
   meta.append(placeEl);
+  /* the live rematch verdict this seat carries: filled by `paintRematchUi()` */
+  const ready = document.createElement('span');
+  ready.className = 'result-ready';
+  ready.hidden = true;
+  meta.append(ready);
   if (local) {
     const you = document.createElement('span');
     you.className = 'result-you';
@@ -1976,12 +2017,17 @@ function paintResultCopy(): void {
   /* one hairline per shared edge: coin|xp, xp|tiq — or coin|tiq when XP paid nothing */
   resultBankDivA.hidden = !(showCoins && showXp);
   resultBankDivB.hidden = !((showXp && showTiq) || (showCoins && showTiq && !showXp));
-  shareBtn.hidden = !won;
+  /* A FRIENDS CAPSULE OWNS ONE TEAL KEY. The duel challenge is a lobby door — there is nobody to
+     challenge in a room the player just raced, and a second call to action there is noise. */
+  shareBtn.hidden = !won || friendsMatch();
+  resultBank.dataset.paid = String(paid);
+  resultBank.classList.toggle('is-staked', staked);
   again.classList.toggle('is-revenge', !won);
   againIco?.setAttribute('href', won ? '#i-play' : '#i-restart');
   paintResultLock();
   paintRewardButtons();
   paintResultRoster();
+  paintRematchUi();
   /* a language flip can land while the consent sheet is up: its warning must switch too */
   paintAdConfirmCopy();
 }
@@ -1993,16 +2039,152 @@ function paintResultCopy(): void {
  */
 function paintResultLock(): void {
   if (!resultView) return;
-  again.disabled = resultLocked;
-  again.classList.toggle('is-locked', resultLocked);
-  const againText = resultLocked
-    ? t('resultOpponentLeft')
-    : t(resultView.won ? 'resultPlayAgain' : 'resultRevenge');
+  const friends = friendsMatch();
+  const dead = rematchDead();
+  const waiting = friends && rematchState?.votes?.[localSide] === 'accepted';
+  again.disabled = resultLocked || dead || !!waiting;
+  again.classList.toggle('is-locked', resultLocked || dead);
+  const againText = resultLocked ? t('resultOpponentLeft') : primaryLabel();
   againLabel.textContent = againText;
   /* the key's spoken name follows the visible one in every language, locked or not */
   again.setAttribute('aria-label', againText);
   if (resultLocked) again.title = t('resultOpponentLeftHint');
   else again.removeAttribute('title');
+}
+
+/**
+ * THE PRIMARY KEY'S ONE SENTENCE. Outside a friends room it is the old pair — Play again, or the
+ * revenge line after a loss. Inside one it is the live consensus: `REMATCH` before anybody votes,
+ * `ACCEPT REMATCH (1/2)` when the room is waiting on this seat, the exact progress while this seat
+ * waits on the others, and the reason once the rematch is dead. Latin digits throughout.
+ */
+function primaryLabel(): string {
+  if (!resultView) return t('resultPlayAgain');
+  if (!friendsMatch()) return t(resultView.won ? 'resultPlayAgain' : 'resultRevenge');
+  const state = rematchState;
+  if (state && (state.status === 'unavailable' || state.requiredCount < 2)) {
+    if (state.reason === 'RIVAL_LEFT') return t('resultRematchRivalLeft');
+    if (state.reason === 'RIVAL_DECLINED') return t('resultRematchRivalDeclined');
+    return t('resultRematchNotEnough');
+  }
+  const total = Math.max(2, sizes.length);
+  const accepted = state?.acceptedCount ?? 0;
+  const you = state?.votes?.[localSide] ?? 'pending';
+  if (you === 'accepted') {
+    const key = total <= 2 ? 'resultRematchWaitingDuel' : 'resultRematchWaitingParty';
+    return t(key).replace('{n}', String(Math.max(1, accepted))).replace('{total}', String(total));
+  }
+  if (accepted > 0) {
+    return t('resultRematchAccept')
+      .replace('{n}', String(accepted))
+      .replace('{total}', String(total));
+  }
+  return t('resultRematch');
+}
+
+/**
+ * The capsule's consensus surface: the progress line over the actions, the decline key a seat that
+ * was asked needs, and one live pill per standings row. Every label here comes from the room —
+ * this client never decides that a rematch started, and never decides that one is impossible.
+ */
+function paintRematchUi(): void {
+  if (!resultView || !friendsMatch()) {
+    rematchBar.hidden = true;
+    rematchDeclineBtn.hidden = true;
+    rematchBarText.textContent = '';
+    paintRematchPills();
+    return;
+  }
+  const state = rematchState;
+  const total = Math.max(2, sizes.length);
+  const accepted = state?.acceptedCount ?? 0;
+  const you = state?.votes?.[localSide] ?? 'pending';
+  const dir = langDef(lang).dir;
+  rematchBar.hidden = false;
+  rematchBarText.dir = dir;
+  rematchBarText.textContent = state && state.status === 'unavailable'
+    ? (state.reason === 'RIVAL_DECLINED' ? t('resultRematchRivalDeclined')
+      : state.reason === 'RIVAL_LEFT' ? t('resultRematchRivalLeft')
+        : t('resultRematchNotEnough'))
+    : `${t('resultRematchAria')} ${accepted}/${total}`;
+  /* The decline key is the answer to a request, never a second way to start one. */
+  const asked = you !== 'accepted' && accepted > 0 && !rematchDead();
+  rematchDeclineBtn.hidden = !asked;
+  rematchDeclineBtn.textContent = t('resultRematchDecline');
+  rematchDeclineBtn.setAttribute('aria-label', t('resultRematchDecline'));
+  paintRematchPills();
+}
+
+/**
+ * One pill per standings row: this player's live verdict. A chair struck from the board reads
+ * LEFT whatever its vote said, so the capsule never promises a rematch with someone who is gone.
+ */
+function paintRematchPills(): void {
+  const friends = !!resultView && friendsMatch();
+  const votes = rematchState?.votes ?? null;
+  for (const row of Array.from(resultRoster.children) as HTMLElement[]) {
+    const pill = row.querySelector<HTMLElement>('.result-ready');
+    if (!pill) continue;
+    if (!friends) { pill.hidden = true; continue; }
+    const seat = Number(row.dataset.seat);
+    if (!Number.isInteger(seat)) { pill.hidden = true; continue; }
+    const gone = isLeft(state, seat as Player) || votes?.[seat] === 'declined';
+    if (gone) {
+      pill.hidden = false;
+      pill.classList.add('is-left');
+      pill.replaceChildren(document.createTextNode(t('resultRematchLeft')));
+      continue;
+    }
+    if (votes?.[seat] === 'accepted') {
+      pill.hidden = false;
+      pill.classList.remove('is-left');
+      pill.replaceChildren(statusCheck(), document.createTextNode(t('resultRematchReady')));
+      continue;
+    }
+    pill.hidden = true;
+    pill.classList.remove('is-left');
+  }
+}
+
+/**
+ * ASK FOR THE REMATCH. The only door a friends capsule has into another board: one vote on the
+ * room that is already open. This function can never reach a queue — that is the whole point of
+ * the branch above it in the key's handler.
+ */
+function requestRematch(): void {
+  if (!active || !('seats' in active)) return;
+  if (rematchDead()) { notify('error'); paintRematchUi(); return; }
+  if (rematchState?.votes?.[localSide] === 'accepted') return;
+  if (!active.sendRematchVote('accepted')) {
+    showNote(t('resultOpponentLeftHint'), true, 2200);
+    return;
+  }
+  const cast = rematchState?.votes ?? {};
+  rematchState = {
+    votes: { ...cast, [localSide]: 'accepted' },
+    acceptedCount: (rematchState?.acceptedCount ?? 0) + 1,
+    requiredCount: rematchState?.requiredCount ?? Math.max(2, sizes.length),
+    status: 'pending',
+    round: rematchState?.round ?? 1,
+  };
+  paintRematchUi();
+  paintResultLock();
+}
+
+/** Decline the rematch this seat was asked for. The room re-reads its quorum immediately. */
+function declineRematch(): void {
+  if (!active || !('seats' in active)) return;
+  if (!active.sendRematchVote('declined')) return;
+  const cast = rematchState?.votes ?? {};
+  rematchState = {
+    votes: { ...cast, [localSide]: 'declined' },
+    acceptedCount: rematchState?.acceptedCount ?? 0,
+    requiredCount: rematchState?.requiredCount ?? Math.max(2, sizes.length),
+    status: 'pending',
+    round: rematchState?.round ?? 1,
+  };
+  paintRematchUi();
+  paintResultLock();
 }
 
 /**
@@ -3424,6 +3606,7 @@ function restart() {
   closeAdConfirm(false);
   resultView = null;
   resultLocked = false;
+  rematchState = null;
   closeVipSheet();
   banter.close();
   overlayOpen = false;
@@ -4028,6 +4211,26 @@ function startGame(setup: StartSetup) {
       /* An explicit forfeit carries the worker's whole verdict, not just the struck chair. */
       session.onForfeit?.((info) => opponentForfeited(info));
       session.onSync((next, turnLeftMs, presence) => applyRoomSnapshot(next, turnLeftMs, presence));
+      /* THE CAPSULE'S CONSENSUS. The worker owns the quorum; this screen only paints it and asks
+         for a vote when the player taps the teal key. A quorum that lands rebuilds the board this
+         socket already holds — never a queue, never a fresh room. */
+      session.onRematchState((next) => {
+        rematchState = next;
+        if (!overlayOpen) return;
+        paintRematchUi();
+        paintResultLock();
+      });
+      session.onRematchStart(() => {
+        rematchState = null;
+        clearResultMotion();
+        stopVictoryFanfare();
+        stopDefeat();
+        /* `restart()` is the board's own fresh draw: it hides the capsule, rebuilds the pawns and
+           starts the clock, and the room's `ROOM_SYNC` that followed `REMATCH_START` lands on it
+           through `applyRoomSnapshot` to make the two boards identical. */
+        restart();
+        router.go('game');
+      });
       /* A chair already struck before this screen mounted: a reconnect into a race that moved on
          without us. The roster carries the verdict, so the board opens on it instead of catching
          up a frame later. */
@@ -5695,6 +5898,10 @@ $('pause-tutorial').addEventListener('click', () => {
 again.addEventListener('click', () => {
   /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
   impact(localWon() ? 'medium' : 'heavy');
+  /* NEVER ROUTE A FRIENDS REMATCH TO THE QUEUE. A private room's next board is a vote on the room
+     the player is already seated in; queueing here would drop the friends they just raced and put
+     them in front of strangers. This branch is the only thing a friends capsule can do. */
+  if (active && 'seats' in active) { requestRematch(); return; }
   clearResultMotion();
   /* Play again and Rematch both leave this result behind: the celebration (or the defeat sting)
      goes with it */
@@ -5721,7 +5928,15 @@ shareBtn.addEventListener('click', () => {
   quitToMenu();
   throwDuelChallenge();
 });
-toMenu.addEventListener('click', () => { impact('light'); clearResultMotion(); quitToMenu(); });
+rematchDeclineBtn.addEventListener('click', () => { impact('light'); declineRematch(); });
+toMenu.addEventListener('click', () => {
+  impact('light');
+  clearResultMotion();
+  /* A settled friends room hears the exit before the screen leaves, so the remaining players'
+     consensus updates on this beat instead of waiting out a reconnect grace. */
+  if (active && 'seats' in active) active.leaveRoom();
+  quitToMenu();
+});
 menuBtn.addEventListener('click', () => {
   if (tutorialActive || state.winner !== null) return;
   impact('light');

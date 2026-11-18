@@ -159,6 +159,12 @@
   min-width: 0;
   max-width: 100%;
   padding: 1px 1px 2px;
+  /* the strip's scroll end owns its own breathing room, so the third pill fades out mid-word
+     instead of being sliced by the capsule's edge */
+  padding-inline-end: 20px;
+  /* a soft edge fade on the scrollport's end: the carousel reads as continuing, not truncated */
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -167,6 +173,18 @@
   -webkit-overflow-scrolling: touch;
 }
 .banter-quick::-webkit-scrollbar { display: none; }
+/* the joined scripts scroll the other way: the fade follows the inline end, not the pixel left */
+.banter-quick[dir="rtl"] {
+  -webkit-mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+}
+.banter-chip-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #D8B76C;
+  opacity: .92;
+}
 .banter-chip {
   appearance: none;
   display: inline-flex;
@@ -208,6 +226,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* legacy labels that still carry a trailing token: the box keeps it whole at the terminal edge */
 .banter-chip-e {
   flex: none;
   line-height: 1;
@@ -364,6 +383,58 @@ form.banter-custom:focus-within {
 .result-banter.is-denied .banter-gate {
   animation: banter-deny .5s cubic-bezier(.3, .9, .3, 1);
 }
+
+/* ---- THE UNIFIED VIP PILL
+   Crown at the start, the prompt in the middle, and the VIP + lock closed into one tail at the
+   end. The whole row is a single interactive control, so tapping anywhere on the locked capsule
+   opens the store instead of only the badge doing it. */
+.banter-gate {
+  justify-content: flex-start;
+  gap: 8px;
+  height: 36px;
+  padding-inline: 11px 5px;
+  cursor: pointer;
+  text-align: start;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.banter-gate .banter-gate-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: start;
+}
+.banter-gate-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid rgba(243, 212, 131, .3);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(243, 212, 131, .15), rgba(243, 212, 131, .04));
+  box-shadow: inset 0 1px 0 rgba(255, 246, 220, .12);
+}
+.banter-gate .banter-gate-vip {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #F5DEA8;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  line-height: 1.5;
+}
+.banter-gate .banter-gate-lock {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 0;
+  background: none;
+  color: #E7C87C;
+}
+.banter-gate .banter-gate-lock .ico { width: 11px; height: 11px; }
 
 /* the opponent-left badge: the first thing read after the verdict */
 .banter-alert {

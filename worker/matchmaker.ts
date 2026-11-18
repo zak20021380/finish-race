@@ -134,6 +134,9 @@ type ClientMessage =
      that ID, while `text` is the VIP custom line — checked against the seat's signed entitlement
      in `relayPostChat`, so a free seat cannot type its way past the gate. */
   | { type: 'POST_MATCH_CHAT'; text?: string; preset?: string }
+  /* The post-match rematch consensus: any seated player may accept or decline. The room owns the
+     quorum — a client never decides that a rematch started. */
+  | { type: 'REMATCH_VOTE'; vote: 'accepted' | 'declined' }
   /* An explicit forfeit: the player pressed Leave, confirmed it, and this frame is their verdict.
      Distinct from a socket that simply died — this one must never hand the chair to a bot. */
   | { type: 'FORFEIT' }
@@ -414,6 +417,25 @@ interface LiveRoom {
    * gap (a dropped relay) and ask for the authoritative snapshot instead of drifting out of turn.
    */
   seq: number;
+  /**
+   * True once the board has reached its verdict and been paid. A settled room is KEPT (never
+   * deleted mid-capsule) so its friends can vote a rematch on the very sockets they are already
+   * holding; the flag is what stops a second settlement paying the same race twice.
+   */
+  settled?: boolean;
+  /**
+   * True while this settled room is collecting rematch votes. Cleared the moment a fresh board
+   * launches, so a late vote can never be read against the board it already replaced.
+   */
+  rematchOpen?: boolean;
+  /** Seat → that player's verdict. Only seats still holding a member appear here. */
+  rematchVotes?: Record<number, 'pending' | 'accepted' | 'declined'>;
+  /** How many rematches this room has already played: the opening seat rotates with it. */
+  rematchCount?: number;
+  /** The last consensus frame this room broadcast: the sweep re-reads it without spamming. */
+  rematchSig?: string;
+  /** Why the consensus died (`RIVAL_LEFT` / `RIVAL_DECLINED` / `NOT_ENOUGH_PLAYERS`). */
+  rematchReason?: string;
 }
 
 /** Where a socket sits: which room, and which seat in it. */
@@ -1861,7 +1883,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
       preset?: unknown; targetUserId?: unknown; relicId?: unknown; relicSerial?: unknown; challengeId?: unknown;
-      code?: unknown; moveId?: unknown;
+      code?: unknown; moveId?: unknown; vote?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1934,6 +1956,12 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       const preset = isPostChatPreset(msg.preset) ? msg.preset : undefined;
       const text = readPostChatText(msg.text) ?? undefined;
       return preset || text ? { type: 'POST_MATCH_CHAT', preset, text } : null;
+    }
+    if (msg.type === 'REMATCH_VOTE') {
+      /* Only the two answers a capsule can send. Anything else is a malformed frame, not a vote. */
+      if (msg.vote === 'accepted') return { type: 'REMATCH_VOTE', vote: 'accepted' };
+      if (msg.vote === 'declined') return { type: 'REMATCH_VOTE', vote: 'declined' };
+      return null;
     }
     if (msg.type === 'RELIC_CHALLENGE_SEND') {
       const targetUserId = readSeatId(msg.targetUserId);
@@ -7806,7 +7834,7 @@ export class MatchmakerDO {
       if (driver.state.winner !== null) {
         live.turnDeadlineMs = 0;
         this.finishRoom(live, driver.state.winner);
-        this.rooms.delete(live.matchId);
+        this.retireFinished(live);
       }
       return;
     }
@@ -7866,6 +7894,9 @@ export class MatchmakerDO {
         }
       }
       this.enforceRoomTurn(live, now);
+      /* A settled friends room keeps its capsule's consensus fresh: a rival who closed the tab
+         shrinks the quorum the moment the sweep notices, so nobody waits on a gone chair. */
+      if (live.rematchOpen) this.broadcastRematch(live, false);
       for (let i = 0; i < live.members.length; i++) {
         const m = live.members[i];
         if (!m || m.connected || m.droppedAt <= 0) continue;
@@ -8074,6 +8105,11 @@ export class MatchmakerDO {
       if (member) this.relayPostChat(member.ws, msg);
       return;
     }
+    if (msg.type === 'REMATCH_VOTE') {
+      /* The capsule's consensus: only a settled friends room has anything to answer. */
+      this.rematchVote(ref, msg.vote);
+      return;
+    }
     if (msg.type === 'SYNC_REQ') {
       /* A seat that suspects drift asks for the board; the answer is the same authoritative
          snapshot a reconnect receives, so one repair path serves both. */
@@ -8149,6 +8185,15 @@ export class MatchmakerDO {
         this.kickPlayer(live, msg.side);
         return;
       }
+      return;
+    }
+    /* A SETTLED BOARD ACCEPTS NO MOVES. The capsule's verbs are the chat lanes above and the two
+       ways out: a rematch vote, or walking to the main menu. A leave here frees the chair on the
+       same beat, so the remaining friends' quorum can never wait on a person who is gone. */
+    if (live.driver.state.winner !== null
+      && (msg.type === 'LEAVE_ROOM' || msg.type === 'LEAVE' || msg.type === 'CANCEL'
+        || msg.type === 'FORFEIT' || msg.type === 'RESIGN')) {
+      this.leaveSettledRoom(ref);
       return;
     }
     if (msg.type === 'EMOTE') {
@@ -8229,8 +8274,193 @@ export class MatchmakerDO {
     if (live.driver.state.winner !== null) {
       live.turnDeadlineMs = 0;
       this.finishRoom(live, live.driver.state.winner);
-      this.rooms.delete(live.matchId);
+      this.retireFinished(live);
     }
+  }
+
+  /**
+   * THE POST-MATCH CAPSULE'S ROOM. A friends room is NOT torn down when its board settles: the
+   * code, the format and every connected seat stay alive so the same people can vote a rematch on
+   * the sockets they already hold. Only a room that could not possibly rematch (a random pairing,
+   * or fewer than two people left at their screens) is closed here.
+   */
+  private retireFinished(live: LiveRoom): void {
+    const alive = this.rematchActiveSeats(live);
+    if (!live.code || alive.length < 2) {
+      this.rooms.delete(live.matchId);
+      return;
+    }
+    live.rematchOpen = true;
+    live.rematchCount = 0;
+    live.rematchReason = undefined;
+    live.rematchSig = undefined;
+    live.turnDeadlineMs = 0;
+    live.rematchVotes = {};
+    for (let i = 0; i < live.members.length; i++) if (live.members[i]) live.rematchVotes[i] = 'pending';
+    this.broadcastRematch(live);
+  }
+
+  /**
+   * Every seat that can still play the rematch: a real member, at its socket, not struck from the
+   * board and not having declined. The count is the quorum — a party of four whose fourth walked
+   * out needs three, and one whose second declined needs the remaining two, so nobody can be
+   * blocked forever by a chair that is no longer in the room.
+   */
+  private rematchActiveSeats(live: LiveRoom): number[] {
+    const driver = live.driver;
+    const out: number[] = [];
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m || !m.connected) continue;
+      if (driver && isLeft(driver.state, i)) continue;
+      if (live.rematchVotes?.[i] === 'declined') continue;
+      out.push(i);
+    }
+    return out;
+  }
+
+  /**
+   * One `REMATCH_STATE` to every socket in the room: who has answered, how many are needed, and
+   * whether the board is coming back. The one write path for the capsule's consensus UI.
+   */
+  private broadcastRematch(live: LiveRoom, force = true): void {
+    const active = this.rematchActiveSeats(live);
+    const cast = live.rematchVotes ?? {};
+    const accepted = active.filter((seat) => cast[seat] === 'accepted');
+    const requiredCount = active.length;
+    const votes: Record<string, 'pending' | 'accepted' | 'declined'> = {};
+    for (let i = 0; i < live.members.length; i++) {
+      if (!live.members[i]) continue;
+      votes[String(i)] = cast[i] ?? 'pending';
+    }
+    const unavailable = !live.rematchOpen || requiredCount < 2;
+    /* The sweep re-reads a settled room on every pass: only a genuinely new consensus is sent. */
+    const sig = `${unavailable ? 'un' : 'ok'}|${requiredCount}|${accepted.join(',')}|${JSON.stringify(votes)}`;
+    if (!force && sig === live.rematchSig) return;
+    live.rematchSig = sig;
+    const frame = JSON.stringify({
+      type: 'REMATCH_STATE',
+      votes,
+      acceptedCount: accepted.length,
+      requiredCount,
+      status: unavailable ? 'unavailable' : 'pending',
+      reason: unavailable ? (live.rematchReason ?? 'NOT_ENOUGH_PLAYERS') : undefined,
+      round: (live.rematchCount ?? 0) + 1,
+    });
+    for (const m of live.members) {
+      if (m && m.connected) this.postTo(m.ws, frame);
+    }
+  }
+
+  /**
+   * A vote from a seated player. A decline is final for that seat and shrinks the quorum at once;
+   * the quorum itself is re-checked on every vote, so a room that reaches it launches on the same
+   * frame — never on a timer, never on a client's own guess.
+   */
+  private rematchVote(ref: RoomRef, vote: 'accepted' | 'declined'): void {
+    const live = ref.live;
+    if (!live.rematchOpen || !live.driver || live.driver.state.winner === null) return;
+    if (!live.members[ref.seat]) return;
+    /* A refused rematch is not a rematch: the room stays settled and says so. */
+    live.rematchVotes = { ...(live.rematchVotes ?? {}), [ref.seat]: vote };
+    const active = this.rematchActiveSeats(live);
+    /* A decline is the reason a duel cannot continue; a party that still has two players is
+       simply a smaller rematch, so the reason only names a rival when there is one rival. */
+    if (vote === 'declined' && active.length < 2) {
+      live.rematchReason = live.size <= 2 ? 'RIVAL_DECLINED' : 'NOT_ENOUGH_PLAYERS';
+    }
+    const accepted = active.filter((seat) => live.rematchVotes?.[seat] === 'accepted');
+    if (active.length >= 2 && accepted.length >= active.length) {
+      this.restartRematch(live);
+      return;
+    }
+    this.broadcastRematch(live);
+  }
+
+  /**
+   * QUORUM REACHED. A brand-new board is built for the same seats, on the same room, and handed
+   * to everyone on the same beat: `REMATCH_START` names the fresh round and `ROOM_SYNC` carries
+   * its authoritative state, so no seat ever opens a board the others are not on. The opening seat
+   * rotates one human chair per rematch so the same player never leads every game.
+   */
+  private restartRematch(live: LiveRoom): void {
+    const previous = live.driver;
+    if (!previous) return;
+    live.rematchOpen = false;
+    const previousId = live.matchId;
+    live.rematchVotes = {};
+    live.rematchReason = undefined;
+    live.rematchSig = undefined;
+    live.rematchCount = (live.rematchCount ?? 0) + 1;
+    live.settled = false;
+    live.counted = false;
+    live.driver = createRoomDriver(live.room, live.mode === 'team' ? live.teams : undefined);
+    live.seed = hash(`${live.room.code}|rematch|${live.rematchCount}|${live.members.map((m) => m?.id ?? 'bot').join('|')}`);
+    live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
+    live.startedAt = Date.now();
+    live.seq = 0;
+    live.disconnectBotMoves = [];
+    if (previousId && previousId !== live.matchId) this.rooms.delete(previousId);
+    this.rooms.set(live.matchId, live);
+    /* ROTATED OPENING: walk the turn past the last leader, one human chair at a time. A pass is a
+       legal action, so this cannot wedge the board; a machine chair is left where the board put it. */
+    for (let i = 0; i < live.size; i++) {
+      const seat = live.driver.state.turn;
+      if (!isAutomated(live.room, seat)) break;
+      if (!live.driver.submit(seat, { kind: 'pass' }).ok) break;
+    }
+    for (const m of live.members) {
+      if (!m) continue;
+      if (!m.connected) continue;
+      this.setInMatch(m.id, true);
+      this.postTo(m.ws, JSON.stringify({
+        type: 'REMATCH_START',
+        matchId: live.matchId,
+        seed: live.seed,
+        seq: live.seq,
+        round: live.rematchCount + 1,
+      }));
+      this.postTo(m.ws, this.roomSyncMessage(live));
+    }
+    this.armRoomTurn(live);
+    const opening = live.driver.state;
+    this.pushRoomEvents(live, live.driver.runBots(this.substituteBudget(live)));
+    this.countBoard(opening, live.driver.state);
+    this.armRoomTurn(live);
+    this.rearm();
+  }
+
+  /**
+   * A seat walked out of a settled capsule (`MAIN MENU`). The chair is freed, the remaining
+   * players' consensus is re-read immediately, and the last person out closes the room.
+   */
+  private leaveSettledRoom(ref: RoomRef): void {
+    const live = ref.live;
+    const member = live.members[ref.seat];
+    if (member) {
+      this.refs.delete(member.ws);
+      this.setInMatch(member.id, false);
+      try {
+        member.ws.close(1000, 'left');
+      } catch {
+        /* the socket is already gone */
+      }
+      live.members[ref.seat] = null;
+    }
+    if (!live.members.some((m) => m !== null)) {
+      this.rooms.delete(live.matchId);
+      this.rearm();
+      return;
+    }
+    if (live.rematchOpen) {
+      live.rematchVotes = { ...(live.rematchVotes ?? {}), [ref.seat]: 'declined' };
+      /* The players who are still here hear exactly why the board cannot come back. */
+      live.rematchReason = this.rematchActiveSeats(live).length < 2
+        ? (live.size <= 2 ? 'RIVAL_LEFT' : 'NOT_ENOUGH_PLAYERS')
+        : live.rematchReason;
+    }
+    this.broadcastRematch(live);
+    this.rearm();
   }
 
   /**
@@ -8244,6 +8474,9 @@ export class MatchmakerDO {
     /* One race is paid once. A seat struck mid-batch settles the room inside `pushRoomEvents`,
        and the caller that batch belongs to still reaches its own finish line afterwards. */
     if (!this.rooms.has(live.matchId)) return {};
+    /* A kept room outlives its verdict, so the paid-once guard is the room's own flag now. */
+    if (live.settled) return {};
+    live.settled = true;
     this.completeRoom(live);
     const tiqDeltas = this.awardRoomWin(live, winner);
     const humans: RoomMember[] = [];
@@ -8431,7 +8664,7 @@ export class MatchmakerDO {
     if (driver.state.winner !== null) {
       live.turnDeadlineMs = 0;
       Object.assign(tiqDeltas, this.finishRoom(live, driver.state.winner));
-      this.rooms.delete(live.matchId);
+      this.retireFinished(live);
     }
     /* The announcement carries the whole verdict — who left, what it cost, who won, who is still
        in — so every remaining screen paints the same banner, the same ash pawn and the same stake

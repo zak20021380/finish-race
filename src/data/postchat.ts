@@ -38,11 +38,11 @@ export interface PostChatQuickChat extends PostChatPreset {
  * admiration. Every line is deliberately safe to receive from a stranger.
  */
 export const POST_CHAT_QUICK_CHATS: readonly PostChatQuickChat[] = [
-  { id: 'rematch', en: 'One more round? 🔄', fa: 'یک دست دیگه؟ 🔄' },
-  { id: 'respect', en: 'Well played! 🤝', fa: 'دمت گرم بازی خوبی بود 🤝' },
-  { id: 'banter', en: 'Lucky break! 😉', fa: 'شانس آوردی! 😉' },
+  { id: 'rematch', en: 'One more round?', fa: 'یک دست دیگه؟' },
+  { id: 'respect', en: 'Well played!', fa: 'دمت گرم بازی خوبی بود' },
+  { id: 'banter', en: 'Lucky break!', fa: 'شانس آوردی!' },
   { id: 'vengeance', en: 'Rematch pending!', fa: 'دست بعد جبران می‌کنم!' },
-  { id: 'admire', en: 'Genius move! 🧠', fa: 'حرکتت خیلی تمیز بود! 🧠' },
+  { id: 'admire', en: 'Genius move!', fa: 'حرکتت خیلی تمیز بود!' },
 ];
 
 /**

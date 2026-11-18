@@ -220,6 +220,29 @@ export interface LobbyRaceSeat {
  * HUD would otherwise paint as "the rival"; a room names all four from its roster, so it is only a
  * fallback for the two-seat case.
  */
+/** One seat's answer in the post-match rematch consensus. */
+export type RematchVote = 'pending' | 'accepted' | 'declined';
+
+/**
+ * The room's authoritative rematch consensus, exactly as `REMATCH_STATE` carries it. The server owns
+ * the quorum — `requiredCount` is the number of seats still in the room and not declining — so a
+ * client never decides for itself that a rematch started.
+ */
+export interface RematchState {
+  /** Seat → that player's verdict. */
+  votes: Record<number, RematchVote>;
+  /** How many seats have accepted right now. */
+  acceptedCount: number;
+  /** How many are needed: the remaining active players, shrunk by every leave and decline. */
+  requiredCount: number;
+  /** `unavailable` means the room cannot play on (a rival left, declined, or too few people). */
+  status: 'pending' | 'unavailable';
+  /** `RIVAL_LEFT`, `RIVAL_DECLINED`, `NOT_ENOUGH_PLAYERS` — the reason the button is dead. */
+  reason?: string;
+  /** 1-based round of the rematch this consensus is collecting for. */
+  round: number;
+}
+
 export interface LobbyRace {
   matchId: string;
   seed: number;
@@ -238,6 +261,17 @@ export interface LobbyRace {
   sendChat(text: string): boolean;
   /** Send one post-match line to the other seats. False when the socket is gone. */
   sendPostMatchChat(line: PostChatLine): boolean;
+  /** Send this seat's rematch vote to the room. False when the socket is gone. */
+  sendRematchVote(vote: 'accepted' | 'declined'): boolean;
+  /** The room's consensus changed: who accepted, how many are needed, and whether it is dead. */
+  onRematchState(cb: (state: RematchState) => void): void;
+  /** The quorum was reached: a fresh board is live and its snapshot is on its way. */
+  onRematchStart(cb: (info: { round: number }) => void): void;
+  /**
+   * Tell the room this seat is walking out of a settled capsule (`MAIN MENU`), so the remaining
+   * players' consensus updates on the same beat instead of waiting out a reconnect grace.
+   */
+  leaveRoom(): boolean;
   resign(): void;
   close(): void;
   onMove(cb: (action: Action, side: number) => void): void;
@@ -588,6 +622,9 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const racePhrases: Array<(lang: ChatLang, index: number, side: number) => void> = [];
   const raceChats: Array<(text: string, side: number, vip: boolean) => void> = [];
   const racePosts: Array<(line: PostChatLine, side: number, vip: boolean) => void> = [];
+  /** The post-match rematch consensus: every `REMATCH_STATE`, and the quorum being reached. */
+  const raceRematches: Array<(state: RematchState) => void> = [];
+  const raceRematchStarts: Array<(info: { round: number }) => void> = [];
   /** Seats a person walked out of; `SEAT_BOT` is the machine taking the chair over. */
   const raceGone = new Set<number>();
   /** Seats struck from the race for good; `SEAT_LEFT` is the disconnect allowance running out. */
@@ -909,6 +946,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
           sendChat: (text) => send({ type: 'CHAT', text }),
           sendPostMatchChat: (line) => send({ type: 'POST_MATCH_CHAT', ...line }),
+          sendRematchVote: (vote) => send({ type: 'REMATCH_VOTE', vote }),
+          leaveRoom: () => send({ type: 'LEAVE_ROOM' }),
           resign: () => { forfeiting = true; send({ type: 'FORFEIT' }); },
           close: () => {
             /* This is the screen walking away from the race, not a network drop: no reconnect may
@@ -936,6 +975,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           onPhrase: (cb) => { racePhrases.push(cb); },
           onChat: (cb) => { raceChats.push(cb); },
           onPostChat: (cb) => { racePosts.push(cb); },
+          onRematchState: (cb) => { raceRematches.push(cb); },
+          onRematchStart: (cb) => { raceRematchStarts.push(cb); },
           onPeerStatus: (cb) => { racePeers.push(cb); },
           onSeatLeft: (cb) => { raceSeatLefts.push(cb); },
           onForfeit: (cb) => { raceForfeits.push(cb); },
@@ -1041,6 +1082,38 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
         if (!text) return;
         for (const cb of racePosts) cb({ text }, Number(msg.side) || 0, vip);
+        return;
+      }
+      case 'REMATCH_STATE': {
+        /* The room's consensus, already judged: this client only paints it. Unknown seats are
+           dropped and an unreadable status falls back to "still collecting". */
+        const raw = (msg.votes && typeof msg.votes === 'object')
+          ? msg.votes as Record<string, unknown> : {};
+        const votes: Record<number, RematchVote> = {};
+        for (const [key, value] of Object.entries(raw)) {
+          const seat = Number(key);
+          if (!Number.isInteger(seat) || seat < 0) continue;
+          votes[seat] = value === 'accepted' ? 'accepted' : value === 'declined' ? 'declined' : 'pending';
+        }
+        const accepted = Number(msg.acceptedCount);
+        const required = Number(msg.requiredCount);
+        const round = Number(msg.round);
+        const state: RematchState = {
+          votes,
+          acceptedCount: Number.isFinite(accepted) ? Math.max(0, accepted) : 0,
+          requiredCount: Number.isFinite(required) ? Math.max(0, required) : 0,
+          status: msg.status === 'unavailable' ? 'unavailable' : 'pending',
+          reason: typeof msg.reason === 'string' ? msg.reason : undefined,
+          round: Number.isFinite(round) && round >= 1 ? round : 1,
+        };
+        for (const cb of raceRematches) cb(state);
+        return;
+      }
+      case 'REMATCH_START': {
+        /* The quorum landed: the authoritative snapshot follows this frame on the same beat. */
+        const round = Number(msg.round);
+        const info = { round: Number.isFinite(round) && round >= 2 ? round : 2 };
+        for (const cb of raceRematchStarts) cb(info);
         return;
       }
       case 'OPPONENT_LEFT':

@@ -326,10 +326,13 @@
 }
 
 /* ---- bank: the settlement's own strip — coins, xp, the TIQ ledger ----
-   Flex, not a fixed grid template: a column that paid nothing is simply not painted, and the
-   container must never leave an empty track where it used to be. */
+   A BALANCED GRID, not a flex row. Three paid items get three equal tracks, so the coin figure,
+   its `2x` chip, `+35 XP` and `+140 TIQ` each own their column and no digit is ever overlapped on
+   a 320-430px screen. A column that paid nothing is simply not painted: the strip collapses to
+   two tracks (or one) through the `data-paid` count `main.ts` writes, never to an empty track. */
 .result-bank {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   min-height: 54px;
   margin: 0 0 10px;
@@ -344,6 +347,16 @@
   backdrop-filter: blur(16px);
 }
 .result-bank[hidden] { display: none; }
+/* the paid-count variants: two tracks, one track, and the staked defeat's shared row */
+.result-bank[data-paid="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.result-bank[data-paid="1"] { grid-template-columns: minmax(0, 1fr); }
+.result-bank.is-staked { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* the hairline dividers stop being flex items and become seams between painted tracks */
+.result-bank > .result-bank-div { display: none; }
+/* a column that paid nothing leaves the grid entirely (both attribute and class selectors would
+   otherwise tie, and the coin column's own grid would win the cascade) */
+.result-bank .result-bank-col[hidden] { display: none; }
+
 /* fewer than three paid items: the capsule centers them instead of leaving an edge ragged */
 .result-bank.is-centered .result-bank-col { justify-content: center; }
 .result-bank-div {
@@ -353,18 +366,50 @@
   background: linear-gradient(transparent, rgba(255, 255, 255, .13) 24%, rgba(255, 255, 255, .13) 76%, transparent);
 }
 .result-bank-col {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding-inline: 4px;
+  padding-inline: 6px;
 }
+/* one crisp seam before every column that has a painted column ahead of it */
+.result-bank-col::before {
+  content: "";
+  position: absolute;
+  inset-block: 7px;
+  inset-inline-start: -2px;
+  width: 1px;
+  display: none;
+  background: linear-gradient(transparent, rgba(255, 255, 255, .14) 24%, rgba(255, 255, 255, .14) 76%, transparent);
+}
+.result-bank-col:not([hidden]) ~ .result-bank-col:not([hidden])::before { display: block; }
+
+/* THE COIN COLUMN. The `2x` chip never shares a line with the digits: it takes its own row
+   underneath them, so a 320px track can shrink the value without clipping a single figure. */
+.result-bank-col.is-coins {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 7px;
+  row-gap: 3px;
+}
+.result-bank-col.is-coins .result-bank-ico { grid-column: 1; grid-row: 1 / span 2; }
+.result-bank-col.is-coins .result-bank-body { grid-column: 2; grid-row: 1; min-width: 0; }
+.result-bank-col.is-coins #btn-double-coins {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  margin: 0;
+}
+/* the TIQ column keeps its shield in the flow instead of being pushed past the track's edge */
+.result-bank-col.is-tiq { flex-wrap: wrap; row-gap: 3px; }
+.result-bank-col.is-tiq #btn-recover-tiq { margin-inline-start: 0; }
 .result-bank-col.is-coins { justify-content: flex-start; }
 .result-bank-col.is-xp { justify-content: center; }
 .result-bank-col.is-tiq { justify-content: flex-end; }
 .result-bank-col.is-stake { flex: 1.4 1 0; justify-content: flex-start; gap: 4px; }
-#btn-double-coins,
 #btn-recover-tiq { margin-inline-start: auto; }
 .result-bank-ico {
   display: grid;
@@ -418,7 +463,9 @@
   gap: 1px;
   color: #FCD34D;
   font-family: var(--font-numeric);
-  font-size: 1.06rem;
+  /* a track-bound figure: the value scales with the viewport so three columns never ellipsize */
+  font-size: clamp(.84rem, 3.5vw, 1.06rem);
+  font-variant-numeric: tabular-nums;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -808,9 +855,10 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 50px;
+  /* 46px, not a slab: the whole capsule fits a compact phone without the keys feeling cramped */
+  min-height: 46px;
   margin: 0;
-  padding: 11px 16px;
+  padding: 8px 14px;
   overflow: hidden;
   border: 0;
   border-radius: 16px;
@@ -875,7 +923,7 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
 
 /* ---- 1. the hero: deep royal cyan under a gold-leaf crown ---- */
 .btn-play-again {
-  min-height: 52px;
+  min-height: 48px;
   color: #032B2B;
   background:
     radial-gradient(120% 200% at 50% -60%, rgba(255, 248, 220, .8) 0%, rgba(255, 236, 176, .26) 40%, transparent 68%),
@@ -1061,6 +1109,86 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
 .btn-main-menu:active .ico { color: #FFF6DE; filter: drop-shadow(0 0 6px rgba(243, 212, 131, .55)); }
 .btn-main-menu:active .result-btn-label { color: #FFFFFF; }
 .btn-main-menu:focus-visible { outline: 3px solid rgba(226, 232, 240, .7); outline-offset: 3px; }
+
+/* ---- THE REMATCH CONSENSUS BAR ----
+   One line of live progress over the actions, plus the DECLINE key a player who was asked needs.
+   It belongs to a friends room only; everywhere else the element stays hidden. */
+.result-rematch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(243, 212, 131, .22);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(243, 212, 131, .06), rgba(243, 212, 131, .012)),
+    rgba(6, 8, 12, .5);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 220, .06);
+}
+.result-rematch[hidden] { display: none; }
+.result-rematch-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #D9CDB2;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.4;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.result-rematch-t[dir="rtl"] { direction: rtl; }
+.result-rematch-decline {
+  appearance: none;
+  flex: none;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(244, 63, 94, .34);
+  border-radius: 999px;
+  background: rgba(76, 5, 25, .26);
+  color: #FFD5DC;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  cursor: pointer;
+}
+.result-rematch-decline[hidden] { display: none; }
+.result-rematch-decline:active { transform: scale(.97); }
+.result-rematch-decline:focus-visible { outline: 2px solid rgba(244, 63, 94, .55); outline-offset: 2px; }
+
+/* ---- ONE SEAT'S LIVE VERDICT on the standings ladder ---- */
+.result-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid rgba(16, 185, 129, .4);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .14);
+  color: #6EE7B7;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.result-ready[hidden] { display: none; }
+.result-ready .result-ready-ico { width: 9px; height: 9px; }
+.result-ready.is-left {
+  border-color: rgba(148, 163, 184, .3);
+  background: rgba(148, 163, 184, .1);
+  color: #9AA6B8;
+}
 
 /* ---- the ad's answer: a pill over the capsule, out of the card's flow ---- */
 .ad-toast {

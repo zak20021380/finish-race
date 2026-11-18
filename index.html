@@ -2428,6 +2428,14 @@
                 <p id="quest-ad-subtitle" data-i18n="quest_ad_subtitle">Watch sponsor ad to validate this match for your friend’s 50-Star vault.</p>
               </div>
 
+              <!-- THE REMATCH CONSENSUS. A friends room votes its next board on the sockets the
+                   capsule already holds: this line states the live progress, and its DECLINE key is
+                   the second answer a player who was asked needs. Hidden outside a friends room. -->
+              <div class="result-rematch" id="result-rematch" hidden>
+                <p class="result-rematch-t" id="result-rematch-t" role="status" aria-live="polite"></p>
+                <button class="result-rematch-decline" id="result-rematch-decline" type="button" hidden>DECLINE</button>
+              </div>
+
               <div class="result-actions">
                 <div class="result-banter" id="result-banter" role="group"
                   aria-label="Quick chat">
@@ -2446,9 +2454,14 @@
                     aria-label="Custom message locked — open the VIP pass">
                     <svg class="ico banter-gate-crown" aria-hidden="true"><use href="#i-crown" /></svg>
                     <span class="banter-gate-t" id="banter-gate-t">Custom message</span>
-                    <span class="banter-gate-vip" aria-hidden="true">VIP</span>
-                    <span class="banter-gate-lock" aria-hidden="true">
-                      <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+                    <!-- ONE UNIFIED PILL: crown at the start, the prompt in the middle, and the
+                         VIP + lock badge closed into a single tail at the end. Tapping anywhere
+                         on the row opens the VIP store. -->
+                    <span class="banter-gate-tail" aria-hidden="true">
+                      <span class="banter-gate-vip">VIP</span>
+                      <span class="banter-gate-lock">
+                        <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+                      </span>
                     </span>
                   </button>
                   <form class="banter-custom" id="banter-form" hidden novalidate>

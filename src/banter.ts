@@ -100,27 +100,57 @@ function presetLabel(id: PostChatPresetId): string {
  * ellipsis while the emoji stays whole at the terminal edge. Isolating the token also stops a
  * bidi-neutral emoji from dragging the line's final punctuation to the wrong end.
  */
-const TRAILING_TOKEN = /^([\s\S]*?)\s*((?:\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3)+)\s*$/u;
+/**
+ * THE CHIP'S OWN MARK. Every closed line wears one crisp monochrome glyph — a stroke-only path in
+ * `currentColor`, never a cartoon face — so the pill reads as part of the capsule's typography
+ * instead of a borrowed pictograph. One path per line, drawn in a 24-unit box.
+ */
+const QUICK_ICONS: Record<PostChatQuickId, string> = {
+  /* retention: two arrows chasing each other, the shape of another round */
+  rematch: 'M4.5 9.2a7.6 7.6 0 0 1 12.9-3.4M19.5 14.8a7.6 7.6 0 0 1-12.9 3.4M17.8 4.2v3.6h-3.6M6.2 19.8v-3.6h3.6',
+  /* respect: one hand raised in a salute, flat and quiet */
+  respect: 'M7 13.2 9.9 9l2.3 2.1L15 7.6l2 4.6M5 15.6h14M8 18.6h8',
+  /* banter: a speech capsule with its tail, the shape of a tease */
+  banter: 'M5 6.4h14v8.8h-6.6L8.2 18.4v-3.2H5z',
+  /* adrenaline: one blade crossed by its own guard */
+  vengeance: 'M6.4 17.6 17.6 6.4M11.4 6.4l6.2 6.2M6.4 11.4l6.2 6.2',
+  /* admiration: a five-point star, drawn as one closed outline */
+  admire: 'M12 4.4 14 9l4.9.5-3.7 3.3 1.1 4.8L12 15.2 7.7 17.6l1.1-4.8L5.1 9.5 10 9z',
+};
+
+/** One stroke-only glyph for a chip, sized and coloured by CSS. */
+function chipGlyph(path: string): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'banter-chip-ico');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const d = document.createElementNS(NS, 'path');
+  d.setAttribute('d', path);
+  d.setAttribute('fill', 'none');
+  d.setAttribute('stroke', 'currentColor');
+  d.setAttribute('stroke-width', '1.7');
+  d.setAttribute('stroke-linecap', 'round');
+  d.setAttribute('stroke-linejoin', 'round');
+  svg.append(d);
+  return svg;
+}
 
 /**
- * Paints a closed line into its pill: words in one box, token in another.
+ * Paints a closed line into its pill: one crisp glyph, then the words.
  *
- * The accessible name is set from the whole label rather than left to the two boxes, so a
- * screen reader still hears one sentence and the split stays a purely visual affair.
+ * The glyph is the line's own mark (see `QUICK_ICONS`), painted before the label so a narrow
+ * capsule always keeps the icon whole and lets the sentence ellipsize behind it. The accessible
+ * name is the sentence alone, so a screen reader never speaks a shape.
  */
 function paintChip(chip: HTMLButtonElement, label: string): void {
-  const words = el('span', 'banter-chip-t');
-  const match = TRAILING_TOKEN.exec(label);
-  /* a line that is nothing but a token has no words to protect: leave it in one box */
-  if (match && match[1].trim()) {
-    words.textContent = match[1];
-    const token = el('span', 'banter-chip-e', match[2]);
-    token.setAttribute('aria-hidden', 'true');
-    chip.replaceChildren(words, token);
-  } else {
-    words.textContent = label;
-    chip.replaceChildren(words);
-  }
+  const words = el('span', 'banter-chip-t', label);
+  chip.replaceChildren();
+  const id = chip.dataset.preset as PostChatQuickId | undefined;
+  const path = id ? QUICK_ICONS[id] : '';
+  if (path) chip.append(chipGlyph(path));
+  chip.append(words);
   chip.setAttribute('aria-label', label);
 }
 
