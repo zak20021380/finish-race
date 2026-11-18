@@ -66,7 +66,6 @@ import {
 } from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type PieceColor } from './themes';
-import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import { impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
@@ -4764,8 +4763,10 @@ export function createMenu(api: MenuApi): Menu {
     if (lbl) lbl.textContent = t('supportSending');
     impact('medium');                     /* light Telegram haptic on the send tap itself */
     clearTimeout(supportTimer);
-    supportTimer = window.setTimeout(() => {
-      /* the ticket lands in the shared queue the Admin Command Center's Inbox reads */
+    supportTimer = window.setTimeout(async () => {
+      /* the ticket lands in the shared queue the Admin Command Center's Inbox reads. The desk is
+         its own chunk, and this callback runs 700 ms after the tap: it lands long before then. */
+      const { isTicketCategory, submitTicket } = await import('./support');
       const me = tgUser();
       submitTicket({
         category: isTicketCategory(cat) ? cat : 'feedback',

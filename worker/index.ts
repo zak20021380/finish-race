@@ -416,9 +416,36 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/') || url.pathname.startsWith('/telegram/')) {
     return json({ error: 'not_found', hint: `no route for ${url.pathname}`, code: 'no_route' }, 404);
   }
-  if (env.ASSETS) return env.ASSETS.fetch(request);
+  if (env.ASSETS) return withCachePolicy(url.pathname, await env.ASSETS.fetch(request));
 
   return json({ error: 'not_found' }, 404);
+}
+
+/**
+ * The cache contract for the shipped bundle — the difference between a repeat open and a reload.
+ *
+ * `/assets/*` is content-addressed: Vite puts a hash of the file's own bytes in its name, so a
+ * cached copy can never be stale and a year is the honest answer. That is what makes a second
+ * launch in the Telegram WebView instant — the shell, the stylesheet, the bundle and every sound
+ * come out of the local cache with no round trip at all.
+ *
+ * The shell is the exact opposite. `index.html` is the only file whose name never changes and the
+ * only one that names the hashes, so it has to be revalidated on every open; a cached copy would
+ * pin the whole app to a previous deploy and pair a fresh bundle with a stale document. The
+ * `no-cache` here does not mean "do not store" — it means "ask before you use it", and the
+ * Worker's own ETag turns that ask into a 304 on almost every open.
+ */
+function withCachePolicy(pathname: string, res: Response): Response {
+  if (res.status !== 200) return res;
+  const headers = new Headers(res.headers);
+  if (/\/assets\//.test(pathname)) {
+    headers.set('cache-control', 'public, max-age=31536000, immutable');
+  } else if (pathname === '/' || pathname.endsWith('/index.html')) {
+    headers.set('cache-control', 'no-cache, must-revalidate');
+  } else {
+    return res;                        // a media file or a page the policy above does not cover
+  }
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
 export default {

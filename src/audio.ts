@@ -4,12 +4,14 @@
  * gain: every voice is a `BufferSource` on the graph, scheduled against the context clock so a
  * step, a wall or a blast lands on the frame that caused it rather than the frame after.
  *
- * The context is built at startup and the decodes start with it, but a mobile webview keeps it
- * suspended and silent until the page has been touched: the first `pointerdown` (the Play tap
- * included) resumes it, and `play` is a no-op until then. Nothing here is allowed to throw, block
- * or leak into gameplay.
+ * The context is built on the first gesture, and the decodes start with it: a mobile webview keeps
+ * an audio graph suspended and silent until the page has been touched, so building one at import
+ * bought nothing but an autoplay warning and a cold-start cost. The first `pointerdown` (the Play
+ * tap included) builds the graph, resumes it and starts the decodes; `play` is a no-op until then.
+ * Nothing here is allowed to throw, block or leak into gameplay.
  */
 import { onSettings, settings } from './settings';
+import { bufferOf, loadAudio, primeAudio } from './audiocache';
 import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
 import laughMp3 from './assets/sounds/laugh.mp3';
@@ -78,20 +80,64 @@ interface Engine {
   master: GainNode;
 }
 
+/**
+ * The graph, built on first use and never on import. A cold start used to construct an
+ * `AudioContext` and begin six decodes while the first frame was still being laid out; both now
+ * wait for the gesture that is the earliest moment a mobile webview lets them speak anyway.
+ */
 let engine: Engine | null = null;
-try {
-  const ctx = new AudioContext();
-  const master = ctx.createGain();
-  master.gain.value = 1;
-  master.connect(ctx.destination);
-  engine = { ctx, master };
-} catch { engine = null; }   // a webview without WebAudio: the board simply races quietly
+let engineTried = false;
 
-/** Every voice, decoded once at startup and kept for the session. */
-const buffers: Partial<Record<SoundName, AudioBuffer>> = {};
+/** Every sampled voice, by URL — the shared cache in `audiocache.ts` owns the fetch and decode. */
+const VOICE_URL: Record<SoundName, string> = {
+  move: moveWav,
+  explosion: explosionMp3,
+  laugh: laughMp3,
+  angry: angryWav,
+  swoosh: swooshMp3,
+};
 
-/** The fanfare is not fire-and-forget, so it keeps its own decoded buffer outside the voice table. */
-let victoryBuffer: AudioBuffer | null = null;
+/**
+ * The one context in the app. `sound.ts` and the matchmaking chime speak through it as well, which
+ * is what keeps a second graph — and a second decode of the same two files — from existing at all.
+ */
+export function engineContext(): AudioContext | null {
+  return engineOf()?.ctx ?? null;
+}
+
+function engineOf(): Engine | null {
+  if (engine) return engine;
+  if (engineTried) return null;
+  engineTried = true;
+  try {
+    const ctx = new AudioContext();
+    const master = ctx.createGain();
+    master.gain.value = 1;
+    master.connect(ctx.destination);
+    engine = { ctx, master };
+    applyGain();
+    primeVoices();
+  } catch { engine = null; }   // a webview without WebAudio: the board simply races quietly
+  return engine;
+}
+
+/**
+ * Start the decodes — once, and only from a gesture or a play. The cache is keyed by URL, so
+ * `sound.ts` asking for `move.wav` a millisecond later joins this same fetch rather than paying
+ * for a second one.
+ */
+function primeVoices(): void {
+  const e = engine;
+  if (!e) return;
+  primeAudio(e.ctx, [...Object.values(VOICE_URL), victoryFanOgg]);
+}
+
+/** A single voice's load, for a play that arrives before the batch above reached it. */
+function ensureVoice(name: SoundName): void {
+  const e = engine;
+  if (!e) return;
+  void loadAudio(e.ctx, VOICE_URL[name]).catch(() => { /* a silent voice, never a broken game */ });
+}
 
 /**
  * The context's own output latency, read when the context starts running and subtracted from every
@@ -107,34 +153,10 @@ function readLatency(ctx: AudioContext): number {
   } catch { return 0; }
 }
 
-function decodeInto(url: string, store: (buf: AudioBuffer) => void): void {
-  const e = engine;
-  if (!e) return;
-  fetch(url)
-    .then((r) => {
-      if (!r.ok) throw new Error(String(r.status));
-      return r.arrayBuffer();
-    })
-    .then((raw) => e.ctx.decodeAudioData(raw))
-    .then(store)
-    .catch(() => { /* a missing or undecodable asset is a silent voice, never a broken game */ });
-}
-
-function decode(name: SoundName, url: string): void {
-  decodeInto(url, (buf) => { buffers[name] = buf; });
-}
-
-decode('move', moveWav);
-decode('explosion', explosionMp3);
-decode('laugh', laughMp3);
-decode('angry', angryWav);
-decode('swoosh', swooshMp3);
-decodeInto(victoryFanOgg, (buf) => { victoryBuffer = buf; });
-
-/** The first gesture anywhere — the Play tap counts — lifts the suspension for the rest of the page. */
+/** The first gesture anywhere — the Play tap counts — builds the graph and lifts the suspension. */
 let unlocked = false;
 function unlock(): void {
-  const e = engine;
+  const e = engineOf();
   if (unlocked || !e) return;
   unlocked = true;
   void e.ctx.resume()
@@ -233,7 +255,7 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     if (now - lastAngryAt < ANGRY_GAP_MS) return;
     lastAngryAt = now;
   }
-  const buf = buffers[name];
+  const buf = bufferOf(VOICE_URL[name]);
   const { ctx, master } = e;
   if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
   const when = Math.max(ctx.currentTime,
@@ -242,6 +264,7 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     /* the blast is the one voice that may not be missing: an asset that failed to fetch, or has
        still not decoded, is no reason for a detonation to go off silently. Synthesize it. */
     if (name === 'explosion') detonate(ctx, master, when, opts.gain ?? 1);
+    else ensureVoice(name);            // still loading: ask again, and the next step rings
     return;
   }
   try {
@@ -395,7 +418,7 @@ export function playVictoryFanfare(): void {
   const e = engine;
   if (victoryPlayed || victorySrc || !e) return;
   if (!settings.sound || adHold) return;
-  const buf = victoryBuffer;
+  const buf = bufferOf(victoryFanOgg);
   if (!buf) return;                    // still decoding: a late fanfare is worse than none
   const { ctx, master } = e;
   if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });

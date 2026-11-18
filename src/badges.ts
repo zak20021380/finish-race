@@ -26,9 +26,18 @@ import { cacheBadgeClaim, cacheBadgeSupply, guestId, ladderWins, profile, type E
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData, tgUser } from './telegram';
-import einsteinMedallion from './assets/images/einstein.png';
-import churchillMedallion from './assets/images/Futuristic Churchill Steel Medallion.png';
-import heisenbergMedallion from './assets/images/Heisenberg Chrome Medallion.png';
+
+/**
+ * The three medallion renders, one lazily-imported chunk each. A static import puts the PNG's URL
+ * in the boot bundle, and the first crest any surface paints then costs the full fetch — three
+ * photoreal coins for an honor nobody in the room is wearing. A loader costs one chunk the first
+ * time that honor is actually drawn, which is the only moment its art can be seen.
+ */
+const medallionArt = {
+  churchill: () => import('./assets/images/Futuristic Churchill Steel Medallion.png'),
+  einstein: () => import('./assets/images/einstein.png'),
+  heisenberg: () => import('./assets/images/Heisenberg Chrome Medallion.png'),
+} satisfies Record<string, () => Promise<{ default: string }>>;
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
@@ -91,8 +100,8 @@ export interface BadgeDef {
   privileges?: BadgePrivilege[];
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
-  /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
-  art?: string;
+  /** Rendered medallion art, loaded on first paint; when set it replaces the vector crest. */
+  art?: () => Promise<{ default: string }>;
   /** Hard edition cap. Mirrors `BADGE_CAPS` in worker/badges.ts; never mint above it. */
   cap: number;
 }
@@ -127,7 +136,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       },
     ],
     accent: 'titanium',
-    art: churchillMedallion,
+    art: medallionArt.churchill,
     cap: 100,
   },
   {
@@ -174,7 +183,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       },
     ],
     accent: 'quantum',
-    art: einsteinMedallion,
+    art: medallionArt.einstein,
     cap: 50,
   },
   {
@@ -205,7 +214,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       },
     ],
     accent: 'frost',
-    art: heisenbergMedallion,
+    art: medallionArt.heisenberg,
     cap: 25,
   },
 ];
@@ -220,15 +229,71 @@ export const badgeById = (id: string | null | undefined): BadgeDef | null =>
 export const badgeText = (text: BadgeText, code: string): string =>
   (code === 'fa' ? text.fa : text.en);
 
+/** Resolved medallion URLs, by badge id. Empty until a surface has actually painted that honor. */
+const artUrls = new Map<string, string>();
+/** The loads in flight, so a repaint of the same crest never starts a second one. */
+const artJobs = new Map<string, Promise<void>>();
+
+/**
+ * Start the honor's medallion chunk the first time it is drawn, then swap every crest already on
+ * screen for the render. `badgeCrestHtml` calls this, so the cost follows the paint exactly: an
+ * honor that is neither worn nor opened is never requested at all.
+ */
+export function ensureBadgeArt(def: BadgeDef): void {
+  if (!def.art || artUrls.has(def.id) || artJobs.has(def.id)) return;
+  const job = def.art()
+    .then((mod) => {
+      artUrls.set(def.id, mod.default);
+      upgradeCrests(def.id, mod.default);
+    })
+    .catch(() => { /* an unreachable chunk leaves the vector crest up, never a broken image */ })
+    .finally(() => { artJobs.delete(def.id); });
+  artJobs.set(def.id, job);
+}
+
+/**
+ * Replace the vector stand-in wherever this honor is already painted. The stand-in carries the
+ * same class list as the render, so this is a straight element exchange: same box, same size,
+ * one tag changed — no reflow, no flash, and no repaint of the host surface.
+ */
+function upgradeCrests(id: string, url: string): void {
+  if (typeof document === 'undefined') return;
+  for (const el of document.querySelectorAll<SVGElement>(`[data-badge-art="${id}"]`)) {
+    const img = document.createElement('img');
+    img.className = el.getAttribute('class') ?? 'badge-crest';
+    img.src = url;
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
+    img.draggable = false;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.dataset.badge = id;
+    const accent = el.dataset.accent;
+    if (accent) img.dataset.accent = accent;
+    el.replaceWith(img);
+  }
+}
+
 /**
  * The honor's crest as markup: its rendered medallion when one ships, else the
  * vector silhouette keyed by accent. Decorative — every host names the badge.
+ *
+ * A medallion that has not loaded yet paints the same vector crest the art-free honors use, at
+ * the render's own class list and box, and `upgradeCrests` swaps it in place the moment the
+ * chunk lands.
  */
 export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string {
+  const sheen = `<span class="medal-sheen" data-badge="${def.id}" aria-hidden="true"></span>`;
+  const loaded = artUrls.get(def.id);
+  if (loaded) {
+    return `<img class="${className} badge-crest-art" src="${loaded}" alt="" aria-hidden="true" draggable="false" loading="lazy" decoding="async"`
+      + ` data-badge="${def.id}" data-accent="${def.accent}" />` + sheen;
+  }
   if (def.art) {
-    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" loading="lazy" decoding="async"`
-      + ` data-badge="${def.id}" data-accent="${def.accent}" />`
-      + `<span class="medal-sheen" data-badge="${def.id}" aria-hidden="true"></span>`;
+    ensureBadgeArt(def);
+    return `<svg class="${className} badge-crest-art" viewBox="0 0 56 56" aria-hidden="true"`
+      + ` data-badge-art="${def.id}" data-accent="${def.accent}"><use href="#i-crest-${def.accent}" /></svg>`
+      + sheen;
   }
   return `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true">`
     + `<use href="#i-crest-${def.accent}" /></svg>`;

@@ -17,8 +17,28 @@
     <title>Tactix</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- FONTS OFF THE CRITICAL PATH. `media="print"` is the only way to hand a stylesheet to the
+         browser without it blocking the first paint: it is fetched at low priority, then promoted
+         to `all` the moment it lands. `display=swap` means the first frame draws the fallback face
+         either way, so a slow or blocked fonts CDN costs nothing but a reflow — never the arena.
+         The <noscript> copy is the same stylesheet for a client running without JS. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <!-- DEFERRED: the Mini App SDK is not needed to paint the shell, and a blocked telegram.org
+         must not hold the board. `defer` keeps it ahead of the app bundle in document order, so
+         `initTelegram()` still finds it; `src/telegram.ts` reads the SDK live and adopts it if a
+         cold cache lands it late. -->
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- AdsGram V1 rewarded video. Loaded async on purpose: the first ad is minutes away, and a
          blocked CDN must never hold up the race — `src/ads.ts` answers `no_sdk` and the UI moves on. -->
     <script src="https://sad.adsgram.ai/js/sad.min.js" async></script>

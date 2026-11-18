@@ -12,6 +12,11 @@ compatibility_date = "2025-09-01"
 
 # The built Mini App (`npm run build` -> dist/): served from the same Worker on `/` and the
 # hashed asset paths, while `/api/*`, `/ws/*`, `/admin/*` and `/health` stay with the script.
+#
+# The cache policy for what this serves is set in `worker/index.ts` (`withCachePolicy`), not here:
+# `/assets/*` is content-addressed and answers `immutable, max-age=31536000`, while `/` and
+# `/index.html` revalidate on every open so a deploy is picked up immediately. Keeping it in the
+# script means one place to read it, and it applies to every asset the binding returns.
 assets = { directory = "./dist", binding = "ASSETS" }
 
 # One singleton instance holds the whole waiting room, so every socket that asks for a 1v1 lands

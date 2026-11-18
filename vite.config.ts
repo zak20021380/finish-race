@@ -15,5 +15,15 @@ export default defineConfig({
       '/ws': { target: 'ws://127.0.0.1:8787', ws: true, changeOrigin: true },
     },
   },
+  /* CHUNK CONTRACT. The boot graph is the shell: `main.ts`, the renderer, the rules, the router
+     and the screens the first frame actually paints. Everything a tap reaches — the Command
+     Center, the face-off cinematic, the nation board, the mind ladder, the squad desk — is a
+     dynamic `import()` in the module that opens it, so Rollup emits it as its own chunk and the
+     first frame never parses it.
+     CSS follows the same split (`cssCodeSplit` is on by default): a lazy module's stylesheet
+     leaves the main bundle and is injected with its chunk, which is why `vsclash.css` ships as
+     `assets/vsclash-*.css` rather than inside `index.css`. Nothing here should be replaced with a
+     `manualChunks` grouping: merging those chunks back would put the parse cost on the boot again,
+     and a blind CSS purge would strip the class names the lazy screens build at runtime. */
   build: { target: 'es2020' },
 });

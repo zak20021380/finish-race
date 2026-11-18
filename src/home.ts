@@ -21,8 +21,8 @@ import type { Difficulty } from './bot';
 import { bindSwipe } from './carousel';
 import { lang, menuState, motionReduced, onLang, saveMenu, t } from './settings';
 import { nameOf } from './countries';
-import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
-import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
+import type { NationFeed, NationRow } from './nations';
+import type { MindFeed, MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { formatCountdown, getGrandCup, paidPlaces, type GrandCup } from './data';
 import { arena, onArena } from './arenaState';
@@ -534,6 +534,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const loadCountries = async (): Promise<void> => {
     nationsSyncedAt = Date.now();
     try {
+      /* the board is its own chunk: it is a network read either way, so the module that parses
+         its answer can arrive with the answer instead of with the first frame */
+      const { fetchNationBoard } = await import('./nations');
       const feed = await fetchNationBoard(myTiq());
       /* A failed read keeps the last real board; a first read paints the clean waiting state. */
       if (feed.live) nationFeed = feed;
@@ -837,6 +840,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     mindsSyncedAt = Date.now();
     const seq = ++mindLoad;
     if (mindFeed) paintMindMine(mindFeed);
+    const { fetchMindLadder } = await import('./minds');
     const next = await fetchMindLadder(myTiq(), MIND_SLOTS);
     if (seq !== mindLoad) return;
     /* A failed read keeps the last real board; a first read paints the five placeholder slots. */

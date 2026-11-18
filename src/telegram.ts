@@ -75,7 +75,13 @@ interface TgWebApp {
 }
 declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
 
-const tg = window.Telegram?.WebApp;
+/**
+ * The SDK, read live rather than captured once at module evaluation. `telegram-web-app.js` is
+ * deferred in `index.html` so a blocked or slow CDN can never hold the first frame; a captured
+ * `undefined` would then quietly turn every Telegram feature in the app into a no-op for the rest
+ * of the session. Every read below goes through here, so the SDK is adopted the moment it lands.
+ */
+const sdk = (): TgWebApp | undefined => window.Telegram?.WebApp;
 
 /**
  * Whether the client actually supports an API introduced in `version`. Calling a newer method on
@@ -85,9 +91,9 @@ const tg = window.Telegram?.WebApp;
  * without one) answers by what it exposes, so nothing is switched off on it.
  */
 function atLeast(version: string): boolean {
-  const check = tg?.isVersionAtLeast;
-  if (typeof check !== 'function') return !!tg;
-  try { return check.call(tg, version); } catch { return false; }
+  const check = sdk()?.isVersionAtLeast;
+  if (typeof check !== 'function') return !!sdk();
+  try { return check.call(sdk(), version); } catch { return false; }
 }
 
 /**
@@ -136,23 +142,23 @@ export function relicDuelShareUrl(code: string, text: string): string {
   return url ? telegramShareLink(url, text) : '';
 }
 
-export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
+export const tgUser = (): TgUser | undefined => sdk()?.initDataUnsafe?.user;
 
 /**
  * The raw Mini App `initData` query string, or '' outside Telegram. The matchmaker verifies it
  * server-side (`worker/auth.ts`), so the client only ever forwards it — it never trusts it.
  */
-export const tgInitData = (): string => tg?.initData ?? '';
+export const tgInitData = (): string => sdk()?.initData ?? '';
 
 /**
  * The client's language, e.g. `fa` or `pt-BR`. Telegram puts it in the initData query string rather
  * than next to the user, so try the documented spots and then the query string before the browser.
  */
 export function languageCode(): string {
-  const fromTg = tg?.initDataUnsafe?.language_code ?? tg?.languageCode ?? tg?.language_code;
+  const fromTg = sdk()?.initDataUnsafe?.language_code ?? sdk()?.languageCode ?? sdk()?.language_code;
   if (fromTg) return fromTg;
   try {
-    const raw = tg?.initData;
+    const raw = sdk()?.initData;
     if (raw) {
       const p = new URLSearchParams(raw);
       const lc = p.get('language_code');
@@ -174,7 +180,7 @@ const START_KEYS = ['startapp', 'tgWebAppStartParam', 'start_param'] as const;
  * therefore survives being opened outside the client — which is what makes a shared link work.
  */
 export function startParam(): string {
-  const fromTg = tg?.initDataUnsafe?.start_param ?? tg?.startParam ?? tg?.start_param;
+  const fromTg = sdk()?.initDataUnsafe?.start_param ?? sdk()?.startParam ?? sdk()?.start_param;
   if (typeof fromTg === 'string' && fromTg) return fromTg;
 
   const fromQuery = (raw: string): string => {
@@ -189,7 +195,7 @@ export function startParam(): string {
   };
 
   try {
-    const init = fromQuery(tg?.initData ?? '');
+    const init = fromQuery(sdk()?.initData ?? '');
     if (init) return init;
   } catch { /* malformed initData */ }
 
@@ -326,7 +332,7 @@ const CANVAS = '#f1f5f9';
  * the secondary brand ramp — never a fill that carries white type.
  */
 export function applyTheme() {
-  const p: TgThemeParams = tg?.themeParams ?? {};
+  const p: TgThemeParams = sdk()?.themeParams ?? {};
   const r = document.documentElement;
   r.classList.remove('dark');
   r.style.colorScheme = 'light';
@@ -343,7 +349,7 @@ export function applyTheme() {
   /* The header/background/scheme setters arrived in 6.1; on an older client each call is just a
      warning in the console, and the page already paints its own light canvas. */
   if (atLeast('6.1')) {
-    try { tg?.setHeaderColor?.(CANVAS); tg?.setBackgroundColor?.(CANVAS); tg?.setColorScheme?.('light'); } catch { /* outside Telegram */ }
+    try { sdk()?.setHeaderColor?.(CANVAS); sdk()?.setBackgroundColor?.(CANVAS); sdk()?.setColorScheme?.('light'); } catch { /* outside Telegram */ }
   }
   try {
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -374,7 +380,7 @@ let appHeight = 0;
  */
 function syncAppHeight(): void {
   if (document.hidden) return;
-  const stable = Number(tg?.viewportStableHeight) || 0;
+  const stable = Number(sdk()?.viewportStableHeight) || 0;
   const visual = Number(window.visualViewport?.height) || 0;
   const inner = Number(window.innerHeight) || 0;
   const h = Math.round(Math.max(stable, visual, inner));
@@ -398,22 +404,50 @@ function recoverAppHeight(): void {
   window.setTimeout(syncAppHeight, 260);
 }
 
+/** The SDK's own boot has run, so a late-landing script cannot boot it twice. */
+let sdkBooted = false;
+/** The shell's window listeners are wired once, whether or not the SDK ever arrives. */
+let shellWired = false;
+/** A watch for the deferred SDK is already armed. */
+let watching = false;
+
+/**
+ * The SDK script is deferred, so on a cold cache it can land after this bundle has been evaluated.
+ * Rather than run the whole app as a plain tab, wait for the one moment it can announce itself and
+ * run the SDK half again. A client that never delivers it keeps the documented browser fallback.
+ */
+function adoptWhenReady(): void {
+  if (watching || typeof document === 'undefined') return;
+  watching = true;
+  const arm = (): void => { if (sdk()) initTelegram(); };
+  const script = document.querySelector<HTMLScriptElement>('script[src*="telegram-web-app"]');
+  script?.addEventListener('load', arm, { once: true });
+  document.addEventListener('DOMContentLoaded', arm, { once: true });
+  window.addEventListener('load', arm, { once: true });
+}
+
 export function initTelegram() {
-  try {
-    tg?.ready();
-    tg?.expand();
-    /* 7.7 added the swipe lock; older clients log a warning per call and simply keep swiping. */
-    if (atLeast('7.7')) tg?.disableVerticalSwipes?.();
-  } catch { /* running outside Telegram */ }
+  const app = sdk();
+  if (app && !sdkBooted) {
+    sdkBooted = true;
+    try {
+      app.ready();
+      app.expand();
+      /* 7.7 added the swipe lock; older clients log a warning per call and simply keep swiping. */
+      if (atLeast('7.7')) app.disableVerticalSwipes?.();
+    } catch { /* running outside Telegram */ }
+    /* Both events are 6.1 additions and warn one line each on every call below that. */
+    if (atLeast('6.1')) {
+      app.onEvent?.('viewportChanged', syncAppHeight);
+      app.onEvent?.('themeChanged', applyTheme);
+    }
+  } else if (!app) adoptWhenReady();
 
   applyTheme();
-
   syncAppHeight();
-  /* Both events are 6.1 additions and warn one line each on every call below that. */
-  if (atLeast('6.1')) {
-    tg?.onEvent?.('viewportChanged', syncAppHeight);
-    tg?.onEvent?.('themeChanged', applyTheme);
-  }
+
+  if (shellWired) return;
+  shellWired = true;
   /* A native sheet can swallow the viewport events entirely; focus, page restore and rotation
      are the doors the WebView always hands back, so the height is re-asserted there too. */
   window.addEventListener('focus', recoverAppHeight);
@@ -432,7 +466,7 @@ export function initTelegram() {
  */
 export function onBackPress(cb: () => void): (visible: boolean) => void {
   if (!atLeast('6.1')) return () => {};
-  const bb = tg?.BackButton;
+  const bb = sdk()?.BackButton;
   if (!bb) return () => {};
   try { bb.onClick?.(cb); } catch { /* ignore */ }
   return (visible: boolean) => { try { if (visible) bb.show(); else bb.hide(); } catch { /* ignore */ } };
@@ -443,7 +477,7 @@ const haptics = (): boolean => settings.haptics && atLeast('6.1');
 
 export const impact = (s: 'light' | 'medium' | 'heavy') => {
   if (!haptics()) return;
-  try { tg?.HapticFeedback?.impactOccurred(s); } catch { /* ignore */ }
+  try { sdk()?.HapticFeedback?.impactOccurred(s); } catch { /* ignore */ }
 };
 
 /**
@@ -452,9 +486,10 @@ export const impact = (s: 'light' | 'medium' | 'heavy') => {
  * outside Telegram — or on a client too old for both — the system browser takes it.
  */
 export function openLink(url: string): void {
+  const app = sdk();
   try {
-    if (url.includes('t.me/') && tg?.openTelegramLink) { tg.openTelegramLink(url); return; }
-    if (tg?.openLink) { tg.openLink(url); return; }
+    if (url.includes('t.me/') && app?.openTelegramLink) { app.openTelegramLink(url); return; }
+    if (app?.openLink) { app.openLink(url); return; }
   } catch { /* outside Telegram */ }
   try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
 }
@@ -469,7 +504,7 @@ export function openLink(url: string): void {
  */
 export function openTelegramShare(shareUrl: string): void {
   if (!shareUrl) return;
-  const app = window.Telegram?.WebApp ?? tg;
+  const app = window.Telegram?.WebApp ?? sdk();
   const native = app?.openTelegramLink;
   if (typeof native === 'function') {
     try { native.call(app, shareUrl); } catch { /* the client declined: stay in the app, never bounce the tab */ }
@@ -488,7 +523,7 @@ export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 export function openInvoice(url: string, status: (result: InvoiceStatus) => void): boolean {
   /* Read the live SDK surface: a host that injects the script after this module loads still
      exposes openInvoice on the shared WebApp object, and Stars must use the native sheet. */
-  const app = window.Telegram?.WebApp ?? tg;
+  const app = window.Telegram?.WebApp ?? sdk();
   const method = app?.openInvoice;
   if (!url || !app || typeof method !== 'function') return false;
   const check = app.isVersionAtLeast;
@@ -511,15 +546,15 @@ export function openInvoice(url: string, status: (result: InvoiceStatus) => void
 
 export const notify = (t: 'success' | 'error' | 'warning') => {
   if (!haptics()) return;
-  try { tg?.HapticFeedback?.notificationOccurred(t); } catch { /* ignore */ }
+  try { sdk()?.HapticFeedback?.notificationOccurred(t); } catch { /* ignore */ }
 };
 
 /** A mine going off: the hardest pattern Telegram offers, error buzz over a heavy impact, as one call. */
 export const detonation = () => {
   if (!haptics()) return;
   try {
-    tg?.HapticFeedback?.notificationOccurred('error');
-    tg?.HapticFeedback?.impactOccurred('heavy');
+    sdk()?.HapticFeedback?.notificationOccurred('error');
+    sdk()?.HapticFeedback?.impactOccurred('heavy');
   } catch { /* ignore */ }
 };
 
@@ -532,7 +567,7 @@ export const shatterImpact = () => {
   if (!settings.haptics) return;
   if (atLeast('6.1')) {
     try {
-      tg?.HapticFeedback?.impactOccurred('heavy');
+      sdk()?.HapticFeedback?.impactOccurred('heavy');
       return;
     } catch { /* older clients expose warning stubs: fall through to the motor */ }
   }

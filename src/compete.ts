@@ -18,15 +18,13 @@
  * on Home's hero slide, so this controller owns no cup, bracket or channel board.
  */
 import { type PlayerRow, type Trend } from './data';
-import {
-  fetchNationBoard,
-  fetchNationRoster,
-  type NationFeed,
-  type NationPlayer,
-  type NationRoster,
-  type NationRow,
+import type {
+  NationFeed,
+  NationPlayer,
+  NationRoster,
+  NationRow,
 } from './nations';
-import { fetchMindLadder, type MindFeed } from './minds';
+import type { MindFeed } from './minds';
 import { myTiq } from './matchmaking';
 import { nameOf } from './countries';
 import { BADGES, type BadgeDef, badgeCrestHtml, badgeEdition, badgeHolders, editionSerialLabel, holderEdition, isBadgeUnlocked, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
@@ -41,7 +39,10 @@ import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
 import { isSelfPlayerId } from './players';
+/* static on purpose: `menu.ts` reads the same desk from its squad sheets, so the module is in the
+   boot chunk either way — a dynamic import here would only add a hop */
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
+
 import { showToast, showRoyalToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -2285,6 +2286,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     let roster = nationRosters.get(key) ?? null;
     if (!roster) {
       try {
+        const { fetchNationRoster } = await import('./nations');
         roster = await fetchNationRoster(c.code);
       } catch {
         roster = null;
@@ -2522,6 +2524,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const el = panes.nations;
     if (!el) return;
     if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
+    const { fetchNationBoard } = await import('./nations');
     const feed = await fetchNationBoard(myTrophyScore());
     if (!feed.live) {
       if (!nationRows) el.innerHTML = empty(t('ranksUnavailable'));
@@ -2587,6 +2590,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (!loadedBoard.minds && !mindsField.length) el.innerHTML = skel(6);
     let feed: MindFeed | null = null;
     try {
+      const { fetchMindLadder } = await import('./minds');
       feed = await fetchMindLadder(myTrophyScore(), 100);
     } catch {
       feed = null;

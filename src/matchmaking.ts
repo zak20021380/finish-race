@@ -45,7 +45,7 @@ import { audioContext } from './sound';
 import { guestId, ladderTally, payout, profile } from './storage';
 import { getMySquad } from './squads';
 import { paintFlag } from './flags';
-import { runtime, tiqFrom } from './admin';
+import { runtime, tiqFrom } from './runtime';
 import { adoptArena, arena, claimArenaAward, type ArenaState } from './arenaState';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 

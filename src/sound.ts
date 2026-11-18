@@ -1,8 +1,8 @@
 /**
- * sound.ts — the game's audio voices. A single `AudioContext` and three decoded buffers —
- * `move.wav` for steps and leaps, `explosion.mp3` for mine detonations and `defeat.m4a` for the
- * post-match defeat fanfare — live here for the whole session, so a step or a blast is a node graph
- * a few microseconds wide: no fetch, no decode, no second context anywhere in the app.
+ * sound.ts — the game's audio voices. It shares the app's single `AudioContext` (owned by
+ * `audio.ts`) and the single decoded-buffer cache (`audiocache.ts`), so `move.wav` and
+ * `explosion.mp3` are fetched and decoded once for the whole app rather than once per engine —
+ * and `defeat.m4a`, the post-match fanfare, once for this one.
  *
  * Mobile webviews refuse to start an `AudioContext` until the page has been touched, and creating
  * one early only earns a console warning. So the engine is built lazily: the first
@@ -17,6 +17,8 @@
  * fallback for a frame where the Web Audio graph is suspended, interrupted or unavailable.
  */
 import { onSettings, settings } from './settings';
+import { engineContext } from './audio';
+import { bufferOf, primeAudio } from './audiocache';
 import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
 import defeatM4a from './assets/sounds/defeat.m4a';
@@ -56,10 +58,8 @@ const DEFEAT_DUCK_FADE_S = 0.22;
 const DEFEAT_RESTORE_FADE_S = 0.4;
 
 let ctx: AudioContext | null = null;
-let moveBuffer: AudioBuffer | null = null;
-let explosionBuffer: AudioBuffer | null = null;
-let defeatBuffer: AudioBuffer | null = null;
-let decoding = false;
+/** The context this engine's duck node was built on, so a rebuilt graph gets a rebuilt mix. */
+let mixCtx: AudioContext | null = null;
 
 /**
  * The session mix every short voice routes through. It stays at 1 except while the defeat fanfare
@@ -67,23 +67,26 @@ let decoding = false;
  */
 let mixGain: GainNode | null = null;
 
-/** The one context, created on first use — never on import, so no autoplay warning at startup. */
+/**
+ * The app's one context — `audio.ts` builds and owns it — with this engine's duck node built on
+ * it. The node hangs off `destination` beside the other engine's master, which is the whole reason
+ * two engines can share one graph without either one's mute, volume or duck reaching the other.
+ */
 function context(): AudioContext | null {
-  if (ctx) return ctx;
-  try {
-    const Ctor = window.AudioContext
-      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return null;
-    const c = new Ctor();
-    /* The duck lives on this node. Built with the context, so a play path can never find it null
-       while the context exists. */
-    const mix = c.createGain();
-    mix.gain.value = 1;
-    mix.connect(c.destination);
-    mixGain = mix;
-    ctx = c;
-  } catch { ctx = null; mixGain = null; }  // a webview with WebAudio switched off: stay silent
-  return ctx;
+  const c = engineContext();
+  if (!c) { ctx = null; mixGain = null; mixCtx = null; return null; }
+  if (mixCtx !== c) {
+    mixCtx = null;
+    try {
+      const mix = c.createGain();
+      mix.gain.value = 1;
+      mix.connect(c.destination);
+      mixGain = mix;
+      mixCtx = c;
+    } catch { mixGain = null; }
+  }
+  ctx = c;
+  return c;
 }
 
 /** Every short voice lands on the mix node; the defeat fanfare is the one voice wired past it. */
@@ -100,27 +103,12 @@ function resume(c: AudioContext): void {
   if (c.state !== 'running') void c.resume().catch(() => { /* still locked: no sound yet */ });
 }
 
-/** Fetch and decode one asset into a buffer, rejecting on a missing or undecodable file. */
-function decode(c: AudioContext, url: string): Promise<AudioBuffer> {
-  return fetch(url)
-    .then((r) => {
-      if (!r.ok) throw new Error(String(r.status));
-      return r.arrayBuffer();
-    })
-    .then((raw) => new Promise<AudioBuffer>((ok, err) => c.decodeAudioData(raw, ok, err)));
-}
-
-/** Fetch and decode every voice exactly once; calls while they are in flight are dropped. */
+/**
+ * Start this engine's decodes. The cache is keyed by URL and already holds whatever `audio.ts`
+ * asked for, so the two files both engines use are fetched exactly once, by whoever spoke first.
+ */
 function prime(c: AudioContext): void {
-  if (decoding || (moveBuffer && explosionBuffer && defeatBuffer)) return;
-  decoding = true;
-  const jobs: Promise<void>[] = [];
-  if (!moveBuffer) jobs.push(decode(c, moveWav).then((buf) => { moveBuffer = buf; }));
-  if (!explosionBuffer) jobs.push(decode(c, explosionMp3).then((buf) => { explosionBuffer = buf; }));
-  if (!defeatBuffer) jobs.push(decode(c, defeatM4a).then((buf) => { defeatBuffer = buf; }));
-  void Promise.allSettled(jobs)
-    .catch(() => { /* allSettled never rejects; belt and braces */ })
-    .finally(() => { decoding = false; });
+  primeAudio(c, [moveWav, explosionMp3, defeatM4a]);
 }
 
 /* ---------- the HTML5 fallback for the fanfare ---------- */
@@ -206,7 +194,7 @@ export function playMove(volume = 1): void {
   if (!c) return;
   resume(c);
   prime(c);
-  const buf = moveBuffer;
+  const buf = bufferOf(moveWav);
   if (!buf) return;                     // still decoding: the first tap warms it, the next rings
   try {
     const src = c.createBufferSource();
@@ -231,7 +219,7 @@ export function playExplosion(): void {
   if (!c) return;
   resume(c);
   prime(c);
-  const buf = explosionBuffer;
+  const buf = bufferOf(explosionMp3);
   if (!buf) return;                     // still decoding: the blast is silent, the next one is not
   try {
     const src = c.createBufferSource();
@@ -377,7 +365,7 @@ export function playDefeat(): void {
   defeatPlayed = true;                  // one shot per match, claimed even when a gate drops it
   if (!settings.sound) return;
   const c = context();
-  const buf = defeatBuffer;
+  const buf = bufferOf(defeatM4a);
   if (c && buf && c.state === 'running' && startDefeatVoice(c, buf)) return;
   playDefeatFallback();
 }

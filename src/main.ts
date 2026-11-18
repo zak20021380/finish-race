@@ -80,14 +80,14 @@ import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
 } from './matchmaking';
-import { createAdmin, recordRace, runtime, tiqFrom, type Admin } from './admin';
+import { runtime, tiqFrom } from './runtime';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, hasHumanRival, isAutomated, isHuman,
   lobbyLine, rewardEligible, seatBadge, seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { initJoinGate } from './joinGate';
-import { showVsClash, type VsRival, type VsStakes } from './vsclash';
+import type { VsRival, VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
 import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
@@ -115,6 +115,35 @@ let animating = false;
    is ready and expanded on the very first evaluation, local state hydrates synchronously from the
    save, and the target screen mounts on the first frame. Remote syncs run in the background. */
 initTelegram();
+
+/* ---------- the post-paint scheduler ----------
+ * A cold start has exactly one job: put Home on screen. A mobile webview gives it four to six
+ * connections, and every background socket, beacon and store hydrate started during module
+ * evaluation competes for those connections with the bundle's own chunks — which is the whole
+ * difference between a first frame and a stalled one. So all of it is handed to `afterPaint`:
+ * two frames (the first commits Home, the second confirms the paint), then the browser's own idle
+ * callback, with a timeout as the guarantee for a client that never goes idle.
+ */
+function afterPaint(fn: () => void, timeout = 600): void {
+  const run = (): void => {
+    try { fn(); } catch { /* background I/O never takes the boot down */ }
+  };
+  const idle = (window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (typeof idle === 'function') idle(run, { timeout });
+    else window.setTimeout(run, timeout);
+  }));
+}
+
+/* The Command Center's chunk, fetched on first use. Declared here rather than beside its mount
+   below for the same reason the render-loop state is: a settled race reaches `recordRace` through
+   `showOverlay`, and a `const` read from its temporal dead zone would abort the result screen. */
+let adminModule: Promise<typeof import('./admin')> | null = null;
+const loadAdmin = (): Promise<typeof import('./admin')> => (adminModule ??= import('./admin'));
+
+applyFlagSupport();
 /* SHARED-DEVICE SWITCH GUARD. Every save and cache key was bound to the account Telegram announced
    at module init. If the SDK later names a different account — a shared phone switched users while
    this webview stayed alive — reload so the whole scope re-binds instead of letting the newcomer
@@ -122,10 +151,16 @@ initTelegram();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && accountChanged()) window.location.reload();
 });
-initTelemetry();
-/* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
-initVipStore();
-applyFlagSupport();
+/* Telemetry's first beacon and the VIP store's first read are both network work: they follow the
+   first frame rather than hold it. The VIP store binds after the SDK either way, so
+   `initDataUnsafe` is readable on its first paint. */
+afterPaint(() => {
+  initTelemetry();
+  initVipStore();
+  /* The face-off cinematic is a chunk of its own; warm it here so the first race's veil is already
+     in memory by the time the player presses Start, without its parse landing on the first frame. */
+  void import('./vsclash').catch(() => { /* a missing chunk leaves the reveal path untouched */ });
+});
 
 /* ---------- invite-first boot ----------
    A friend's duel link is a promise to land in that room immediately. `detectInviteDuelLaunch()`
@@ -155,7 +190,7 @@ let inviteGateDeferred = INVITE_DUEL_LAUNCH || INVITE_FTUE;
    that cannot be answered fails open. On an invited launch it is deliberately NOT started: a join
    sheet in front of a waiting friend is the whole drop-off this flow exists to remove.
    `initJoinGate()` is called from the router the moment the player exits back to #s-home instead. */
-if (!inviteGateDeferred) initJoinGate();
+if (!inviteGateDeferred) afterPaint(initJoinGate);
 
 /* ---------- no zoom / no scroll ---------- */
 
@@ -866,6 +901,8 @@ function placeNoteNow() {
 /* ---------- screens ---------- */
 
 let menu: Menu;
+/** The Command Center's own module: its type only, so the panel itself is a lazy chunk. */
+type Admin = import('./admin').Admin;
 let admin: Admin | null = null;
 /* The close hook is the pause family's safety net: see `resumeAfterSheetClose` — every way the
    pause sheet (or the quit confirm it opens) can go away ends in a live board again, never a
@@ -2431,7 +2468,7 @@ function showOverlay() {
     onboardingConsumesDebut = false;
   }
   if (onboardingActive()) deactivateOnboarding();
-  recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
+  void loadAdmin().then((m) => m.recordRace(earned));  // the Stats tab counts the day's duels
   /* FIRST-DUEL WELCOME CUSHION. The debut is the likeliest churn moment — and a new invitee
      usually loses to the experienced friend who sent the link — so the +200 lands on a defeat as
      surely as on a win. `claimFirstDuelBonus()` stamps the flag and credits the wallet in ONE
@@ -3892,10 +3929,12 @@ function startGame(setup: StartSetup) {
      reveal — so it goes straight to the board rather than paying for a second cinematic. */
   if (setup.quiet || questLaunch) { reveal(); return; }
   const rivals = wantsTutorial ? [] : clashRivals();
-  showVsClash(rivals, {
+  /* The face-off is its own chunk, warmed right after the first frame (see the boot's `afterPaint`
+     block), so the first race's cinematic never waits on a fetch it could have made minutes ago. */
+  void import('./vsclash').then(({ showVsClash }) => showVsClash(rivals, {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
     seats: sizes.length,
-  }, reveal);
+  }, reveal));
 }
 
 /**
@@ -5734,33 +5773,37 @@ createNotifications({ sheets });
 
 /* ---- the in-game relic-duel channel ----
    One ambient socket listens for challenges; an accepted challenge becomes a live 1v1 on that same
-   socket and routes straight to the board. The mailbox covers a challenge filed while away. */
-startRelicChannel({
-  onIncoming: (challenge) => {
-    showRelicChallenge(challenge);
-  },
-  onStart: (session) => { startRelicDuel(session); },
-  onDeclined: () => {
-    impact('light');
-    showToast(t('relicDuelDeclined'), 'warning', 3000);
-  },
-  onExpired: () => {
-    impact('light');
-    showToast(t('relicDuelExpired'), 'warning', 3000);
-  },
-  onClosed: (challengeId) => { dismissRelicChallenge(challengeId); },
-  onRefused: (reason) => {
-    impact('light');
-    const line =
-      reason === 'SHIELDED' ? t('relicDuelShielded')
-        : reason === 'TARGET_BUSY' ? t('relicDuelBusy')
-          : reason === 'BUSY' ? t('relicDuelSelfBusy')
-            : reason === 'SELF' ? t('relicDuelNoTarget')
-              : t('relicDuelOffline');
-    showToast(line, 'error', 3000);
-  },
+   socket and routes straight to the board. The mailbox covers a challenge filed while away.
+   Both open after the first frame: a challenge is a thing that arrives seconds later at the
+   earliest, and a socket held open during boot is a connection the first frame cannot have. */
+afterPaint(() => {
+  startRelicChannel({
+    onIncoming: (challenge) => {
+      showRelicChallenge(challenge);
+    },
+    onStart: (session) => { startRelicDuel(session); },
+    onDeclined: () => {
+      impact('light');
+      showToast(t('relicDuelDeclined'), 'warning', 3000);
+    },
+    onExpired: () => {
+      impact('light');
+      showToast(t('relicDuelExpired'), 'warning', 3000);
+    },
+    onClosed: (challengeId) => { dismissRelicChallenge(challengeId); },
+    onRefused: (reason) => {
+      impact('light');
+      const line =
+        reason === 'SHIELDED' ? t('relicDuelShielded')
+          : reason === 'TARGET_BUSY' ? t('relicDuelBusy')
+            : reason === 'BUSY' ? t('relicDuelSelfBusy')
+              : reason === 'SELF' ? t('relicDuelNoTarget')
+                : t('relicDuelOffline');
+      showToast(line, 'error', 3000);
+    },
+  });
+  void syncRelicMailbox();
 });
-void syncRelicMailbox();
 
 /** A challenge accepted by the holder: leave whatever sheet/search was up and take the board. */
 function startRelicDuel(session: OnlineSession): void {
@@ -5796,14 +5839,23 @@ async function syncRelicMailbox(): Promise<void> {
   }
 }
 
-/* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
-admin = createAdmin({
-  note: showNote,
-  /* the stage is not a router screen, so it shows the BackButton itself while it is up */
-  onToggle: (open) => setBackButton(open || router.current !== 'home'),
+/* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ----
+   The panel is a lazy chunk: ~290 KB of source, five tabs and a metrics grid that only an
+   appointed operator ever opens. The boot paints Home without it, and the chunk is fetched the
+   moment the door is needed — here, after the first frame, because the FAB's own entitlement is
+   the server's answer (`probeDoor`) and an operator's key should still appear on the same visit.
+   `recordRace` rides the same chunk: it is a counter, and it can arrive a few milliseconds late. */
+afterPaint(() => {
+  void loadAdmin().then((m) => {
+    admin = m.createAdmin({
+      note: showNote,
+      /* the stage is not a router screen, so it shows the BackButton itself while it is up */
+      onToggle: (open) => setBackButton(open || router.current !== 'home'),
+    });
+    admin.mount();
+  }).catch(() => { /* a chunk that never arrives leaves the game without its operator panel */ });
+  startArenaSync();
 });
-admin.mount();
-startArenaSync();
 onAward((award) => {
   impact('medium');
   notify('success');
