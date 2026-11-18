@@ -1,8 +1,9 @@
 /**
  * tutorial.ts — the first-match hands-on lesson: a thirteen-tap comeback narrative.
  *
- * The lesson is one opening card and then thirteen single taps, each of them a real move on the real
- * board. `main.ts` seeds the FULL match opening — both pawns on their true start tiles, no rival
+ * The lesson is one opening card and then thirteen steps, each of them a real move on the real
+ * board — and a wall or a mine asks for TWO taps: the first previews it, the second commits it.
+ * `main.ts` seeds the FULL match opening — both pawns on their true start tiles, no rival
  * mine and no knockback — so the choreography is deterministic:
  *
  *   PHASE 1 — clean opening sprint (steps 1-3)
@@ -10,7 +11,8 @@
  *        there is no rival ambush and no setback, just a smooth, unbroken run.
  *
  *   PHASE 2 — the three-wall funnel (steps 4-6)
- *   4-6. wall — three pulsing ghost grooves, one tap each. The first cuts the leader's straight
+ *   4-6. wall — three pulsing ghost grooves, two taps each: the first previews the bar, the second
+ *        drops it. The first cuts the leader's straight
  *        rush, the second bends it into a narrow corridor, the third seals the side escape so the
  *        only route left runs through the choke point. A soft detour marker names the tile the
  *        rival is forced to take after each bar drops.
@@ -18,19 +20,20 @@
  *   PHASE 3 — HUD mine, counter-mine & comeback sprint (steps 7-9)
  *   7. selectMine — one tap on the player's own HUD Mine button arms real mine-placement mode; the
  *      board stays in normal move mode until that tap, so new players learn where the key lives.
- *   8. placeMine — one tap on the glowing choke-point square buries the charge; the rival holds its
+ *   8. placeMine — two taps on the glowing choke-point square bury the charge; the rival holds its
  *      breath. Mine mode is locked at this stage so it can never be toggled off by a stray tap.
- *   9. sprint — one tap forward springs the trap: the player's pawn holds the funnel row at (2, 8)
- *      while the rival's own sprint walks it onto the charge. The blast throws it two rows back and
- *      hands the lead to the player. Every overlay marker is cleared the instant that beat begins,
+ *   9. sprint — the tap WALKS the pawn forward, from (2, 8) to (2, 7), through the real move
+ *      handler, so the answer to the finger is immediate. One deliberate beat later the rival's own
+ *      sprint walks it onto the (3, 8) charge; the blast throws it two rows back and hands the lead
+ *      to the player. Every overlay marker is cleared the instant that beat begins,
  *      so no ring or hand is left over the empty crater.
   *
   *   PHASE 4 — the rival's counter-wall and the left/right dodge (steps 10-13)
-  *   After the blast the rival drops one cheap bar flush on the edge directly above the player's
-  *   pawn — h(1, 8) meets the funnel's v(3, 7) in a legal T-junction — so the straight step out of
-  *   (2, 8) is walled off with zero gap. The last four taps teach the way around it and practise BOTH
-  *   directions: left under the bar to (1, 8), left again to the open edge at (0, 8), forward past the
-  *   wall's end to (0, 7), then right back into the centre lane at (1, 7). The rival answers each
+ *   After the blast the rival drops one cheap bar flush on the edge directly above the player's NEW
+ *   square — h(1, 7) meets the funnel's v(3, 7) as a legal L-corner — so the straight step out of
+ *   (2, 7) is walled off with zero gap. The last four taps teach the way around it and practise BOTH
+ *   directions: left under the bar to (1, 7), left again to the open edge at (0, 7), forward past the
+ *   wall's end to (0, 6), then right back into the centre lane at (1, 6). The rival answers each
   *   dodge with a harmless sideways shuffle. The final tap closes the lesson and hands the player the
   *   free-play climax.
   *
@@ -39,9 +42,11 @@
   * 0, the player's charge or the funnel corridor) so the loop can never stall on a bot the lesson
   * does not own. The cue banner therefore stays up across every bot sub-turn.
  *
- * There is no wall-mode toggle, no rotation step and no ✓/✕ confirmation anywhere: the gate names
- * one target per stage and `main.ts` commits it through the same `play()` a real race uses. The one
- * exception is step 7, which teaches the HUD's own arm key: tapping it calls the real `armMine()`
+  * There is no wall-mode toggle, no rotation step and no confirm-disc toolbar anywhere: the gate
+ * names one target per stage and `main.ts` commits it through the same `play()` a real race uses.
+ * A wall and the mine spend that one target in TWO taps — preview, then confirm — so the lesson can
+ * never rush past a new player. The one exception is step 7, which teaches the HUD's own arm key:
+ * tapping it calls the real `armMine()`
  * toggle. Between the taps the rival answers with its own scripted step, so the combo reads as a
  * duel rather than a slideshow.
  *
@@ -155,7 +160,14 @@ export interface Tutorial {
   complete(): void;
   skip(): void;
   cancel(): void;
-  allows(action: TutorialAction): boolean;
+    allows(action: TutorialAction): boolean;
+  /**
+   * THE FIRST TAP. On a wall or a mine stage it locks the bright ghost onto the exact slot the tap
+   * named, ticks, and turns the cue into its confirm prompt; it answers true and the caller must
+   * NOT play anything. False means the tap is the confirming one (or the stage is not a two-tap
+   * one): commit it through the real `play()` and report it with `notify()`.
+   */
+  preview(action: TutorialAction): boolean;
   notify(action: TutorialAction): void;
   nudge(): void;
 }
@@ -337,9 +349,14 @@ const setBox = (el: HTMLElement, r: TutorialRect) => {
   el.style.height = `${Math.max(0, r.height)}px`;
 };
 
-const REPLY_BEAT_MS = 260;      // let the player's own move read, then the rival answers at once
-/** The buried charge gets its own beat before the rival holds position over it. */
-const TRAP_BEAT_MS = 420;
+/** The player's own action reads first; the scripted rival never answers in the same breath. */
+const REPLY_BEAT_MS = 650;
+/** The rival's answer reads before the next target, its ring and the ghost hand appear. */
+const CUE_BEAT_MS = 600;
+/** Step 9 walks the pawn at once; the trap springs one deliberate beat after the move lands. */
+const SPRINT_BEAT_MS = 750;
+/** The explosion and its knockback get the longest beat: the player must SEE the crash. */
+const BLAST_CUE_BEAT_MS = 850;
 /** The top bar the lesson itself owns: the language segment and Skip both live in it. */
 const BAR_BOTTOM = 66;
 
@@ -394,7 +411,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let nudgeTimer = 0;
   /** Every stage change and close bumps this, so a stale bot reply can never advance the lesson. */
   let flow = 0;
-  let lang: TutorialLang = liveLang;
+    let lang: TutorialLang = liveLang;
+  /** The wall/mine target is previewed and waiting for its second (committing) tap. */
+  let locked = false;
+  /** A scripted transition is in flight: the action gate stays shut until the next cue is up. */
+  let busy = false;
 
   const stage = (): TutorialStage | null =>
     open ? TUTORIAL_STEPS[stepIndex].stage : null;
@@ -461,8 +482,12 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       bodyEl.textContent = body;
       nextLabel.textContent = tIn(lang, 'tutGoalAction');
       liveEl.textContent = `${title}. ${body}`;
-    } else if (def.cue) {
-      const line = tIn(lang, def.cue);
+        } else if (def.cue) {
+      /* a previewed wall or mine keeps its confirm sentence when the copy is repainted */
+      const kind = STAGE_KIND[def.stage];
+      const line = locked && (kind === 'wall' || kind === 'mine')
+        ? tIn(lang, kind === 'wall' ? 'tutConfirmWall' : 'tutConfirmMine')
+        : tIn(lang, def.cue);
       cueText.textContent = line;
       cueNum.textContent = `${def.step}/${TUTORIAL_STEP_TOTAL}`;
       cue.setAttribute('aria-label', tIn(lang, 'tutStepAria').replace('{n}', String(def.step)));
@@ -478,6 +503,26 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     card.classList.add('lang-swap');
     cue.classList.add('lang-swap');
     root.classList.add('lang-swap');
+  };
+
+    /**
+   * The confirm sub-cue. A previewed slot takes over the banner's sentence and the live region, so
+   * the second tap is asked for in the same tongue as the stage that set it up — and a language
+   * switch mid-preview re-reads it in place rather than falling back to the stage prompt.
+   */
+  const paintConfirm = (kind: 'wall' | 'mine') => {
+    const line = tIn(lang, kind === 'wall' ? 'tutConfirmWall' : 'tutConfirmMine');
+    cueText.textContent = line;
+    liveEl.textContent = line;
+    cue.dataset.confirm = '1';
+    root.dataset.locked = '1';
+  };
+
+  /** Drop the confirm state: the stage moved on, the lesson closed, or it restarted. */
+  const clearConfirm = () => {
+    locked = false;
+    delete cue.dataset.confirm;
+    delete root.dataset.locked;
   };
 
   const switchLang = (next: TutorialLang, animate: boolean) => {
@@ -669,6 +714,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     /* Entering the blast is the exact moment the mine tile is emptied: clear once here and keep
        every following tracked frame clear until the stage moves on to the first dodge. */
     blastCleared = def.stage === 'blast';
+    /* a fresh stage owns no preview and no transition: both gates reset here */
+    clearConfirm();
+    busy = false;
     flow++;
     root.dataset.stage = def.stage;
     root.dataset.tone = def.tone;
@@ -708,20 +756,28 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   /**
-   * One bot beat, then the next stage. Token-guarded like every other transition, so a skip, a
-   * close or a stale reply can never advance a lesson that has already moved on.
+   * One transition in three deliberate beats: the player's own action reads for `preMs`, the
+   * scripted rival answers, and that answer reads for `postMs` before the next stage lights up.
+   * The action gate stays shut (`busy`) for the whole of it, so a fast double-tap can neither skip
+   * a cue nor act on a board the rival has not answered on yet. Token-guarded like every other
+   * transition: a skip, a close or a stale reply can never advance a lesson that has moved on.
    */
-  const awaiting = (beatMs: number, beat: () => Promise<void>, next: () => void) => {
+  const awaiting = (preMs: number, beat: () => Promise<void>, postMs: number, next: () => void) => {
     const token = ++flow;
+    busy = true;
     transitionTimer = window.setTimeout(() => {
       transitionTimer = 0;
       void beat()
         .catch(() => undefined)
         .then(() => {
           if (!open || token !== flow) return;
-          next();
+          transitionTimer = window.setTimeout(() => {
+            transitionTimer = 0;
+            if (!open || token !== flow) return;
+            next();
+          }, postMs);
         });
-    }, beatMs);
+    }, preMs);
   };
 
   const attach = () => {
@@ -742,6 +798,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     open = false;
     blastCell = null;
     blastCleared = false;
+    clearConfirm();
+    busy = false;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -798,7 +856,24 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     skip() { close('skipped'); },
     cancel() { close('cancelled'); },
     allows(action) {
-      return tutorialAllows(stage(), targets(), action);
+      /* a transition in flight owns the board: nothing is accepted until the next cue is up */
+      return !busy && tutorialAllows(stage(), targets(), action);
+    },
+    preview(action) {
+      if (!open || busy) return false;
+      const now = TUTORIAL_STEPS[stepIndex].stage;
+      const kind = STAGE_KIND[now];
+      if (kind !== 'wall' && kind !== 'mine') return false;
+      if (action.kind !== kind) return false;
+      if (!tutorialAllows(now, targets(), action)) return false;
+      /* already locked on this exact slot: this tap IS the confirm, so let the caller commit */
+      if (locked) return false;
+      locked = true;
+      /* a tactile tick and a brighter ghost — never a word from the board's own toast */
+      impact('light');
+      audio.play('move', { gain: 0.32 });
+      paintConfirm(kind);
+      return true;
     },
     notify(action) {
       if (!open) return;
@@ -810,16 +885,17 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         case 'rush1':
         case 'rush2':
         case 'rush3':
-          /* a clean advance: the rival answers the step at once, then the next tap is lit. No rival
-             charge, no knockback — the player's pawn keeps climbing toward the funnel. */
-          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
+          /* a clean advance: one beat for the pawn's own step, the rival answers, one beat for that
+             answer, then the next square lights up. No rival charge, no knockback. */
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), CUE_BEAT_MS, () => go(NEXT_STAGE[now] as TutorialStage));
           return;
         case 'wall1':
         case 'wall2':
         case 'wall3':
-          /* each bar bends the rival's route one notch deeper into the funnel; the detour marker
-             and the next ghost groove are re-derived from the live board on the next stage */
-          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
+          /* the confirming tap dropped the bar. One beat for its weight, the rival's forced detour,
+             one beat for that detour, and only then is the next ghost groove lit — the player gets
+             to watch the funnel actually close. */
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), CUE_BEAT_MS, () => go(NEXT_STAGE[now] as TutorialStage));
           return;
         case 'selectMine':
           /* The real HUD arm key was tapped by `main.ts`, which has already put the board into mine
@@ -828,39 +904,53 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
           return;
         case 'placeMine': {
           if (action.kind !== 'mine') { close('finished'); return; }
-          /* The charge is buried on the choke point. The rival holds position for one beat — the
-             player's forward tap is what sends it walking onto the square. */
+          /* The confirming tap buried the charge on the choke point. The bots hold position for
+             one beat — the player's forward tap is what sends the rival walking onto the square. */
           blastCell = action.cell;
-          awaiting(TRAP_BEAT_MS, () => hooks.reply('placeMine'), () => go('sprint'));
+          awaiting(REPLY_BEAT_MS, () => hooks.reply('placeMine'), CUE_BEAT_MS, () => go('sprint'));
           return;
         }
         case 'sprint': {
-          /* The tap sprang the trap: the player's pawn holds the funnel row while the rival sprints
-             onto the charge. `go('blast')` clears every marker BEFORE the board walks the rival onto
-             it, so the empty crater wears no ring, hand or mine silhouette while the blast, the
-             knockback, the shake and the bang play out. */
+          /* `main.ts` has already WALKED the pawn forward through the real move handler, so the
+             answer to the finger lands on the same frame. `go('blast')` clears every marker before
+             the rival moves onto the charge; one deliberate beat later the rival walks into it, and
+             the blast, the knockback, the shake and the bang play out with nothing left hanging
+             over the crater. The counter-wall then waits for the explosion to settle
+             (`BLAST_CUE_BEAT_MS`), so the player watches the crash before a bar appears above
+             their NEW square. */
           const cell = blastCell;
           go('blast');
           if (!cell) { close('finished'); return; }
+          busy = true;
           const token = ++flow;
-          void hooks.detonate(cell)
-            .catch(() => undefined)
-            .then(() => hooks.counterWall())
-            .catch(() => undefined)
-            .then(() => {
-              if (!open || token !== flow) return;
-              hooks.finishPulse();
-              impact('medium');
-              audio.play('swoosh', { gain: 0.5 });
-              go('dodgeLeft1');
-            });
+          transitionTimer = window.setTimeout(() => {
+            transitionTimer = 0;
+            void hooks.detonate(cell)
+              .catch(() => undefined)
+              .then(() => {
+                if (!open || token !== flow) return;
+                transitionTimer = window.setTimeout(() => {
+                  transitionTimer = 0;
+                  if (!open || token !== flow) return;
+                  void hooks.counterWall()
+                    .catch(() => undefined)
+                    .then(() => {
+                      if (!open || token !== flow) return;
+                      hooks.finishPulse();
+                      impact('medium');
+                      audio.play('swoosh', { gain: 0.5 });
+                      go('dodgeLeft1');
+                    });
+                }, BLAST_CUE_BEAT_MS);
+              });
+          }, SPRINT_BEAT_MS);
           return;
         }
         case 'dodgeLeft1':
         case 'dodgeLeft2':
         case 'clearWall':
           /* one rival beat between the sidesteps, then the next fixed square lights up alone */
-          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), () => go(NEXT_STAGE[now] as TutorialStage));
+          awaiting(REPLY_BEAT_MS, () => hooks.reply(now), CUE_BEAT_MS, () => go(NEXT_STAGE[now] as TutorialStage));
           return;
         case 'dodgeRight':
           /* Step 13 lands past the wall. `close()` strips the ring and the hand before the hand-off;

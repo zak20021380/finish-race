@@ -1512,6 +1512,46 @@ body.tutorial-live .g-round { opacity: 0; }
 }
 .tut-cue[dir="rtl"] .tut-cue-t { text-align: right; }
 
+/* ---- THE CONFIRM BEAT. A wall slot or the mine square has been previewed and is one tap away
+   from being committed: the ghost burns brighter, its pulse tightens, and the cue banner's
+   sentence turns the same amber as the piece waiting to drop. Nothing here moves the target, its
+   ring or its tap box — the second tap lands on the identical slot the first one did. ---- */
+.tutorial[data-locked] .tut-aid {
+  animation-duration: .62s;
+  filter: brightness(1.34) saturate(1.18);
+}
+.tutorial[data-locked] .tut-aid[data-kind="wall"] {
+  box-shadow:
+    0 0 0 2px rgba(255, 247, 214, .96),
+    0 0 24px rgba(245, 158, 11, .82),
+    0 0 54px rgba(56, 189, 248, .58),
+    inset 0 0 20px rgba(255, 247, 214, .5);
+}
+.tutorial[data-locked] .tut-aid[data-kind="mine"] {
+  box-shadow:
+    inset 0 0 0 2.5px rgba(255, 247, 214, .98),
+    0 0 30px rgba(245, 158, 11, .74),
+    0 0 58px rgba(244, 63, 94, .34);
+}
+.tutorial[data-locked] .tut-aid-mine {
+  filter: drop-shadow(0 0 10px rgba(255, 247, 214, .95));
+}
+.tutorial[data-locked] .tut-spot {
+  --tut-ring-soft: rgba(255, 247, 214, .86);
+}
+.tutorial[data-locked] .tut-cue {
+  border-color: rgba(252, 211, 77, .62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 0 0 1px rgba(252, 211, 77, .28),
+    0 18px 34px -24px rgba(0, 0, 0, .95);
+}
+.tut-cue[data-confirm="1"] .tut-cue-t { color: #fde68a; }
+.tut-cue[data-confirm="1"] .tut-cue-n {
+  background: rgba(252, 211, 77, .16);
+  color: #fff7d6;
+}
+
 /* ---- skip: quiet, top-right, still a 48px target ---- */
 .tut-skip {
   position: absolute;

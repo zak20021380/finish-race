@@ -4473,9 +4473,10 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 /**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
- * canvas receives this tap exactly as it would after the lesson. Each of the thirteen steps is ONE
- * tap: the pawn is already in hand, the wall commits without a ghost toolbar, and the step-8 mine
- * buries on the tile the step-7 HUD arm key just prepared (no confirm disc).
+ * canvas receives this tap exactly as it would after the lesson. The pawn is already in hand, and a
+ * wall or the mine asks for TWO taps of that one target: the first locks the bright ghost on the
+ * slot and turns the cue into its confirm prompt, the second commits it through the same `play()`
+ * a real race uses — no ghost toolbar, no confirm disc.
  */
 function tutorialTap(p: Vec) {
   const stage = tutorialStage();
@@ -4518,12 +4519,18 @@ function tutorialTap(p: Vec) {
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
   invalidate();           // a queued ripple is a finite transition: wake the parked loop
-  /* Step 9 springs the trap: the player's pawn holds the funnel row while the rival's own sprint
-     walks it onto the charge. The forward tap is the trigger, not a step — the blast hands the lead
-     over, and the counter-wall dodge begins from the square the pawn already holds. */
+  /* TAP 1 of a wall or a mine is a PREVIEW, not a commitment: the bright ghost locks onto the very
+     slot the finger hit, a tick lands, and the cue asks for the confirming tap. Nothing is spent,
+     no rival answers, and the beat cannot be rushed past. The second tap falls through below. */
+  if (tutorial?.preview(action)) return;
+  /* Step 9 WALKS THE PAWN. The forward tap runs the real move handler — (2, 8) -> (2, 7) — so the
+     player feels their pawn answer immediately after burying the charge; the lesson springs the
+     trap one deliberate beat later, from the new row, while the pawn stays right where it landed. */
   if (stage === 'sprint') {
     disarmWall();
     impact('light');
+    if (action.kind !== 'move') { tutorial?.nudge(); return; }
+    if (!play({ kind: 'move', ball: action.ball, to: action.to })) { tutorial?.nudge(); return; }
     tutorial?.notify(action);
     return;
   }
@@ -4534,8 +4541,8 @@ function tutorialTap(p: Vec) {
       if (!play({ kind: 'move', ball: action.ball, to: action.to })) { tutorial?.nudge(); return; }
       break;
     case 'wall': {
-      /* ONE tap raises the bar: no mode toggle, no rotation, no ✓/✕ pair. The same `play()` every
-         real race uses spends the wall, and the board answers with its own weight. */
+      /* The confirming tap raises the bar: no mode toggle, no rotation, no confirm pair. The same
+         `play()` every real race uses spends the wall, and the board answers with its own weight. */
       const wall: Wall = { ...action.spec, owner: state.turn };
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
       impact('heavy');
@@ -4543,8 +4550,8 @@ function tutorialTap(p: Vec) {
       break;
     }
     case 'mine':
-      /* ONE tap buries the charge on the rival's forced detour — the arm key and the staged pair
-         are both handled here, so the player never has to find them. */
+      /* The confirming tap buries the charge on the rival's forced detour — the arm key and the
+         staged pair are both handled here, so the player never has to find them. */
       if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
       impact('medium');
       break;
@@ -4741,7 +4748,7 @@ function tutorialForwardStep(): { ball: Ball; to: Pos } | null {
   return { ball, to };
 }
 
-/** STEPS 1-3 and 8 — the single square directly ahead of the player's pawn. */
+/** STEPS 1-3 and 9 — the single square directly ahead of the player's pawn. */
 function tutorialAdvanceTarget(): TutorialTargetMove | null {
   const step = tutorialForwardStep();
   return step
@@ -4751,11 +4758,11 @@ function tutorialAdvanceTarget(): TutorialTargetMove | null {
 
 /**
  * STEPS 10-13 — four FIXED squares anchored on the player's pawn at the moment the rival's
- * counter-wall dropped, not the live forward finder. The bar sits flush on the edge directly above
- * that pawn — h(1, 8) shuts the straight step out of (2, 8) with zero gap and meets v(3, 7) in a
- * legal T-junction — so the lesson teaches the way around it and practises BOTH directions: left
- * under the bar to (1, 8), left again to the open edge at (0, 8), forward past the wall's end to
- * (0, 7), then right back into the centre lane at (1, 7). The anchor is read once so the four tiles
+ * counter-wall dropped, not the live forward finder. Step 9 walked the pawn onto (2, 7), so the bar
+ * sits flush on the edge directly above that square — h(1, 7) shuts the straight step out of (2, 7)
+ * with zero gap and meets v(3, 7) as a legal L-corner — and the lesson teaches the way around it,
+ * practising BOTH directions: left under the bar to (1, 7), left again to the open edge at (0, 7),
+ * forward past the wall's end to (0, 6), then right back into the centre lane at (1, 6). The anchor is read once so the four tiles
  * stay put as the pawn walks them; each is offered only when the rules say the pawn can actually
  * step there, so a replay on a drifted board can never spotlight a dead tile.
  */
@@ -5169,9 +5176,9 @@ async function tutorialDetonate(cell: Cell): Promise<void> {
 
 /**
  * STEP 10's setup. Once the blast has settled the rival drops one cheap bar flush on the edge directly
- * above the player's pawn — h(1, 8) covers columns 1-2 on the line above row 8, so it shuts the
- * straight step out of (2, 8) with zero empty tiles in between, meets v(3, 7) in a legal T-junction
- * and leaves the left flank open. It is committed through the very same `wallOk` gate a human
+ * above the player's NEW pawn square — h(1, 7) covers columns 1-2 on the line above row 7, so it
+ * shuts the straight step out of (2, 7) with zero empty tiles in between, meets v(3, 7) as a legal
+ * L-corner and leaves the left flank open. It is committed through the very same `wallOk` gate a human
  * placement uses, with the rival's turn borrowed for this one action and handed straight back. The
  * player's square is saved as the dodge anchor, and the board is washed of every stale input mode —
  * mine off, no ghost, no carried pick — with the pawn already in hand, so its move dots light up the
@@ -5187,7 +5194,8 @@ async function tutorialCounterWall(): Promise<void> {
   if (state.turn !== localSide) state = { ...state, turn: localSide };
   const ball = firstBall(state, localSide);
   if (!ball) return;
-  /* The fixed anchor the four dodge tiles are measured from: the player's pawn square right now. */
+  /* The fixed anchor the four dodge tiles are measured from: the square step 9 walked the pawn onto
+     — (2, 7) on the seeded opening — so every dodge tap moves smoothly around the bar above it. */
   tutDodgeAnchor = { ...ball.pos };
   const spec: WallSpec = { o: 'h', x: ball.pos.c - 1, y: ball.pos.r };
   const wall: Wall = { ...spec, owner: foe };
