@@ -2614,7 +2614,7 @@
         <div class="mm-stage">
           <!-- what this arena is actually running: seat and pairing radius -->
           <div class="mm-tele" aria-hidden="true">
-            <span class="mm-tele-c"><svg class="ico"><use href="#i-bolt" /></svg>1v1 Arena</span>
+            <span class="mm-tele-c" id="mm-mode"><svg class="ico"><use id="mm-mode-ico" href="#i-bolt" /></svg><span id="mm-mode-t">1v1 Arena</span></span>
             <span class="mm-tele-c is-range" id="mm-range"><svg class="ico"><use href="#i-target" /></svg>TIQ range <b>±250</b></span>
           </div>
 
@@ -2631,6 +2631,10 @@
                 <span class="mm-flag" id="mm-you-flag" aria-hidden="true"></span>
               </span>
               <span class="mm-pod-name" id="mm-you-name">You</span>
+              <span class="mm-chantag" id="mm-you-channel" hidden>
+                <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+                <bdi dir="auto" id="mm-you-channel-t"></bdi>
+              </span>
               <span class="mm-plaque"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-you-tiq">0</b></span>
             </div>
 
@@ -2693,7 +2697,8 @@
             <span class="mm-stakes-t">Win stakes</span>
             <span class="mm-stakes-c is-tiq"><svg class="ico"><use href="#i-brain" /></svg>+<b id="mm-stake-tiq">140</b> TIQ</span>
             <span class="mm-stakes-c is-gold"><svg class="ico"><use href="#i-medal" /></svg>+<b id="mm-stake-gold">65</b> Gold</span>
-            <span class="mm-stakes-c is-cup"><svg class="ico"><use href="#i-cup" /></svg>Ranked <b id="mm-stake-season">S4</b></span>
+            <span class="mm-stakes-c is-war" id="mm-stake-war" hidden><svg class="ico"><use href="#i-swords" /></svg>+<b id="mm-stake-war-n">25</b> <span id="mm-stake-war-u">WAR PTS</span></span>
+            <span class="mm-stakes-c is-cup"><svg class="ico"><use id="mm-season-ico" href="#i-cup" /></svg><span id="mm-stake-season-k">Ranked</span> <b id="mm-stake-season">S4</b></span>
           </div>
 
           <div class="mm-tip">
@@ -4473,67 +4478,156 @@
         <p class="fine">Stored on this device only. Nothing leaves your phone.</p>
       </section>
 
-      <!-- channel war registration: an obsidian tournament pass. The crest and the pool come
-           first, then the field's own numbers, then the one key that claims a seat. Free to
-           enter, kept on this device. Every text line that carries Latin tokens or digits is
-           pinned LTR so a `?` or a `·` can never jump to the wrong end. -->
-      <section class="sheet pass-sheet" id="sheet-stars" hidden role="dialog" aria-modal="true" aria-labelledby="stars-sheet-title">
+
+      <!-- CHANNEL WARS HUB — the one door the hero's "Fight for your channel" key opens.
+           Two states, one shell: a player with no channel gets the three-step strip and a
+           one-tap join rail; a player with a channel gets the war room — their crest, the live
+           ladder and the gold key that queues a war match. src/channelWar.ts owns both. -->
+      <section class="sheet cw-sheet" id="channel-war-modal" hidden role="dialog" aria-modal="true" aria-labelledby="cw-title">
         <span class="sheet-grip" aria-hidden="true"></span>
 
-        <header class="tp-head">
-          <span class="tp-crest" aria-hidden="true">
-            <svg class="tp-crest-mark" viewBox="0 0 48 48" focusable="false"><use href="#i-pass-crest" /></svg>
+        <header class="cw-head">
+          <span class="cw-crest" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24" focusable="false"><use href="#i-arena" /></svg>
           </span>
-          <h2 class="sheet-t tp-title" id="stars-sheet-title" lang="en" dir="ltr">Squad Tournament Pass</h2>
-          <p class="sheet-p tp-sub" id="stars-sheet-desc" lang="en" dir="ltr">Represent your channel in the 8s Blitz championship</p>
+          <span class="cw-head-txt">
+            <h2 class="cw-title" id="cw-title" data-i18n="cwTitle">CHANNEL WARS</h2>
+            <p class="cw-sub" data-i18n="cwSub">Win matches. Lift your channel. Take the week.</p>
+          </span>
+          <button class="cw-x" type="button" data-sheet-close data-i18n-aria="cwClose" aria-label="Close Channel Wars">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-close" /></svg>
+          </button>
         </header>
 
-        <p class="tp-prize" dir="ltr">
-          <svg class="ico tp-prize-ico" aria-hidden="true"><use href="#i-cup" /></svg>
-          <span class="tp-prize-txt">
-            <b class="tp-prize-amt" id="stars-sheet-prize">200 Stars reward</b>
-            <span class="tp-prize-note" id="stars-sheet-prize-note">Top 10 contributors</span>
+        <div class="cw-meta">
+          <span class="cw-live"><i class="cw-live-dot" aria-hidden="true"></i><span data-i18n="cwLive">LIVE</span></span>
+          <span class="cw-clock">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-clock" /></svg>
+            <span class="cw-clock-k" data-i18n="cwEndsIn">Ends in</span>
+            <b class="cw-clock-v" id="cw-countdown" dir="ltr">--</b>
           </span>
-        </p>
-
-        <dl class="tp-specs">
-          <div class="tp-spec">
-            <dt class="tp-k">Entry</dt>
-            <dd class="tp-v tp-free">
-              <svg class="ico tp-free-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
-              <span id="stars-sheet-entry">Free entry</span>
-            </dd>
-          </div>
-          <div class="tp-spec">
-            <dt class="tp-k">Starts in</dt>
-            <dd class="tp-v tp-clock" id="stars-sheet-start">01:45:20</dd>
-          </div>
-          <div class="tp-spec tp-cap">
-            <dt class="tp-k">Capacity</dt>
-            <dd class="tp-v tp-cap-v">
-              <span class="tp-cap-line">
-                <b class="tp-cap-seats" id="stars-sheet-seat">184 / 256</b>
-                <span class="tp-cap-pct" id="stars-sheet-pct">72% full</span>
-              </span>
-              <span class="tp-meter" role="progressbar" aria-label="Seats claimed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="72">
-                <i class="tp-meter-fill" id="stars-sheet-meter"></i>
-              </span>
-              <span class="tp-cap-note" id="stars-sheet-seat-note">72 seats left before the field closes</span>
-            </dd>
-          </div>
-        </dl>
-
-        <div class="tp-actions">
-          <button class="btn tp-cta" type="button" id="stars-sheet-yes">
-            <span class="tp-cta-face">Claim seat &amp; compete</span>
-          </button>
-          <button class="btn btn-ghost tp-quiet" type="button" data-sheet-close data-autofocus>Not yet</button>
+          <span class="cw-pot">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-star-3d" /></svg>
+            <b dir="ltr">200</b>
+          </span>
         </div>
 
-        <ul class="tp-perks" lang="en" dir="ltr">
-          <li>Every win lifts your channel up the Cup</li>
-          <li id="stars-sheet-perk">Top 10 contributors share the Star pool</li>
-        </ul>
+        <!-- STATE A — no channel yet. Three steps, one field, one tap. -->
+        <div class="cw-view" id="cw-onboard">
+          <ol class="cw-steps">
+            <li class="cw-step is-pick">
+              <span class="cw-step-n" aria-hidden="true">1</span>
+              <span class="cw-step-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-chat" /></svg></span>
+              <b class="cw-step-t" data-i18n="cwStep1T">Pick a channel</b>
+              <span class="cw-step-b" data-i18n="cwStep1B">Any Telegram channel you rep</span>
+            </li>
+            <li class="cw-step is-win">
+              <span class="cw-step-n" aria-hidden="true">2</span>
+              <span class="cw-step-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
+              <b class="cw-step-t" data-i18n="cwStep2T">Win matches</b>
+              <span class="cw-step-b"><bdi dir="ltr">+25</bdi> <span data-i18n="cwStep2B">WAR PTS every win</span></span>
+            </li>
+            <li class="cw-step is-climb">
+              <span class="cw-step-n" aria-hidden="true">3</span>
+              <span class="cw-step-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>
+              <b class="cw-step-t" data-i18n="cwStep3T">Climb &amp; win</b>
+              <span class="cw-step-b" data-i18n="cwStep3B">Top channels take weekly rewards</span>
+            </li>
+          </ol>
+
+          <div class="cw-join">
+            <label class="cw-join-l" for="cw-handle" data-i18n="cwJoinTitle">Join your channel</label>
+            <div class="cw-join-row">
+              <span class="cw-join-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-link" /></svg></span>
+              <input class="cw-input" id="cw-handle" type="text" dir="ltr" autocomplete="off"
+                     autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
+                     maxlength="64" data-i18n-ph="cwJoinPh" placeholder="@channel or t.me/channel"
+                     aria-describedby="cw-join-err" />
+              <button class="cw-join-btn" id="cw-join-go" type="button">
+                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-user-join" /></svg>
+                <span data-i18n="cwJoinCta">Join</span>
+              </button>
+            </div>
+            <p class="cw-join-err" id="cw-join-err" role="alert" hidden></p>
+          </div>
+
+          <div class="cw-rail">
+            <div class="cw-rail-head">
+              <span class="cw-rail-t" id="cw-rail-title" data-i18n="cwPopular">Popular channels active now</span>
+              <span class="cw-rail-hint" data-i18n="cwPopularSub">One tap and you are on the roster</span>
+            </div>
+            <ol class="cw-list cw-quick" id="cw-quick-list" data-scroll></ol>
+          </div>
+        </div>
+
+        <!-- STATE B — the war room. Your crest, the live ladder, the gold key. -->
+        <div class="cw-view" id="cw-hub" hidden>
+          <article class="cw-hero">
+            <div class="cw-hero-top">
+              <span class="cw-av is-hero" id="cw-hero-av">
+                <img class="cw-av-img" id="cw-hero-img" alt="" hidden decoding="async" />
+                <b class="cw-av-t" id="cw-hero-mark" aria-hidden="true">?</b>
+              </span>
+              <span class="cw-hero-id">
+                <span class="cw-hero-k" data-i18n="cwYourChannel">YOUR CHANNEL</span>
+                <b class="cw-hero-name"><bdi dir="auto" id="cw-hero-name">—</bdi></b>
+                <span class="cw-hero-handle"><bdi dir="ltr" id="cw-hero-handle">@—</bdi></span>
+              </span>
+              <button class="cw-change" id="cw-change" type="button">
+                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-swap" /></svg>
+                <span data-i18n="cwChange">Change</span>
+              </button>
+            </div>
+
+            <div class="cw-hero-stats">
+              <span class="cw-stat is-rank">
+                <span class="cw-stat-k" data-i18n="cwRank">RANK</span>
+                <b class="cw-stat-v" id="cw-hero-rank" dir="ltr">#1</b>
+              </span>
+              <span class="cw-stat is-pts">
+                <span class="cw-stat-k" data-i18n="cwTotalPts">WAR POINTS</span>
+                <b class="cw-stat-v" id="cw-hero-pts" dir="ltr">0</b>
+              </span>
+              <span class="cw-stat is-crew">
+                <span class="cw-stat-k" data-i18n="cwActiveFighters">FIGHTERS</span>
+                <b class="cw-stat-v" id="cw-hero-crew" dir="ltr">1</b>
+              </span>
+            </div>
+
+            <button class="cw-rally" id="cw-rally" type="button">
+              <span class="cw-rally-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-send" /></svg></span>
+              <span class="cw-rally-t">
+                <b data-i18n="cwRally">Rally Channel</b>
+                <span data-i18n="cwRallySub">Bring your people — every fighter adds points</span>
+              </span>
+              <svg class="ico cw-rally-chev" aria-hidden="true" focusable="false"><use href="#i-chevron-right" /></svg>
+            </button>
+          </article>
+
+          <div class="cw-board">
+            <div class="cw-rail-head">
+              <span class="cw-rail-t" data-i18n="cwBoard">Live channel leaderboard</span>
+              <span class="cw-rail-hint" id="cw-board-count" dir="ltr">0</span>
+            </div>
+            <ol class="cw-list cw-ladder" id="cw-board-list" data-scroll></ol>
+            <p class="cw-gap" id="cw-gap">
+              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-target" /></svg>
+              <span class="cw-gap-t" id="cw-gap-t"></span>
+            </p>
+          </div>
+        </div>
+
+        <div class="cw-foot" id="cw-foot" hidden>
+          <button class="cw-cta" id="cw-start" type="button">
+            <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
+            <span class="cw-cta-t">
+              <b data-i18n="cwStartWar">Start War Match</b>
+              <span><bdi dir="ltr">+25</bdi> <span data-i18n="cwStartWarSub">WAR PTS on win</span></span>
+            </span>
+          </button>
+        </div>
+
+        <p class="sr-only" id="cw-live-region" role="status" aria-live="polite"></p>
       </section>
 
       <!-- roster: one channel's Top 10, and the Stars each of them projects to.

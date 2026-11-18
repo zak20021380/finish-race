@@ -43,7 +43,7 @@ import { isPremiumUser } from './premium';
 import { menuState, motionReduced, settings, t } from './settings';
 import { audioContext } from './sound';
 import { guestId, ladderTally, payout, profile } from './storage';
-import { getMySquad } from './squads';
+import { getMySquad, WAR_WIN } from './squads';
 import { paintFlag } from './flags';
 import { runtime, tiqFrom } from './runtime';
 import { adoptArena, arena, claimArenaAward, type ArenaState } from './arenaState';
@@ -319,11 +319,20 @@ const WS_URL = import.meta.env?.VITE_WS_URL?.trim() ?? '';
  * The queue the Arena's cup key opens, carried on the socket's query string. The room tags the
  * resulting race, so a cup match is counted as an Arena match even when the pairing itself is the
  * same shared queue. Every other entry point sets it back to `pvp` before it opens.
+ *
+ * `channel_war` is a client-side identity, not a separate pool: a war match is an ordinary ranked
+ * 1v1 pairing that the settlement also credits to the fighter's channel. The wire therefore sees
+ * `pvp`, and the stage wears the war banner.
  */
-let queueMode: 'pvp' | 'arena' = 'pvp';
+let queueMode: 'pvp' | 'arena' | 'channel_war' = 'pvp';
 
-export function setQueueMode(mode: 'pvp' | 'arena'): void {
+export function setQueueMode(mode: 'pvp' | 'arena' | 'channel_war'): void {
   queueMode = mode;
+}
+
+/** True while the search on screen is a Channel Wars match. */
+export function isWarQueue(): boolean {
+  return queueMode === 'channel_war';
 }
 
 function socketUrl(): string {
@@ -351,7 +360,7 @@ function socketParams(wide: boolean): string {
   params.set('age', String(profile.age ?? 0));
   params.set('name', readFace('Player').name);
   params.set('wide', wide ? '1' : '0');
-  params.set('mode', queueMode);
+  params.set('mode', queueMode === 'arena' ? 'arena' : 'pvp');
   /* the board this search is for: the matchmaker only pairs two seats playing the same game */
   params.set('sizes', menuState.sizes.join(','));
   /* economy / social telemetry for the Admin Command Center's directory. The room clamps every
@@ -1109,6 +1118,20 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     gold: document.getElementById('mm-stake-gold') as HTMLElement | null,
     season: document.getElementById('mm-stake-season') as HTMLElement | null,
   };
+  /* The war identity: the mode pill, the fighter's channel badge and the war stake. All three
+     are painted from the same queue flag, so they can never disagree about what is being played. */
+  const warEls = {
+    mode: document.getElementById('mm-mode'),
+    modeIco: document.getElementById('mm-mode-ico'),
+    modeT: document.getElementById('mm-mode-t'),
+    channel: document.getElementById('mm-you-channel'),
+    channelT: document.getElementById('mm-you-channel-t'),
+    stake: document.getElementById('mm-stake-war'),
+    stakeN: document.getElementById('mm-stake-war-n'),
+    stakeU: document.getElementById('mm-stake-war-u'),
+    seasonK: document.getElementById('mm-stake-season-k'),
+    seasonIco: document.getElementById('mm-season-ico'),
+  };
 
   let source: MatchSource = init.source ?? simulatedSearch();
   let onMatchFound = init.onMatchFound;
@@ -1231,11 +1254,33 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
       ));
     }
     /* the same Command Center season the Mind Ladder capsule counts down */
+    const war = isWarQueue();
     const season = `S${arena().seasonNo}`;
     if (stakeEls.season) {
-      stakeEls.season.textContent = season;
-      stakeEls.season.closest('.mm-stakes-c')?.toggleAttribute('hidden', season === '');
+      stakeEls.season.textContent = war ? '' : season;
+      stakeEls.season.hidden = war;
+      stakeEls.season.closest('.mm-stakes-c')?.toggleAttribute('hidden', !war && season === '');
     }
+    paintWarIdentity(war);
+  }
+
+  /**
+   * What this search is for. A war match swaps the arena pill for the Channel War banner, pins the
+   * fighter's channel to their own pod, and adds the war stake beside TIQ and Gold — the three
+   * numbers the settlement actually pays.
+   */
+  function paintWarIdentity(war: boolean): void {
+    const mine = war ? getMySquad() : null;
+    warEls.mode?.classList.toggle('is-war', war);
+    warEls.modeIco?.setAttribute('href', war ? '#i-swords' : '#i-bolt');
+    if (warEls.modeT) warEls.modeT.textContent = war ? t('cwModePill') : '1v1 Arena';
+    if (warEls.channel) warEls.channel.hidden = !mine;
+    if (warEls.channelT) warEls.channelT.textContent = mine?.handle ?? '';
+    if (warEls.stake) warEls.stake.hidden = !war;
+    if (warEls.stakeN) warEls.stakeN.textContent = String(WAR_WIN);
+    if (warEls.stakeU) warEls.stakeU.textContent = t('cwWarPts');
+    if (warEls.seasonK) warEls.seasonK.textContent = war ? t('cwSeasonWar') : 'Ranked';
+    warEls.seasonIco?.setAttribute('href', war ? '#i-swords' : '#i-cup');
   }
 
   /** One line of the sweep, with its own fade so two neighbours never cross-fade. */

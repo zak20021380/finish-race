@@ -31,7 +31,10 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications, clearRelicChallenges, dismissRelicChallenge, noteRelicMissed, showRelicChallenge } from './notifications';
 import { fetchRelicMailbox, startRelicChannel } from './network';
-import { showMarkupToast, showToast } from './toast';
+import { showMarkupToast, showRoyalToast, showToast } from './toast';
+import { getMySquad, WAR_LOSS, WAR_WIN } from './squads';
+import { awardWarPoints } from './squadRegister';
+import { channelWarHandleOf } from '../shared/config';
 import { mountCoins } from './coin';
 import {
   appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, setSkip2xConfirm,
@@ -68,7 +71,7 @@ import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { mineStage, setCapsuleStage, setMineStage, STAGE_CLEAR } from './staging';
 import { setPieceBoxes, type PieceBox } from './boardpieces';
 import {
-  detonation, impact, initTelegram, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
+  detonation, impact, initTelegram, inviteChannelWarHandle, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
   onBackPress, shatterImpact, startParam, tgUser,
 } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -935,16 +938,16 @@ const sheets = createSheets($('scrim'), { onClose: resumeAfterSheetClose });
 const sheetById = (id: string) => document.getElementById(id);
 
 /**
- * The Channel War pass is a TAP door, never a boot surface. A WebView can resume a page from a
- * bfcache snapshot with the pass still raised, so every launch — and every restored page — starts
+ * The Channel Wars Hub is a TAP door, never a boot surface. A WebView can resume a page from a
+ * bfcache snapshot with the hub still raised, so every launch — and every restored page — starts
  * by putting it away and dropping the scrim with it. No other screen state is touched.
  */
-function keepChannelPassClosed(): void {
-  const pass = sheetById('sheet-stars');
-  if (!pass || pass.hidden) return;
-  pass.classList.remove('open', 'closing');
-  pass.style.pointerEvents = '';
-  pass.hidden = true;
+function keepChannelWarClosed(): void {
+  const hub = sheetById('channel-war-modal');
+  if (!hub || hub.hidden) return;
+  hub.classList.remove('open', 'closing');
+  hub.style.pointerEvents = '';
+  hub.hidden = true;
   if (sheets.isOpen) {
     sheets.closeNow();                    // keep the sheet controller's panel/scrim in sync
     return;
@@ -955,11 +958,11 @@ function keepChannelPassClosed(): void {
     scrim.hidden = true;
   }
 }
-keepChannelPassClosed();
-window.addEventListener('pageshow', (event) => { if (event.persisted) keepChannelPassClosed(); });
-/* A bfcache/session snapshot is taken on pagehide: the pass must be gone before it is captured, so
+keepChannelWarClosed();
+window.addEventListener('pageshow', (event) => { if (event.persisted) keepChannelWarClosed(); });
+/* A bfcache/session snapshot is taken on pagehide: the hub must be gone before it is captured, so
    the next launch resumes on the screen it left, never on a raised tournament drawer. */
-window.addEventListener('pagehide', () => { keepChannelPassClosed(); });
+window.addEventListener('pagehide', () => { keepChannelWarClosed(); });
 
 /**
  * The 1v1 searching stage. Quick match queues here instead of dropping straight onto the
@@ -1014,11 +1017,25 @@ const matchmaking = createMatchmaking({
 });
 
 /**
+ * The Channel Wars identity of the board being played. `warPending` is armed by the hub's queue
+ * and spent by `startGame`, so the flag survives the debut override and the matchmaker hand-off
+ * without leaking into a practice board launched from the mode drawer. `warPaid` keeps one match
+ * to one credit: the settlement and the forfeit path both ask it before paying.
+ */
+let warPending = false;
+let warMatch = false;
+let warPaid = false;
+
+/**
  * The one door every queue goes through, so the arena's own lock can stand in front of it: when
  * entries are closed, a new queue is refused with the reason rather than silently doing nothing.
  * `matchmaking.open()` is never called directly.
  */
-function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
+function queueMatch(mode: 'pvp' | 'arena' | 'channel_war' = 'pvp') {
+  /* A war match is an ordinary ranked pairing that also pays the fighter's channel. The flag is
+     held here rather than read off the seat, because the debut override and a bot backfill both
+     produce a board with no online mode — and a war match still owes its channel its points. */
+  warPending = mode === 'channel_war';
   /* MATCH #1 OVERRIDE. A debut seat never enters the live queue: a veteran on the far side of the
      matchmaker is the one outcome this first race cannot underwrite. Route straight to the local
      AI controller instead, through the very same `startGame()` door the practice fallback uses, so
@@ -1032,9 +1049,10 @@ function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
     return;
   }
   setQueueMode(mode);
-  /* the arena lock is mirrored from the server: new entries stop, live races play out */
+  /* the arena lock is mirrored from the server: new entries stop, live races play out. The war
+     runs on its own weekly clock, so a closed Arena season never shuts the Channel Wars door. */
   const board = arena();
-  if (arenaLocked(board)) {
+  if (mode !== 'channel_war' && arenaLocked(board)) {
     impact('light');
     notify('warning');
     showNote(board.status === 'finale' || board.endsAt <= Date.now()
@@ -2486,6 +2504,33 @@ recoverBtn.addEventListener('click', () => { void claimTiqRecovery(); });
 doubleBtn.addEventListener('click', () => { void claimDoubleCoins(); });
 
 let overlayOpen = false;
+/**
+ * Pay the channel for the war match that just settled.
+ *
+ * A win banks the full bonus, a defeat banks the participation credit — showing up for your
+ * channel counts. The local ledger moves on this frame, so the hub the player returns to already
+ * shows the new total; the registry call behind it is what makes the ladder shared.
+ */
+function settleWarMatch(won: boolean): void {
+  if (!warMatch || warPaid) return;
+  warPaid = true;
+  const channel = getMySquad();
+  if (!channel) return;
+  const gain = won ? WAR_WIN : WAR_LOSS;
+  void awardWarPoints(won).then((standing) => {
+    if (!standing) return;
+    const name = channel.name || channel.handle;
+    showRoyalToast(
+      t('cwAwardTitle'),
+      t(won ? 'cwAwardWinBody' : 'cwAwardLossBody')
+        .replace('{channel}', name)
+        .replace('{n}', String(gain))
+        .replace('{rank}', String(standing.rank)),
+      'i-swords',
+    );
+  });
+}
+
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
@@ -2573,6 +2618,9 @@ function showOverlay() {
   const stakeTiq = settled.bot || !mine || !won || !forfeited ? 0 : FORFEIT_TIQ;
   forfeitMatch = false;
   if (stakeTiq > 0) afterTiq = Math.max(0, afterTiq + applyTiqDelta(stakeTiq - (afterTiq - beforeTiq)));
+  /* The channel's own ledger moves on the same beat as the player's: a war match pays its squad
+     whether the far side held a person or the machine. */
+  if (mine) settleWarMatch(won);
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
   /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
@@ -3297,6 +3345,8 @@ function timeoutMove() {
 }
 
 function restart() {
+  /* Replaying a war board is another war match: the channel is owed its points again. */
+  warPaid = false;
   /* every new board is a new match: the last result's celebration (or its defeat sting) cannot
      survive into it */
   stopVictoryFanfare();
@@ -3810,6 +3860,10 @@ function clashRivals(): VsRival[] {
 }
 
 function startGame(setup: StartSetup) {
+  /* The queue's war identity lands on the board it opened, and on no other. */
+  warMatch = warPending;
+  warPending = false;
+  warPaid = false;
   cancelTutorial();
   /* A status pill from the previous race is not this race's news. */
   hidePeerPill();
@@ -4217,10 +4271,15 @@ function quitToMenu() {
         if (adjust !== 0) applyTiqDelta(adjust);
         forfeitToast = true;
       }
+      /* Walking out of a war match is still a war match played: the channel keeps its
+         participation credit, and never the win bonus. */
+      settleWarMatch(false);
     }
     active.close();
     active = null;
   }
+  warMatch = false;
+  warPending = false;
   paused = true;
   router.popTo('home');
   /* The verdict follows the player home: one crisp toast naming the stake just paid. */
@@ -5635,7 +5694,9 @@ again.addEventListener('click', () => {
   stopDefeat();
   /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) {
-    const mode: 'pvp' | 'arena' = active.mode === 'arena' ? 'arena' : 'pvp';
+    const mode: 'pvp' | 'arena' | 'channel_war' = warMatch
+      ? 'channel_war'
+      : active.mode === 'arena' ? 'arena' : 'pvp';
     active.close();
     active = null;
     queueMatch(mode);
@@ -6398,5 +6459,17 @@ if (invitedSquad) {
     try {
       window.dispatchEvent(new CustomEvent('detour:squad-invite', { detail: { id: invitedSquad } }));
     } catch { /* a shell without CustomEvent: the player still has the squad list */ }
+  });
+}
+
+/* ---------- the rally door: `?startapp=ch_<handle>` raises the Channel Wars Hub ----------
+   Same rule as the squad invite: the link is a prompt. It opens the hub with the channel already
+   typed into the join field, and the Join key is still the only thing that writes a roster row. */
+const ralliedChannel = inviteChannelWarHandle();
+if (ralliedChannel) {
+  requestAnimationFrame(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('detour:channel-war-invite', { detail: { handle: ralliedChannel } }));
+    } catch { /* a shell without CustomEvent: the hub is still one tap away on Home */ }
   });
 }

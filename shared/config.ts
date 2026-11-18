@@ -86,6 +86,26 @@ export function squadAppLink(id: string): string {
   return clean ? botAppLink(`${SQUAD_PREFIX}${clean}`) : '';
 }
 
+/**
+ * The `?startapp=` payload prefix a Channel Wars rally carries. `ch_<handle>` names the channel by
+ * its public handle rather than a registry id, because the link is pasted into the channel itself:
+ * the community's own name is the thing its members recognise.
+ */
+export const CHANNEL_WAR_PREFIX = 'ch_';
+
+/** `https://t.me/Tactix_Robot/play?startapp=ch_<handle>` — the rally link a fighter shares. */
+export function channelWarAppLink(handle: string): string {
+  const bare = (handle ?? '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 32);
+  return bare ? botAppLink(`${CHANNEL_WAR_PREFIX}${bare}`) : '';
+}
+
+/** The channel handle a `ch_<handle>` rally payload names, without the `@`, or ''. */
+export function channelWarHandleOf(raw: string | null | undefined): string {
+  const value = (raw ?? '').trim();
+  if (value.toLowerCase().slice(0, CHANNEL_WAR_PREFIX.length) !== CHANNEL_WAR_PREFIX) return '';
+  return value.slice(CHANNEL_WAR_PREFIX.length).replace(/[^A-Za-z0-9_]/g, '').slice(0, 32);
+}
+
 /** `https://t.me/Tactix_Robot?start=<payload>` — opens the bot chat first. */
 export function botStartLink(payload = ''): string {
   const clean = cleanStartPayload(payload);

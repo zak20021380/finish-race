@@ -104,6 +104,11 @@ export interface RegisteredSquad {
   requireApproval: boolean;
   /** Leader-only queue of join requests awaiting a decision. */
   pending: SquadApplicantRow[];
+  /**
+   * Channel Wars total: points its members banked by playing war matches. A different currency
+   * from the roster's TIQ — this one only moves when somebody actually plays.
+   */
+  warPoints: number;
   /** The last announcements this leader dispatched, newest first. */
   announcements: SquadAnnouncementRow[];
 }
@@ -437,6 +442,7 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     banned: row.banned === true,
     bannedAt: stampOf(row.bannedAt),
     requireApproval: row.requireApproval === true,
+    warPoints: warTotalOf(row.warPoints),
     pending: (Array.isArray(row.pending) ? row.pending : [])
       .map(readSquadApplicant)
       .filter((a): a is SquadApplicantRow => a !== null)
@@ -532,6 +538,28 @@ export function squadWarTiq(squad: RegisteredSquad): number {
   return squad.roster.reduce((sum, m) => sum + Math.max(0, m.tiq), 0);
 }
 
+/** A war-point reading, bounded. Anything malformed is a zero, never a NaN on the board. */
+export function warTotalOf(raw: unknown): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.min(WAR_POINTS_CAP, Math.floor(n)) : 0;
+}
+
+/** The ceiling one squad can hold in a season. */
+export const WAR_POINTS_CAP = 1_000_000;
+
+/**
+ * Bank a war match's points. The gain is clamped to the two amounts the game actually pays, so a
+ * hand-made request cannot mint a lead: a war match is worth a win or a participation credit.
+ */
+export function addWarPoints(squad: RegisteredSquad, gain: number): number {
+  const paid = Math.max(0, Math.min(WAR_WIN_POINTS, Math.floor(Number(gain) || 0)));
+  squad.warPoints = Math.min(WAR_POINTS_CAP, warTotalOf(squad.warPoints) + paid);
+  return squad.warPoints;
+}
+
+/** What a war match pays, mirrored from the client's own settlement. */
+export const WAR_WIN_POINTS = 25;
+
 /** Squad IQ: the arithmetic mean of the roster's TIQ, rounded once. */
 export function squadAvgTiq(squad: RegisteredSquad): number {
   return squad.roster.length
@@ -559,6 +587,8 @@ export interface SquadView {
   subscribers: number;
   /** Squad IQ: the arithmetic mean of the roster's TIQ. */
   tiq: number;
+  /** Channel Wars total: the points its members banked by playing war matches. */
+  warPoints: number;
   creatorId: string;
   createdAt: number;
   verified: boolean;
@@ -589,6 +619,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     members: roster.length,
     subscribers: squad.subscribers,
     tiq: squadAvgTiq(squad),
+    warPoints: warTotalOf(squad.warPoints),
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
     verified: squad.verification === 'verified' && !squad.banned,
@@ -1151,6 +1182,7 @@ export async function verifyAndBuildSquad(
       bannedAt: 0,
       requireApproval: false,
       pending: [],
+      warPoints: 0,
       announcements: [],
     },
   };

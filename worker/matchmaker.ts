@@ -75,7 +75,7 @@ import {
   type VipTierRevenue,
 } from '../shared/vip';
 import {
-  ACTIVE_CUP_ID, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
+  ACTIVE_CUP_ID, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
   verifyAndBuildSquad, verifySquadChat,
@@ -2857,6 +2857,11 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadLeave(request, url);
     }
+    /* Channel Wars: a settled war match banks its points on the squad the player fought for. */
+    if (url.pathname === '/api/squads/war') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadWarCredit(request, url);
+    }
     if (url.pathname === '/api/squads/kick') {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadKick(request, url);
@@ -3252,6 +3257,31 @@ export class MatchmakerDO {
     this.squadsDirty = true;
     await this.persistSquads();
     return json({ ok: true, joined: added, role, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Bank a war match's points on the squad the caller fought for.
+   *
+   * Only a member may credit their own squad, and the gain is clamped to what a war match actually
+   * pays — so the ladder moves when matches are played, not when requests are typed.
+   */
+  private async squadWarCredit(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad', message: 'That squad is no longer enlisted.' }, 404);
+    if (squad.banned) return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
+    if (!squad.roster.some((m) => m.id === requester)) {
+      return json({ ok: false, error: 'not_a_member', message: 'Join this squad before scoring for it.' }, 409);
+    }
+    const total = addWarPoints(squad, typeof body.gain === 'number' ? body.gain : Number(body.gain));
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, warPoints: total, squad: squadViewOf(squad) });
   }
 
   /**

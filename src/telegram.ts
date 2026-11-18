@@ -4,7 +4,7 @@
  */
 import { settings } from './settings';
 import { foldRoomDigits, normalizeRoomCode } from './room';
-import { botAppLink, duelAppLink, relicDuelAppLink, telegramShareLink } from '../shared/config';
+import { botAppLink, channelWarHandleOf, duelAppLink, relicDuelAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
   /** Telegram's numeric user id — the key the admin allowlist matches on. */
@@ -313,6 +313,23 @@ export function inviteSquadId(): string {
     const raw = (new URLSearchParams(window.location.search).get('squad') ?? '').trim();
     if (!raw) return '';
     return squadIdOf(raw) || (/^[A-Za-z0-9_-]{1,48}$/.test(raw) ? raw : '');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The channel a Channel Wars rally link names, or ''. `ch_<handle>` is the whole grammar; every
+ * other payload (`squad_`, `ref_`, `room_`, `duel_`) belongs to its own door and is left alone.
+ */
+export function inviteChannelWarHandle(): string {
+  try {
+    const fromStart = channelWarHandleOf(startParam());
+    if (fromStart) return fromStart;
+  } catch { /* fall through to the URL */ }
+  try {
+    const raw = (new URLSearchParams(window.location.search).get('channel') ?? '').trim();
+    return channelWarHandleOf(raw) || (/^[A-Za-z0-9_]{4,32}$/.test(raw) ? raw : '');
   } catch {
     return '';
   }

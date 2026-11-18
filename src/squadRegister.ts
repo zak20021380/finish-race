@@ -1,11 +1,12 @@
 import { workerUrl } from './adminApi';
 import { t } from './settings';
 import {
-  ACTIVE_CUP_ID, applySquadRoster, approveSquadRequestLocal, bindSquadById, claimRegisteredSquad,
-  dropSquad, getMySquad, getSquadAdminState, getSquadById, getSquadRanking,
+  ACTIVE_CUP_ID, adoptWarPoints, applySquadRoster, approveSquadRequestLocal, bindSquadById, claimRegisteredSquad,
+  creditWarPoints, dropSquad, getMySquad, getSquadAdminState, getSquadById, getSquadRanking,
   hydrateSquadBoard as mergeSquadBoard, joinSquadLocally, kickSquadMemberLocal, leaveSquad,
-  mergeSquadRequests, myPlayerId, mySquadApplicant, normalizeSquad, queueSquadRequest,
+  mergeSquadRequests, myPlayerId, mySquadApplicant, myWarStanding, normalizeSquad, queueSquadRequest,
   rejectSquadRequestLocal, setSquadRequireApproval, squadIdFromPayload, squadRequiresApproval,
+  WAR_LOSS, WAR_WIN,
   type RankedSquad, type Squad, type SquadApplicant, type SquadKind, type SquadMember, type SquadRole,
 } from './squads';
 import { addNotification } from './notifications';
@@ -87,6 +88,8 @@ interface SquadPayload {
   requireApproval?: boolean;
   /** Leader-only: the join requests waiting for an answer. */
   requests?: ApplicantPayload[];
+  /** The registry's Channel Wars total for this squad. */
+  warPoints?: number;
 }
 
 interface ApplicantPayload {
@@ -333,6 +336,9 @@ export function toSquad(payload: SquadPayload): Squad | null {
       ? { cupId: payload.cupId.trim().slice(0, 48) }
       : {}),
     ...(typeof payload.requireApproval === 'boolean' ? { requireApproval: payload.requireApproval } : {}),
+    ...(Number.isFinite(Number(payload.warPoints)) && Number(payload.warPoints) >= 0
+      ? { warPoints: Math.floor(Number(payload.warPoints)) }
+      : {}),
   }, ownerId || undefined);
 }
 
@@ -507,6 +513,7 @@ function absorb(payload: SquadPayload | undefined): RankedSquad | null {
   if (!squad) return null;
   const local = getSquadRanking().find((s) => s.id === squad.id);
   if (!local) return null;
+  if (typeof squad.warPoints === 'number') adoptWarPoints(squad.id, squad.warPoints);
   const bound = joinSquadLocally(squad.id, squad.roster, {
     subscribers: squad.subscribers,
     ownerId: squad.ownerId,
@@ -585,6 +592,29 @@ export async function syncSquadScore(): Promise<RankedSquad | null> {
   const sent = await postJson<MemberResponse>('/api/squads/sync', { squadId: mine.id, ...myPayload() });
   if (!sent?.ok || !sent.data || sent.data.ok !== true) return mine;
   return absorb(sent.data.squad) ?? mine;
+}
+
+/**
+ * Bank a war match's points.
+ *
+ * Local first: the squad's total moves on the settlement frame, so the hub the player returns to
+ * already shows the win. The POST replicates that gain to the registry, which is what lets a
+ * teammate on another phone see the same ladder. A Worker that never answers leaves the local
+ * credit standing — the match was played, and the points were earned.
+ */
+export async function awardWarPoints(won: boolean): Promise<{ points: number; rank: number } | null> {
+  const credited = creditWarPoints(won ? WAR_WIN : WAR_LOSS);
+  if (!credited) return null;
+  const standing = () => {
+    const live = myWarStanding();
+    return { points: live.points || credited.points, rank: live.rank || 1 };
+  };
+  if (!telegramUserId()) return standing();
+  const sent = await postJson<MemberResponse>('/api/squads/war', {
+    squadId: credited.squad.id, gain: won ? WAR_WIN : WAR_LOSS, ...myPayload(),
+  });
+  if (sent?.ok && sent.data?.ok === true && sent.data.squad) absorb(sent.data.squad);
+  return standing();
 }
 
 export async function leaveSquadOnServer(id: string): Promise<SquadActionResult> {

@@ -25,6 +25,12 @@ export type SquadTrend = 'up' | 'down' | 'same';
  */
 export const ACTIVE_CUP_ID = 'cup-200-stars';
 
+/** What a war match pays. A defeat still banks the participation credit: showing up counts. */
+export const WAR_WIN = 25;
+export const WAR_LOSS = 5;
+/** A season's ceiling for one squad. Bounds the save and refuses a hostile write. */
+export const WAR_CAP = 1_000_000;
+
 /** Unified community type: a Telegram Channel (broadcast) or Group (chat). */
 export type SquadKind = 'channel' | 'group';
 
@@ -109,6 +115,11 @@ export interface Squad {
    * field is the Worker's copy, used to seed a device that has never flipped the switch.
    */
   requireApproval?: boolean;
+  /**
+   * The registry's Channel Wars total. The device's own live reading lives in `SquadSave.war`
+   * so a win credits the board on the same frame it settles, before the Worker answers.
+   */
+  warPoints?: number;
 }
 
 export interface RankedSquad extends Squad {
@@ -128,10 +139,16 @@ interface SquadSave {
   bonus: Record<string, number>;
   /** Leader-only controls, keyed by squad id. Absent = never touched on this device. */
   admin: Record<string, SquadAdminState>;
+  /**
+   * Channel Wars totals, keyed by squad id. Kept out of `custom` for the same reason `admin` is:
+   * a board hydration replaces a squad wholesale, and a win the Worker has not acknowledged yet
+   * must survive it.
+   */
+  war: Record<string, number>;
 }
 
 function fresh(): SquadSave {
-  return { boundId: null, custom: [], bonus: {}, admin: {} };
+  return { boundId: null, custom: [], bonus: {}, admin: {}, war: {} };
 }
 
 /** A stored join request, normalised so a stale or hostile row cannot break a roster write. */
@@ -178,6 +195,7 @@ function squadOk(s: unknown): s is Squad {
     && (x.ownerId === undefined || (typeof x.ownerId === 'string' && x.ownerId.length <= 24))
     && (x.requireApproval === undefined || typeof x.requireApproval === 'boolean')
     && (x.cupId === undefined || (typeof x.cupId === 'string' && x.cupId.length <= 48))
+    && (x.warPoints === undefined || (typeof x.warPoints === 'number' && Number.isFinite(x.warPoints) && x.warPoints >= 0))
     && (x.enlistedAt === undefined || (typeof x.enlistedAt === 'number' && Number.isFinite(x.enlistedAt) && x.enlistedAt > 0));
 }
 
@@ -262,6 +280,12 @@ function migrate(raw: Partial<SquadSave> | null): SquadSave {
           .map((a) => ({ ...a }))
           .slice(0, 60),
       };
+    }
+  }
+  if (raw.war && typeof raw.war === 'object') {
+    for (const [k, v] of Object.entries(raw.war)) {
+      if (typeof k !== 'string' || k.length > 48) continue;
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= WAR_CAP) s.war[k] = Math.floor(v);
     }
   }
   return s;
@@ -789,6 +813,7 @@ export function dropSquad(id: string): boolean {
   if (save.boundId === id) save.boundId = null;
   delete save.bonus[id];
   delete save.admin[id];
+  delete save.war[id];
   flush();
   return true;
 }
@@ -813,6 +838,80 @@ export interface ChannelCup {
   players: number;
   endsAt: number;
   top: RankedSquad | null;
+}
+
+/* ---------- Channel Wars: the weekly war-point ladder ----------
+   War points are a different currency from Squad IQ. IQ is the mean of the roster's own TIQ, so
+   it moves when a member gets better; war points only ever move when somebody actually plays a
+   war match. They are banked per squad, credited on the settlement frame, and replicated to the
+   registry afterwards — so the hub a player returns to already shows the win they just earned. */
+
+/**
+ * The live war total for a squad: whichever reading is further ahead. The device credits a win
+ * before the Worker acknowledges it, and the registry is the authority once it catches up, so
+ * taking the higher of the two loses neither an unconfirmed win nor a win earned on another phone.
+ */
+export function warPointsOf(s: Pick<Squad, 'id' | 'warPoints'>): number {
+  const local = save.war[s.id] ?? 0;
+  const server = typeof s.warPoints === 'number' && Number.isFinite(s.warPoints) ? s.warPoints : 0;
+  return Math.max(0, Math.min(WAR_CAP, Math.floor(Math.max(local, server))));
+}
+
+/** Every squad this device knows, ranked by war points. The hub's leaderboard order. */
+export function getWarRanking(): RankedSquad[] {
+  return getSquadRanking()
+    .map((s) => ({ ...s, warPoints: warPointsOf(s) }))
+    .sort((a, b) =>
+      (b.warPoints ?? 0) - (a.warPoints ?? 0)
+      || b.members - a.members
+      || b.trophies - a.trophies
+      || a.handle.localeCompare(b.handle))
+    .map((s, i) => ({ ...s, rank: i + 1 }));
+}
+
+/** The bound squad's place on the war ladder, or 0 when this player has no channel. */
+export function myWarStanding(): { squad: RankedSquad | null; rank: number; points: number } {
+  const mine = getMySquad();
+  if (!mine) return { squad: null, rank: 0, points: 0 };
+  const board = getWarRanking();
+  const at = board.findIndex((s) => s.id === mine.id);
+  const row = at >= 0 ? board[at] : null;
+  return { squad: row ?? mine, rank: row?.rank ?? 0, points: warPointsOf(mine) };
+}
+
+/**
+ * Bank a war match's points for the bound squad, locally and immediately. Returns the squad and
+ * its new total so the caller can repaint without a second read; null when there is no channel.
+ */
+export function creditWarPoints(n: number): { squad: RankedSquad; points: number } | null {
+  const mine = getMySquad();
+  if (!mine) return null;
+  const gain = Math.max(0, Math.min(WAR_WIN, Math.floor(n)));
+  const points = Math.min(WAR_CAP, warPointsOf(mine) + gain);
+  save.war[mine.id] = points;
+  flush();
+  return { squad: getMySquad() ?? mine, points };
+}
+
+/** Adopt the registry's total after a credit or a board read. Never walks a local win backwards. */
+export function adoptWarPoints(id: string, total: number): void {
+  if (!id || !Number.isFinite(total) || total < 0) return;
+  const next = Math.min(WAR_CAP, Math.floor(total));
+  if ((save.war[id] ?? 0) >= next) return;
+  save.war[id] = next;
+  flush();
+}
+
+/**
+ * When the running war closes: the next Monday at 00:00, local time. Weekly rewards need a weekly
+ * boundary, and a fixed one means every device counts down to the same finish line.
+ */
+export function warEndsAt(now = Date.now()): number {
+  const end = new Date(now);
+  end.setHours(0, 0, 0, 0);
+  const days = (8 - end.getDay()) % 7 || 7;   // Monday is day 1; a Monday rolls to the next one
+  end.setDate(end.getDate() + days);
+  return end.getTime();
 }
 
 /** The cup meta Home paints: fixed pool, live headcount, midnight reset, current leader. */

@@ -24,12 +24,12 @@ import { nameOf } from './countries';
 import type { NationFeed, NationRow } from './nations';
 import type { MindFeed, MindRowData } from './minds';
 import { myTiq } from './matchmaking';
-import { formatCountdown, getGrandCup, paidPlaces, type GrandCup } from './data';
 import { arena, onArena } from './arenaState';
-import { adoptUserStorageKey, onChange, profile, theme } from './storage';
+import { onChange, profile, theme } from './storage';
 import { impact } from './telegram';
 import { flagPhoto } from './flags';
-import { getSquadRanking } from './squads';
+import { getSquadRanking, warEndsAt } from './squads';
+import { createChannelWarHub } from './channelWar';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
 import type { Router } from './router';
@@ -45,20 +45,9 @@ export interface HomeApi {
   router: Router;
   sheets: Sheets;
   start(setup: RaceSetup): void;
-  /** The Channel War seat drawer's one door: the arena queue. */
-  queue(mode?: 'pvp' | 'arena'): void;
+  /** The Channel Wars Hub's one door: the war queue. */
+  queue(mode?: 'pvp' | 'arena' | 'channel_war'): void;
 }
-
-/** Persian figures for the countdown only: a ticking clock beside Persian copy reads as an error.
- *  The leaderboard carousel deliberately never calls this — its digits are Latin in every language. */
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-const localDigits = (value: string, code: string): string =>
-  code === 'fa' ? value.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : value;
-
-/** Persian prose never zero-pads: "۰۲ ساعت" reads as a glitch, "۲ ساعت" reads as Farsi.
- *  The Latin clock keeps its padding because "02h 45m" is a code, not a sentence. */
-const localNumber = (value: number, code: string): string =>
-  localDigits(code === 'fa' ? String(value) : String(value).padStart(2, '0'), code);
 
 /**
  * Paints a translated template that carries `{placeholders}` inside a right-to-left
@@ -869,113 +858,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   });
 
   /* ---------- Channel War: Home's hero slide is the one door ----------
-     The Arena is a progression road now, so the tournament's only entry lives
-     here. The CTA opens the same seat drawer the cup used to own and hands a
-     locked seat straight to the arena queue; the Arena screen never links back
-     to the channel bracket, a squad selector or a tournament ladder. */
+     The Arena is a progression road now, so the tournament's only entry lives here. The CTA
+     raises the Channel Wars Hub, which owns both the zero-channel onboarding and the war room;
+     only its gold key reaches the queue, and it queues a war match rather than a generic seat. */
 
-  const CHANNEL_SEAT_KEY = adoptUserStorageKey('detour.arena.seat.v1');
-
-  const channelSeatFor = (cupId: string): boolean => {
-    try {
-      const raw = window.localStorage.getItem(CHANNEL_SEAT_KEY);
-      if (!raw) return false;
-      const seat = JSON.parse(raw) as { cup?: unknown } | null;
-      return seat?.cup === cupId;
-    } catch {
-      return false;
-    }
-  };
-
-  const seatChannelWar = (cupId: string): void => {
-    try {
-      window.localStorage.setItem(CHANNEL_SEAT_KEY, JSON.stringify({ cup: cupId, at: Date.now() }));
-    } catch {
-      /* the queue still opens */
-    }
-  };
-
-  let channelCup: GrandCup | null = null;
-  let channelCupRequest: Promise<void> | null = null;
-
-  const paintChannelSheet = (): void => {
-    if (!channelCup) return;
-    const cup = channelCup;
-    const paid = paidPlaces(cup);
-    const taken = Math.max(0, Math.min(cup.players, cup.maxPlayers));
-    const pct = Math.round((taken / cup.maxPlayers) * 100);
-    const format = cup.specs[cup.specs.length - 1] || '8s Blitz';
-    setSheetText('stars-sheet-desc', `Represent your channel in the ${format} championship`);
-    setSheetText('stars-sheet-prize', `${cup.stars} Stars reward`);
-    setSheetText('stars-sheet-prize-note', `Top ${paid} contributors`);
-    setSheetText('stars-sheet-entry', cup.entry);
-    setSheetText('stars-sheet-start', formatCountdown(cup.startsAt));
-    setSheetText('stars-sheet-seat', `${taken} / ${cup.maxPlayers}`);
-    setSheetText('stars-sheet-pct', `${pct}% full`);
-    setSheetText('stars-sheet-perk', `Top ${paid} contributors share the Star pool`);
-    const left = cup.maxPlayers - taken;
-    setSheetText('stars-sheet-seat-note', left > 0
-      ? `${left} seats left before the field closes`
-      : 'The field is full — wait for the next bracket');
-    const meter = document.getElementById('stars-sheet-meter');
-    if (meter) meter.style.width = `${pct}%`;
-    const gauge = document.querySelector('#sheet-stars .tp-meter');
-    if (gauge) gauge.setAttribute('aria-valuenow', String(pct));
-  };
-
-  /* The pass keeps its own clock: the countdown is the one figure on the card that
-     moves, so it ticks once a second while the pass is raised and the tab is visible. */
-  window.setInterval(() => {
-    if (!channelCup || document.hidden) return;
-    const sheet = document.getElementById('sheet-stars');
-    if (!sheet || sheet.hidden) return;
-    setSheetText('stars-sheet-start', formatCountdown(channelCup.startsAt));
-  }, 1000);
-
-  const loadChannelCup = (): Promise<void> => {
-    if (channelCup) return Promise.resolve();
-    if (!channelCupRequest) {
-      channelCupRequest = getGrandCup()
-        .then((cup) => {
-          channelCup = cup;
-          paintChannelSheet();
-        })
-        .catch(() => { /* the markup keeps its authored copy */ })
-        .finally(() => { channelCupRequest = null; });
-    }
-    return channelCupRequest;
-  };
-
-  function setSheetText(id: string, text: string): void {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  }
+  const warHub = createChannelWarHub({ sheets: api.sheets, queue: api.queue });
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', (event) => {
-    /* A scripted click is NOT a tap. The pass may only ever be raised by a real gesture on this
+    /* A scripted click is NOT a tap. The hub may only ever be raised by a real gesture on this
        banner, so no boot path, restore or synthetic trigger can cover someone's first screen. */
     if (!event.isTrusted) return;
     impact('medium');
-    if (channelCup && channelSeatFor(channelCup.id)) {
-      api.queue('arena');
-      return;
-    }
-    void loadChannelCup();
-    paintChannelSheet();
-    const sheet = document.getElementById('sheet-stars');
-    if (sheet) api.sheets.open(sheet);
-    else api.queue('arena');
+    warHub.open();
   });
-
-  document.getElementById('stars-sheet-yes')?.addEventListener('click', () => {
-    impact('medium');
-    if (channelCup) seatChannelWar(channelCup.id);
-    api.sheets.close();
-    api.queue('arena');
-  });
-
-  /* Warm the drawer's numbers in the background so the first tap is already live. */
-  void loadChannelCup();
 
   /* The hero's Star is the authentic Telegram Stars PNG, bundled by Vite (never a
      hotlinked URL) and mounted once; the glow, dish and levitation are pure CSS. */
@@ -1015,18 +910,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
   paintTourLeader();
 
-  /* The HUD's clock. Anchored to a real deadline 02h 45m out, so the capsule
-     reads exactly as authored on arrival and then ticks honestly; it is only
-     repainted while the tab is visible. */
+  /* The HUD's clock reads the same weekly deadline the Channel Wars Hub counts down to, so the
+     card and the hub can never quote two different finish lines. Latin figures in every language:
+     a countdown is a code, and the ladder beside it is already Latin. */
   const tourClock = document.getElementById('tour-countdown');
   if (tourClock) {
-    const endsAt = Date.now() + (2 * 60 + 45) * 60_000;
     const paintClock = (): void => {
-      // Round up: 02h 45m out reads "02h 45m left", not "02h 44m left", on arrival.
-      const totalMin = Math.max(0, Math.ceil((endsAt - Date.now()) / 60_000));
+      const left = Math.max(0, warEndsAt() - Date.now());
+      const totalMin = Math.ceil(left / 60_000);
+      const days = Math.floor(totalMin / 1440);
+      const hours = Math.floor((totalMin % 1440) / 60);
+      const mins = totalMin % 60;
+      const pad = (n: number) => String(n).padStart(2, '0');
       paintBidi(tourClock, t('carouselTimeLeft'), {
-        hours: localNumber(Math.floor(totalMin / 60), lang),
-        mins: localNumber(totalMin % 60, lang),
+        hours: days > 0 ? `${days}d ${pad(hours)}` : pad(hours),
+        mins: pad(mins),
       });
     };
     paintClock();
