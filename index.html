@@ -2485,29 +2485,6 @@
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
                  costs the card no height and cannot be swallowed by the veil -->
             <p class="ad-toast" id="ad-toast" role="status" aria-live="polite" dir="auto"></p>
-
-            <!-- Pre-watch consent. The rewarded video opens fullscreen over everything, so the
-                 player gets one explicit warning first: closing early pays nothing. It lives
-                 outside the card, which goes inert while this sheet is up. -->
-            <div class="ad-confirm" id="ad-confirm" hidden>
-              <span class="ad-confirm-scrim" data-ad-confirm-cancel aria-hidden="true"></span>
-              <section class="ad-confirm-sheet" id="ad-confirm-sheet" role="dialog" aria-modal="true"
-                aria-labelledby="ad-confirm-title" aria-describedby="ad-confirm-desc" tabindex="-1">
-                <span class="ad-confirm-grip" aria-hidden="true"></span>
-                <span class="ad-confirm-crest" aria-hidden="true">
-                  <svg class="ico" viewBox="0 0 24 24"><use id="ad-confirm-ico" href="#i-shield" /></svg>
-                </span>
-                <h3 class="ad-confirm-title" id="ad-confirm-title" dir="auto">LIFT TIQ PENALTY</h3>
-                <p class="ad-confirm-desc" id="ad-confirm-desc" dir="auto">Watch the full video to claim
-                  your reward. Closing or skipping early yields zero rewards.</p>
-                <div class="ad-confirm-actions">
-                  <button class="ad-confirm-btn is-primary" id="ad-confirm-watch" type="button"
-                    dir="auto">WATCH VIDEO</button>
-                  <button class="ad-confirm-btn is-ghost" id="ad-confirm-cancel" type="button"
-                    data-ad-confirm-cancel dir="auto">CANCEL</button>
-                </div>
-              </section>
-            </div>
           </div>
         </section>
       </div>
@@ -5822,6 +5799,38 @@
           <img class="vip-star-icon" id="vip-cta-star" alt="" aria-hidden="true" />
         </button>
       </div>
+    </div>
+
+    <!-- ---------------- rewarded-ad consent (2x coins / TIQ recovery) ----------------
+         A DIRECT CHILD OF <body>, never of the Victory/Result capsule. The result overlay
+         owns a backdrop-filter and a transform-driven entrance animation; on mobile WebViews
+         that combination traps position:fixed descendants and clips the sheet off-screen,
+         leaving a dark screen and a stalled spinner. Root placement plus z-index 1100 (above
+         the result overlay's 900) keeps the card over its own scrim and over the result on
+         every viewport, 320px phones included. The close key, the scrim and Escape all dismiss
+         it, so a dimmed screen can never trap the player. -->
+    <div class="ad-confirm" id="ad-confirm" hidden>
+      <span class="ad-confirm-scrim" data-ad-confirm-cancel aria-hidden="true"></span>
+      <section class="ad-confirm-sheet" id="ad-confirm-sheet" role="dialog" aria-modal="true"
+        aria-labelledby="ad-confirm-title" aria-describedby="ad-confirm-desc" tabindex="-1">
+        <button class="ad-confirm-close" id="ad-confirm-close" type="button"
+          data-ad-confirm-cancel aria-label="Close" title="Close">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-close" /></svg>
+        </button>
+        <span class="ad-confirm-grip" aria-hidden="true"></span>
+        <span class="ad-confirm-crest" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><use id="ad-confirm-ico" href="#i-shield" /></svg>
+        </span>
+        <h3 class="ad-confirm-title" id="ad-confirm-title" dir="auto">LIFT TIQ PENALTY</h3>
+        <p class="ad-confirm-desc" id="ad-confirm-desc" dir="auto">Watch the full video to claim
+          your reward. Closing or skipping early yields zero rewards.</p>
+        <div class="ad-confirm-actions">
+          <button class="ad-confirm-btn is-primary" id="ad-confirm-watch" type="button"
+            dir="auto">WATCH VIDEO</button>
+          <button class="ad-confirm-btn is-ghost" id="ad-confirm-cancel" type="button"
+            data-ad-confirm-cancel dir="auto">CANCEL</button>
+        </div>
+      </section>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

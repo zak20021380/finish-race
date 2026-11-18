@@ -116,11 +116,29 @@ export function adBlockId(placement: Placement): string {
 
 /* ---------- waiting for the tag ---------- */
 
-/** How long one tap waits for `sad.min.js` before it answers `no_sdk`. */
-const SDK_WAIT_MS = 3000;
+/** How long a desktop tap waits for `sad.min.js` before it answers `no_sdk`. */
+const SDK_WAIT_MS_DESKTOP = 3000;
+/**
+ * A phone gets a tight 1200ms window. The in-app consent card is already on screen with its
+ * scrim, so a blocked CDN or a Telegram WebView that never hands control to the SDK must not
+ * leave a dimmed screen and a spinning chip: after this beat the door answers `no_sdk`, the
+ * caller's in-app modal fallback stays visible, and the spinner is released.
+ */
+const SDK_WAIT_MS_MOBILE = 1200;
 
 /** The poll's beat while waiting: short enough that a script landing mid-wait feels instant. */
 const SDK_POLL_MS = 100;
+
+/** Phone-sized viewports use the fast fallback window; larger screens keep the leisurely one. */
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 480px)').matches;
+}
+
+function sdkWaitMs(): number {
+  return isMobileViewport() ? SDK_WAIT_MS_MOBILE : SDK_WAIT_MS_DESKTOP;
+}
 
 function sdkNow(): AdsgramSdk | undefined {
   return typeof window === 'undefined' ? undefined : window.Adsgram;
@@ -130,7 +148,8 @@ function sdkNow(): AdsgramSdk | undefined {
  * The tag is `async`, so a player can reach the result card before the script does. A bounded wait
  * turns "the CDN was still loading" into a played video instead of a refusal: the chip's spinner is
  * already up, so the beat is legible, and a blocked CDN costs one wait per tap rather than a stuck
- * screen. Never longer than `SDK_WAIT_MS`, and it settles on whatever `window.Adsgram` says.
+ * screen. The bound is the caller's (`sdkWaitMs()`: 1200ms on mobile, 3000ms elsewhere), and it
+ * settles on whatever `window.Adsgram` says.
  */
 async function waitForSdk(ms: number): Promise<AdsgramSdk | undefined> {
   const ready = sdkNow();
@@ -211,8 +230,10 @@ export async function playRewardedAd(
   };
 
   try {
-    /* the tap may beat the async tag: wait a short beat, then answer honestly if it never lands */
-    const sdk = await waitForSdk(SDK_WAIT_MS);
+    /* the tap may beat the async tag: wait a short beat, then answer honestly if it never lands.
+       On mobile this is the 1200ms fallback window — past it the in-app modal remains the surface
+       the player sees, and the `no_sdk` outcome lets the caller reset its spinner cleanly. */
+    const sdk = await waitForSdk(sdkWaitMs());
     if (!sdk) return { rewarded: false, reason: 'no_sdk' };
     /* the wait is long enough for the player to leave: never open a video over another screen */
     if (options.stillWanted && !options.stillWanted()) return { rewarded: false, reason: 'skipped' };

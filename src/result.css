@@ -9,7 +9,8 @@
    ========================================================================== */
 
 .overlay.result {
-  z-index: 10;
+  /* Root-level tokens live in style.css: the result sits below the rewarded-ad modal. */
+  z-index: var(--z-result-overlay, 900);
   padding:
     max(10px, env(safe-area-inset-top))
     max(10px, env(safe-area-inset-right))
@@ -1113,14 +1114,9 @@ html.reduced-motion .ad-toast { transition: none; }
    The rewarded video is fullscreen, so consent is explicit: one warning, one
    primary key, one quiet exit. Closing early is the only thing it must prevent.
    ========================================================================== */
-.ad-confirm {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: grid;
-  place-items: end center;
-  padding: 12px;
-}
+/* Layout, fixed centering and stacking are owned by style.css, where this modal lives
+   as a direct child of <body>. Keeping them there prevents the result capsule's
+   backdrop-filter / transform stacking context from trapping this sheet on mobile. */
 .ad-confirm[hidden] { display: none !important; }
 .ad-confirm-scrim {
   position: absolute;
@@ -1134,6 +1130,13 @@ html.reduced-motion .ad-toast { transition: none; }
   position: relative;
   z-index: 1;
   width: min(100%, 344px);
+  /* The card is visible by default: the entrance animation is decoration, never the thing
+     that makes the dialog appear. A stalled WebView animation can therefore never leave a
+     dark scrim over an invisible card. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
   border: 1px solid rgba(243, 212, 131, .3);
   border-radius: 22px;
@@ -1145,10 +1148,18 @@ html.reduced-motion .ad-toast { transition: none; }
     0 26px 58px -22px rgba(0, 0, 0, .96);
   color: var(--ink);
   text-align: center;
-  opacity: 0;
-  transform: translateY(16px) scale(.985);
+  opacity: 1;
+  transform: none;
 }
 .ad-confirm.open .ad-confirm-sheet { animation: ad-confirm-in .28s cubic-bezier(.2, 1.14, .36, 1) both; }
+/* A mobile watchdog adds `.is-fallback` if the sheet body still fails to render after
+   the fast 1200ms window. It pins the card visible, centred and scrollable whatever the
+   WebView's animation engine decided to do. */
+.ad-confirm.is-fallback .ad-confirm-sheet {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
 @keyframes ad-confirm-in {
   from { opacity: 0; transform: translateY(16px) scale(.985); }
   to { opacity: 1; transform: none; }
@@ -1164,6 +1175,31 @@ html.reduced-motion .ad-toast { transition: none; }
   border-radius: 999px;
   background: rgba(255, 255, 255, .16);
 }
+/* The always-available escape hatch: a 40px tap target in the card's top corner.
+   The mark is the same inline SVG `i-close` used by the vault and VIP sheets —
+   a crisp vector, never a typed glyph or an emoji. */
+.ad-confirm-close {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+  color: #C9C2B4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.ad-confirm-close:hover { background: rgba(255, 255, 255, .08); color: #F7E8C4; }
+.ad-confirm-close:active { background: rgba(255, 255, 255, .12); }
+.ad-confirm-close:focus-visible { outline: 2px solid rgba(243, 212, 131, .8); outline-offset: 2px; }
+.ad-confirm-close .ico { width: 16px; height: 16px; }
 .ad-confirm-crest {
   display: grid;
   place-items: center;
@@ -1328,7 +1364,7 @@ html.reduced-motion .ad-toast { transition: none; }
   .result-bank-value { font-size: .95rem; }
   .result-stake-n { font-size: .92rem; }
   #btn-double-coins { padding-inline: 7px 8px; }
-  .ad-confirm { padding: 10px; }
+  .ad-confirm { padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
   .ad-confirm-sheet { padding: 10px 13px calc(12px + env(safe-area-inset-bottom)); border-radius: 19px; }
   .ad-confirm-title { font-size: 12px; letter-spacing: .04em; }
   .ad-confirm-desc { font-size: 10.5px; }
@@ -1467,13 +1503,15 @@ html[data-lang="fa"] .overlay.result .result-stake-n {
   font-family: var(--font-numeric);
   unicode-bidi: isolate;
 }
-/* the consent sheet and the shield follow the capsule's reading direction */
-html[data-lang="fa"] .overlay.result .ad-confirm-sheet,
-html[data-lang="ar"] .overlay.result .ad-confirm-sheet { direction: rtl; }
+/* the consent sheet is a root-level modal now, so its direction rules are root-level too */
+html[data-lang="fa"] .ad-confirm-sheet,
+html[data-lang="ar"] .ad-confirm-sheet { direction: rtl; }
+html[data-lang="fa"] :is(.ad-confirm-title, .ad-confirm-desc, .ad-confirm-btn) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
 html[data-lang="fa"] .overlay.result :is(
-  .ad-confirm-title,
-  .ad-confirm-desc,
-  .ad-confirm-btn,
   .result-stake-saved
 ) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;

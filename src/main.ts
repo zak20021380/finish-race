@@ -279,6 +279,7 @@ const adConfirmTitle = $<HTMLElement>('ad-confirm-title');
 const adConfirmDesc = $<HTMLElement>('ad-confirm-desc');
 const adConfirmIco = document.getElementById('ad-confirm-ico') as SVGUseElement | null;
 const adConfirmWatch = $<HTMLButtonElement>('ad-confirm-watch');
+const adConfirmSheet = document.getElementById('ad-confirm-sheet');
 const againLabel = $<HTMLSpanElement>('again-label');
 const againIco = document.getElementById('again-ico') as SVGUseElement | null;
 const shareBtn = $<HTMLButtonElement>('share');
@@ -2132,22 +2133,65 @@ function paintAdConfirmCopy(): void {
   adConfirmIco?.setAttribute('href', tiq ? '#i-shield' : '#i-play');
 }
 
-function askAdConfirm(kind: AdConfirmKind): Promise<boolean> {
+/**
+ * The consent card IS the in-app rewarded-ad modal: the scrim and the visible card are shown in
+ * one synchronous frame, so a dimmed screen can never appear on its own while an ad provider is
+ * being waited on. On mobile the WebView must render the card body within this window — the same
+ * 1200ms budget the ad module gives the SDK — or the watchdog below forces it visible.
+ */
+const AD_MODAL_FALLBACK_MS = 1200;
+let adConfirmWatchdog = 0;
+/** Set from consent acceptance until the ad's answer lands: the modal is never dismissed mid-claim. */
+let adClaimInFlight = false;
+
+const mobileViewport = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 480px)').matches;
+
+/**
+ * Mobile fallback. A WebView can paint the scrim but leave the sheet transparent or clipped off a
+ * `dvh` viewport — the player sees a black screen with a spinning chip. After 1200ms we inspect
+ * the rendered box; if it never materialised we add `.is-fallback` (CSS pins the card visible,
+ * centred and scrollable) and hand the chip's spinner back so nothing keeps turning in the dark.
+ */
+function guardAdConfirmVisible(onStalled?: () => void): void {
+  window.clearTimeout(adConfirmWatchdog);
+  if (!mobileViewport()) return;
+  adConfirmWatchdog = window.setTimeout(() => {
+    if (!adConfirmResolve || adConfirm.hidden) return;
+    const box = adConfirmSheet?.getBoundingClientRect();
+    const opacity = adConfirmSheet ? Number(window.getComputedStyle(adConfirmSheet).opacity) : 0;
+    const visible = !!adConfirmSheet && !!box
+      && box.width > 0 && box.height > 0
+      && box.bottom > 0 && box.top < window.innerHeight
+      && opacity > 0.05;
+    if (visible) return;
+    adConfirm.classList.add('is-fallback');
+    onStalled?.();
+  }, AD_MODAL_FALLBACK_MS);
+}
+
+function askAdConfirm(kind: AdConfirmKind, onStalled?: () => void): Promise<boolean> {
   if (adConfirmResolve || !adConfirm.hidden) return Promise.resolve(false);
   adConfirmKind = kind;
   paintAdConfirmCopy();
   hideAdToast();
   adConfirmOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  /* atomic: the scrim and the card become visible in the same frame, before any SDK is touched */
+  adConfirm.classList.remove('is-fallback');
   adConfirm.hidden = false;
   void adConfirm.offsetWidth;                 // lay the sheet out at its closed position first
   adConfirm.classList.add('open');
   /* the card behind the scrim is not a tab stop while the consent sheet is the only answer */
   resultCard.toggleAttribute('inert', true);
   try { adConfirmWatch.focus({ preventScroll: true }); } catch { /* no focus in headless */ }
+  guardAdConfirmVisible(onStalled);
   return new Promise<boolean>((resolve) => { adConfirmResolve = resolve; });
 }
 
 function closeAdConfirm(accepted: boolean): void {
+  /* always retire the watchdog and the forced-visible state, even on a redundant close */
+  window.clearTimeout(adConfirmWatchdog);
+  adConfirm.classList.remove('is-fallback');
   const resolve = adConfirmResolve;
   if (!resolve) return;
   adConfirmResolve = null;
@@ -2164,6 +2208,7 @@ function closeAdConfirm(accepted: boolean): void {
 }
 
 adConfirm.addEventListener('click', (event) => {
+  if (adClaimInFlight) return;                // never dismiss the sheet mid-claim
   const target = event.target as HTMLElement | null;
   if (!target?.closest('[data-ad-confirm-cancel]')) return;
   impact('light');
@@ -2171,7 +2216,7 @@ adConfirm.addEventListener('click', (event) => {
 });
 adConfirmWatch.addEventListener('click', () => { impact('light'); closeAdConfirm(true); });
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || !adConfirmResolve) return;
+  if (event.key !== 'Escape' || !adConfirmResolve || adClaimInFlight) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   impact('light');
@@ -2290,12 +2335,13 @@ async function claimTiqRecovery(): Promise<void> {
     return;
   }
 
-  if (!(await askAdConfirm('tiq'))) return;
+  if (!(await askAdConfirm('tiq', () => setChipBusy(recoverBtn, recoverSpin, false)))) return;
   /* the sheet can outlive the card: re-check the settlement before a fullscreen video opens */
   if (resultView !== view || !overlayOpen) return;
   if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
   if (getRemainingTiqRecoveries() <= 0) return;
 
+  adClaimInFlight = true;
   recoverBusy = true;
   setChipBusy(recoverBtn, recoverSpin, true);
   /* the defeat fanfare does not play under a rewarded video: stop it with the rest of the audio */
@@ -2304,7 +2350,7 @@ async function claimTiqRecovery(): Promise<void> {
   const outcome = await playRewardedAd('recover_tiq', {
     /* a player who left the result while the tag was still loading gets no video over the menu */
     stillWanted: () => overlayOpen && resultView === view,
-  }).finally(releaseAudio);
+  }).finally(() => { releaseAudio(); adClaimInFlight = false; });
   recoverBusy = false;
   setChipBusy(recoverBtn, recoverSpin, false);
 
@@ -2357,13 +2403,14 @@ async function claimDoubleCoins(): Promise<void> {
         animateCoinTotal(view.coins);
         view.questAdCompleted = false;
       } else {
-        if (!(await askAdConfirm('coins'))) return;
+        if (!(await askAdConfirm('coins', () => setChipBusy(doubleBtn, doubleSpin, false)))) return;
         if (resultView !== view || !overlayOpen) return;
         stopDefeat();
         holdAudio();
+        adClaimInFlight = true;
         const outcome = await playRewardedAd('double_coins', {
           stillWanted: () => overlayOpen && resultView === view,
-        }).finally(releaseAudio);
+        }).finally(() => { releaseAudio(); adClaimInFlight = false; });
         if (resultView !== view) return;
         if (!outcome.rewarded) {
           const exhausted = outcome.reason === 'no_fill' || outcome.reason === 'no_sdk';
@@ -2416,6 +2463,7 @@ function showOverlay() {
   resetMatchClaims();
   recoverBusy = false;
   doubleBusy = false;
+  adClaimInFlight = false;
   setChipBusy(recoverBtn, recoverSpin, false);
   setChipBusy(doubleBtn, doubleSpin, false);
   resultStake.classList.remove('is-refunded');
