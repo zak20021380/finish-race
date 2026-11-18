@@ -261,8 +261,10 @@ export interface LobbyRace {
    * the worker's verdict — the stake both sides moved, and the winner when that ended the race.
    */
   onForfeit(cb: (info: { side: number; name: string; deltas: Record<string, number>; winner: number | null }) => void): void;
-  /** The room's authoritative board, sent after a resume, a refusal or an explicit sync request. */
-  onSync(cb: (state: GameState, turnLeftMs: number) => void): void;
+  /** The room's authoritative board, sent after a resume, a refusal or an explicit sync request.
+   *  `presence` is the room's own read of who is at their socket, so a snapshot clears any stale
+   *  reconnecting pill on the same beat the board lands. */
+  onSync(cb: (state: GameState, turnLeftMs: number, presence?: Array<{ seat: number; connected: boolean }>) => void): void;
   /** Ask the room to re-send its authoritative board. */
   requestSync(): void;
   /** The socket is gone after the board settled: the result capsule's live keys are dead. */
@@ -368,10 +370,11 @@ export interface LobbyHandle {
 
 /** How long a lobby waits for a socket before it accepts that it is playing alone. */
 const CONNECT_MS = 1400;
-/** One heartbeat: long enough to stay under every proxy's idle clock, short enough to notice death. */
-const HEARTBEAT_MS = 20_000;
+/** One heartbeat: a mobile webview throttles timers, so a steady 4s beat keeps every hop warm and
+ *  lets the server tell a sleeping page from a dead link inside three missed beats. */
+const HEARTBEAT_MS = 4_000;
 /** No frame, not even a `PONG`, for this long means the socket is half-open: walk it back. */
-const DEAD_MS = 45_000;
+const DEAD_MS = 12_000;
 
 const faceOf = (name: string): string => (name.trim().charAt(0) || 'P').toUpperCase();
 
@@ -505,9 +508,9 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   /**
    * The keepalive. A lobby seat is idle by nature — two people waiting for a third, a host who
    * stepped into a chat — and an idle socket is exactly what an intermediary reaps. A `PING` every
-   * twenty seconds keeps the connection warm, and its `PONG` is the proof of life: silence past
-   * `DEAD_MS` means the socket is half-open, so it is closed on purpose and the normal close path
-   * starts the reconnect instead of leaving a phantom seat behind.
+   * four seconds keeps the connection warm through a throttled webview, and its `PONG` is the proof
+   * of life: silence past `DEAD_MS` means the socket is half-open, so it is closed on purpose and the
+   * normal close path starts the reconnect instead of leaving a phantom seat behind.
    */
   const startBeat = (): void => {
     stopBeat();
@@ -519,7 +522,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         try { sock.close(); } catch { /* already gone */ }
         return;
       }
-      send({ type: 'PING' });
+      send({ type: 'PING', t: Date.now() });
     }, HEARTBEAT_MS);
   };
 
@@ -528,10 +531,11 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
    * is the moment to notice a socket that died while the page could not hear it: closing it makes
    * the close handler run, and the close handler is what reconnects. A live race also asks for a
    * fresh snapshot here, because the moves it missed while hidden are exactly the drift this is
-   * meant to repair.
+   * meant to repair. An immediate `PING` proves liveness to the room on the same beat, so a seat the
+   * silence sweep had marked away is restored before the next heartbeat would have fired.
    */
-  const onVisible = (): void => {
-    if (document.hidden || left || solo) return;
+  const wake = (): void => {
+    if (left || solo) return;
     if (race && !raceDead) {
       if (!sock) {
         if (raceTimer) {
@@ -545,17 +549,33 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         try { sock.close(); } catch { /* already gone */ }
         return;
       }
-      if (sock.readyState === 1) send({ type: 'SYNC_REQ' });
+      if (sock.readyState === 1) {
+        send({ type: 'PING', t: Date.now() });
+        send({ type: 'SYNC_REQ' });
+      }
       return;
     }
-    if (sock?.readyState === 1 && Date.now() - aliveAt > DEAD_MS) {
-      try { sock.close(); } catch { /* already gone */ }
+    if (sock?.readyState === 1) {
+      if (Date.now() - aliveAt > DEAD_MS) {
+        try { sock.close(); } catch { /* already gone */ }
+        return;
+      }
+      send({ type: 'PING', t: Date.now() });
     }
   };
+
+  const onVisible = (): void => {
+    if (document.hidden) return;
+    wake();
+  };
+
+  /** The OS network came back: the same wake-up, without waiting for a visibility change. */
+  const onOnline = (): void => { wake(); };
 
   const teardown = (): void => {
     stopBeat();
     document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('online', onOnline);
   };
 
   const paint = (): void => opts.onState(lobby);
@@ -585,13 +605,21 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
   const racePeers: Array<(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number, name: string) => void> = [];
-  const raceSyncs: Array<(state: GameState, turnLeftMs: number) => void> = [];
+  const raceSyncs: Array<(state: GameState, turnLeftMs: number, presence?: Array<{ seat: number; connected: boolean }>) => void> = [];
   /** Moves made while the socket is away: flushed on the authoritative snapshot, never before. */
   const outbox: Array<Record<string, unknown>> = [];
+  /** The highest state sequence this seat has applied: a relay above it plus one is a dropped packet. */
+  let raceSeq = 0;
+  /** The one move awaiting its ack: a turn-based seat never has two in flight at once. */
+  let pendingMove: { moveId: string; action: Action; since: number } | null = null;
+  let moveRetryTimer = 0;
+  let moveCounter = 0;
   /** The live race's reconnect attempts, in the order they are spaced. */
   const RACE_RESUME_STEPS = [250, 600, 1200, 2000] as const;
   /** The server holds the seat this long; keep trying at the last beat until it runs out. */
-  const RACE_GRACE_MS = 25_000;
+  const RACE_GRACE_MS = 20_000;
+  /** An unacknowledged move is retried with the same id after this long; the room deduplicates it. */
+  const MOVE_RETRY_MS = 1200;
   let raceTries = 0;
   let raceTimer = 0;
   let raceOpenTimer = 0;
@@ -665,6 +693,44 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         return;
       }
     }
+  };
+
+  /** The ack landed (or a snapshot superseded the move): stop retrying it. */
+  const clearPendingMove = (): void => {
+    pendingMove = null;
+    if (moveRetryTimer) {
+      globalThis.clearTimeout(moveRetryTimer);
+      moveRetryTimer = 0;
+    }
+  };
+
+  /**
+   * Retry an unacknowledged move with the SAME id after `MOVE_RETRY_MS`. The room deduplicates by
+   * id, so a retry that crossed a lost ack never plays the turn twice. While the socket is down the
+   * outbox already holds the move for the next seated socket, so the retry only writes to an open one.
+   */
+  const armMoveRetry = (): void => {
+    if (moveRetryTimer) return;
+    moveRetryTimer = globalThis.setTimeout(() => {
+      moveRetryTimer = 0;
+      if (!pendingMove || !race || raceDead || left || solo) return;
+      if (Date.now() - pendingMove.since > RACE_GRACE_MS) { clearPendingMove(); return; }
+      if (sock && sock.readyState === 1) {
+        try {
+          sock.send(JSON.stringify({ type: 'MOVE', action: pendingMove.action, moveId: pendingMove.moveId }));
+        } catch { /* the outbox holds it for the next seated socket */ }
+      }
+      armMoveRetry();
+    }, MOVE_RETRY_MS);
+  };
+
+  /** Submit one move under a fresh idempotency key and arm its ack retry. */
+  const sendMove = (a: Action): boolean => {
+    const moveId = `m${++moveCounter}`;
+    pendingMove = { moveId, action: a, since: Date.now() };
+    const ok = send({ type: 'MOVE', action: a, moveId });
+    armMoveRetry();
+    return ok;
   };
 
   /** Fold one frame from the worker into the model. */
@@ -790,6 +856,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         racePostGone = false;
         raceGone.clear();
         raceLeft.clear();
+        clearPendingMove();
+        raceSeq = typeof msg.seq === 'number' && Number.isFinite(msg.seq) ? msg.seq : 0;
         const seats = Array.isArray(msg.seats) ? msg.seats : [];
         const roster: LobbyRaceSeat[] = seats.map((r, i) => {
           const s = r as Record<string, unknown>;
@@ -836,7 +904,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             isBot: rival?.bot === true,
             vip: rival?.vip === true,
           },
-          send: (a) => send({ type: 'MOVE', action: a }),
+          send: (a) => sendMove(a),
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
           sendChat: (text) => send({ type: 'CHAT', text }),
@@ -848,6 +916,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             left = true;
             raceDead = true;
             race = null;
+            clearPendingMove();
+            outbox.length = 0;
             if (raceTimer) {
               globalThis.clearTimeout(raceTimer);
               raceTimer = 0;
@@ -885,6 +955,10 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         if (!next || typeof next !== 'object' || !Array.isArray(next.balls)) return;
         raceTries = 0;
         raceDroppedAt = 0;
+        /* The snapshot is authoritative: its sequence supersedes anything this seat applied, and it
+           supersedes the move awaiting an ack — the board already reflects it, or refused it. */
+        if (typeof msg.seq === 'number' && Number.isFinite(msg.seq)) raceSeq = msg.seq;
+        clearPendingMove();
         /* The snapshot is the authority on who is still in the race: a chair struck while this
            socket was away never delivered its own SEAT_LEFT, so the board rebuilds the list. */
         raceLeft.clear();
@@ -892,9 +966,23 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           raceLeft.add(side);
           raceGone.add(side);
         }
+        const presence = Array.isArray(msg.presence)
+          ? (msg.presence as Array<Record<string, unknown>>)
+            .filter((p) => typeof p.seat === 'number')
+            .map((p) => ({ seat: p.seat as number, connected: p.connected !== false }))
+          : undefined;
         const leftMs = Number(msg.turnLeftMs);
-        for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0);
+        for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0, presence);
         flushOutbox();
+        return;
+      }
+      case 'MOVE_ACK': {
+        /* The room accepted this seat's move: advance the sequence and stop retrying that id. */
+        const seq = Number(msg.seq);
+        if (Number.isFinite(seq) && seq > raceSeq) raceSeq = seq;
+        if (pendingMove && typeof msg.moveId === 'string' && msg.moveId === pendingMove.moveId) {
+          clearPendingMove();
+        }
         return;
       }
       case 'PEER_STATUS': {
@@ -907,9 +995,22 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         for (const cb of racePeers) cb(side, status, Number.isFinite(graceMs) ? Math.max(0, graceMs) : 0, name);
         return;
       }
-      case 'MOVE':
-        for (const cb of raceMoves) cb(msg.action as Action, Number(msg.side) || 0);
+      case 'MOVE': {
+        const side = Number(msg.side) || 0;
+        const seq = Number(msg.seq);
+        if (Number.isFinite(seq) && seq > 0) {
+          /* A relay at or below the sequence already applied is a stale duplicate; one above the
+             next expected tick means a packet was dropped — ask for the authoritative board rather
+             than apply an action the local turn may not allow. */
+          if (seq <= raceSeq) return;
+          if (seq > raceSeq + 1) { send({ type: 'SYNC_REQ' }); return; }
+          raceSeq = seq;
+        }
+        /* The room played a move FOR this seat (a turn-deadline fallback): that is its ack too. */
+        if (race && side === race.side) clearPendingMove();
+        for (const cb of raceMoves) cb(msg.action as Action, side);
         return;
+      }
       case 'EMOTE':
         if (!isChatEmoteId(msg.emote)) return;
         for (const cb of raceEmotes) cb(msg.emote, Number(msg.side) || 0);
@@ -949,9 +1050,11 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         return;
       case 'REJECT': {
         /* A refusal carries the authoritative board: reconcile first, then let the screen say why.
-           The board is the truth, the toast is only the explanation. */
+           The board is the truth, the toast is only the explanation. The refused move is not retried. */
+        clearPendingMove();
         const next = msg.state as GameState | null;
         if (next && typeof next === 'object' && Array.isArray(next.balls)) {
+          if (typeof msg.seq === 'number' && Number.isFinite(msg.seq)) raceSeq = msg.seq;
           const leftMs = Number(msg.turnLeftMs);
           for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0);
           flushOutbox();
@@ -1158,6 +1261,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     sock = null;
   }
   document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('online', onOnline);
 
   /**
    * The connect window. A socket still in `CONNECTING` is a slow network, not a missing server —
@@ -1249,6 +1353,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         raceOpenTimer = 0;
       }
       left = true;
+      clearPendingMove();
+      outbox.length = 0;
       teardown();
       /* `LEAVE`, not `CANCEL`: a host's exit disbands the code on the server so a stale link is
          refused cleanly, while a guest's only gives their own seat back. */

@@ -50,7 +50,7 @@ export interface RelicChannelInit {
   onRefused?(reason: string): void;
 }
 
-const HEARTBEAT_MS = 20_000;
+const HEARTBEAT_MS = 4_000;
 const RETRY_MIN_MS = 2_000;
 const RETRY_MAX_MS = 15_000;
 const MAILBOX_TIMEOUT_MS = 4_000;
@@ -202,7 +202,7 @@ function connect(): void {
     stopHeartbeat();
     heartbeat = window.setInterval(() => {
       if (!sock || sock.readyState !== 1) return;
-      post({ type: 'PING' });
+      post({ type: 'PING', t: Date.now() });
     }, HEARTBEAT_MS);
   });
   next.addEventListener('message', (ev) => {
@@ -263,6 +263,16 @@ export function stopRelicChannel(): void {
     try { dead.close(1000, 'stopped'); } catch { /* already gone */ }
   }
 }
+
+/* A webview that slept through a chat switch fires its timers late. The moment the page is visible
+   again — or the OS network returns — prove liveness at once instead of waiting out the next beat,
+   so the room restores this seat before its silence clock would have called it away. */
+const wakeChannel = (): void => {
+  if (stopped || document.hidden) return;
+  post({ type: 'PING', t: Date.now() });
+};
+document.addEventListener('visibilitychange', wakeChannel);
+window.addEventListener('online', wakeChannel);
 
 /** The next-boot mailbox: challenges filed for this seat while no session socket was listening. */
 export async function fetchRelicMailbox(): Promise<RelicMailboxItem[]> {

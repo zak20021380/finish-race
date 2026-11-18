@@ -521,11 +521,14 @@ peerPill.append(peerPillText);
 gameScreen.appendChild(peerPill);
 
 let peerPillTimer = 0;
+/** The rival the pill is currently warning about, or -1. Any proof that seat is active clears it. */
+let peerWarnSide = -1;
 function hidePeerPill(): void {
   if (peerPill.hidden && !peerPillTimer) return;
   window.clearTimeout(peerPillTimer);
   peerPillTimer = 0;
   peerPill.hidden = true;
+  peerWarnSide = -1;
   peerPill.classList.remove('is-warn', 'is-ok', 'is-left');
 }
 
@@ -539,6 +542,7 @@ function paintPeerPill(template: string, name: string): void {
   const at = name ? template.indexOf('{name}') : -1;
   if (at < 0) { peerPillText.textContent = template; return; }
   const bdi = document.createElement('bdi');
+  bdi.dir = 'auto';
   bdi.textContent = name;
   peerPillText.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
 }
@@ -582,6 +586,7 @@ function paintCheckmateBanner(name: string): void {
   const at = name ? template.indexOf('{name}') : -1;
   if (at < 0) { checkmateBannerText.textContent = template; return; }
   const bdi = document.createElement('bdi');
+  bdi.dir = 'auto';
   bdi.textContent = name;
   checkmateBannerText.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
 }
@@ -658,6 +663,7 @@ function paintResultLeft(name: string): void {
     resultLeftTxt.textContent = template;
   } else {
     const bdi = document.createElement('bdi');
+    bdi.dir = 'auto';
     bdi.textContent = name;
     resultLeftTxt.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
   }
@@ -671,6 +677,7 @@ function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', 
   window.clearTimeout(peerPillTimer);
   peerPillTimer = 0;
   peerPill.hidden = false;
+  peerWarnSide = status === 'reconnecting' ? side : -1;
   peerPill.classList.toggle('is-warn', status === 'reconnecting');
   peerPill.classList.toggle('is-ok', status !== 'reconnecting');
   peerPill.classList.remove('is-left');
@@ -685,6 +692,15 @@ function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', 
   } else {
     peerPillTimer = window.setTimeout(hidePeerPill, 1800);
   }
+}
+
+/**
+ * A rival proved they are active — they moved, or the authoritative snapshot lists them seated. A
+ * `reconnecting` pill naming that seat cannot stand against that proof, so it comes down at once
+ * instead of waiting out its lease over a board that has already moved on.
+ */
+function notePeerActive(side: number): void {
+  if (peerWarnSide === side) hidePeerPill();
 }
 
 /** The chair was struck from the race: a verdict, not a promise, so it reads in its own tone. */
@@ -749,6 +765,7 @@ function paintCheckmateSplash(): void {
   const at = name ? template.indexOf('{name}') : -1;
   if (at < 0) { cmSub.textContent = template; return; }
   const bdi = document.createElement('bdi');
+  bdi.dir = 'auto';
   bdi.textContent = name;
   cmSub.append(template.slice(0, at), bdi, template.slice(at + '{name}'.length));
 }
@@ -3380,8 +3397,11 @@ function restart() {
  * dropped; the pawns are placed on their logical cells before the next paint, so a jump is a clean
  * re-read rather than a tween across half the grid.
  */
-function applyRoomSnapshot(next: GameState, turnLeftMs: number): void {
+function applyRoomSnapshot(next: GameState, turnLeftMs: number, presence?: Array<{ seat: number; connected: boolean }>): void {
   if (!active) return;
+  /* The snapshot carries the room's own read of who is seated: any rival it proves connected cannot
+     still be "reconnecting", so the pill comes down on the same beat the board lands. */
+  if (presence) for (const p of presence) if (p.connected) notePeerActive(p.seat);
   const dimsChanged = next.cols !== state.cols || next.rows !== state.rows;
   /* The seats this client had already seen go out: a trap that closed while the socket was down
      shows up in the snapshot alone, and the banner says so when the board lands. */
@@ -3914,6 +3934,8 @@ function startGame(setup: StartSetup) {
     /* the rival's moves come through the same door the bot's do, so walls, mines and the blitz
        hand-off all animate exactly as they do offline */
     session.onMove((action, side) => {
+      /* A seat that just moved is plainly connected: drop any reconnecting pill naming it. */
+      notePeerActive(side);
       if (state.winner !== null) return;
       if (side === state.turn) {
         if (!play(action, true) && 'seats' in session) session.requestSync();
@@ -3951,7 +3973,7 @@ function startGame(setup: StartSetup) {
       session.onSeatLeft((side, name) => strikeSeat(side, name));
       /* An explicit forfeit carries the worker's whole verdict, not just the struck chair. */
       session.onForfeit?.((info) => opponentForfeited(info));
-      session.onSync((next, turnLeftMs) => applyRoomSnapshot(next, turnLeftMs));
+      session.onSync((next, turnLeftMs, presence) => applyRoomSnapshot(next, turnLeftMs, presence));
       /* A chair already struck before this screen mounted: a reconnect into a race that moved on
          without us. The roster carries the verdict, so the board opens on it instead of catching
          up a frame later. */

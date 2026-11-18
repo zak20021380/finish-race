@@ -118,7 +118,7 @@ type ClientMessage =
   | { type: 'QUEUE'; wide: boolean }
   | { type: 'WIDEN' }
   | { type: 'CANCEL' }
-  | { type: 'MOVE'; action: Action }
+  | { type: 'MOVE'; action: Action; moveId?: string }
   /* An emote off the quick-chat sheet (`src/data/phrases.ts`): relayed to the other seats as-is,
      never judged by the board — laughing does not spend a turn. */
   | { type: 'EMOTE'; emote: string }
@@ -339,6 +339,24 @@ interface RoomMember {
    * `PING` for a few beats is away, and the room says so instead of painting a phantom card.
    */
   lastPingAt: number;
+  /**
+   * When this seat last sent ANY valid frame — a ping, a move, an emote. The silence clock reads
+   * this, so a player who is actively moving is never called away just because a throttled webview
+   * missed a heartbeat timer. Updated on every frame the room accepts from the seat's socket.
+   */
+  lastSeenAt: number;
+  /**
+   * True once a `reconnecting` pill has been broadcast for the current dropped episode. Cleared the
+   * moment the seat speaks again, so a hand-off that heals inside the announce delay never paints a
+   * banner, and a recovery only says "online" when a "reconnecting" actually went out.
+   */
+  reconnectAnnounced: boolean;
+  /**
+   * The `moveId` of the last move this seat submitted and the room accepted. A client retries an
+   * unacknowledged move with the same id; the room recognises it here and answers the ack again
+   * instead of playing the turn twice.
+   */
+  lastMoveId: string;
 }
 
 /**
@@ -390,6 +408,12 @@ interface LiveRoom {
    * tally. At `DISCONNECT_BOT_MOVES` the seat is struck from the race instead of played further.
    */
   disconnectBotMoves: number[];
+  /**
+   * Monotonic state sequence: one tick per accepted board mutation (a move, a wall, a mine, a
+   * machine batch). Every relayed `MOVE` and every `ROOM_SYNC` carries it, so a client can spot a
+   * gap (a dropped relay) and ask for the authoritative snapshot instead of drifting out of turn.
+   */
+  seq: number;
 }
 
 /** Where a socket sits: which room, and which seat in it. */
@@ -489,18 +513,26 @@ const RETIRED_TTL_MS = 30 * 60 * 1000;
  */
 const NOTIFY_COOLDOWN_MS = 30_000;
 /**
- * How long a seat may go without answering a heartbeat before the room calls it away. Only a
+ * How long a seat may go without being heard from before the room calls it away. The client speaks
+ * a `PING` every 4s, so three missed beats (12s) is a dead link, not a throttled webview. Only a
  * client that has spoken at least one `PING` is judged by this clock — a build that predates the
  * heartbeat is never mistaken for a dead one.
  */
-const SEAT_SILENCE_MS = 70_000;
+const SEAT_SILENCE_MS = 12_000;
 /**
  * A live friend-room seat whose socket drops is held this long before the machine finishes it.
  * Long enough for a phone that slept, a carrier hand-off or a brief tunnel; short enough that the
  * surviving rival is never left staring at a frozen board. Inside the window the returning
  * player gets their exact seat, their board and their turn back.
  */
-const RECONNECT_GRACE_MS = 25_000;
+const RECONNECT_GRACE_MS = 20_000;
+/**
+ * How long a dropped seat is given to walk back in BEFORE the room tells the rivals it is
+ * reconnecting. A mobile network hand-off closes and reopens a socket inside a second or two;
+ * announcing every one of those would paint a phantom banner over a board that never stopped.
+ * The hold is silent for this long, and only a drop that outlives it earns the pill.
+ */
+const PEER_ANNOUNCE_DELAY_MS = 2_500;
 /**
  * How many turns the machine may play for a seat whose player is away. Two is a courtesy — long
  * enough that a phone hand-off does not cost anybody their race — and then the chair is struck
@@ -1829,7 +1861,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
       preset?: unknown; targetUserId?: unknown; relicId?: unknown; relicSerial?: unknown; challengeId?: unknown;
-      code?: unknown;
+      code?: unknown; moveId?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1875,7 +1907,10 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     }
     if (msg.type === 'MOVE') {
       const action = readAction(msg.action, side, cols, rows);
-      return action ? { type: 'MOVE', action } : null;
+      if (!action) return null;
+      /* The client's idempotency key: bounded, opaque, and only used to recognise a retry. */
+      const moveId = typeof msg.moveId === 'string' && msg.moveId ? msg.moveId.slice(0, 64) : undefined;
+      return { type: 'MOVE', action, moveId };
     }
     if (msg.type === 'EMOTE') {
       return typeof msg.emote === 'string' && EMOTE_IDS.has(msg.emote)
@@ -6838,6 +6873,7 @@ export class MatchmakerDO {
         lastSeenAt: now,
         hostPending: false,
         disconnectBotMoves: Array.from({ length: size }, () => 0),
+        seq: 0,
       };
       this.openRooms.push(live);
     }
@@ -6849,6 +6885,7 @@ export class MatchmakerDO {
       guild: identity.squad,
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
+      lastSeenAt: Date.now(), reconnectAnnounced: false, lastMoveId: '',
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -6958,6 +6995,7 @@ export class MatchmakerDO {
         lastSeenAt: now,
         hostPending: false,
         disconnectBotMoves: Array.from({ length: size }, () => 0),
+        seq: 0,
       };
       this.lobbies.set(key, room);
     }
@@ -6986,6 +7024,7 @@ export class MatchmakerDO {
       guild: identity.squad,
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
+      lastSeenAt: Date.now(), reconnectAnnounced: false, lastMoveId: '',
     };
     room.room = seatHuman(room.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -7088,16 +7127,43 @@ export class MatchmakerDO {
   /** Wire one socket into a room's frame path. Used at seat time and again on every resume. */
   private watchRoomSocket(live: LiveRoom, ws: WebSocket): void {
     ws.addEventListener('message', (ev: MessageEvent) => {
-      const ref = this.refs.get(ws);
+      const ref = this.refForSocket(ws);
       if (!ref) return;
+      /* A frame from a socket the seat no longer wears is a ghost: the player already reconnected
+         on a newer one, and this old socket must never move the board or mark the seat away. */
+      if (ref.live.members[ref.seat]?.ws !== ws) return;
       const board = ref.live.driver
         ? ref.live.driver.state
         : dimsFor(contendersIn(sizesOf(ref.live.room)));
       const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
       if (msg) this.roomFrame(ref, msg);
     });
-    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws), ws));
-    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws), ws));
+    ws.addEventListener('close', () => this.roomLeave(this.refForSocket(ws), ws));
+    ws.addEventListener('error', () => this.roomLeave(this.refForSocket(ws), ws));
+  }
+
+  /**
+   * The seat a socket speaks for. The fast path is the live ref map; when a transient drop cleared
+   * it, the chair may still be held for this player, so a frame from the very socket the seat still
+   * wears re-binds it instead of being thrown away. That re-bind is what lets a webview which merely
+   * blinked recover on its next ping — without it the seat would sit `reconnecting` forever while
+   * its player kept moving into a socket the room had stopped listening to.
+   */
+  private refForSocket(ws: WebSocket): RoomRef | undefined {
+    const direct = this.refs.get(ws);
+    if (direct) return direct;
+    const pools: Iterable<LiveRoom>[] = [this.rooms.values(), this.lobbies.values(), this.openRooms];
+    for (const pool of pools) {
+      for (const live of pool) {
+        const seat = live.members.findIndex((m) => !!m && m.ws === ws
+          && (m.connected || m.droppedAt > 0));
+        if (seat < 0) continue;
+        const ref: RoomRef = { live, seat };
+        this.refs.set(ws, ref);
+        return ref;
+      }
+    }
+    return undefined;
   }
 
   /** The live race behind a spent code, if one is still running. */
@@ -7147,6 +7213,8 @@ export class MatchmakerDO {
     member.connected = true;
     member.droppedAt = 0;
     member.lastPingAt = 0;
+    member.lastSeenAt = Date.now();
+    member.reconnectAnnounced = false;
     /* Back inside the allowance: a second drop is judged on its own two turns, not on the first. */
     live.disconnectBotMoves[seat] = 0;
     live.lastSeenAt = Date.now();
@@ -7168,6 +7236,11 @@ export class MatchmakerDO {
       type: 'ROOM_SYNC',
       matchId: live.matchId,
       state: live.driver?.state ?? null,
+      seq: live.seq,
+      /* Who is actually at their socket right now: a seat the snapshot proves connected clears any
+         lingering reconnecting pill on the same beat the board lands. A null member is a machine
+         chair, which is never "reconnecting". */
+      presence: live.members.map((m, i) => ({ seat: i, connected: m ? m.connected : true })),
       turnDeadlineMs: live.turnDeadlineMs,
       turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
     });
@@ -7421,7 +7494,7 @@ export class MatchmakerDO {
         /* A socket that stopped answering its heartbeat is gone even if the close frame never
            came: mark the seat away the moment its silence proves it, so the other side is never
            left looking at a phantom player. */
-        if (m.connected && m.lastPingAt > 0 && now - m.lastPingAt >= SEAT_SILENCE_MS) {
+        if (m.connected && m.lastPingAt > 0 && now - m.lastSeenAt >= SEAT_SILENCE_MS) {
           m.connected = false;
           m.droppedAt = now;
           changed = true;
@@ -7580,6 +7653,9 @@ export class MatchmakerDO {
              hold the whole room's Start behind a stale busy flag. */
           busy: false,
           lastPingAt: 0,
+          lastSeenAt: now,
+          reconnectAnnounced: false,
+          lastMoveId: '',
         };
         room = seatHuman(room, seat, { kind: 'human', id: m.id, name: m.name });
       }
@@ -7607,6 +7683,7 @@ export class MatchmakerDO {
         lastSeenAt,
         hostPending: row.hostPending === true && !members[hostSeat],
         disconnectBotMoves: Array.from({ length: size }, () => 0),
+        seq: 0,
       });
     }
   }
@@ -7745,23 +7822,31 @@ export class MatchmakerDO {
   private sweepRacedRooms(now: number): void {
     for (const live of [...this.rooms.values()]) {
       if (!live.driver) continue;
-      /* A socket that stopped answering its heartbeat is gone even if no close frame ever came:
-         a killed webview or a mobile link that went quiet behind a proxy. Marking it away here is
-         what starts the same grace a real close would — the rival must not wait forever. */
+      /* A socket that went quiet is gone even if no close frame ever came: a killed webview or a
+         mobile link that died behind a proxy. The clock reads the last ANY frame, so a player who is
+         actively moving is never called away by a throttled heartbeat. Marking it away here starts
+         the same silent grace a real close would — the announce below decides when rivals hear it. */
       for (let i = 0; i < live.members.length; i++) {
         const m = live.members[i];
         if (!m || !m.connected) continue;
-        if (m.lastPingAt > 0 && now - m.lastPingAt >= SEAT_SILENCE_MS) {
+        if (m.lastPingAt > 0 && now - m.lastSeenAt >= SEAT_SILENCE_MS) {
           m.connected = false;
           m.droppedAt = now;
-          this.broadcastPeerStatus(live, i, 'reconnecting', RECONNECT_GRACE_MS);
+          m.reconnectAnnounced = false;
         }
       }
       this.enforceRoomTurn(live, now);
       for (let i = 0; i < live.members.length; i++) {
         const m = live.members[i];
-        if (!m || m.connected) continue;
-        if (m.droppedAt <= 0 || now - m.droppedAt < RECONNECT_GRACE_MS) continue;
+        if (!m || m.connected || m.droppedAt <= 0) continue;
+        const elapsed = now - m.droppedAt;
+        /* A drop that outlives the silent hold earns the pill; the grace it prints is what is left
+           of the reconnect window, so the client's lease matches the server's own forfeit clock. */
+        if (!m.reconnectAnnounced && elapsed >= PEER_ANNOUNCE_DELAY_MS) {
+          m.reconnectAnnounced = true;
+          this.broadcastPeerStatus(live, i, 'reconnecting', Math.max(0, RECONNECT_GRACE_MS - elapsed));
+        }
+        if (elapsed < RECONNECT_GRACE_MS) continue;
         /* The grace is over and the player never came back: the chair is struck from the race,
            not handed to a bot for the rest of the match. */
         this.eliminateSeat({ live, seat: i });
@@ -7795,7 +7880,7 @@ export class MatchmakerDO {
         /* A seat answering the heartbeat still owes the next one: the alarm is what turns its
            silence into an away badge on the other side. */
         if (m.connected && m.lastPingAt > 0) {
-          soonest = Math.min(soonest, m.lastPingAt + SEAT_SILENCE_MS);
+          soonest = Math.min(soonest, m.lastSeenAt + SEAT_SILENCE_MS);
         }
         if (!m.connected && i !== live.hostSeat) {
           soonest = Math.min(soonest, m.droppedAt + ROOM_SEAT_HOLD_MS);
@@ -7819,10 +7904,15 @@ export class MatchmakerDO {
       for (const m of live.members) {
         if (!m) continue;
         if (m.connected && m.lastPingAt > 0) {
-          soonest = Math.min(soonest, m.lastPingAt + SEAT_SILENCE_MS);
+          soonest = Math.min(soonest, m.lastSeenAt + SEAT_SILENCE_MS);
         }
         /* A struck chair has no grace left to run: `droppedAt` is 0, so it arms nothing. */
         if (!m.connected && m.droppedAt > 0) {
+          /* The silent hold ends at the announce delay; the forfeit at the full grace. Both are
+             alarms so a webview that reconnects mid-handoff is heard even across an eviction. */
+          if (!m.reconnectAnnounced) {
+            soonest = Math.min(soonest, m.droppedAt + PEER_ANNOUNCE_DELAY_MS);
+          }
           soonest = Math.min(soonest, m.droppedAt + RECONNECT_GRACE_MS);
         }
       }
@@ -7879,6 +7969,7 @@ export class MatchmakerDO {
       type: 'ROOM_FOUND',
       matchId: live.matchId,
       seed: live.seed,
+      seq: live.seq,
       side: seat,
       sizes: sizesOf(roster),
       mode: live.mode,
@@ -7912,21 +8003,28 @@ export class MatchmakerDO {
     const live = ref.live;
     const member = live.members[ref.seat];
     if (member) this.markActive(member.id, live.driver ? this.roomModeOf(live) : undefined);
-    /* The seat may have been marked away by the heartbeat sweep while its webview was merely
-       throttled in the background. Any frame proves the socket is still here, so the player is
-       back in the chair before the frame is handled — no reconnect, no lost seat. */
+    /* Any valid frame is proof of life: move the seat's own clock and the room's idle clock forward
+       together, so an actively-moving player is never called away by a throttled heartbeat timer. */
+    const now = Date.now();
+    if (member) member.lastSeenAt = now;
+    live.lastSeenAt = now;
+    /* The seat may have been marked away by a close, an error or the silence sweep while its webview
+       was merely throttled or handing off networks. Any frame proves the socket is still here, so the
+       player is back in the chair before the frame is handled — no reconnect, no lost seat. The pill
+       only says "online" when a "reconnecting" actually went out; a hand-off that healed inside the
+       announce delay never painted one, so it gets no phantom recovery flash either. */
     if (member && !member.connected) {
+      const wasAnnounced = member.reconnectAnnounced;
       member.connected = true;
       member.droppedAt = 0;
+      member.reconnectAnnounced = false;
       live.disconnectBotMoves[ref.seat] = 0;
-      live.lastSeenAt = Date.now();
       /* Any frame proves the heartbeat is flowing again: without this a revived seat would be
          marked away by the very next sweep on its old ping timestamp. */
-      if (member.lastPingAt > 0) member.lastPingAt = Date.now();
+      if (member.lastPingAt > 0) member.lastPingAt = now;
       if (live.driver) {
-        /* The heartbeat sweep had called this seat away; the frame proves it is here. Tell the
-           rival the pill can go, and hand the seat the board it missed while it was marked away. */
-        this.broadcastPeerStatus(live, ref.seat, 'online');
+        if (wasAnnounced) this.broadcastPeerStatus(live, ref.seat, 'online');
+        /* Hand the seat the board it missed while it was marked away, on the same beat. */
         this.postTo(member.ws, this.roomSyncMessage(live));
       } else {
         this.broadcastLobby(live);
@@ -7936,8 +8034,8 @@ export class MatchmakerDO {
       /* A seat that is still there is worth answering: the `PONG` is how the client tells a
          sleeping webview from a live room, and it keeps every hop between us from idling out. */
       if (member) {
-        member.lastPingAt = Date.now();
-        this.postTo(member.ws, JSON.stringify({ type: 'PONG' }));
+        member.lastPingAt = now;
+        this.postTo(member.ws, JSON.stringify({ type: 'PONG', t: now }));
       }
       return;
     }
@@ -8057,6 +8155,12 @@ export class MatchmakerDO {
       return;
     }
     if (msg.type !== 'MOVE') return;
+    /* Idempotent submission: a client retries an unacknowledged move with the same id. The room
+       recognises the id it already accepted and answers the ack again — never plays the turn twice. */
+    if (member && msg.moveId && member.lastMoveId === msg.moveId) {
+      this.postTo(member.ws, JSON.stringify({ type: 'MOVE_ACK', moveId: msg.moveId, seq: live.seq }));
+      return;
+    }
     const before = live.driver.state;
     /* Authoritative crossing gate: a perpendicular bar through another wall's centre anchor is
        refused before it can reach the driver, using the same predicate as the client and the bot. */
@@ -8074,13 +8178,21 @@ export class MatchmakerDO {
           type: 'REJECT',
           reason: result.reason,
           state: live.driver.state,
+          seq: live.seq,
           turnDeadlineMs: live.turnDeadlineMs,
           turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
         }));
       }
       return;
     }
+    if (member && msg.moveId) member.lastMoveId = msg.moveId;
+    const seqBefore = live.seq;
     this.countBoard(before, live.driver.state);
+    /* The mover's ack travels first, so its sequence advances before the machine batch relays behind
+       it — otherwise the mover would read its own bot answers as a gap and ask for a needless resync. */
+    if (member && msg.moveId) {
+      this.postTo(member.ws, JSON.stringify({ type: 'MOVE_ACK', moveId: msg.moveId, seq: seqBefore + 1 }));
+    }
     this.pushRoomEvents(live, result.events);
     this.armRoomTurn(live);
     this.rearm();
@@ -8128,13 +8240,17 @@ export class MatchmakerDO {
    */
   private pushRoomEvents(live: LiveRoom, events: readonly RoomEvent[], includeSeat = -1): void {
     if (!events.length) return;
+    /* One sequence tick per board mutation, stamped on every relay so a client can order the batch
+       and spot a dropped relay. The mover's own event is first, matching the ack it already got. */
+    const seqs = events.map(() => ++live.seq);
     for (const m of live.members) {
       if (!m || !m.connected) continue;
-      for (const ev of events) {
+      for (let i = 0; i < events.length; i++) {
+        const ev = events[i];
         /* The seat that played a move applied it locally already — except an event the server
            played FOR it (a turn-deadline fallback), which that seat has to receive too. */
         if (ev.seat === m.seat && ev.seat !== includeSeat) continue;
-        this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
+        this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action, seq: seqs[i] }));
       }
     }
     /* A trap can empty a whole team in one sweep, and the board then holds two contenders on one
@@ -8316,8 +8432,10 @@ export class MatchmakerDO {
   /**
    * A live seat's socket went away. The chair is *held* for the reconnect grace window instead of
    * being handed to the machine on the spot: a phone changing networks is not a resignation. The
-   * room keeps the code, the identity and the board, and the rival is told exactly how long the
-   * hold lasts; only an expiry in `sweepRacedRooms` converts the seat.
+   * room keeps the code, the identity and the board. The drop is silent for `PEER_ANNOUNCE_DELAY_MS`
+   * — a hand-off that heals inside it never paints a banner — and only an expiry in
+   * `sweepRacedRooms` converts the seat. The ref is cleared so a ghost socket cannot keep speaking,
+   * but `refForSocket` re-binds it the instant the held seat's own socket sends another frame.
    */
   private roomDrop(ref: RoomRef, member: RoomMember, ws?: WebSocket): void {
     /* A close frame from a socket the seat no longer wears is a ghost: the player already
@@ -8328,11 +8446,9 @@ export class MatchmakerDO {
     if (wasConnected) {
       member.connected = false;
       member.droppedAt = Date.now();
+      member.reconnectAnnounced = false;
     }
     ref.live.lastSeenAt = Date.now();
-    if (wasConnected) {
-      this.broadcastPeerStatus(ref.live, ref.seat, 'reconnecting', RECONNECT_GRACE_MS);
-    }
     this.rearm();
   }
 
