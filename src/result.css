@@ -1238,6 +1238,70 @@ html.reduced-motion .ad-toast { transition: none; }
   line-height: 1.65;
   text-wrap: pretty;
 }
+/* ---- "don't ask again": a compact 36px row between the warning and the gold key.
+   The native input is hidden in style.css but stays focusable; the 18px rounded box is its
+   painted face. The tick comes from the inline i-check sprite — crisp at any density. */
+.ad-skip-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: -6px 0 12px;
+  color: #C9C2B4;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ad-skip-box {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(232, 185, 74, .45);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, .45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .55);
+  color: #191203;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.ad-skip-check-ico {
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.ad-skip-input:checked + .ad-skip-box {
+  border-color: #F3D483;
+  background: linear-gradient(160deg, #F7E4A8, #D4AF37 60%, #A8801F);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 0 12px -4px rgba(243, 212, 131, .85);
+}
+.ad-skip-input:checked + .ad-skip-box .ad-skip-check-ico { opacity: 1; transform: none; }
+.ad-skip-input:focus-visible + .ad-skip-box {
+  outline: 2px solid rgba(243, 212, 131, .8);
+  outline-offset: 2px;
+}
+.ad-skip-label { flex: 1 1 auto; }
+@media (max-width: 480px) {
+  .ad-skip-opt { gap: 7px; font-size: 10.5px; }
+}
+html.reduced-motion .ad-skip-box,
+html.reduced-motion .ad-skip-check-ico { transition: none; }
+html[data-lang="fa"] .ad-skip-opt,
+html[data-lang="ar"] .ad-skip-opt {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
 .ad-confirm-actions {
   display: grid;
   grid-template-columns: 1fr;

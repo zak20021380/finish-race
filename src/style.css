@@ -42762,3 +42762,18 @@ bdi { unicode-bidi: isolate; }
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* The opt-out row shares this root-level sheet. Its native input stays in the tree for keyboard
+   and assistive-tech semantics but is painted by the gold box styled in result.css. Hiding the
+   row for the TIQ sheet must remove the tap target too, so the guard lives here with the modal's
+   other visibility rules rather than relying on the UA stylesheet. */
+.ad-skip-opt[hidden] { display: none !important; }
+.ad-skip-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}

@@ -33,7 +33,10 @@ import { createNotifications, clearRelicChallenges, dismissRelicChallenge, noteR
 import { fetchRelicMailbox, startRelicChannel } from './network';
 import { showMarkupToast, showToast } from './toast';
 import { mountCoins } from './coin';
-import { appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, t, tIn, toggleAppearance } from './settings';
+import {
+  appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, setSkip2xConfirm,
+  skip2xConfirm, t, tIn, toggleAppearance,
+} from './settings';
 import {
   audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
 } from './audio';
@@ -280,6 +283,9 @@ const adConfirmDesc = $<HTMLElement>('ad-confirm-desc');
 const adConfirmIco = document.getElementById('ad-confirm-ico') as SVGUseElement | null;
 const adConfirmWatch = $<HTMLButtonElement>('ad-confirm-watch');
 const adConfirmSheet = document.getElementById('ad-confirm-sheet');
+const adSkipOpt = document.getElementById('ad-skip-opt');
+const adSkipCheck = $<HTMLInputElement>('ad-skip-check');
+const adSkipLabel = $<HTMLElement>('ad-skip-label');
 const againLabel = $<HTMLSpanElement>('again-label');
 const againIco = document.getElementById('again-ico') as SVGUseElement | null;
 const shareBtn = $<HTMLButtonElement>('share');
@@ -2130,6 +2136,9 @@ function paintAdConfirmCopy(): void {
   adConfirmTitle.textContent = t(tiq ? 'ad_confirm_title_tiq' : 'ad_confirm_title_coins');
   adConfirmDesc.textContent = t(tiq ? 'ad_confirm_desc_tiq' : 'ad_confirm_desc_coins');
   adConfirmWatch.textContent = t('ad_confirm_watch');
+  adSkipLabel.textContent = t('adSkipOpt');
+  /* The opt-out belongs to the 2x sheet only: a stake recovery keeps its single warning. */
+  if (adSkipOpt) adSkipOpt.hidden = tiq;
   adConfirmIco?.setAttribute('href', tiq ? '#i-shield' : '#i-play');
 }
 
@@ -2174,6 +2183,8 @@ function askAdConfirm(kind: AdConfirmKind, onStalled?: () => void): Promise<bool
   if (adConfirmResolve || !adConfirm.hidden) return Promise.resolve(false);
   adConfirmKind = kind;
   paintAdConfirmCopy();
+  /* Every open starts from the saved choice — never from the previous modal's tick. */
+  adSkipCheck.checked = skip2xConfirm();
   hideAdToast();
   adConfirmOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   /* atomic: the scrim and the card become visible in the same frame, before any SDK is touched */
@@ -2214,7 +2225,13 @@ adConfirm.addEventListener('click', (event) => {
   impact('light');
   closeAdConfirm(false);
 });
-adConfirmWatch.addEventListener('click', () => { impact('light'); closeAdConfirm(true); });
+adConfirmWatch.addEventListener('click', () => {
+  impact('light');
+  /* The opt-out is saved only by committing to a video. CANCEL, the scrim and Escape all take
+     the plain close path, so declining an ad never silently disables future confirmations. */
+  if (adConfirmKind === 'coins' && adSkipCheck.checked) setSkip2xConfirm(true);
+  closeAdConfirm(true);
+});
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || !adConfirmResolve || adClaimInFlight) return;
   event.preventDefault();
@@ -2403,7 +2420,10 @@ async function claimDoubleCoins(): Promise<void> {
         animateCoinTotal(view.coins);
         view.questAdCompleted = false;
       } else {
-        if (!(await askAdConfirm('coins', () => setChipBusy(doubleBtn, doubleSpin, false)))) return;
+        /* "Watch directly" fast path: the sheet never opens, while the 2x chip's busy spinner,
+           the still-wanted guard and the one-ad-at-a-time mutex below all stay in force. */
+        if (!skip2xConfirm()
+          && !(await askAdConfirm('coins', () => setChipBusy(doubleBtn, doubleSpin, false)))) return;
         if (resultView !== view || !overlayOpen) return;
         stopDefeat();
         holdAudio();

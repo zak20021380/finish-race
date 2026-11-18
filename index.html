@@ -1687,6 +1687,12 @@
                   <span class="row-txt"><span class="row-t" data-i18n="haptics">Haptics</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
+                <!-- the inverse of the modal's "don't ask again" opt-out: flip this back on
+                     whenever a player wants the 2x confirmation sheet to return -->
+                <button class="row" type="button" role="switch" aria-checked="true" id="set-confirm-2x" data-ad-confirm-toggle>
+                  <span class="row-txt"><span class="row-t" data-i18n="confirmBefore2xAd">Confirm before 2x ad</span></span>
+                  <span class="switch" aria-hidden="true"></span>
+                </button>
                 <!-- client-side perspective: your pawns/walls/HUD and the finish wash wear the
                      chosen family; the rival automatically wears the opposite one. Purely local —
                      two players who both pick red still see themselves in red. -->
@@ -5824,6 +5830,13 @@
         <h3 class="ad-confirm-title" id="ad-confirm-title" dir="auto">LIFT TIQ PENALTY</h3>
         <p class="ad-confirm-desc" id="ad-confirm-desc" dir="auto">Watch the full video to claim
           your reward. Closing or skipping early yields zero rewards.</p>
+        <label class="ad-skip-opt" id="ad-skip-opt">
+          <input class="ad-skip-input" type="checkbox" id="ad-skip-check" />
+          <span class="ad-skip-box" aria-hidden="true">
+            <svg class="ad-skip-check-ico" viewBox="0 0 24 24" focusable="false"><use href="#i-check" /></svg>
+          </span>
+          <span class="ad-skip-label" id="ad-skip-label" data-i18n="adSkipOpt">Don't ask again (watch directly)</span>
+        </label>
         <div class="ad-confirm-actions">
           <button class="ad-confirm-btn is-primary" id="ad-confirm-watch" type="button"
             dir="auto">WATCH VIDEO</button>

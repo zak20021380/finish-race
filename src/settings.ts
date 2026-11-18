@@ -1067,6 +1067,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ad_confirm_desc_coins: 'Watch the full video to claim your reward. Closing or skipping early yields zero rewards.',
     ad_confirm_watch: 'WATCH VIDEO',
     ad_confirm_cancel: 'CANCEL',
+    adSkipOpt: "Don't ask again (watch directly)",
+    confirmBefore2xAd: 'Confirm before 2x ad',
     /* the SDK closed without completing: no reward, and no recovery was spent */
     ad_failed_incomplete: 'Video closed early! You must watch the complete ad to earn the reward.',
     ad_success_tiq_saved: 'TIQ Saved! Match loss penalty successfully waived.',
@@ -2069,6 +2071,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ad_confirm_desc_coins: 'ویدیو را تا آخر تماشا کنید. در صورت بستن زودهنگام یا رد کردن تبلیغ، هیچ پاداشی تعلق نمی‌گیرد.',
     ad_confirm_watch: 'تماشای ویدیو',
     ad_confirm_cancel: 'انصراف',
+    adSkipOpt: 'دیگه نشون نده (پخش مستقیم تبلیغ)',
+    confirmBefore2xAd: 'تأیید قبل از تبلیغ 2 برابری',
     /* SDK بدون اتمام بسته شد: پاداشی نیست و سهمیه بازیابی هم خرج نمی‌شود */
     ad_failed_incomplete: 'ویدیو کامل دیده نشد! برای دریافت پاداش باید تا پایان تبلیغ منتظر بمانید.',
     ad_success_tiq_saved: 'امتیاز شما حفظ شد! جریمه باخت لغو گردید.',
@@ -2283,6 +2287,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     adDoubleCtaVip: '×2',
     adDoubleSubVip: 'БЕЗ РЕКЛ.',
     adDoubleVipAria: 'Забрать ×2 · без рекламы',
+    adSkipOpt: 'Больше не спрашивать (смотреть сразу)',
+    confirmBefore2xAd: 'Подтверждение перед рекламой 2x',
     resultVipBoost: 'VIP +50%',
     banterPlaceholder: 'Напишите сообщение…',
     banterInputLabel: 'Своё сообщение, до 40 символов',
@@ -2621,6 +2627,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     adDoubleCtaVip: '×2',
     adDoubleSubVip: 'بلا إعلان',
     adDoubleVipAria: 'احصل على ×2 · بدون إعلانات',
+    adSkipOpt: 'ما تسألني مرة ثانية (شاهد الإعلان مباشرة)',
+    confirmBefore2xAd: 'تأكيد قبل إعلان 2x',
     resultVipBoost: 'VIP +50%',
     banterPlaceholder: 'اكتب رسالة…',
     banterInputLabel: 'رسالة مخصصة، 40 حرفًا كحد أقصى',
@@ -2959,6 +2967,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     adDoubleCtaVip: '×2',
     adDoubleSubVip: 'SIN ADS',
     adDoubleVipAria: 'Reclamar ×2 · sin anuncios',
+    adSkipOpt: 'No volver a preguntar (ver directamente)',
+    confirmBefore2xAd: 'Confirmar antes del anuncio 2x',
     resultVipBoost: 'VIP +50%',
     banterPlaceholder: 'Escribe un mensaje…',
     banterInputLabel: 'Mensaje personalizado, 40 caracteres máx.',
@@ -3310,6 +3320,27 @@ export function setSetting<K extends keyof Settings>(key: K, value: Settings[K])
 }
 
 export function onSettings(w: (s: Settings) => void) { watchers.push(w); }
+
+/* ---------- 2x rewarded-ad confirmation opt-out ----------
+   A raw key, not a Settings field: the consent sheet writes it the moment a player commits to a
+   video, while the Settings sheet shows its inverse ("Confirm before 2x ad"). One door, two faces. */
+const SKIP_2X_KEY = 'fr_skip_2x_confirm';
+
+/** True when the player chose to go straight to the ad on future 2x taps. */
+export function skip2xConfirm(): boolean {
+  try { return window.localStorage.getItem(SKIP_2X_KEY) === '1'; } catch { return false; }
+}
+/** The Settings row reads the opt-out backwards: ON means the sheet still asks. */
+export function confirmBefore2xAd(): boolean { return !skip2xConfirm(); }
+
+const skip2xWatchers: ((confirm: boolean) => void)[] = [];
+export function onSkip2xConfirm(w: (confirm: boolean) => void): void { skip2xWatchers.push(w); }
+
+export function setSkip2xConfirm(skip: boolean): void {
+  try { window.localStorage.setItem(SKIP_2X_KEY, skip ? '1' : '0'); } catch { /* stay in memory */ }
+  for (const w of skip2xWatchers) { try { w(!skip); } catch { /* watcher threw */ } }
+}
+export function setConfirmBefore2xAd(confirm: boolean): void { setSkip2xConfirm(!confirm); }
 
 /* ---------- the race stage's light / dark finish ---------- */
 

@@ -9,7 +9,8 @@
 import { DIFFICULTIES, type Difficulty } from './bot';
 import {
   LANGS, lang, langDef, motionReduced, onLang, setLang, t,
-  menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type LangDef, type Settings,
+  menuState, saveMenu, settings, setSetting, onSettings, confirmBefore2xAd, onSkip2xConfirm,
+  setConfirmBefore2xAd, type LangCode, type LangDef, type Settings,
 } from './settings';
 import {
   ageLocked, claimIdentityReward, cleanDisplayName, createTeam, daysInMonth,
@@ -4381,6 +4382,19 @@ export function createMenu(api: MenuApi): Menu {
     });
   }
   onSettings(paintSettings);
+
+  /* ---- 2x ad confirmation: the same preference the consent sheet opts out of,
+     shown the other way round so it can always be switched back on ---- */
+  const adConfirmToggle = $<HTMLButtonElement>('set-confirm-2x');
+  const paintAdConfirmToggle = () => {
+    adConfirmToggle.setAttribute('aria-checked', String(confirmBefore2xAd()));
+  };
+  adConfirmToggle.addEventListener('click', () => {
+    setConfirmBefore2xAd(!confirmBefore2xAd());
+    impact('light');
+  });
+  onSkip2xConfirm(paintAdConfirmToggle);
+  paintAdConfirmToggle();
 
   /* ---- piece colour: the client-side red/blue perspective -----------------
      This is a save preference, never a rule: the race still seats, turns and scores
