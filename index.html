@@ -2835,8 +2835,8 @@
                 </div>
                 <div class="vault-card-center">
                   <span class="vault-card-balance-label" data-i18n="vault_card_balance_label">VAULT BALANCE</span>
-                  <p class="vault-card-balance" dir="ltr">
-                    <b id="sv-bal">5</b><span class="vault-card-target">/ <span id="sv-target">50</span></span>
+                  <p class="vault-card-balance">
+                    <bdi dir="ltr" class="vault-card-ratio"><b id="sv-bal">5</b><span class="vault-card-target">/ <span id="sv-target">50</span></span></bdi>
                     <img class="vault-star-icon vault-card-star" alt="" aria-hidden="true" width="24" height="24" decoding="async" draggable="false" />
                   </p>
                 </div>
@@ -2849,7 +2849,16 @@
                     <b class="vault-card-name" id="sv-card-holder" dir="auto">Player</b>
                     <span class="vault-card-gift" id="sv-card-gift">+5 Starter</span>
                   </div>
-                  <span class="vault-card-unlock" id="sv-card-unlock">45 Stars to unlock</span>
+                  <div class="vault-card-payout-slot">
+                    <button class="sv-payout" type="button" id="sv-payout" disabled>
+                      <span class="sv-payout-i" aria-hidden="true">
+                        <svg class="ico" id="sv-payout-glyph"><use id="sv-payout-ic" href="#i-lock" /></svg>
+                        <img class="vault-star-icon" id="sv-payout-star" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" hidden />
+                      </span>
+                      <span class="sv-payout-t" id="sv-payout-t">Locked · Cash out at 50</span>
+                    </button>
+                    <span class="vault-card-unlock" id="sv-card-unlock">45 more</span>
+                  </div>
                 </div>
               </section>
 
@@ -2873,26 +2882,23 @@
                   <div class="sv-quest-head">
                     <span class="sv-quest-headcopy">
                       <b class="sv-quest-title" id="sv-quest-title" data-i18n="quest_card_title">Earn +5 Stars Per Friend</b>
-                      <span class="sv-quest-meta" data-i18n="quest_card_meta">Complete both goals vs Hard AI within 72h (15 matches total):</span>
+                      <span class="sv-quest-meta" data-i18n="quest_card_meta">When your friend completes both within 72h:</span>
                     </span>
                     <b class="sv-quest-reward" dir="ltr"><span id="sv-quest-reward-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                   </div>
-                  <!-- both goals are mandatory: side by side, joined by one gold AND pill -->
+                  <!-- one box, two plain-language rows: the whole rule reads in one glance, no mental math -->
                   <div class="sv-quest-paths">
                     <div class="sv-quest-path" data-tone="plays">
                       <b class="sv-quest-path-t">
                         <svg class="ico sv-quest-path-ico" aria-hidden="true"><use href="#i-gamepad" /></svg>
-                        <span id="sv-path-matches">10 Any Matches</span>
+                        <span id="sv-row-matches">Play 15 matches vs Hard AI</span>
                       </b>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_matches_sub">Play vs Hard AI (win or lose)</span>
                     </div>
-                    <span class="sv-quest-and" data-i18n="quest_and">AND</span>
                     <div class="sv-quest-path" data-tone="rivals">
                       <b class="sv-quest-path-t">
                         <svg class="ico sv-quest-path-ico" aria-hidden="true"><use href="#i-swords" /></svg>
-                        <span id="sv-path-wins">5 Wins</span>
+                        <span id="sv-row-wins">Win at least 5 of those matches</span>
                       </b>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_wins_sub">Beat Hard AI (15 total)</span>
                     </div>
                   </div>
                 </div>
@@ -2909,13 +2915,6 @@
                   <svg class="ico" aria-hidden="true"><use id="sv-copy-ic" href="#i-copy" /></svg>
                 </button>
               </div>
-              <button class="sv-payout" type="button" id="sv-payout" disabled>
-                <span class="sv-payout-i" aria-hidden="true">
-                  <svg class="ico" id="sv-payout-glyph"><use id="sv-payout-ic" href="#i-lock" /></svg>
-                  <img class="vault-star-icon" id="sv-payout-star" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" hidden />
-                </span>
-                <span class="sv-payout-t" id="sv-payout-t">Locked · Reach 50 Stars to cash out</span>
-              </button>
               <p class="sv-notice" id="sv-notice" hidden></p>
             </div>
 

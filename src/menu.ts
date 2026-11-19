@@ -2235,19 +2235,19 @@ export function createMenu(api: MenuApi): Menu {
         ? t('vault_card_waiting')
         : vault.canPayout
           ? t('vault_card_ready')
-          : balance >= target
-            ? t('vault_card_unavailable')
-            : svFill('vault_card_remaining_unlock', { remaining: en(target - balance) }));
+            : balance >= target
+              ? t('vault_card_unavailable')
+              : svFill('vault_card_remaining_unlock', { remaining: en(target - balance) }));
+    const unlockEl = document.getElementById('sv-card-unlock');
+    if (unlockEl) unlockEl.hidden = vault.canPayout;
 
     svText('sv-pending', en(vault.pendingFriendsCount));
     svText('sv-earned', `+${en(vault.earnedStars)}`);
     svText('sv-paid', en(vault.paidOutStars));
 
     svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
-    svText('sv-path-matches', svFill('quest_option_matches', {
-      n: en(C.QUEST_MIN_MATCHES - C.QUEST_MIN_WINS),
-    }));
-    svText('sv-path-wins', svFill('quest_option_wins', { n: en(C.QUEST_MIN_WINS) }));
+    svText('sv-row-matches', svFill('quest_row_matches', { n: en(C.QUEST_MIN_MATCHES) }));
+    svText('sv-row-wins', svFill('quest_row_wins', { n: en(C.QUEST_MIN_WINS) }));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');
