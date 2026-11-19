@@ -8075,17 +8075,6 @@ html.reduced-motion .hex-photo { transition: none; }
 .sv :is(button, input) { font: inherit; }
 .sv-check { flex: none; width: 10px; height: 10px; }
 
-/* the quiet ember beside the title: it only lights on a live server read */
-.sv-live {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-}
-.sv-live[data-live="true"] { background: var(--mint); box-shadow: 0 0 7px rgba(16, 185, 129, .55); }
-
 /* the meter: one number against one target, then the gold fill and the gift that seeded it */
 .sv-meter {
   display: flex;
@@ -41136,7 +41125,6 @@ html:lang(fa) :is(.vg-fine, .vg-done, .vm-foot-l), html:lang(ar) :is(.vg-fine, .
 #modal-stars-vault .vm-head-t { gap: 4px; }
 #modal-stars-vault .vm-title { font-size: 18px; font-weight: 800; line-height: 1.4; }
 #modal-stars-vault .vm-sub { font-size: 10.5px; font-weight: 500; line-height: 1.5; color: #BCA77B; }
-#modal-stars-vault .sv-live { margin-top: 9px; width: 5px; height: 5px; }
 #modal-stars-vault .sv-vault { flex: none; gap: 12px; }
 #modal-stars-vault .sv-vault > * { flex-shrink: 0; }
 .vault-vip-card {

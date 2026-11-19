@@ -2297,9 +2297,6 @@ export function createMenu(api: MenuApi): Menu {
         : offline ? t('vaultOffline') : '';
     }
 
-    const live = document.getElementById('sv-live');
-    if (live) live.dataset.live = String(vault.live);
-
     const friendsTotal = en(vault.pendingFriendsCount + vault.qualifiedFriendsCount);
     svText('sv-friends-n', friendsTotal);
     /* The tracker's summary pill: how many friends are on the ledger and how many Stars those
