@@ -36387,7 +36387,8 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-hero {
   flex: none;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The rank pill lives in the sub-row now, so the text column takes the room itself. */
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 11px;
   padding: 11px;
@@ -36417,7 +36418,9 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   text-transform: uppercase;
   color: rgba(255, 255, 255, .94);
 }
-.cw-hero-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cw-hero-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+/* The sub-row: the @handle first, the rank pill trailing at the end of the line. */
+.cw-hero-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cw-hero-name {
   min-width: 0;
   font-size: 14px;
@@ -36437,9 +36440,8 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   white-space: nowrap;
 }
 .cw-hero-handle {
-  display: block;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 100%;
   font-family: var(--font-numeric);
   font-size: 10px;
   font-weight: 700;
@@ -36488,8 +36490,10 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-stats {
   flex: none;
   display: grid;
+  /* One strict rhythm: three even plates, every card stretched to the same height. */
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+  align-items: stretch;
+  gap: 8px;
 }
 .cw-stat {
   display: flex;
@@ -36520,14 +36524,16 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-stat-k .ico { width: 10px; height: 10px; flex: none; }
 .cw-stat.is-tiq .cw-stat-k { color: var(--cw-gold-ink); }
+/* The figure alone: the card's label says what the number is, so no unit rides inside it. */
 .cw-stat-v {
   display: block;
   min-width: 0;
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
-  font-size: clamp(12px, 4vw, 15px);
+  /* One typography for every plate, so heights and baselines match across cards. */
+  font-size: clamp(1.05rem, 4.2vw, 1.25rem);
   line-height: 1.1;
-  font-weight: 900;
+  font-weight: 800;
   color: var(--ink);
   direction: ltr;
   unicode-bidi: isolate;
@@ -36537,13 +36543,6 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-stat.is-tiq .cw-stat-v { color: var(--cw-gold-hi); }
 .cw-stat-v.is-unknown { color: var(--text-dim); }
-/* inside a plate the unit drops to its own line rather than fighting the figure for width */
-.cw-stat-v .cw-tiq {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px;
-}
 
 /* the roster that actually earned it */
 .cw-fighters { display: flex; flex-direction: column; gap: 7px; min-height: 0; }
@@ -36554,6 +36553,7 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   align-items: center;
   gap: 8px;
   min-width: 0;
+  min-height: 52px;
   padding: 6px 9px;
   border-radius: 12px;
   background: var(--cw-plate);
@@ -36652,6 +36652,14 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   line-height: 1.15;
   text-align: center;
   white-space: normal;
+}
+/* The inspector foot: a compact invite beside the widened primary, both standing tall. */
+#cw-detail .cw-actions .cw-cta { flex: 1.6; }
+#cw-detail .cw-actions .cw-invite {
+  min-height: 48px;
+  width: auto;
+  min-width: 58px;
+  padding: 0 12px;
 }
 
 /* ---- the admin door: one handle, one title, one key, one link ---- */
@@ -36898,7 +36906,6 @@ html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
   .cw-stat { padding: 8px 6px; }
   .cw-stat-k { font-size: 7px; gap: 3px; }
   .cw-stat-k .ico { width: 9px; height: 9px; }
-  .cw-stat-v { font-size: 12px; }
   .cw-fighter { grid-template-columns: 24px 26px minmax(0, 1fr) auto; gap: 6px; padding: 6px 7px; }
   .cw-fighter-av { width: 26px; height: 26px; }
   .cw-fighter-name { font-size: 11px; }

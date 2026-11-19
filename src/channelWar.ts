@@ -121,13 +121,6 @@ function tiqFigure(n: number, opts: { sign?: '+' | '−' | ''; cls?: string } = 
   return host;
 }
 
-/** Fill an existing host with `1,450 TIQ`, replacing whatever it painted last. */
-function paintTiq(host: HTMLElement | null, n: number, sign?: '+' | '−' | ''): void {
-  if (!host) return;
-  host.textContent = '';
-  host.append(tiqFigure(n, { sign }));
-}
-
 /** A Latin-digit template with its numbers isolated, so RTL prose never reorders them. */
 function paintTemplate(host: HTMLElement, template: string, vars: Record<string, string>): void {
   host.textContent = '';
@@ -222,6 +215,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   /* the inspector */
   const detailBack = document.getElementById('cw-detail-back');
+  const detailClose = document.getElementById('cw-detail-close');
   const detailBody = detailView?.querySelector<HTMLElement>('.cw-detail-body') ?? null;
   const detailAv = document.getElementById('cw-detail-av');
   const detailImg = document.getElementById('cw-detail-img') as HTMLImageElement | null;
@@ -467,7 +461,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     li.className = 'cw-fighter';
 
     const rank = document.createElement('span');
-    rank.className = `cw-fighter-rank${place <= 3 ? ` is-${place}` : ''}`;
+    /* The pill always carries the place; the colour stays a prize: muted neutral when the fighter
+       carried nothing for the channel, gold/silver/bronze when they did. */
+    const scored = (m.warTiq ?? 0) > 0;
+    rank.className = `cw-fighter-rank${place <= 3 && scored ? ` is-${place}` : ''}`;
     rank.setAttribute('dir', 'ltr');
     rank.textContent = `#${place}`;
 
@@ -565,7 +562,8 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       detailRank.setAttribute('dir', scored ? 'ltr' : 'auto');
       detailRank.textContent = scored ? `#${s.rank}` : t('cwUnranked');
     }
-    paintTiq(detailTiq, tiq);
+    /* The metric in its own plain figure — the plate's label already says what the number is. */
+    if (detailTiq) detailTiq.textContent = tiqLabel(tiq);
     /* Telegram's own audience. `null` is "the bot never got an answer" — a dash, never a zero. */
     if (detailMembers) {
       const audience = s.telegramMembers;
@@ -956,6 +954,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   });
 
   detailBack?.addEventListener('click', () => { impact('light'); closeDetail(); });
+  detailClose?.addEventListener('click', () => { impact('light'); closeDetail(); });
   detailPlay?.addEventListener('click', () => { playFriends(); });
   detailInvite?.addEventListener('click', () => { rally(); });
   detailJoin?.addEventListener('click', () => { void joinFromDetail(); });

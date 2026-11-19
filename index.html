@@ -4609,6 +4609,9 @@
             </button>
             <h2 class="cw-title is-reg" id="cw-detail-title" data-i18n="cwDetailTitle">CHANNEL DETAILS</h2>
             <span class="cw-head-sp" aria-hidden="true"></span>
+            <button class="cw-x" id="cw-detail-close" type="button" data-i18n-aria="cwClose" aria-label="Close">
+              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-close" /></svg>
+            </button>
           </header>
 
           <div class="cw-detail-body" data-scroll>
@@ -4619,9 +4622,11 @@
               </span>
               <span class="cw-hero-id">
                 <b class="cw-hero-name"><bdi dir="auto" id="cw-detail-name">Channel</bdi></b>
-                <bdi class="cw-hero-handle" id="cw-detail-handle" dir="ltr">@channel</bdi>
+                <span class="cw-hero-sub">
+                  <bdi class="cw-hero-handle" id="cw-detail-handle" dir="ltr">@channel</bdi>
+                  <span class="cw-hero-rank" id="cw-detail-rank" dir="ltr">—</span>
+                </span>
               </span>
-              <span class="cw-hero-rank" id="cw-detail-rank" dir="ltr">—</span>
             </div>
 
             <div class="cw-stats">
@@ -4635,14 +4640,14 @@
               <div class="cw-stat">
                 <span class="cw-stat-k">
                   <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
-                  <span data-i18n="cwStatMembers">Telegram Members</span>
+                  <span data-i18n="cwStatMembers">MEMBERS</span>
                 </span>
                 <b class="cw-stat-v" id="cw-detail-members" dir="ltr">—</b>
               </div>
               <div class="cw-stat">
                 <span class="cw-stat-k">
                   <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-swords" /></svg>
-                  <span data-i18n="cwStatFighters">Bot Fighters</span>
+                  <span data-i18n="cwStatFighters">FIGHTERS</span>
                 </span>
                 <b class="cw-stat-v" id="cw-detail-fighters-n" dir="ltr">0</b>
               </div>
@@ -4657,17 +4662,17 @@
           <div class="cw-foot">
             <p class="cw-detail-note" id="cw-detail-note" hidden></p>
             <div class="cw-actions">
-              <button class="cw-invite is-wide" id="cw-detail-invite" type="button" hidden>
+              <button class="cw-invite" id="cw-detail-invite" type="button" hidden>
                 <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
-                <span data-i18n="cwInviteFriends">Invite Friends</span>
+                <span data-i18n="cwInvite">Invite</span>
               </button>
               <button class="cw-cta" id="cw-detail-play" type="button" hidden>
-                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
-                <span class="cw-cta-t"><b id="cw-detail-play-t">PLAY WITH FRIENDS (+TIQ)</b></span>
+                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
+                <span class="cw-cta-t"><b id="cw-detail-play-t">Play with Friends</b></span>
               </button>
               <button class="cw-cta is-join" id="cw-detail-join" type="button" hidden>
                 <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-user-join" /></svg></span>
-                <span class="cw-cta-t"><b id="cw-detail-join-t">JOIN THIS CHANNEL</b></span>
+                <span class="cw-cta-t"><b id="cw-detail-join-t">Join This Channel</b></span>
               </button>
             </div>
           </div>
