@@ -7901,6 +7901,25 @@ html.reduced-motion .hex-photo { transition: none; }
   color: var(--honey-ink);
   white-space: nowrap;
 }
+/* The Career header's yellow note is a full sentence in every locale (EN/FA/RU/AR/ES),
+   not a short tag. Let the row wrap and the note take the remaining width so the whole
+   note wraps inside the card from 320px up instead of clipping past the right edge. */
+#s-profile .pf-quest-sec .pf-sec-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  width: 100%;
+}
+#s-profile .pf-quest-sec .pf-sec-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+}
 
 /* ---- tiles: cohesive clay, 20px corners, consistent inner padding ---- */
 .pf-tiles { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
