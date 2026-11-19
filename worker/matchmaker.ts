@@ -2233,13 +2233,16 @@ function adminIdOf(raw: unknown): string {
 
 /* ---------- the Stars Vault: the ad-verified HardBot invite quest ----------
  *
- * The referral ledger owns the permanent inviter and firstSeenAt. Only a server-issued HardBot
- * 1v1 receipt followed by the client's completed-ad SDK claim can advance this 72-hour quest.
- * Counters, receipts and Stars commit together. Legacy PvP statistics remain audit data only.
- * The SDK callback and local winner are client claims, NOT cryptographic provider attestation;
- * no Adsgram S2S verification is configured. The server owns timing, caps and exactly-once credit.
+ * The referral ledger owns the permanent inviter and firstSeenAt. Only a server-issued match
+ * receipt can advance this 72-hour quest; the client reports `{ mode, difficulty, won, matchId }`
+ * and the room owns timing, dedupe, caps and exactly-once credit. Counters, receipts and Stars
+ * commit together. Legacy PvP statistics remain audit data only. The reported winner is a client
+ * claim, NOT cryptographic provider attestation; no Adsgram S2S verification is configured.
  *
- * Both goals are mandatory: 15 verified HardBot matches AND at least 5 wins inside the window.
+ * Both goals are mandatory inside the window:
+ *   - `matchesCount >= 15` — completed real matches against ANY opponent (online 1v1, a friends
+ *     room, or an AI bot of any difficulty, win or lose; tutorial boards never count);
+ *   - `hardWins >= 5` — victories strictly against Hard AI (`vs_bot` + `hard`, 1v1).
  * A friend is pending — and the inviter's EARNED and VAULT BALANCE stay untouched — until the
  * compound check passes. Past OR-rule credits that do not prove both goals are revoked on load.
  *
@@ -2253,16 +2256,44 @@ const VAULT_PAYOUTS_MAX = 600;
 const VAULT_FRIENDS_SHOWN = 25;
 
 const VAULT_QUEST_DAY_MS = 24 * 60 * 60 * 1000;
-/** Every counted match plus one outstanding board; consumed ids are retry tombstones. */
-const VAULT_QUEST_RECEIPTS_MAX = REFERRAL_CONFIG.QUEST_MIN_MATCHES + 1;
+/**
+ * Every counted match plus every hard win, over the headroom a friend needs when they play their
+ * 15 matches before their Hard AI wins. Consumed ids are retry tombstones.
+ */
+const VAULT_QUEST_RECEIPTS_MAX = (REFERRAL_CONFIG.QUEST_MIN_MATCHES + REFERRAL_CONFIG.QUEST_MIN_HARD_WINS) * 2;
+
+/** A real, server-receipted board. The tutorial / solo sandbox never gets a receipt. */
+type VaultQuestMode = 'vs_bot' | 'online' | 'friends';
+type VaultQuestDifficulty = 'easy' | 'normal' | 'hard';
+type VaultQuestFormat = '1v1' | 'party';
+
+const VAULT_QUEST_MODES: readonly VaultQuestMode[] = ['vs_bot', 'online', 'friends'];
+const VAULT_QUEST_DIFFICULTIES: readonly VaultQuestDifficulty[] = ['easy', 'normal', 'hard'];
+const VAULT_QUEST_FORMATS: readonly VaultQuestFormat[] = ['1v1', 'party'];
+
+const questModeOf = (raw: unknown): VaultQuestMode | null =>
+  (VAULT_QUEST_MODES as readonly unknown[]).includes(raw) ? raw as VaultQuestMode : null;
+const questDifficultyOf = (raw: unknown): VaultQuestDifficulty | null =>
+  (VAULT_QUEST_DIFFICULTIES as readonly unknown[]).includes(raw) ? raw as VaultQuestDifficulty : null;
+const questFormatOf = (raw: unknown): VaultQuestFormat | null =>
+  (VAULT_QUEST_FORMATS as readonly unknown[]).includes(raw) ? raw as VaultQuestFormat : null;
+
+/**
+ * The only receipt shape that earns a Hard AI win: a 1v1 bot board on `hard`. Every other real
+ * match still advances the total-matches goal, but never this counter.
+ */
+const vaultHardAiWin = (
+  receipt: Pick<VaultQuestReceipt, 'mode' | 'difficulty' | 'format'>, winner: 'player' | 'bot',
+): boolean => receipt.mode === 'vs_bot' && receipt.difficulty === 'hard'
+  && receipt.format === '1v1' && winner === 'player';
 
 interface VaultQuestReceipt {
   matchId: string;
   requestId: string;
   sequence: number;
-  mode: 'vs_bot';
-  difficulty: 'hard';
-  format: '1v1';
+  mode: VaultQuestMode;
+  difficulty: VaultQuestDifficulty;
+  format: VaultQuestFormat;
   issuedAt: number;
   expiresAt: number;
   verifiedAt: number;
@@ -2449,10 +2480,10 @@ const VAULT_CORS: Record<string, string> = {
   'cache-control': 'no-store',
 };
 
-/** Never either goal: 15 verified matches AND 5 genuine wins, both in the same 72h window. */
+/** Never either goal: 15 verified matches (any opponent) AND 5 Hard AI wins, both inside 72h. */
 function vaultQuestTargetReached(quest: VaultFriendQuest): boolean {
   return quest.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES
-    && quest.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS;
+    && quest.hardWins >= REFERRAL_CONFIG.QUEST_MIN_HARD_WINS;
 }
 
 /** Never migrate legacy matches, PvP wins or Arena standing into verified counters. */
@@ -2465,7 +2496,10 @@ function readVaultQuest(raw: unknown): VaultFriendQuest | null {
   const receipts: VaultQuestReceipt[] = [];
   if (Array.isArray(q.receipts)) for (const r of q.receipts.slice(-VAULT_QUEST_RECEIPTS_MAX)) {
     if (!r || typeof r.matchId !== 'string' || !/^rq_[0-9a-f-]{36}$/.test(r.matchId)) continue;
-    if (r.mode !== 'vs_bot' || r.difficulty !== 'hard' || r.format !== '1v1'
+    const mode = questModeOf(r.mode);
+    const difficulty = questDifficultyOf(r.difficulty);
+    const format = questFormatOf(r.format);
+    if (!mode || !difficulty || !format
       || typeof r.requestId !== 'string' || !/^[0-9a-f-]{36}$/.test(r.requestId)
       || !Number.isSafeInteger(r.sequence) || r.sequence <= 0
       || receipts.some((p) => p.matchId === r.matchId || p.requestId === r.requestId)) continue;
@@ -2479,7 +2513,7 @@ function readVaultQuest(raw: unknown): VaultFriendQuest | null {
     if (!verifiedAt && end < Date.now()) continue;
     receipts.push({
       matchId: r.matchId, requestId: r.requestId, sequence: r.sequence,
-      mode: 'vs_bot', difficulty: 'hard', format: '1v1', issuedAt, expiresAt: end,
+      mode, difficulty, format, issuedAt, expiresAt: end,
       verifiedAt, winner: verifiedAt ? r.winner : null,
     });
   }
@@ -9284,7 +9318,7 @@ export class MatchmakerDO {
     const q = friend.quest;
     if (!q) return false;
     return q.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES
-      && q.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS
+      && q.hardWins >= REFERRAL_CONFIG.QUEST_MIN_HARD_WINS
       && q.completedAt >= q.firstSeenAt
       && q.completedAt <= q.firstSeenAt + REFERRAL_CONFIG.QUEST_DURATION_MS;
   }
@@ -9588,7 +9622,12 @@ export class MatchmakerDO {
     if (this.restricted(who.playerId)) return refuse('banned', 403);
     if (friend && (friend.inviterId !== inviterId
       || (friend.quest && friend.quest.firstSeenAt !== firstSeenAt))) return refuse('invalid_binding', 403);
-    if (action === 'start' && (body.mode !== 'vs_bot' || body.difficulty !== 'hard'
+    /* Every real board is reportable: online 1v1, a friends room, or an AI bot on any level. The
+       mode/difficulty pair is what the counter later trusts, so an unknown one is refused here. */
+    const reportMode = questModeOf(body.mode);
+    const reportDifficulty = questDifficultyOf(body.difficulty);
+    const reportFormat = questFormatOf(body.format);
+    if (action === 'start' && (!reportMode || !reportDifficulty || !reportFormat
       || typeof body.requestId !== 'string' || !/^[0-9a-f-]{36}$/.test(body.requestId)
       || typeof body.sequence !== 'number' || !Number.isSafeInteger(body.sequence) || body.sequence <= 0)) {
       return refuse('invalid_match');
@@ -9597,15 +9636,12 @@ export class MatchmakerDO {
     if (action === 'verify') {
       if (typeof body.matchId !== 'string' || !/^rq_[0-9a-f-]{36}$/.test(body.matchId)
         || (body.winner !== 'player' && body.winner !== 'bot')) return refuse('invalid_match');
-      /* Explicit SDK completion is the requested trust boundary, not S2S ad-provider proof.
-         Neither gameplay telemetry nor a dismissed/failed ad reaches the counter mutation. */
-      if (body.adCompleted !== true) return refuse('ad_not_completed');
+      /* The receipt issued at match start is the trust boundary: it owns the mode, the difficulty
+         and the clock. The client's winner claim is the only unauthenticated part, exactly as it
+         was before, and dedupe is by the server-issued matchId. */
       const q = friend?.quest;
       const receipt = q?.receipts.find((r) => r.matchId === body.matchId);
-      if (!friend || !q || !receipt || receipt.mode !== 'vs_bot' || receipt.difficulty !== 'hard'
-        || receipt.format !== '1v1') {
-        return refuse('invalid_match');
-      }
+      if (!friend || !q || !receipt) return refuse('invalid_match');
       if (receipt.verifiedAt > 0) {
         if (receipt.winner !== body.winner) return refuse('invalid_match');
         /* Includes retries after completion, midnight or expiry; no reward/counter is revisited. */
@@ -9622,8 +9658,11 @@ export class MatchmakerDO {
 
       q.activeDay = Math.floor(now / VAULT_QUEST_DAY_MS);
       q.dailyMatches = status.dailyMatches + 1;
+      /* Goal 1: any completed real match, whatever the mode or difficulty, win or lose. */
       q.matchesCount += 1;
-      if (body.winner === 'player') q.hardWins += 1;
+      /* Goal 2: strictly a 1v1 win on Hard AI. An easy/normal win or a Hard AI defeat never moves
+         this counter, and the receipt cannot be re-verified into a different verdict. */
+      if (vaultHardAiWin(receipt, body.winner)) q.hardWins += 1;
       receipt.winner = body.winner;
       receipt.verifiedAt = now;
       if (vaultQuestTargetReached(q)) q.completedAt = now;
@@ -9671,7 +9710,8 @@ export class MatchmakerDO {
     q.receipts = consumed;
     const matchId = `rq_${crypto.randomUUID()}`;
     q.receipts.push({
-      matchId, requestId, sequence, mode: 'vs_bot', difficulty: 'hard', format: '1v1', issuedAt: now,
+      matchId, requestId, sequence,
+      mode: reportMode!, difficulty: reportDifficulty!, format: reportFormat!, issuedAt: now,
       expiresAt: status.referralQuestExpiresAt,
       verifiedAt: 0, winner: null,
     });

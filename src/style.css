@@ -41205,8 +41205,11 @@ html:lang(fa) .vf-summary, html:lang(ar) .vf-summary {
 
 /* the sheets mirror for fa/ar; every numeral and every fill keeps its own LTR direction */
 html:lang(fa) .vault-modal-sheet, html:lang(ar) .vault-modal-sheet { direction: rtl; }
-/* both utility keys use the same forward sprite; RTL mirrors BOTH, never just one */
-:is(html:lang(fa), html:lang(ar), html[dir="rtl"]) :is(#sv-friends-open, #sv-guide-open) .vm-foot-chev {
+/* both utility keys use the same forward sprite; RTL mirrors BOTH, never just one. Each button is
+   named separately as well, so a future re-id of either key cannot leave one chevron pointing the
+   wrong way: Invited Friends and How it Works? always flip together. */
+:is(html:lang(fa), html:lang(ar), html[dir="rtl"], body[dir="rtl"])
+:is(#sv-friends-open, #sv-invited-btn, #sv-guide-open, #sv-how-btn) .vm-foot-chev {
   transform: scaleX(-1);
 }
 html:lang(fa) :is(.vm-foot-l, .vg-t, .vg-b, .vg-fine, .vg-done, .vf-back),

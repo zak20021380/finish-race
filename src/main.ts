@@ -101,6 +101,7 @@ import {
   createReferralQuestMatch, isReferralQuestActive, onReferralQuestChange, referralQuestUser,
   verifyReferralQuestMatch,
 } from './referral';
+import type { ReferralQuestMatchSetup } from './referral';
 import { REFERRAL_CONFIG } from '../shared/referralConfig';
 
 /* ---------- render-loop state ----------
@@ -2358,7 +2359,7 @@ function paintRewardButtons(): void {
   doubleLabel.textContent = pending ? t('quest_sync_retry')
     : paid ? t(quest && resultView.questVerified ? 'quest_verified' : 'adDoubleClaimed')
     : quest ? t(user.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES - 1
-      && user.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS - 1
+      && user.hardWins >= REFERRAL_CONFIG.QUEST_MIN_HARD_WINS - 1
       ? 'quest_ad_button_final' : 'quest_ad_button_standard')
     : doubleOpen ? t('adDoubleCtaVip')
     : t('adDoubleCta');
@@ -2876,6 +2877,10 @@ function showOverlay() {
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
   /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
+  /* The referral ledger's own report: the server-issued receipt carries this board's mode and
+     difficulty, and the room dedupes by that matchId. A tutorial board has no receipt, so this is
+     a no-op there. It runs before the player can tap the quest chip, which only re-verifies. */
+  void questMatch().then((matchId) => (matchId ? verifyReferralQuestMatch(matchId, won) : null));
   resultView = {
     won,
     coins: earned,
@@ -3596,6 +3601,20 @@ function timeoutMove() {
   showNote(onboardingActive() || tutorialClimax ? 'Extra time — auto-move' : 'Auto-move', false, 1800, true);
 }
 
+/**
+ * The receipt metadata for the board `restart()` is about to launch. A live socket is an online
+ * duel, a room holding another person is a Play with Friends match, and everything else is the
+ * machine at the drawer's chosen level. `format` is what keeps a 4-seat party from ever reading as
+ * a 1v1 Hard AI win. Exported only through the quest receipt; nothing here awards anything.
+ */
+function referralQuestSetup(): ReferralQuestMatchSetup {
+  const format: ReferralQuestMatchSetup['format'] =
+    sizes.length === 2 && sizes.every((n) => n === 1) ? '1v1' : 'party';
+  if (active) return { mode: 'online', difficulty: 'normal', format };
+  if (room && humansIn(room) > 1) return { mode: 'friends', difficulty: 'normal', format };
+  return { mode: 'vs_bot', difficulty, format };
+}
+
 function restart() {
   /* Replaying a war board is another war match: the channel is owed its points again. */
   warPaid = false;
@@ -3623,8 +3642,11 @@ function restart() {
   }
   gen++;
   const questGeneration = ++questEpoch;
-  questMatch = hardBotDuel && !tutorialStandalone
-    ? createReferralQuestMatch(() => questGeneration === questEpoch)
+  /* Every real board files one receipt, whatever the mode: online 1v1, a Play with Friends room,
+     or a bot race on any difficulty. A tutorial lesson and the granted debut board are never
+     counted matches, and a local solo sandbox has no seat to report. */
+  questMatch = !tutorialStandalone && !onboardingConsumesDebut
+    ? createReferralQuestMatch(() => questGeneration === questEpoch, referralQuestSetup())
     : async () => null;
   void questMatch();
   blastGen++;      // drop any combo beats still scheduled against the previous board

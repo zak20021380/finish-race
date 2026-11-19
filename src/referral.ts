@@ -88,7 +88,7 @@ function publishQuest(raw: unknown): void {
     referralQuestExpiresAt: count(user.referralQuestExpiresAt, Number.MAX_SAFE_INTEGER),
     referralQuestStartedAt: count(user.referralQuestStartedAt, Number.MAX_SAFE_INTEGER),
     matchesCount: count(user.matchesCount, REFERRAL_CONFIG.QUEST_MIN_MATCHES),
-    hardWins: count(user.hardWins, REFERRAL_CONFIG.QUEST_MIN_WINS),
+    hardWins: count(user.hardWins, REFERRAL_CONFIG.QUEST_MIN_HARD_WINS),
     dailyMatches: count(user.dailyMatches, REFERRAL_CONFIG.QUEST_DAILY_MATCH_CAP),
     dailyMatchCap: REFERRAL_CONFIG.QUEST_DAILY_MATCH_CAP,
     activeDay: count(user.activeDay, 3),
@@ -146,7 +146,17 @@ export function refreshReferralQuest(): Promise<void> {
   return questRefresh;
 }
 
-export function createReferralQuestMatch(stillWanted: () => boolean): () => Promise<string | null> {
+/** The real board a receipt is filed for: any opponent, any bot level. */
+export interface ReferralQuestMatchSetup {
+  mode: 'vs_bot' | 'online' | 'friends';
+  difficulty: 'easy' | 'normal' | 'hard';
+  format: '1v1' | 'party';
+}
+
+export function createReferralQuestMatch(
+  stillWanted: () => boolean,
+  setup: ReferralQuestMatchSetup = { mode: 'vs_bot', difficulty: 'hard', format: '1v1' },
+): () => Promise<string | null> {
   const requestId = crypto.randomUUID();
   let sequence = 0;
   let matchId: string | null = null;
@@ -161,7 +171,7 @@ export function createReferralQuestMatch(stillWanted: () => boolean): () => Prom
       if (pending?.matchId && typeof pending.won === 'boolean') return null;
       // Retries keep their sequence; delayed starts cannot displace a newer board's receipt.
       if (!sequence) sequence = ++questMatchSequence;
-      const reply = await questRequest('/start', { mode: 'vs_bot', difficulty: 'hard', requestId, sequence });
+      const reply = await questRequest('/start', { ...setup, requestId, sequence });
       if (reply?.ok && typeof reply.matchId === 'string') matchId = reply.matchId;
       return matchId;
     })().finally(() => { inFlight = null; });
@@ -442,7 +452,7 @@ function readVault(raw: unknown): StarsVault | null {
         name: label(f.name, 48),
         avatar: label(f.avatar, 300),
         matches: count(f.matches),
-        hardWins: count(f.hardWins, REFERRAL_CONFIG.QUEST_MIN_WINS),
+        hardWins: count(f.hardWins, REFERRAL_CONFIG.QUEST_MIN_HARD_WINS),
         referralQuestStatus: f.referralQuestStatus ?? 'none',
         days: count(f.days, 366),
         pvpMatches: count(f.pvpMatches),

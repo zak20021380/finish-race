@@ -2173,14 +2173,14 @@ export function createMenu(api: MenuApi): Menu {
       label: svFill('quest_track_matches', { n: en(matches), max: en(C.QUEST_MIN_MATCHES) }),
     }));
 
-    const wins = Math.min(f.hardWins, C.QUEST_MIN_WINS);
+    const wins = Math.min(f.hardWins, C.QUEST_MIN_HARD_WINS);
     stages.append(svStageTrack({
       tone: 'gold',
       done: f.referralQuestStatus === 'completed',
       reward: C.TOTAL_PER_FRIEND_STARS,
       doneKey: 'quest_complete',
-      pct: (wins / C.QUEST_MIN_WINS) * 100,
-      label: svFill('quest_track_wins', { n: en(wins), max: en(C.QUEST_MIN_WINS) }),
+      pct: (wins / C.QUEST_MIN_HARD_WINS) * 100,
+      label: svFill('quest_track_wins', { n: en(wins), max: en(C.QUEST_MIN_HARD_WINS) }),
     }));
 
     if (f.flagged) {
@@ -2247,7 +2247,7 @@ export function createMenu(api: MenuApi): Menu {
 
     svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
     svText('sv-row-matches', svFill('quest_row_matches', { n: en(C.QUEST_MIN_MATCHES) }));
-    svText('sv-row-wins', svFill('quest_row_wins', { n: en(C.QUEST_MIN_WINS) }));
+    svText('sv-row-wins', svFill('quest_row_wins', { n: en(C.QUEST_MIN_HARD_WINS) }));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');
@@ -2334,7 +2334,7 @@ export function createMenu(api: MenuApi): Menu {
     svText('vg-2-t', t('vaultGuide2Title'));
     svText('vg-2-n', `+${questReward}`);
     svText('vg-2-b', svFill('vaultGuide2Body', {
-      m: en(C.QUEST_MIN_MATCHES), w: en(C.QUEST_MIN_WINS), h: hours,
+      m: en(C.QUEST_MIN_MATCHES), w: en(C.QUEST_MIN_HARD_WINS), h: hours,
     }));
     svText('vg-4-t', t('vaultGuide4Title'));
     svText('vg-4-n', en(target));

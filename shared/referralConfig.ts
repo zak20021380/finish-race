@@ -17,13 +17,20 @@ export const REFERRAL_CONFIG = {
 
   /** Quest lifetime from the referral ledger's immutable firstSeenAt. */
   QUEST_DURATION_MS: 72 * 60 * 60 * 1000,
-  /** Ad-verified HardBot 1v1 matches accepted per UTC day. */
+  /** Verified matches accepted per UTC day, whatever mode they were played in. */
   QUEST_DAILY_MATCH_CAP: 10,
 
-  /** Goal 1 (required): verified HardBot 1v1 matches inside the quest window. */
+  /**
+   * Goal 1 (required): completed real matches inside the quest window, against ANY opponent —
+   * online 1v1, a Play with Friends room, or an AI Bot of any difficulty, win or lose.
+   * Tutorial / solo sandbox boards never reach the counter.
+   */
   QUEST_MIN_MATCHES: 15,
-  /** Goal 2 (required): genuine HardBot victories among those matches. Both are an AND. */
-  QUEST_MIN_WINS: 5,
+  /**
+   * Goal 2 (required): victories strictly against Hard AI (`vs_bot` + `hard`). A win on any other
+   * difficulty, or in any other mode, never advances this counter. Both goals are an AND.
+   */
+  QUEST_MIN_HARD_WINS: 5,
 
   /** Vault balance needed before "Request Payout" wakes up. */
   MIN_PAYOUT_THRESHOLD_STARS: 50,
