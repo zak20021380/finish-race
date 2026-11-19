@@ -42135,6 +42135,21 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
 
 /* ---- the sheet ---- */
 #modal-friend-duel .fd-sheet { max-height: 90vh; max-height: 90dvh; }
+/* A substantial card: wider on desktop, roomier inside on mobile, and taller touch targets
+   for the create key, the code input and the join key. */
+#modal-friend-duel .vault-modal-sheet {
+  width: min(440px, calc(100vw - 24px));
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+}
+/* The lift: while the code field's virtual keyboard is up, the sheet is translated on the
+   compositor with zero transition lag so it pins exactly above the keyboard, and the blurred
+   scrim is simplified so a low-end phone keeps animating the background at a locked 60fps. */
+.vault-modal.is-kd-lift .vault-modal-sheet { transition: none; }
+.vault-modal.is-kd-lift .vault-modal-scrim {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(8, 12, 20, .86);
+}
 /* The room grew a roster, a format row and a start key: the body scrolls when a 320px-wide card
    cannot hold all four at once, instead of clipping the key the player came here to press. */
 .fd-body {
@@ -42180,7 +42195,7 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 58px;
+  min-height: 56px;
   padding: 10px 12px;
   border: 0;
   border-radius: 16px;
@@ -42251,7 +42266,8 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 48px;
+  position: relative;
+  height: 52px;
   padding: 0 12px;
   border-radius: 13px;
   background: #0A101B;
@@ -42260,6 +42276,27 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
     inset 0 0 0 1px rgba(255, 255, 255, .07);
   transition: box-shadow var(--motion-fast);
 }
+/* the paste key lives at the well's right edge, hovering the input's text: one tap in, no typing */
+.fd-paste {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 3px;
+  flex: none;
+  width: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 0;
+  cursor: pointer;
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+}
+.fd-paste:hover:not(:active) { color: var(--honey-ink); background: rgba(255, 255, 255, .06); }
+.fd-paste:active { transform: scale(.96); }
+.fd-paste:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.fd-paste .ico { width: 19px; height: 19px; }
 .fd-well:focus-within {
   box-shadow:
     inset 0 2px 7px rgba(0, 0, 0, .7),
@@ -42280,7 +42317,8 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
   font-size: 16px;
   font-weight: 900;
   letter-spacing: .28em;
-  padding: 0;
+  /* text clears the paste key hovering the well's right edge */
+  padding: 0 38px 0 0;
 }
 .fd-input::placeholder {
   color: var(--ink-soft);
@@ -42293,7 +42331,7 @@ html[data-lang="ar"] .cpt-action .ico { transform: scaleX(-1); }
 .fd-join-btn {
   flex: none;
   min-width: 96px;
-  min-height: 48px;
+  min-height: 52px;
   appearance: none;
   border: 0;
   border-radius: 13px;

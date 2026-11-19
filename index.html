@@ -390,6 +390,15 @@
           <path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.6-1.6" />
         </g>
       </symbol>
+      <!-- the friend duel's paste key: a sheet with an arrow running up into it — the player's
+           tap pulls the room code out of their clipboard without typing -->
+      <symbol id="i-paste" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9.4" y="4.6" width="9" height="10.4" rx="2.2" />
+          <path d="M16.4 2.6h3.2a2.2 2.2 0 0 1 2.2 2.2v8.4a2.2 2.2 0 0 1-2.2 2.2H16.4" />
+          <path d="m15.8 11 3.2 3" />
+        </g>
+      </symbol>
       <symbol id="i-cup" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
@@ -3098,12 +3107,18 @@
               <p class="fd-or" aria-hidden="true"><span data-i18n="fdOr">or join a friend’s room</span></p>
 
               <div class="fd-join">
-                <label class="fd-well" for="fd-code">
+                <label class="fd-well" id="fd-well" for="fd-code">
                   <span class="fd-hash" aria-hidden="true">#</span>
                   <input id="fd-code" class="fd-input" type="text" inputmode="numeric" maxlength="4"
                     placeholder="Enter Code" data-i18n-ph="fdCodePlaceholder" autocomplete="off"
-                    spellcheck="false" enterkeyhint="go" dir="ltr" data-i18n-aria="fdCodeAria"
+                    autocorrect="off" autocapitalize="characters" spellcheck="false"
+                    enterkeyhint="go" dir="ltr" data-i18n-aria="fdCodeAria"
                     aria-label="Enter a 4-digit room code" />
+                  <!-- the paste key: one tap pulls the copied code into the field instead of typing -->
+                  <button type="button" class="fd-paste" id="fd-paste"
+                          data-i18n-aria="fdPasteAria" aria-label="Paste room code" title="Paste room code">
+                    <svg class="ico" aria-hidden="true"><use href="#i-paste" /></svg>
+                  </button>
                 </label>
                 <button class="fd-join-btn" type="button" id="fd-join" disabled data-i18n="fdJoinBtn">Join &amp; Play</button>
               </div>

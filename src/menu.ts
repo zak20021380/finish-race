@@ -3783,7 +3783,13 @@ export function createMenu(api: MenuApi): Menu {
   const friendDuelModalEl = document.getElementById('modal-friend-duel');
   const friendDuelTile = document.getElementById('pf-quest-empty') as HTMLButtonElement | null;
   const friendDuelModal = friendDuelModalEl
-    ? createModal(friendDuelModalEl, { onClose: () => syncFriendDuelScreen() })
+    ? createModal(friendDuelModalEl, {
+        onClose: () => {
+          kdStop();
+          resetFdJoinField();
+          syncFriendDuelScreen();
+        },
+      })
     : null;
   const fdGateway = document.getElementById('fd-gateway');
   const fdRoom = document.getElementById('fd-room');
@@ -3797,6 +3803,10 @@ export function createMenu(api: MenuApi): Menu {
   const fdModeSub = document.getElementById('fd-mode-sub');
   const fdStart = document.getElementById('fd-start') as HTMLButtonElement | null;
   const fdStartT = document.getElementById('fd-start-t');
+  const fdPasteBtn = document.getElementById('fd-paste') as HTMLButtonElement | null;
+  const fdRoot = document.getElementById('modal-friend-duel');
+  const fdSheet = fdRoot?.querySelector('.vault-modal-sheet') as HTMLElement | null;
+  if (fdPasteBtn) fdPasteBtn.title = t('fdPasteAria');
 
   /** The one escaping helper this sheet needs: a seat's name is somebody else's text. */
   const fdEsc = (s: string): string =>
@@ -3932,6 +3942,11 @@ export function createMenu(api: MenuApi): Menu {
    */
   const openFriendsSheet = (): void => {
     if (!friendDuelModal) return;
+    /* Every open: the join field is empty, error-free and its join key is cold — the previous
+       room's digits are never carried into a fresh card, and a lifted keyboard pin is re-armed
+       against an already-up virtual keyboard. */
+    resetFdJoinField();
+    kdStart();
     paintFriendDuel(getFriendDuelSnapshot());
     friendDuelModal.open(friendDuelTile);
     /* Opening the sheet is opening the room: a roster already full re-arms its countdown. */
@@ -4007,6 +4022,111 @@ export function createMenu(api: MenuApi): Menu {
   };
   fdSyncJoin();
 
+  /* ---- the join field opens empty and resets on every close ----
+     A consumed or expired room must never pre-fill the next player's code: the field is cleared
+     when the sheet opens, on every close path, and when the join succeeds (the new room mints
+     its own digits on the server anyway). */
+
+  const resetFdJoinField = (): void => {
+    if (fdCodeInput) fdCodeInput.value = '';
+    if (fdJoinBtn) fdJoinBtn.disabled = true;
+    if (fdErr) { fdErr.hidden = true; fdErr.textContent = ''; }
+  };
+
+  /* ---- mobile keyboard: the sheet pins itself above the virtual keyboard, composited ---- */
+
+  /** The exact keyboard height: the gap between the layout viewport and the visual viewport. */
+  const kdGap = (): number => {
+    const vp = window.visualViewport;
+    if (!vp) return 0;
+    return Math.max(0, window.innerHeight - vp.height - vp.offsetTop);
+  };
+
+  let kdApplied = 0;
+  const kdApply = (gap: number): void => {
+    if (!fdSheet) return;
+    /* While the gap moves the lift runs composited at zero lag; on the way back the card
+       settles smoothly under the released keyboard. */
+    fdSheet.style.transition = gap > 0 ? 'none' : '';
+    fdSheet.style.transform = gap > 0 ? `translate3d(0, -${gap}px, 0)` : '';
+    kdApplied = gap;
+  };
+  const kdRestore = (): void => {
+    if (!fdSheet || kdApplied <= 0) { kdApplied = 0; return; }
+    fdSheet.style.transition = '';
+    fdSheet.style.transform = '';
+    kdApplied = 0;
+  };
+  const kdUpdate = (): void => {
+    if (!fdRoot) return;
+    const gap = kdGap();
+    if (gap === kdApplied) return;
+    kdApply(gap);
+    /* The blur path does the smooth restore; a fresh open or a gap-to-zero mid-focus lifts
+       or settles at the same per-frame cadence. */
+    fdRoot.classList.toggle('is-kd-lift', gap > 0);
+  };
+
+  const kdAttach = (): void => {
+    const vp = window.visualViewport;
+    if (!vp) return;
+    vp.addEventListener('resize', kdUpdate);
+    vp.addEventListener('scroll', kdUpdate);
+  };
+  const kdDetach = (): void => {
+    const vp = window.visualViewport;
+    if (!vp) return;
+    vp.removeEventListener('resize', kdUpdate);
+    vp.removeEventListener('scroll', kdUpdate);
+  };
+
+  const kdStart = (): void => {
+    kdAttach();
+    kdUpdate();
+  };
+  const kdStop = (): void => {
+    kdRestore();
+    kdDetach();
+    if (fdRoot) fdRoot.classList.remove('is-kd-lift');
+  };
+
+  fdCodeInput?.addEventListener('focus', kdStart);
+  fdCodeInput?.addEventListener('blur', kdStop);
+
+  /* ---- paste: a copied room code pulls in one tap ---- */
+
+  const fdDoPaste = (): void => {
+    void (async () => {
+      let text = '';
+      try { text = await navigator.clipboard?.readText?.() ?? ''; } catch { /* no permission yet */ }
+      if (!text) {
+        /* graceful fallback: a hidden textarea asked through the keyboard's own paste gesture */
+        const ta = document.createElement('textarea');
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;margin:0;padding:0;width:10px;height:10px;'
+          + 'opacity:0;pointer-events:none;background:transparent;border:0;outline:0;';
+        document.body.append(ta);
+        ta.select();
+        try { text = document.execCommand('paste') ? ta.value : ''; } catch { /* legacy path missing */ }
+        ta.remove();
+      }
+      const digits = normalizeRoomCode(text);
+      if (fdCodeInput) fdCodeInput.value = digits;
+      fdSyncJoin();
+      if (fdErr) { fdErr.hidden = true; fdErr.textContent = ''; }
+      if (!digits) {
+        notify('warning');
+        showToast(t('fdPasteFailed'), 'warning');
+      }
+    })();
+  };
+  fdPasteBtn?.addEventListener('click', (e) => {
+    /* The tap pulls the code in: it is not the label's "focus the input" tap as well. */
+    e.stopPropagation();
+    e.preventDefault();
+    fdDoPaste();
+  });
+
   const fdDoJoin = (): void => {
     const raw = normalizeRoomCode(fdCodeInput?.value ?? '');
     if (raw.length !== 4) {
@@ -4023,8 +4143,9 @@ export function createMenu(api: MenuApi): Menu {
       return;
     }
     notify('success');
-    if (fdCodeInput) fdCodeInput.value = '';
-    fdSyncJoin();
+    /* Joining opens a brand-new room — the card itself goes, and the field stays ready for the
+       next player: empty, and no join-button or error state lingering from the previous match. */
+    resetFdJoinField();
     paintFriendDuel(getFriendDuelSnapshot());
   };
   fdJoinBtn?.addEventListener('click', fdDoJoin);
@@ -4080,6 +4201,7 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
     leaveFriendDuel();
     paintFriendDuel(null);
+    resetFdJoinField();
     if (fdErr) {
       fdErr.hidden = true;
       fdErr.textContent = '';
@@ -4100,6 +4222,8 @@ export function createMenu(api: MenuApi): Menu {
   window.addEventListener('detour:friend-duel', () => {
     const snap = getFriendDuelSnapshot();
     if (!snap || !friendDuelModal) return;
+    resetFdJoinField();
+    kdStart();
     paintFriendDuel(snap);
     friendDuelModal.open(friendDuelTile ?? null);
   });
