@@ -1490,6 +1490,8 @@ const waiting: (() => void)[] = [];            // bot thinks parked by the pause
  *  board itself: its stage gate decides which real tap is live. */
 let tutorialActive = false;
 let tutorial: Tutorial | null = null;
+/** The action a wall/mine preview staged and the floating ✓ has not answered yet. */
+let tutPending: TutorialAction | null = null;
 /** Set by the on-demand door: the lesson opens on the next race even if it was read before. */
 let tutorialRequested = false;
 /** A lesson that replaces the launch is its own match: finishing or skipping it returns to Home. */
@@ -4744,12 +4746,65 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 }
 
 /**
+ * Raise the REAL floating keys for a staged wall or mine, exactly as a live race does: the wall
+ * walks up armed and wears its glass Cancel/Rotate/Confirm toolbar, the mine stages its square and
+ * draws the ✓/× disc pair. `syncStage()` publishes the pair's own geometry, so the lesson's ring,
+ * ghost hand and input cut-out can land on the very keys the frame paints.
+ */
+function raiseTutorialPreview(action: TutorialAction): void {
+  if (action.kind === 'wall') {
+    setMode(previewWall(mode(), { spec: action.spec, ok: true, armed: true, p: localSide }));
+  } else if (action.kind === 'mine') {
+    mineGhost = action.cell;
+    armCapsules();
+    invalidate();           // the parked loop must wake to paint the staged pair
+  }
+}
+
+/** The floating ✓: spend the staged wall or mine through the same door a live race uses. */
+function commitTutorialPreview(): void {
+  const pending = tutPending;
+  if (!pending || (pending.kind !== 'wall' && pending.kind !== 'mine')) {
+    tutorial?.nudge();
+    return;
+  }
+  const owner = state.turn;
+  tutorial?.previewDone();
+  tutPending = null;
+  if (pending.kind === 'wall') {
+    const wall: Wall = { ...pending.spec, owner };
+    if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
+    impact('heavy');
+    shake(true);
+  } else {
+    if (!play({ kind: 'mine', cell: pending.cell })) { tutorial?.nudge(); return; }
+    impact('medium');
+  }
+  tutorial?.notify(pending);
+}
+
+/** The floating ✕: clear the staged ghost (and its keys) and point the hand back at the slot. */
+function cancelTutorialPreview(): void {
+  if (mineArmed) {
+    mineGhost = null;
+    armCapsules();
+    invalidate();
+  } else {
+    disarmWall();
+  }
+  tutPending = null;
+  tutorial?.previewDone();
+  impact('light');
+  audio.play('move', { gain: 0.3 });
+}
+
+/**
  * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
  * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
  * canvas receives this tap exactly as it would after the lesson. The pawn is already in hand, and a
- * wall or the mine asks for TWO taps of that one target: the first locks the bright ghost on the
- * slot and turns the cue into its confirm prompt, the second commits it through the same `play()`
- * a real race uses — no ghost toolbar, no confirm disc.
+ * wall or the mine is staged first: that tap raises the SAME floating controls a live race draws —
+ * the wall's glass Cancel/Rotate/Confirm toolbar, the mine's ✓/× disc pair — and the ✓ is what
+ * commits the action through the same `play()` a real race uses.
  */
 function tutorialTap(p: Vec) {
   const stage = tutorialStage();
@@ -4765,6 +4820,14 @@ function tutorialTap(p: Vec) {
       tutorial?.nudge();
     }
     return;
+  }
+  /* The floating keys answer first while a preview is up: the ✓ commits the staged action, the ×
+     drops it and the lesson points back at the slot — the real double-door of a live match. */
+  if (tutorial?.confirming) {
+    const hit = at(p);
+    if (hit?.kind === 'confirm' || hit?.kind === 'mine-confirm') { commitTutorialPreview(); return; }
+    if (hit?.kind === 'cancel') { cancelTutorialPreview(); return; }
+    if (hit?.kind === 'rotate') { tutorial?.nudge(); return; }
   }
   let action = tutorialHitAction(at(p));
   /* The groove is a hairline and the detour is one tile: a tap anywhere inside the ring the lesson
@@ -4792,10 +4855,14 @@ function tutorialTap(p: Vec) {
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
   invalidate();           // a queued ripple is a finite transition: wake the parked loop
-  /* TAP 1 of a wall or a mine is a PREVIEW, not a commitment: the bright ghost locks onto the very
-     slot the finger hit, a tick lands, and the cue asks for the confirming tap. Nothing is spent,
-     no rival answers, and the beat cannot be rushed past. The second tap falls through below. */
-  if (tutorial?.preview(action)) return;
+  /* TAP 1 of a wall or a mine is a PREVIEW, not a commitment: the stage locks on the exact slot the
+     finger hit, a tick lands, and the cue asks for the floating ✓. Nothing is spent, no rival
+     answers, and the beat cannot be rushed past — the real controls own the board from here. */
+  if (tutorial?.preview(action)) {
+    tutPending = action;
+    raiseTutorialPreview(action);
+    return;
+  }
   /* Step 9 WALKS THE PAWN. The forward tap runs the real move handler — (2, 8) -> (2, 7) — so the
      player feels their pawn answer immediately after burying the charge; the lesson springs the
      trap one deliberate beat later, from the new row, while the pawn stays right where it landed. */
@@ -4814,17 +4881,20 @@ function tutorialTap(p: Vec) {
       if (!play({ kind: 'move', ball: action.ball, to: action.to })) { tutorial?.nudge(); return; }
       break;
     case 'wall': {
-      /* The confirming tap raises the bar: no mode toggle, no rotation, no confirm pair. The same
-         `play()` every real race uses spends the wall, and the board answers with its own weight. */
+      /* The slot itself answered the preview (the ✓ is the taught door; this keeps a tap on the
+         staged bar a confirm too). `play()` spends the wall exactly as a live race does. */
       const wall: Wall = { ...action.spec, owner: state.turn };
+      tutorial?.previewDone();
+      tutPending = null;
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
       impact('heavy');
       shake(true);
       break;
     }
     case 'mine':
-      /* The confirming tap buries the charge on the rival's forced detour — the arm key and the
-         staged pair are both handled here, so the player never has to find them. */
+      /* The staged square confirmed from under the pair: bury the charge on the forced detour. */
+      tutorial?.previewDone();
+      tutPending = null;
       if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
       impact('medium');
       break;
@@ -5337,11 +5407,13 @@ async function tutorialReply(stage: TutorialStage): Promise<void> {
  * Stage change from the lesson: give the board exactly the furniture the step needs and nothing
  * else. Every tap-the-square stage — the four forward taps and the four dodge taps — holds the pawn
  * so its legal dots light up, which makes the lit square a plain live tap and not only a hole in the
- * scrim; each wall step stands a real ghost bar in the glowing groove (unarmed, so no ✓/✕ toolbar is
- * ever raised); step 7 leaves the board in ordinary move mode while the HUD key is taught; step 8
- * locks mine mode on with a single placeable square. `refresh(null)` takes it all away.
+ * scrim; each wall step stands a real ghost bar in the glowing groove (unarmed until the player's
+ * tap raises its toolbar); step 7 leaves the board in ordinary move mode while the HUD key is
+ * taught; step 8 locks mine mode on with a single placeable square. `refresh(null)` takes it all
+ * away.
  */
 function syncTutorialUI(stage: TutorialStage | null = null) {
+  tutPending = null;          // a stage change owns no staged preview
   if (!tutorialActive) {
     invalidate();
     return;
@@ -5893,6 +5965,7 @@ tutorial = createTutorial({
     const bootLesson = firstRunBoot;
     firstRunBoot = false;
     tutorialActive = false;
+    tutPending = null;
     document.body.classList.remove('tutorial-live');
     mineGhost = null;            // before the mode: `armCapsules` must not re-stage a dead square
     setMode(BOARD_IDLE);

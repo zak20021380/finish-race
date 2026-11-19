@@ -2,7 +2,8 @@
  * tutorial.ts — the first-match hands-on lesson: a thirteen-tap comeback narrative.
  *
  * The lesson is one opening card and then thirteen steps, each of them a real move on the real
- * board — and a wall or a mine asks for TWO taps: the first previews it, the second commits it.
+ * board — and a wall or a mine is a preview then a real floating confirm: the first tap raises the
+ * board's own ✓/× controls beside the ghost, the second lands on the ✓ and commits it.
  * `main.ts` seeds the FULL match opening — both pawns on their true start tiles, no rival
  * mine and no knockback — so the choreography is deterministic:
  *
@@ -11,8 +12,9 @@
  *        there is no rival ambush and no setback, just a smooth, unbroken run.
  *
  *   PHASE 2 — the three-wall funnel (steps 4-6)
- *   4-6. wall — three pulsing ghost grooves, two taps each: the first previews the bar, the second
- *        drops it. The first cuts the leader's straight
+ *   4-6. wall — three pulsing ghost grooves: the first tap raises the real glass toolbar beside the
+ *        previewed bar and the hand moves onto its ✓ key; tapping ✓ drops the bar (× puts it away,
+ *        exactly as a live race does). The first cuts the leader's straight
  *        rush, the second bends it into a narrow corridor, the third seals the side escape so the
  *        only route left runs through the choke point. A soft detour marker names the tile the
  *        rival is forced to take after each bar drops.
@@ -20,8 +22,9 @@
  *   PHASE 3 — HUD mine, counter-mine & comeback sprint (steps 7-9)
  *   7. selectMine — one tap on the player's own HUD Mine button arms real mine-placement mode; the
  *      board stays in normal move mode until that tap, so new players learn where the key lives.
- *   8. placeMine — two taps on the glowing choke-point square bury the charge; the rival holds its
- *      breath. Mine mode is locked at this stage so it can never be toggled off by a stray tap.
+ *   8. placeMine — one tap on the glowing choke-point square stages the charge and raises the real
+ *      ✓/× disc pair; the ✓ buries it, the × clears it. The rival holds its breath. Mine mode is
+ *      locked at this stage so it can never be toggled off by a stray tap.
  *   9. sprint — the tap WALKS the pawn forward, from (2, 8) to (2, 7), through the real move
  *      handler, so the answer to the finger is immediate. One deliberate beat later the rival's own
  *      sprint walks it onto the (3, 8) charge; the blast throws it two rows back and hands the lead
@@ -42,13 +45,13 @@
   * 0, the player's charge or the funnel corridor) so the loop can never stall on a bot the lesson
   * does not own. The cue banner therefore stays up across every bot sub-turn.
  *
-  * There is no wall-mode toggle, no rotation step and no confirm-disc toolbar anywhere: the gate
- * names one target per stage and `main.ts` commits it through the same `play()` a real race uses.
- * A wall and the mine spend that one target in TWO taps — preview, then confirm — so the lesson can
- * never rush past a new player. The one exception is step 7, which teaches the HUD's own arm key:
- * tapping it calls the real `armMine()`
- * toggle. Between the taps the rival answers with its own scripted step, so the combo reads as a
- * duel rather than a slideshow.
+  * There is no wall-mode toggle and no rotation step: the gate names one target per stage and
+ * `main.ts` commits it through the same `play()` a real race uses. A wall and the mine are staged
+ * first and then answered on the board's OWN floating keys — the wall's glass Cancel/Rotate/Confirm
+ * toolbar, the mine's ✓/× disc pair — so the lesson teaches the exact controls a live match arms,
+ * and can never rush past a new player. The one exception is step 7, which teaches the HUD's own
+ * arm key: tapping it calls the real `armMine()` toggle. Between the taps the rival answers with its
+ * own scripted step, so the combo reads as a duel rather than a slideshow.
  *
  * Each stage carries one short localized prompt in the cue banner (EN / FA / RU / AR / ES, painted
  * from `settings.ts`), a step counter in Latin digits, the pulsing spotlight and the ghost hand on
@@ -64,6 +67,7 @@
 
 import type { Cell, Pos, WallSpec } from './rules';
 import { audio } from './audio';
+import { capsuleStage } from './staging';
 import { impact } from './telegram';
 import { lang as appLang, onLang, tIn, type LangCode } from './settings';
 
@@ -153,6 +157,8 @@ export interface Tutorial {
   /** The overlay is up and the action gate is live. */
   readonly active: boolean;
   readonly stage: TutorialStage | null;
+  /** A wall or mine is staged and the board's own floating ✓/× keys are the live answer. */
+  readonly confirming: boolean;
   start(): void;
   /** The goal card was dismissed: the FINISH band was tapped, or its Start key pressed. */
   advance(): void;
@@ -162,12 +168,20 @@ export interface Tutorial {
   cancel(): void;
     allows(action: TutorialAction): boolean;
   /**
-   * THE FIRST TAP. On a wall or a mine stage it locks the bright ghost onto the exact slot the tap
-   * named, ticks, and turns the cue into its confirm prompt; it answers true and the caller must
-   * NOT play anything. False means the tap is the confirming one (or the stage is not a two-tap
-   * one): commit it through the real `play()` and report it with `notify()`.
+   * THE FIRST TAP. On a wall or a mine stage it stages the exact slot the tap named, ticks, and
+   * turns the cue into its confirm prompt; it answers true and the caller must NOT play anything.
+   * The caller then raises the REAL floating controls (the wall's glass toolbar, the mine's ✓/×
+   * pair) and every overlay marker re-homes onto the ✓ key. False means the tap confirms a live
+   * preview (or the stage is not a two-tap one): commit it through the real `play()` and report it
+   * with `notify()`.
    */
   preview(action: TutorialAction): boolean;
+  /**
+   * The floating keys were answered — the ✓ committed the staged action, or the × cleared it. Drop
+   * the confirm state and repaint: the prompt returns to its stage line and the ring and the hand
+   * go back to the stage's own target.
+   */
+  previewDone(): void;
   notify(action: TutorialAction): void;
   nudge(): void;
 }
@@ -506,8 +520,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
     /**
-   * The confirm sub-cue. A previewed slot takes over the banner's sentence and the live region, so
-   * the second tap is asked for in the same tongue as the stage that set it up — and a language
+   * The confirm sub-cue. A staged slot takes over the banner's sentence and the live region, so the
+   * floating ✓/× pair is asked for in the same tongue as the stage that set it up — and a language
    * switch mid-preview re-reads it in place rather than falling back to the stage prompt.
    */
   const paintConfirm = (kind: 'wall' | 'mine') => {
@@ -540,9 +554,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const fullPath = (): string =>
     `M0 0H${Math.ceil(window.innerWidth)}V${Math.ceil(window.innerHeight)}H0Z`;
 
-  /** The scrim and the input guard share this one path: the hole is both sharp and pressable. */
-  const drawMask = (hole: TutorialRect | null, radius: number) => {
-    clipPath.setAttribute('d', hole ? `${fullPath()} ${roundRectPath(hole, radius)}` : fullPath());
+  /** The scrim and the input guard share this one path: every hole is both sharp and pressable. */
+  const drawMask = (holes: readonly { rect: TutorialRect; radius: number }[]) => {
+    clipPath.setAttribute('d', holes.length
+      ? `${fullPath()} ${holes.map((h) => roundRectPath(h.rect, h.radius)).join(' ')}`
+      : fullPath());
   };
 
   const placeRing = (rect: TutorialRect | null, radius: number) => {
@@ -638,7 +654,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   /** Strip every overlay marker in one shot — the shared body for the detonation beat and close(). */
   const clearMarkers = () => {
-    drawMask(null, 0);
+    drawMask([]);
     placeRing(null, 0);
     aidEl.hidden = true;
     detourEl.hidden = true;
@@ -666,7 +682,27 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     }
     const radius = target.spot.radius ?? 16;
     const ring = clampRect(atLeast(padRect(target.spot.rect, TUTORIAL_SPOT_PAD), 48, 48));
-    drawMask(ring, radius);
+    /* THE REAL CONFIRM BEAT. A staged wall or mine has raised the board's own floating controls
+       (`capsuleStage()` is published by main.ts from the very same geometry the frame draws). The
+       ring, the ghost hand and the input cut-out re-home onto that pair: the ✓ key is what the hand
+       points at, and the pair's own box is the one door taps can pass through — the ✕ beside it
+       stays a real way back instead of a disc the overlay swallows. */
+    const kind = STAGE_KIND[s];
+    const cap = locked && (kind === 'wall' || kind === 'mine') ? capsuleStage() : null;
+    if (cap) {
+      const confirm = clampRect(atLeast(padRect(cap.confirm, 5), 46, 46));
+      const door = clampRect(padRect(cap.pair, 6));
+      drawMask([{ rect: door, radius: 16 }]);
+      placeRing(confirm, 14);
+      placeAid(s, target.spot);
+      placeDetour(s);
+      pointer.style.display = '';
+      placePointer(confirm);
+      if (s === 'goal') placeCard();
+      placeCue(confirm);
+      return;
+    }
+    drawMask([{ rect: ring, radius }]);
     placeRing(ring, radius);
     placeAid(s, target.spot);
     placeDetour(s);
@@ -839,6 +875,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   return {
     get active() { return open; },
     get stage() { return stage(); },
+    get confirming() { return open && locked; },
     start() {
       if (open) return;
       open = true;
@@ -873,7 +910,17 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       impact('light');
       audio.play('move', { gain: 0.32 });
       paintConfirm(kind);
+      /* the caller raises the real floating keys right after this answer, and this sweep re-homes
+         the ring, the ghost hand and the input door onto them as soon as they are published */
+      trackFor(480);
       return true;
+    },
+    previewDone() {
+      if (!open || !locked) return;
+      clearConfirm();
+      paintCopy();
+      place();
+      trackFor(260);
     },
     notify(action) {
       if (!open) return;
