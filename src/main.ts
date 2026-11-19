@@ -1825,6 +1825,11 @@ function paintResultAvatar(
 /** A seat's photo, off the same identity the dock already wears. Bots and room seats have none. */
 function resultPhoto(seat: Player): string {
   if (seat === localSide) return asPhoto(tgUser()?.photo_url);
+  /* A room names every chair from its roster, so each of a party's opponents is painted from its
+     OWN seat. The single `opponent` slot is only a fallback for a ranked duel's one rival. */
+  if (active && 'seats' in active) {
+    return asPhoto(active.seats.find((s) => s.side === seat)?.avatarUrl);
+  }
   return seat === rivalSide() ? asPhoto(active?.opponent.avatarUrl ?? null) : '';
 }
 
@@ -2808,9 +2813,13 @@ function showOverlay() {
      that follows a friends win cannot inherit the +TIQ line the channel earned an hour ago. */
   warBadge.hidden = true;
   const won = localWon();
-  /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
-     rematch and banter already dead: there is nobody on the far side of that socket. */
-  if (active && 'goneSides' in active && active.goneSides().includes(rivalSide())) resultLocked = true;
+  /* A rival who walked out mid-race leaves a machine in the chair. A duel whose only opponent is
+     gone has nobody to answer, so its capsule opens dead. A party still has people at the table
+     while ANY other seat is held by a person, so it stays alive; the server's rematch consensus
+     (not the old single-rival index, which is 0/1 only) decides when that is no longer true. */
+  const goneSides = active && 'goneSides' in active ? active.goneSides() : [];
+  const otherSeats = roster().filter((s) => s !== localSide);
+  if (otherSeats.length && otherSeats.every((s) => goneSides.includes(s))) resultLocked = true;
   /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
      Center's Double-Coins multiplier scales what the settlement pays. A seat the machine held is
      the one exception: it pays nothing and it touches no ladder, because a bot is not a person and
@@ -3729,6 +3738,10 @@ function applyRoomSnapshot(next: GameState, turnLeftMs: number, presence?: Array
      still be "reconnecting", so the pill comes down on the same beat the board lands. */
   if (presence) for (const p of presence) if (p.connected) notePeerActive(p.seat);
   const dimsChanged = next.cols !== state.cols || next.rows !== state.rows;
+  /* The wall budget scales with contenders, not only with board size: a 3P and a 4P field share
+     the same 10x14 grid but hand out 6 and 5 walls. Recompute it on every snapshot so a seat-count
+     change that does not move the dimensions still leaves the "Walls left: N of M" label truthful. */
+  wallsEach = wallBudget(next.balls.length);
   /* The seats this client had already seen go out: a trap that closed while the socket was down
      shows up in the snapshot alone, and the banner says so when the board lands. */
   const knownOut = state.eliminated ?? [];
@@ -3740,7 +3753,6 @@ function applyRoomSnapshot(next: GameState, turnLeftMs: number, presence?: Array
   if (dimsChanged) {
     renderer.setBoard(state.cols, state.rows);
     fitBoard(state.cols, state.rows);
-    wallsEach = wallBudget(state.balls.length);
   }
   ballViews.length = 0;
   snapBalls();

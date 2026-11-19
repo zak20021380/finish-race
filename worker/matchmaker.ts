@@ -7340,9 +7340,9 @@ export class MatchmakerDO {
       this.notified.set(key, now);
       const body = JSON.stringify({
         chat_id: chatId,
-        text: `⚔️ ${arrival.name} is waiting for you in Lobby #${live.room.code}! Tap below to jump straight into the match!`,
+        text: `${arrival.name} is waiting for you in Lobby #${live.room.code}! Tap below to jump straight into the match!`,
         reply_markup: {
-          inline_keyboard: [[{ text: `⚔️ Join Lobby #${live.room.code}`, url: link }]],
+          inline_keyboard: [[{ text: `Join Lobby #${live.room.code}`, url: link }]],
         },
       });
       const call = fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -7647,6 +7647,16 @@ export class MatchmakerDO {
       members[to] = moved;
       const ref = this.refs.get(moved.ws);
       if (ref) ref.seat = to;
+    }
+    /* The crown rides its seat through the reflow. A host whose chair sat in a well a smaller
+       format drops moves to a lower index; the crown has to follow or every host-only key (start,
+       format, kick, invite) is answered by an index that no longer holds that player. A reserved
+       crown (a host who has not landed yet) is not in the moves, so park it on the first free well. */
+    const hostMove = reflowed.moves.find((m) => m.from === live.hostSeat);
+    if (hostMove) live.hostSeat = hostMove.to;
+    else {
+      const free = members.findIndex((m) => m === null);
+      live.hostSeat = free >= 0 ? free : 0;
     }
     live.room = reflowed.room;
     live.members = members;
@@ -8064,7 +8074,10 @@ export class MatchmakerDO {
     if (driver.state.winner !== null) {
       live.turnDeadlineMs = 0;
       this.finishRoom(live, driver.state.winner);
-      this.rooms.delete(live.matchId);
+      /* A timeout that hands the win to a finishing pawn must keep the room exactly like every
+         other finish path: a friends room with two or more people still at their sockets has to
+         survive for the rematch capsule. Deleting it here silently strands the surviving friends. */
+      this.retireFinished(live);
     }
   }
 
