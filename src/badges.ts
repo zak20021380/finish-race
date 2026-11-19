@@ -26,18 +26,21 @@ import { cacheBadgeClaim, cacheBadgeSupply, guestId, ladderWins, profile, type E
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData, tgUser } from './telegram';
+import churchillArt from './assets/images/Futuristic Churchill Steel Medallion.png';
+import einsteinArt from './assets/images/einstein.png';
+import heisenbergArt from './assets/images/Heisenberg Chrome Medallion.png';
 
 /**
- * The three medallion renders, one lazily-imported chunk each. A static import puts the PNG's URL
- * in the boot bundle, and the first crest any surface paints then costs the full fetch — three
- * photoreal coins for an honor nobody in the room is wearing. A loader costs one chunk the first
- * time that honor is actually drawn, which is the only moment its art can be seen.
+ * The three medallion renders, imported as static ES module URLs. Vite hashes and emits each PNG
+ * and resolves the base path, so the URL is known synchronously and cannot be lost to a dropped
+ * lazy chunk. The files are case-matched to these imports:
+ *   Futuristic Churchill Steel Medallion.png / einstein.png / Heisenberg Chrome Medallion.png
  */
-const medallionArt = {
-  churchill: () => import('./assets/images/Futuristic Churchill Steel Medallion.png'),
-  einstein: () => import('./assets/images/einstein.png'),
-  heisenberg: () => import('./assets/images/Heisenberg Chrome Medallion.png'),
-} satisfies Record<string, () => Promise<{ default: string }>>;
+const medallionArt: Record<string, string> = {
+  churchill: churchillArt,
+  einstein: einsteinArt,
+  heisenberg: heisenbergArt,
+};
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
@@ -100,8 +103,8 @@ export interface BadgeDef {
   privileges?: BadgePrivilege[];
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
-  /** Rendered medallion art, loaded on first paint; when set it replaces the vector crest. */
-  art?: () => Promise<{ default: string }>;
+  /** Vite-hashed URL of the rendered medallion; when set it replaces the vector crest. */
+  art?: string;
   /** Hard edition cap. Mirrors `BADGE_CAPS` in worker/badges.ts; never mint above it. */
   cap: number;
 }
@@ -229,48 +232,126 @@ export const badgeById = (id: string | null | undefined): BadgeDef | null =>
 export const badgeText = (text: BadgeText, code: string): string =>
   (code === 'fa' ? text.fa : text.en);
 
-/** Resolved medallion URLs, by badge id. Empty until a surface has actually painted that honor. */
-const artUrls = new Map<string, string>();
-/** The loads in flight, so a repaint of the same crest never starts a second one. */
-const artJobs = new Map<string, Promise<void>>();
+/* ---------- rendered medallion art: eager img, retry with backoff, shimmer ---------- */
 
 /**
- * Start the honor's medallion chunk the first time it is drawn, then swap every crest already on
- * screen for the render. `badgeCrestHtml` calls this, so the cost follows the paint exactly: an
- * honor that is neither worn nor opened is never requested at all.
+ * Backoff schedule for a medallion that fails to paint. A crest starts on the plain hashed URL
+ * (attempt 0); each failure adds a cache-busting `?r=N` and waits a little longer. Only after all
+ * 3 retries fail does the clean vector silhouette show, so one transient WebView hiccup can never
+ * strand a badge on its flat fallback.
  */
-export function ensureBadgeArt(def: BadgeDef): void {
-  if (!def.art || artUrls.has(def.id) || artJobs.has(def.id)) return;
-  const job = def.art()
-    .then((mod) => {
-      artUrls.set(def.id, mod.default);
-      upgradeCrests(def.id, mod.default);
-    })
-    .catch(() => { /* an unreachable chunk leaves the vector crest up, never a broken image */ })
-    .finally(() => { artJobs.delete(def.id); });
-  artJobs.set(def.id, job);
+const ART_RETRY_DELAYS = [400, 1200, 2500] as const;
+/** Preloaded images are held so the browser does not abandon the background fetch. */
+const artPreloads: HTMLImageElement[] = [];
+
+interface RetryImage extends HTMLImageElement {
+  /** Pending retry timer, cleared when the crest is re-triggered. */
+  badgeRetryTimer?: number;
+}
+
+/** Append a retry query param, keeping any query string already on the URL. */
+const withRetry = (url: string, attempt: number): string =>
+  `${url}${url.includes('?') ? '&' : '?'}r=${attempt}`;
+
+/** Put a crest back into its loading state and ask the browser to fetch the plain URL again. */
+function restartBadgeArt(img: HTMLImageElement): void {
+  const frame = img.closest<HTMLElement>('.badge-art-frame');
+  if (!frame) return;
+  const retry = img as RetryImage;
+  if (retry.badgeRetryTimer) {
+    window.clearTimeout(retry.badgeRetryTimer);
+    retry.badgeRetryTimer = undefined;
+  }
+  const base = img.dataset.badgeArtBase;
+  if (!base) return;
+  img.dataset.badgeArtAttempt = '0';
+  frame.classList.remove('is-fallback', 'is-loaded');
+  frame.classList.add('is-loading');
+  img.src = base;
+}
+
+/** Schedule the next retry for a crest whose image just failed. */
+function retryBadgeArt(img: HTMLImageElement): void {
+  const frame = img.closest<HTMLElement>('.badge-art-frame');
+  if (!frame) return;
+  const attempt = Number(img.dataset.badgeArtAttempt ?? '0');
+  if (attempt >= ART_RETRY_DELAYS.length) {
+    /* All 3 retries failed: show the vector silhouette, but keep the img mounted so a later
+       drawer open can warm it again through `reloadFailedBadgeArt`. */
+    frame.classList.remove('is-loading', 'is-loaded');
+    frame.classList.add('is-fallback');
+    return;
+  }
+  const next = attempt + 1;
+  img.dataset.badgeArtAttempt = String(next);
+  frame.classList.add('is-loading');
+  const retry = img as RetryImage;
+  const base = img.dataset.badgeArtBase;
+  if (!base) return;
+  retry.badgeRetryTimer = window.setTimeout(() => {
+    retry.badgeRetryTimer = undefined;
+    if (!img.isConnected) return;
+    img.src = withRetry(base, next);
+  }, ART_RETRY_DELAYS[attempt]);
+}
+
+/** A crest has painted: drop the shimmer and keep the artwork visible. */
+function badgeArtLoaded(img: HTMLImageElement): void {
+  const frame = img.closest<HTMLElement>('.badge-art-frame');
+  if (!frame) return;
+  const retry = img as RetryImage;
+  if (retry.badgeRetryTimer) {
+    window.clearTimeout(retry.badgeRetryTimer);
+    retry.badgeRetryTimer = undefined;
+  }
+  frame.classList.remove('is-loading', 'is-fallback');
+  frame.classList.add('is-loaded');
+}
+
+if (typeof document !== 'undefined') {
+  /* `load` and `error` do not bubble, so catch them in the capture phase on the document. That
+     keeps the retry logic in one place even though every surface paints crests via innerHTML. */
+  document.addEventListener('load', (e) => {
+    const img = e.target as HTMLImageElement | null;
+    if (img && img.tagName === 'IMG' && img.hasAttribute('data-badge-art-base')) badgeArtLoaded(img);
+  }, true);
+  document.addEventListener('error', (e) => {
+    const img = e.target as HTMLImageElement | null;
+    if (img && img.tagName === 'IMG' && img.hasAttribute('data-badge-art-base')) retryBadgeArt(img);
+  }, true);
 }
 
 /**
- * Replace the vector stand-in wherever this honor is already painted. The stand-in carries the
- * same class list as the render, so this is a straight element exchange: same box, same size,
- * one tag changed — no reflow, no flash, and no repaint of the host surface.
+ * Warm all three medallions in the background shortly after startup. Holding the Image objects —
+ * not just setting src on a temporary — keeps the fetch alive until the browser has cached it.
  */
-function upgradeCrests(id: string, url: string): void {
-  if (typeof document === 'undefined') return;
-  for (const el of document.querySelectorAll<SVGElement>(`[data-badge-art="${id}"]`)) {
-    const img = document.createElement('img');
-    img.className = el.getAttribute('class') ?? 'badge-crest';
-    img.src = url;
-    img.alt = '';
-    img.setAttribute('aria-hidden', 'true');
-    img.draggable = false;
-    img.loading = 'lazy';
+export function preloadBadgeArt(): void {
+  if (typeof Image === 'undefined') return;
+  for (const url of Object.values(medallionArt)) {
+    const img = new Image();
     img.decoding = 'async';
-    img.dataset.badge = id;
-    const accent = el.dataset.accent;
-    if (accent) img.dataset.accent = accent;
-    el.replaceWith(img);
+    img.src = url;
+    artPreloads.push(img);
+  }
+}
+
+/**
+ * Called whenever the Profile shelf or a badges drawer is (re)opened: any crest already showing
+ * its vector fallback, and any crest that never finished loading, is asked to load again from the
+ * plain URL. A crest mid-retry is left alone so its backoff is never reset.
+ */
+export function reloadFailedBadgeArt(root: ParentNode = document): void {
+  for (const frame of root.querySelectorAll<HTMLElement>('.badge-art-frame')) {
+    const img = frame.querySelector<HTMLImageElement>('img[data-badge-art-base]');
+    if (!img) continue;
+    if (img.complete && img.naturalWidth > 0) {
+      /* decoded from cache but the load event was missed: settle it now */
+      badgeArtLoaded(img);
+      continue;
+    }
+    const failed = frame.classList.contains('is-fallback');
+    const stuck = !frame.classList.contains('is-loading') && img.complete && img.naturalWidth === 0;
+    if (failed || stuck) restartBadgeArt(img);
   }
 }
 
@@ -278,22 +359,22 @@ function upgradeCrests(id: string, url: string): void {
  * The honor's crest as markup: its rendered medallion when one ships, else the
  * vector silhouette keyed by accent. Decorative — every host names the badge.
  *
- * A medallion that has not loaded yet paints the same vector crest the art-free honors use, at
- * the render's own class list and box, and `upgradeCrests` swaps it in place the moment the
- * chunk lands.
+ * A rendered crest is a circular, GPU-promoted frame with an eager <img>, a hidden vector
+ * fallback and a subtle loading shimmer. The image load/error handlers above own the retry and
+ * fallback states via the frame's `is-loading` / `is-loaded` / `is-fallback` classes.
  */
 export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string {
-  const sheen = `<span class="medal-sheen" data-badge="${def.id}" aria-hidden="true"></span>`;
-  const loaded = artUrls.get(def.id);
-  if (loaded) {
-    return `<img class="${className} badge-crest-art" src="${loaded}" alt="" aria-hidden="true" draggable="false" loading="lazy" decoding="async"`
-      + ` data-badge="${def.id}" data-accent="${def.accent}" />` + sheen;
-  }
   if (def.art) {
-    ensureBadgeArt(def);
-    return `<svg class="${className} badge-crest-art" viewBox="0 0 56 56" aria-hidden="true"`
-      + ` data-badge-art="${def.id}" data-accent="${def.accent}"><use href="#i-crest-${def.accent}" /></svg>`
-      + sheen;
+    const sheen = `<span class="medal-sheen" data-badge="${def.id}" aria-hidden="true"></span>`;
+    const fallback = `<span class="badge-art-fallback" aria-hidden="true">`
+      + `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true"><use href="#i-crest-${def.accent}" /></svg>`
+      + `</span>`;
+    return `<span class="badge-art-frame is-loading" aria-hidden="true">`
+      + fallback
+      + `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" loading="eager" decoding="async"`
+      + ` data-badge="${def.id}" data-badge-art-base="${def.art}" data-badge-art-attempt="0" />`
+      + `<span class="badge-art-shimmer"></span>`
+      + `</span>` + sheen;
   }
   return `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true">`
     + `<use href="#i-crest-${def.accent}" /></svg>`;

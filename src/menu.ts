@@ -21,7 +21,8 @@ import {
 import {
   BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeHolders, badgeProgress, badgeProgressText,
   badgeStatus, badgeText, claimMintedAt, editionSerialLabel, editionSpeech, editionSyncState,
-  equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount,
+  equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, preloadBadgeArt,
+  refreshBadgeEditions, reloadFailedBadgeArt, unlockedCount,
   type BadgeDef, type EditionHolder, type WornEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
@@ -3101,6 +3102,8 @@ export function createMenu(api: MenuApi): Menu {
     paintBadgeSheet(id);
     void refreshBadgeEditions();
     api.sheets.open(sheet);
+    /* a re-opened card that had given up on its art gets one more plain-URL load */
+    reloadFailedBadgeArt(sheet);
     /* the sheet must be laid out before scrollTop can reset: a hidden element ignores it */
     const body = document.getElementById('badge-sheet-body');
     if (body) body.scrollTop = 0;
@@ -4276,6 +4279,8 @@ export function createMenu(api: MenuApi): Menu {
     if (!sheet) return;
     paintBadgeList();
     api.sheets.open(sheet);
+    /* every card is freshly painted, but re-trigger any crest left in a fallback state */
+    reloadFailedBadgeArt(sheet);
     impact('light');
   });
 
@@ -4994,7 +4999,7 @@ export function createMenu(api: MenuApi): Menu {
       .forEach((node) => node.remove());
   }
 
-  return {
+  const menu: Menu = {
     openFriends() { openFriendsSheet(); },
     setRoute(id) {
       /* Only what the tap must show before the next frame: the dock's active key
@@ -5022,6 +5027,7 @@ export function createMenu(api: MenuApi): Menu {
         setHeroExpanded(false, true);             // every entry lands on the compact summary
         paintProfile();                           // the equipped row is only laid out once it is showing
         paintBadges();                            // the shelf mounts on first entry, not at boot
+        reloadFailedBadgeArt(document);           // re-warm any crest that fell back to its vector
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
         paintVault();                             // the Stars Vault reads the room, never the save
         void refreshVault();
@@ -5045,6 +5051,10 @@ export function createMenu(api: MenuApi): Menu {
       if (invite && !profile.teamId) openTeam();
     },
   };
+  /* Warm the three medallions in the background shortly after boot, well before the Profile /
+     Badges drawer can open, so their artwork is already in browser memory on first paint. */
+  window.setTimeout(preloadBadgeArt, 300);
+  return menu;
 }
 
 /* ---------------------------------------------------------------------------

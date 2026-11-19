@@ -28491,7 +28491,58 @@ html.reduced-motion .toast.toast-royal { transition: none; }
   object-position: center;
   -webkit-user-select: none;
   user-select: none;
+  /* pin the decoded bitmap to its own compositing layer so Telegram WebView
+     never drops the artwork while scrolling a drawer */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
+
+/* The art frame is a circular, GPU-promoted box holding the image, its vector fallback and a
+   loading shimmer. translateZ(0) plus a hidden backface stops iOS/Android WebViews from dropping
+   the layer mid-scroll, which is what left a crest stuck on its silhouette before. */
+.badge-art-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  border-radius: 50%;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.badge-art-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  border-radius: 50%;
+  line-height: 0;
+}
+.badge-art-frame.is-fallback .badge-art-fallback { display: grid; }
+.badge-art-frame.is-fallback .badge-crest-art { display: none; }
+.badge-art-shimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(110deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, .28) 50%,
+    rgba(255, 255, 255, 0) 70%);
+  background-size: 220% 100%;
+  animation: badge-art-shimmer 1.25s linear infinite;
+  transition: opacity .18s ease;
+}
+.badge-art-frame.is-loading .badge-art-shimmer { opacity: .9; }
+.badge-art-frame.is-loaded .badge-art-shimmer,
+.badge-art-frame.is-fallback .badge-art-shimmer { opacity: 0; animation: none; }
+@keyframes badge-art-shimmer {
+  from { background-position: 180% 0; }
+  to   { background-position: -80% 0; }
+}
+html.reduced-motion .badge-art-shimmer { animation: none; background-position: 50% 0; }
 
 /* ---- Genius medallion finish: one alpha-true shine overlay shared by the
    profile shelf and the detail sheet. The halo is the honor's own metal, the
