@@ -2194,12 +2194,14 @@ html.no-flags .flag-code { display: inline-block; }
   display: grid;
   place-items: center;
   flex: 0 0 28px;
+  width: 28px;
   height: 32px;
   border-radius: 9px;
   background: rgba(245, 185, 75, .08);
-  font-size: 18px;
+  color: #F5B94B;
   line-height: 1;
 }
+#lobby-quest-banner .quest-banner-trophy .ico { width: 18px; height: 18px; }
 #quest-banner-title {
   min-width: 0;
   margin: 0;
@@ -8225,7 +8227,7 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   flex-direction: column;
   min-width: 0;
 }
-/* one unified quest: a single card, a single reward badge, two paths split by an OR rule */
+/* one unified quest: a single card, a single reward badge, two mandatory paths joined by AND */
 .sv-quest-card {
   display: flex;
   flex-direction: column;
@@ -8283,7 +8285,7 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   white-space: nowrap;
 }
 .sv-quest-reward .ico { width: 14px; height: 14px; }
-/* the two ways to unlock the Stars, side by side: equal mini-cards split by one OR pill.
+/* both required goals, side by side: equal mini-cards joined by one gold AND pill.
    The grid mirrors itself under RTL, so the first path always leads the reading order. */
 .sv-quest-paths {
   display: grid;
@@ -8337,22 +8339,25 @@ html:lang(fa) .sv-gift, html:lang(ar) .sv-gift { border-radius: 9px 4px 4px 9px;
   color: #93A0B2;
   overflow-wrap: anywhere;
 }
-.sv-quest-or {
+.sv-quest-and {
   display: grid;
   place-items: center;
   flex: none;
-  width: 26px;
+  min-width: 30px;
   height: 26px;
+  padding: 0 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .06em;
+  background: linear-gradient(180deg, rgba(245, 158, 11, .16), rgba(245, 158, 11, .05));
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .45);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .07em;
   line-height: 1;
-  color: #A3AEBE;
+  color: #FCD34D;
 }
-html:lang(fa) .sv-quest-or, html:lang(ar) .sv-quest-or { letter-spacing: 0; }
+html:lang(fa) .sv-quest-and, html:lang(ar) .sv-quest-and { letter-spacing: 0; font-size: 11px; }
 
 /* one primary decision: an obsidian-gold glass bar with the copy key socketed into its flank,
    instead of a bright block and a second equal-looking button beside it */
@@ -8610,6 +8615,37 @@ html.reduced-motion .sv-payout[data-state="ready"] { animation: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* one state pill per friend: PENDING until both goals are proven, +5 EARNED after the room
+   credits it, a quiet EXPIRED tag once the 72h window is gone */
+.sv-friend-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sv-friend-pill[data-tone="pending"] {
+  background: rgba(245, 158, 11, .08);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .28);
+}
+.sv-friend-pill[data-tone="earned"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.sv-friend-pill .sv-check { width: 10px; height: 10px; }
+html:lang(fa) .sv-friend-pill, html:lang(ar) .sv-friend-pill { letter-spacing: 0; text-transform: none; }
 .sv-friend-total {
   flex: none;
   display: inline-flex;
@@ -41368,7 +41404,7 @@ html:lang(ar) #modal-stars-vault .vault-modal-body { font-family: 'Vazirmatn', s
   #modal-stars-vault .sv-quest-path { padding: 6px 7px; }
   #modal-stars-vault .sv-quest-path-t { font-size: 11.5px; }
   #modal-stars-vault .sv-quest-path-l { font-size: 9.5px; }
-  #modal-stars-vault .sv-quest-or { width: 22px; height: 22px; font-size: 8px; }
+  #modal-stars-vault .sv-quest-and { min-width: 26px; height: 22px; padding: 0 6px; font-size: 8px; }
   #modal-stars-vault .sv-quest-reward { padding-block: 5px; font-size: 14px; }
   #modal-stars-vault .sv-acts, #modal-stars-vault .sv-copy { height: 38px; }
   #modal-stars-vault .sv-payout, #modal-stars-vault .vm-foot-btn { height: 32px; }

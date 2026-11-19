@@ -12,11 +12,7 @@
 export const REFERRAL_CONFIG = {
   /** Pre-filled gift sitting in every vault from the first paint, so the meter is never empty. */
   STARTER_VAULT_GIFT_STARS: 5,
-  /** Legacy stage allocation, retained for already-earned Stars. */
-  STAGE1_REWARD_STARS: 2,
-  /** Legacy second-stage allocation; the quest now awards the remaining total at once. */
-  STAGE2_REWARD_STARS: 3,
-  /** What one fully qualified friend is worth: 2 + 3. */
+  /** What one fully qualified friend is worth; paid once, only after both goals are complete. */
   TOTAL_PER_FRIEND_STARS: 5,
 
   /** Quest lifetime from the referral ledger's immutable firstSeenAt. */
@@ -24,19 +20,10 @@ export const REFERRAL_CONFIG = {
   /** Ad-verified HardBot 1v1 matches accepted per UTC day. */
   QUEST_DAILY_MATCH_CAP: 10,
 
-  /** Quest completion: ad-verified HardBot matches (legacy key retained). */
-  STAGE1_MIN_MATCHES: 10,
-  /** Legacy display/audit setting only; no longer a quest requirement. */
-  STAGE1_MIN_DAYS: 3,
-  /** Stage 1: random-matchmaking duels against another person. */
-  STAGE1_MIN_PVP_MATCHES: 3,
-  /** Stage 1: distinct human opponents across those duels. */
-  STAGE1_MIN_DISTINCT_OPPONENTS: 2,
-
-  /** Quest alternative: ad-verified HardBot wins (legacy key retained). */
-  STAGE2_MIN_RANKED_PVP_WINS: 5,
-  /** Stage 2 alternative: reaching this Arena realm unlocks it without the win count. */
-  STAGE2_ALT_ARENA_UNLOCK: 3,
+  /** Goal 1 (required): verified HardBot 1v1 matches inside the quest window. */
+  QUEST_MIN_MATCHES: 15,
+  /** Goal 2 (required): genuine HardBot victories among those matches. Both are an AND. */
+  QUEST_MIN_WINS: 5,
 
   /** Vault balance needed before "Request Payout" wakes up. */
   MIN_PAYOUT_THRESHOLD_STARS: 50,
@@ -53,8 +40,8 @@ export const REFERRAL_CONFIG = {
 
 /**
  * The TIQ behind each Arena realm, lowest first — the same ladder the Arena Road paints.
- * `STAGE2_ALT_ARENA_UNLOCK` is a realm number, so the server needs this to turn the player's
- * standing into one. Kept beside the rest of the campaign so the gate is a single edit.
+ * Friend rows keep the reached realm as audit data. Kept beside the rest of the campaign so the
+ * ladder is a single edit.
  */
 export const ARENA_RANK_TIQ: readonly number[] = [0, 1200, 2800, 5000];
 

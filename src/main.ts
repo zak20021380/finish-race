@@ -101,6 +101,7 @@ import {
   createReferralQuestMatch, isReferralQuestActive, onReferralQuestChange, referralQuestUser,
   verifyReferralQuestMatch,
 } from './referral';
+import { REFERRAL_CONFIG } from '../shared/referralConfig';
 
 /* ---------- render-loop state ----------
  * Kept at the very top of the module, ahead of every boot wiring call. A resize, a language flip
@@ -2354,7 +2355,9 @@ function paintRewardButtons(): void {
   doubleIco?.setAttribute('href', vipDouble ? '#i-bolt' : '#i-play');
   doubleLabel.textContent = pending ? t('quest_sync_retry')
     : paid ? t(quest && resultView.questVerified ? 'quest_verified' : 'adDoubleClaimed')
-    : quest ? t(user.matchesCount === 9 || user.hardWins === 4 ? 'quest_ad_button_final' : 'quest_ad_button_standard')
+    : quest ? t(user.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES - 1
+      && user.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS - 1
+      ? 'quest_ad_button_final' : 'quest_ad_button_standard')
     : doubleOpen ? t('adDoubleCtaVip')
     : t('adDoubleCta');
   if (doubleOpen) doubleBtn.setAttribute('aria-label', t('adDoubleVipAria'));

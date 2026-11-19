@@ -1395,16 +1395,16 @@
                no coin counter, no TIQ stake, in any language or mode. -->
           <section id="lobby-quest-banner" hidden style="display: none;" dir="ltr" aria-labelledby="quest-banner-title">
             <div class="quest-banner-head">
-              <span class="quest-banner-trophy" aria-hidden="true">🏆</span>
-              <h2 id="quest-banner-title" data-i18n="quest_banner_title">Friendship Quest: Defeat Hard Bot</h2>
+              <span class="quest-banner-trophy" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-cup" /></svg></span>
+              <h2 id="quest-banner-title" data-i18n="quest_banner_title">Friendship Quest: 15 Hard AI Matches</h2>
             </div>
             <div class="quest-progress">
               <span id="quest-banner-wins">Wins: 0/5</span>
-              <span id="quest-banner-matches">Matches: 0/10</span>
+              <span id="quest-banner-matches">Matches: 0/15</span>
               <span id="quest-banner-day">Day 1/3</span>
             </div>
             <span id="quest-banner-time">72h left</span>
-            <button id="quest-banner-cta" type="button" data-i18n="quest_banner_cta">Battle Hard Bot ⚔️</button>
+            <button id="quest-banner-cta" type="button" data-i18n="quest_banner_cta">Battle Hard AI</button>
             <p id="quest-banner-cap" data-i18n="quest_daily_cap" role="status" hidden>Today’s quest limit reached. Come back tomorrow.</p>
           </section>
           <div class="launcher">
@@ -2353,7 +2353,7 @@
                    The list is rebuilt by main.ts from the settled board, so rank, portrait and the
                    local gold hairline always agree with the standings. -->
               <ol class="result-roster" id="result-roster" aria-label="Final standings"></ol>
-              <p id="quest-wrong-mode-notice" dir="ltr" data-i18n="quest_wrong_mode_notice" role="status" hidden>This match does not count toward the quest. Play Hard Bot 1v1 and watch the full sponsor ad to verify each match.</p>
+              <p id="quest-wrong-mode-notice" dir="ltr" data-i18n="quest_wrong_mode_notice" role="status" hidden>Match not counted: only Hard AI 1v1 matches progress the Stars Quest.</p>
 
               <!-- Obsidian VIP: the +50% bonus the settlement already paid, shown beside the rewards -->
               <span class="result-vip-boost" id="result-vip-boost" hidden>
@@ -2438,7 +2438,7 @@
 
               <div id="result-quest-reward" dir="ltr" hidden>
                 <div id="quest-ad-slot"></div>
-                <p id="quest-ad-subtitle" data-i18n="quest_ad_subtitle">Watch sponsor ad to validate this match for your friend’s 50-Star vault.</p>
+                <p id="quest-ad-subtitle" data-i18n="quest_ad_subtitle">Watch the sponsor ad to count this match toward your friend’s Stars Vault.</p>
               </div>
 
               <!-- THE REMATCH CONSENSUS. A friends room votes its next board on the sockets the
@@ -2817,26 +2817,26 @@
                   <div class="sv-quest-head">
                     <span class="sv-quest-headcopy">
                       <b class="sv-quest-title" id="sv-quest-title" data-i18n="quest_card_title">Earn +5 Stars Per Friend</b>
-                      <span class="sv-quest-meta" data-i18n="quest_card_meta">When your friend completes either goal vs Hard AI within 72h:</span>
+                      <span class="sv-quest-meta" data-i18n="quest_card_meta">Complete both goals vs Hard AI within 72h (15 matches total):</span>
                     </span>
                     <b class="sv-quest-reward" dir="ltr"><span id="sv-quest-reward-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                   </div>
-                  <!-- the two ways to unlock the Stars, side by side, split by one OR pill -->
+                  <!-- both goals are mandatory: side by side, joined by one gold AND pill -->
                   <div class="sv-quest-paths">
                     <div class="sv-quest-path" data-tone="plays">
                       <b class="sv-quest-path-t">
                         <svg class="ico sv-quest-path-ico" aria-hidden="true"><use href="#i-gamepad" /></svg>
-                        <span id="sv-path-matches">Play 10 Matches</span>
+                        <span id="sv-path-matches">10 Any Matches</span>
                       </b>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_matches_sub">vs Hard AI (win or lose)</span>
+                      <span class="sv-quest-path-l" data-i18n="quest_path_matches_sub">Play vs Hard AI (win or lose)</span>
                     </div>
-                    <span class="sv-quest-or" data-i18n="quest_or">OR</span>
+                    <span class="sv-quest-and" data-i18n="quest_and">AND</span>
                     <div class="sv-quest-path" data-tone="rivals">
                       <b class="sv-quest-path-t">
                         <svg class="ico sv-quest-path-ico" aria-hidden="true"><use href="#i-swords" /></svg>
-                        <span id="sv-path-wins">Win 5 Matches</span>
+                        <span id="sv-path-wins">5 Wins</span>
                       </b>
-                      <span class="sv-quest-path-l" data-i18n="quest_path_wins_sub">Beat Hard AI</span>
+                      <span class="sv-quest-path-l" data-i18n="quest_path_wins_sub">Beat Hard AI (15 total)</span>
                     </div>
                   </div>
                 </div>
@@ -2949,7 +2949,7 @@
               <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-info" /></svg></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="vg-title" data-i18n="vaultGuideTitle">How Stars Vault Works</h2>
-                <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">4 simple steps to cash out Stars</p>
+                <p class="vm-sub" id="vg-sub" data-i18n="vaultGuideSub">3 simple steps to cash out Stars</p>
               </span>
             </header>
 
@@ -2963,21 +2963,13 @@
                   </span>
                   <b class="vg-n" dir="ltr"><span id="vg-1-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
-                <li class="vg-card" data-tone="plays">
-                  <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-gamepad" /></svg></span>
-                  <span class="vg-txt">
-                    <b class="vg-t" id="vg-2-t">Play vs Hard AI</b>
-                    <span class="vg-b" id="vg-2-b">Friend plays 10 matches vs Hard AI within 72h. The sponsor ad after each match verifies it.</span>
-                  </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-2-n">+2</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
-                </li>
                 <li class="vg-card" data-tone="rivals">
                   <span class="vg-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
                   <span class="vg-txt">
-                    <b class="vg-t" id="vg-3-t">Win vs Hard AI</b>
-                    <span class="vg-b" id="vg-3-b">Friend wins 5 matches vs Hard AI within 72h. Either goal unlocks 5 Stars once.</span>
+                    <b class="vg-t" id="vg-2-t">Both Goals vs Hard AI</b>
+                    <span class="vg-b" id="vg-2-b">Friend plays 15 matches vs Hard AI within 72h and wins at least 5 of them. The sponsor ad verifies each match. No Stars are paid until both goals are complete.</span>
                   </span>
-                  <b class="vg-n" dir="ltr"><span id="vg-3-n">+3</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
+                  <b class="vg-n" dir="ltr"><span id="vg-2-n">+5</span><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></b>
                 </li>
                 <li class="vg-card" data-tone="cash">
                   <span class="vg-ico" aria-hidden="true"><img class="vault-star-icon" alt="" aria-hidden="true" width="15" height="15" decoding="async" draggable="false" /></span>

@@ -79,13 +79,6 @@ export function renderStarAsset(size: number = 20, extraClass: string = ''): str
   return `<img src="${telegramStarsUrl}" class="ico-star-img ${extraClass}" width="${size}" height="${size}" alt="Stars" loading="eager" draggable="false" />`;
 }
 
-/**
- * The full-colour Telegram Star used everywhere inside the Stars Vault: static markup and dynamic
- * rows point at this one Vite-hashed URL, with no tint or grayscale filter over the golden PNG.
- */
-const vaultStarAsset = (size: number, extraClass: string = ''): string =>
-  `<img src="${telegramStarsUrl}" class="vault-star-icon ${extraClass}" width="${size}" height="${size}" alt="" aria-hidden="true" decoding="async" draggable="false" />`;
-
 export interface MenuApi {
   router: Router;
   sheets: Sheets;
@@ -2145,46 +2138,48 @@ export function createMenu(api: MenuApi): Menu {
     nm.dir = 'auto';
     nm.textContent = f.name || t('vaultFriendAnon');
 
-    /* "+2 / 5", "+5 / 5" plus a check — a zero-credit friend reads plain "0 / 5". The plus and
-       every figure are Latin, and the check is the #i-check sprite, never a typed glyph. */
-    const total = document.createElement('span');
-    total.className = 'sv-friend-total';
-    total.dir = 'ltr';
-    const complete = f.credited >= C.TOTAL_PER_FRIEND_STARS;
-    total.append(
-      document.createTextNode(svFill('vaultFriendTotal', {
-        n: `${f.credited > 0 ? '+' : ''}${en(f.credited)}`,
-        total: en(C.TOTAL_PER_FRIEND_STARS),
-      })),
-    );
-    total.insertAdjacentHTML('beforeend', vaultStarAsset(16));
-    if (complete) total.append(svIcon('#i-check', 'sv-check'));
-    total.dataset.complete = String(complete);
+    /* The row's one state pill: PENDING until the room proves BOTH goals, the campaign's +5
+       EARNED once it has, and a quiet expired tag once the 72h window is gone. Never a guess. */
+    const done = f.referralQuestStatus === 'completed';
+    const expired = f.referralQuestStatus === 'expired';
+    const pill = document.createElement('span');
+    pill.className = 'sv-friend-pill';
+    pill.dataset.tone = done ? 'earned' : expired ? 'expired' : 'pending';
+    pill.dir = 'auto';
+    if (done) {
+      const reward = f.credited > 0 ? f.credited : C.TOTAL_PER_FRIEND_STARS;
+      pill.append(
+        svIcon('#i-check', 'sv-check'),
+        document.createTextNode(svFill('vaultStage1Done', { n: en(reward) })),
+      );
+    } else {
+      pill.textContent = t(expired ? 'vaultExpired' : 'vaultPending');
+    }
 
-    head.append(av, nm, total);
+    head.append(av, nm, pill);
 
     const stages = document.createElement('div');
     stages.className = 'sv-stages';
 
-    const matches = Math.min(f.matches, C.STAGE1_MIN_MATCHES);
-    const pct1 = matches / C.STAGE1_MIN_MATCHES * 100;
+    const matches = Math.min(f.matches, C.QUEST_MIN_MATCHES);
+    const pct1 = matches / C.QUEST_MIN_MATCHES * 100;
     stages.append(svStageTrack({
       tone: 'mint',
       done: f.referralQuestStatus === 'completed',
       reward: C.TOTAL_PER_FRIEND_STARS,
       doneKey: 'quest_complete',
       pct: pct1,
-      label: svFill('quest_track_matches', { n: en(matches) }),
+      label: svFill('quest_track_matches', { n: en(matches), max: en(C.QUEST_MIN_MATCHES) }),
     }));
 
-    const wins = Math.min(f.hardWins, C.STAGE2_MIN_RANKED_PVP_WINS);
+    const wins = Math.min(f.hardWins, C.QUEST_MIN_WINS);
     stages.append(svStageTrack({
       tone: 'gold',
       done: f.referralQuestStatus === 'completed',
       reward: C.TOTAL_PER_FRIEND_STARS,
       doneKey: 'quest_complete',
-      pct: (wins / C.STAGE2_MIN_RANKED_PVP_WINS) * 100,
-      label: svFill('quest_track_wins', { n: en(wins) }),
+      pct: (wins / C.QUEST_MIN_WINS) * 100,
+      label: svFill('quest_track_wins', { n: en(wins), max: en(C.QUEST_MIN_WINS) }),
     }));
 
     if (f.flagged) {
@@ -2248,8 +2243,10 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-paid', en(vault.paidOutStars));
 
     svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
-    svText('sv-path-matches', svFill('quest_option_matches', { n: en(C.STAGE1_MIN_MATCHES) }));
-    svText('sv-path-wins', svFill('quest_option_wins', { n: en(C.STAGE2_MIN_RANKED_PVP_WINS) }));
+    svText('sv-path-matches', svFill('quest_option_matches', {
+      n: en(C.QUEST_MIN_MATCHES - C.QUEST_MIN_WINS),
+    }));
+    svText('sv-path-wins', svFill('quest_option_wins', { n: en(C.QUEST_MIN_WINS) }));
 
     const link = referralLink();
     const shareT = document.getElementById('sv-share-t');
@@ -2332,12 +2329,12 @@ export function createMenu(api: MenuApi): Menu {
     svText('vg-1-t', t('vaultGuide1Title'));
     svText('vg-1-n', `+${gift}`);
     svText('vg-1-b', svFill('vaultGuide1Body', { gift }));
-    svText('vg-2-t', t('quest_path_matches'));
+    const hours = en(Math.round(C.QUEST_DURATION_MS / 3_600_000));
+    svText('vg-2-t', t('vaultGuide2Title'));
     svText('vg-2-n', `+${questReward}`);
-    svText('vg-2-b', t('quest_guide_matches'));
-    svText('vg-3-t', t('quest_path_wins'));
-    svText('vg-3-n', `+${questReward}`);
-    svText('vg-3-b', svFill('quest_guide_wins', { n: questReward }));
+    svText('vg-2-b', svFill('vaultGuide2Body', {
+      m: en(C.QUEST_MIN_MATCHES), w: en(C.QUEST_MIN_WINS), h: hours,
+    }));
     svText('vg-4-t', t('vaultGuide4Title'));
     svText('vg-4-n', en(target));
     svText('vg-4-b', svFill('vaultGuide4Body', { target: en(target) }));

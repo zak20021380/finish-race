@@ -2239,8 +2239,11 @@ function adminIdOf(raw: unknown): string {
  * The SDK callback and local winner are client claims, NOT cryptographic provider attestation;
  * no Adsgram S2S verification is configured. The server owns timing, caps and exactly-once credit.
  *
- * State lives under its own key, never on the evictable PlayerRecord directory. Existing earned,
- * paid and queued Stars are retained; completing a quest only awards the unpaid portion of 5.
+ * Both goals are mandatory: 15 verified HardBot matches AND at least 5 wins inside the window.
+ * A friend is pending — and the inviter's EARNED and VAULT BALANCE stay untouched — until the
+ * compound check passes. Past OR-rule credits that do not prove both goals are revoked on load.
+ *
+ * State lives under its own key, never on the evictable PlayerRecord directory.
  */
 const STARS_VAULT_KEY = 'stars-vault.v1';
 /** Bound the legacy day/opponent audit arrays; neither array qualifies the new quest. */
@@ -2250,8 +2253,8 @@ const VAULT_PAYOUTS_MAX = 600;
 const VAULT_FRIENDS_SHOWN = 25;
 
 const VAULT_QUEST_DAY_MS = 24 * 60 * 60 * 1000;
-/** At most ten consumed receipts and one outstanding match; consumed ids are retry tombstones. */
-const VAULT_QUEST_RECEIPTS_MAX = REFERRAL_CONFIG.STAGE1_MIN_MATCHES + 1;
+/** Every counted match plus one outstanding board; consumed ids are retry tombstones. */
+const VAULT_QUEST_RECEIPTS_MAX = REFERRAL_CONFIG.QUEST_MIN_MATCHES + 1;
 
 interface VaultQuestReceipt {
   matchId: string;
@@ -2446,9 +2449,10 @@ const VAULT_CORS: Record<string, string> = {
   'cache-control': 'no-store',
 };
 
+/** Never either goal: 15 verified matches AND 5 genuine wins, both in the same 72h window. */
 function vaultQuestTargetReached(quest: VaultFriendQuest): boolean {
-  return quest.matchesCount >= REFERRAL_CONFIG.STAGE1_MIN_MATCHES
-    || quest.hardWins >= REFERRAL_CONFIG.STAGE2_MIN_RANKED_PVP_WINS;
+  return quest.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES
+    && quest.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS;
 }
 
 /** Never migrate legacy matches, PvP wins or Arena standing into verified counters. */
@@ -2457,7 +2461,7 @@ function readVaultQuest(raw: unknown): VaultFriendQuest | null {
   if (!q || !whole(q.firstSeenAt)) return null;
   const firstSeenAt = whole(q.firstSeenAt);
   const expiresAt = firstSeenAt + REFERRAL_CONFIG.QUEST_DURATION_MS;
-  const matchesCount = Math.min(REFERRAL_CONFIG.STAGE1_MIN_MATCHES, whole(q.matchesCount));
+  const matchesCount = Math.min(REFERRAL_CONFIG.QUEST_MIN_MATCHES, whole(q.matchesCount));
   const receipts: VaultQuestReceipt[] = [];
   if (Array.isArray(q.receipts)) for (const r of q.receipts.slice(-VAULT_QUEST_RECEIPTS_MAX)) {
     if (!r || typeof r.matchId !== 'string' || !/^rq_[0-9a-f-]{36}$/.test(r.matchId)) continue;
@@ -2502,7 +2506,10 @@ function vaultQuestUser(
   const expiresAt = startedAt > 0 ? startedAt + REFERRAL_CONFIG.QUEST_DURATION_MS : 0;
   const utcDay = Math.floor(now / VAULT_QUEST_DAY_MS);
   const activeDay = startedAt > 0 ? Math.max(1, Math.min(3, Math.floor((now - startedAt) / VAULT_QUEST_DAY_MS) + 1)) : 0;
-  const completed = (friend?.stage1 && friend.stage2) || Boolean(q?.completedAt);
+  /* Strict and counter-derived: a stale stage flag, a flagged ring or a legacy completion never
+     reads as done. */
+  const completed = Boolean(!friend?.flagged && inviterId && q && vaultQuestTargetReached(q)
+    && q.completedAt >= q.firstSeenAt && q.completedAt <= expiresAt);
   return {
     referredBy: inviterId,
     referralQuestStatus: !inviterId ? 'none' : completed ? 'completed'
@@ -2798,6 +2805,13 @@ export class MatchmakerDO {
             for (const friend of vault.friends) this.vaultFriends.set(friend.id, friend);
             for (const pay of vault.payouts) this.vaultPayouts.set(pay.requestId, pay);
             this.vaultBudget = vault.budget;
+            /* The compound gate is retroactive: OR-rule credits are audited before the first read.
+               `vaultLoaded` flips only after the audit commits, so a failed audit fails closed. */
+            this.vaultReconcile(Date.now());
+            if (this.vaultDirty) {
+              await storage.put(STARS_VAULT_KEY, this.vaultSnapshot());
+              this.vaultDirty = false;
+            }
             this.vaultLoaded = true;
           } catch { /* Fail closed: never overwrite balances after a failed vault read. */ }
           this.seedRoles();
@@ -9191,12 +9205,23 @@ export class MatchmakerDO {
     friend.arena = Math.max(friend.arena, arenaRankOf(p.tiq));
   }
 
+  /**
+   * The only proof that qualifies a friend: both verified counters at their targets AND a
+   * completion stamp inside the 72h window. No stage flags, no partial credit, no legacy PvP.
+   */
+  private vaultStrictQualified(friend: VaultFriend): boolean {
+    const q = friend.quest;
+    if (!q) return false;
+    return q.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES
+      && q.hardWins >= REFERRAL_CONFIG.QUEST_MIN_WINS
+      && q.completedAt >= q.firstSeenAt
+      && q.completedAt <= q.firstSeenAt + REFERRAL_CONFIG.QUEST_DURATION_MS;
+  }
+
   /** Only verified quest counters qualify. A completed legacy friend is never paid again. */
   private vaultEvaluate(friend: VaultFriend, acc: VaultAccount, now: number): void {
     if (friend.flagged || (friend.stage1 && friend.stage2)) return;
-    const q = friend.quest;
-    if (!q || !vaultQuestTargetReached(q) || q.completedAt < q.firstSeenAt
-      || q.completedAt > q.firstSeenAt + REFERRAL_CONFIG.QUEST_DURATION_MS) return;
+    if (!this.vaultStrictQualified(friend)) return;
     friend.stage1 = true;
     friend.stage2 = true;
     /* Queued Stars are already earned too: neither they nor partial legacy credit may be minted
@@ -9205,6 +9230,44 @@ export class MatchmakerDO {
       REFERRAL_CONFIG.TOTAL_PER_FRIEND_STARS - friend.creditedStars - friend.queuedStars);
     if (remaining > 0) this.vaultAward(acc, friend, remaining, now);
     this.persistVault();
+  }
+
+  /**
+   * Boot-time audit. Everything minted under the retired OR rule is re-checked against the
+   * compound gate: a friend that cannot prove 15 matches AND 5 wins inside the window loses the
+   * stage flags, the completion stamp and every Star the inviter was credited for them. Queued
+   * Stars and this month's budget/cap are refunded together so the ledger never pays twice.
+   */
+  private vaultReconcile(now: number): void {
+    this.vaultRollMonth(now);
+    const monthKey = utcMonthKey(now);
+    for (const friend of this.vaultFriends.values()) {
+      if (this.vaultStrictQualified(friend)) {
+        const acc = this.vaultAccounts.get(friend.inviterId);
+        if (acc) this.vaultEvaluate(friend, acc, now);
+        continue;
+      }
+      if (!friend.stage1 && !friend.stage2 && friend.creditedStars === 0
+        && friend.queuedStars === 0 && !friend.creditMonth) continue;
+      const acc = this.vaultAccounts.get(friend.inviterId);
+      if (acc) {
+        if (friend.creditMonth === monthKey && friend.creditedStars > 0) {
+          acc.monthQualified = Math.max(0, acc.monthQualified - 1);
+          this.vaultBudget.spent = Math.max(0, this.vaultBudget.spent - friend.creditedStars);
+        }
+        acc.earnedStars = Math.max(0, acc.earnedStars - friend.creditedStars);
+        acc.queuedStars = Math.max(0, acc.queuedStars - friend.queuedStars);
+        acc.updatedAt = now;
+      }
+      if (friend.quest) friend.quest.completedAt = 0;
+      friend.stage1 = false;
+      friend.stage2 = false;
+      friend.creditedStars = 0;
+      friend.queuedStars = 0;
+      friend.creditMonth = '';
+      friend.updatedAt = now;
+      this.persistVault();
+    }
   }
 
   /** What a waiting request has locked: the same Stars cannot be asked for twice. */
@@ -9369,12 +9432,19 @@ export class MatchmakerDO {
     if (request) {
       if (action !== 'PAID' && action !== 'REJECT') return { ok: false, error: 'bad_action' };
       if (request.status !== 'waiting') return { ok: false, error: 'already_decided' };
-      request.status = action === 'PAID' ? 'paid' : 'rejected';
-      request.decidedAt = now;
       if (action === 'PAID') {
         const acc = this.vaultAccount(request.playerId, now);
+        /* A revoked OR-era credit must never be settled: the unlocked ledger has to cover it. */
+        if (acc.starterBonus + acc.earnedStars - acc.paidOutStars < request.amount) {
+          return { ok: false, error: 'insufficient_balance' };
+        }
+        request.status = 'paid';
+        request.decidedAt = now;
         acc.paidOutStars += request.amount;
         acc.updatedAt = now;
+      } else {
+        request.status = 'rejected';
+        request.decidedAt = now;
       }
       this.persistVault();
       return { ok: true, view: this.vaultAdminView() };
