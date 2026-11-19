@@ -47,6 +47,11 @@ export interface HomeApi {
   start(setup: RaceSetup): void;
   /** The Channel Wars Hub's one door: the war queue. */
   queue(mode?: 'pvp' | 'arena' | 'channel_war'): void;
+  /**
+   * The Play with Friends room. Channel TIQ is only ever earned there, so the hub's enrolled CTA
+   * hands the player to it instead of queueing them into a board that would pay nothing.
+   */
+  openFriends(): void;
 }
 
 /**
@@ -862,7 +867,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      raises the Channel Wars Hub, which owns both the zero-channel onboarding and the war room;
      only its gold key reaches the queue, and it queues a war match rather than a generic seat. */
 
-  const warHub = createChannelWarHub({ sheets: api.sheets, queue: api.queue });
+  const warHub = createChannelWarHub({
+    sheets: api.sheets,
+    queue: api.queue,
+    openFriends: api.openFriends,
+  });
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', (event) => {
     /* A scripted click is NOT a tap. The hub may only ever be raised by a real gesture on this

@@ -1755,7 +1755,17 @@ html[data-lang="fa"] .overlay.result .result-stake-saved { unicode-bidi: isolate
 }
 .iv-bonus.is-war .iv-bonus-ico { color: #FBE7B4; }
 .iv-bonus.is-war .iv-bonus-ico .ico { width: 17px; height: 17px; }
-.iv-bonus.is-war .iv-bonus-k { color: #F3D89A; letter-spacing: .14em; }
+/* The unit rides its own mark: a drawn TIQ glyph and three Latin letters, never a typed emoji.
+   One flex row, so the kicker's caps and the glyph sit on the same baseline at any width. */
+.iv-bonus.is-war .iv-bonus-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #F3D89A;
+  letter-spacing: .14em;
+}
+.iv-bonus.is-war .iv-war-ico { width: 11px; height: 11px; flex: none; }
+.iv-bonus.is-war .iv-bonus-k span { direction: ltr; unicode-bidi: isolate; }
 .iv-bonus.is-war .iv-bonus-t { font-size: 11.5px; font-weight: 700; line-height: 1.45; }
 /* the figures are a code; the channel's name keeps its own direction and its own face */
 .iv-bonus.is-war .iv-bonus-t bdi[dir="ltr"] {

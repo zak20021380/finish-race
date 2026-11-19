@@ -67,6 +67,12 @@ interface MemberPayload {
   username?: string;
   /** The player's Telegram profile photo, as their own client reported it. */
   photo?: string;
+  /** Channel Wars TIQ this player banked for the squad, as the registry holds it. */
+  warTiq?: number;
+  /** The inspector's own name for the same reading. */
+  tiqContributed?: number;
+  /** The inspector's own name for the portrait. */
+  avatar?: string;
 }
 
 interface SquadPayload {
@@ -88,8 +94,12 @@ interface SquadPayload {
   requireApproval?: boolean;
   /** Leader-only: the join requests waiting for an answer. */
   requests?: ApplicantPayload[];
-  /** The registry's Channel Wars total for this squad. */
+  /** The registry's Channel Wars TIQ total for this squad. */
   warPoints?: number;
+  /** The chat's real Telegram audience, or `null` when Telegram never answered. */
+  telegramMembers?: number | null;
+  /** Players of our bot representing this channel. */
+  botFightersCount?: number;
 }
 
 interface ApplicantPayload {
@@ -277,7 +287,13 @@ function toMember(row: MemberPayload): SquadMember | null {
   const tiq = Number(row.tiq);
   const joinedAt = Number(row.joinedAt);
   const country = typeof row.country === 'string' ? row.country.toUpperCase().slice(0, 2) : '';
-  const photo = typeof row.photo === 'string' ? row.photo.trim().slice(0, 300) : '';
+  /* The registry names the portrait `photo`; the inspector names it `avatar`. Either one is the
+     same face, so a payload from either door lands on the same row. */
+  const photo = typeof (row.photo ?? row.avatar) === 'string'
+    ? String(row.photo ?? row.avatar).trim().slice(0, 300)
+    : '';
+  /* The contribution is `warTiq` on a roster row and `tiqContributed` on a fighter row. */
+  const war = Number(row.warTiq ?? row.tiqContributed);
   return {
     id,
     name: typeof row.name === 'string' ? row.name.trim().slice(0, 24) : '',
@@ -287,6 +303,7 @@ function toMember(row: MemberPayload): SquadMember | null {
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username: typeof row.username === 'string' ? row.username.replace(/^@+/, '').slice(0, 32) : '',
     ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
+    ...(Number.isFinite(war) && war > 0 ? { warTiq: Math.floor(war) } : {}),
   };
 }
 
@@ -319,6 +336,9 @@ export function toSquad(payload: SquadPayload): Squad | null {
     .filter((m): m is SquadMember => m !== null);
   const ownerId = (payload.creatorId ?? payload.ownerId ?? '').replace(/[^0-9]/g, '').slice(0, 24);
   const subscribers = Number(payload.subscribers);
+  /* The nullable audience travels separately from the legacy numeric column: `null` is "Telegram
+     never answered", and it must survive the trip or the inspector invents a zero. */
+  const audience = payload.telegramMembers;
   return normalizeSquad({
     id,
     handle,
@@ -331,6 +351,11 @@ export function toSquad(payload: SquadPayload): Squad | null {
     avatar: typeof payload.avatar === 'string' ? payload.avatar.slice(0, 160) : '',
     ...(typeof payload.tag === 'string' && payload.tag ? { tag: payload.tag } : {}),
     ...(Number.isFinite(subscribers) && subscribers >= 0 ? { subscribers: Math.floor(subscribers) } : {}),
+    ...(audience === null
+      ? { telegramMembers: null }
+      : Number.isFinite(Number(audience)) && Number(audience) >= 0
+        ? { telegramMembers: Math.floor(Number(audience)) }
+        : {}),
     ...(ownerId ? { ownerId } : {}),
     ...(typeof payload.cupId === 'string' && payload.cupId.trim()
       ? { cupId: payload.cupId.trim().slice(0, 48) }
@@ -479,6 +504,7 @@ export async function registerSquadWithTelegram(
       const roster = toSquad(remote)?.roster;
       joinSquadLocally(existing.id, roster, {
         subscribers: remote.subscribers,
+        telegramMembers: remote.telegramMembers,
         ownerId: remote.creatorId ?? remote.ownerId,
       });
       return { ok: true, squad: getMySquad() ?? existing, message: t('enlistToast') };
@@ -545,6 +571,7 @@ function absorb(payload: SquadPayload | undefined): RankedSquad | null {
   if (typeof squad.warPoints === 'number') adoptWarPoints(squad.id, squad.warPoints);
   const bound = joinSquadLocally(squad.id, squad.roster, {
     subscribers: squad.subscribers,
+    telegramMembers: squad.telegramMembers,
     ownerId: squad.ownerId,
   });
   return bound === 'bad-handle' ? null : getMySquad() ?? local;
@@ -678,6 +705,7 @@ export async function leaveSquadOnServer(id: string): Promise<SquadActionResult>
     if (squad) {
       applySquadRoster(squad.id, squad.roster, {
         subscribers: squad.subscribers,
+        telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
       });
     }
@@ -704,6 +732,7 @@ export async function kickSquadMember(id: string, memberId: string): Promise<Squ
     if (squad) {
       applySquadRoster(squad.id, squad.roster, {
         subscribers: squad.subscribers,
+        telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
       });
     }
@@ -726,10 +755,15 @@ export async function fetchSquad(id: string): Promise<RankedSquad | null> {
     /* Paint the roster the registry holds. A local membership write happens only when the answer
        actually names this player: a kicked member must never be re-added by a page refresh. */
     if (onRoster) {
-      joinSquadLocally(squad.id, squad.roster, { subscribers: squad.subscribers, ownerId: squad.ownerId });
+      joinSquadLocally(squad.id, squad.roster, {
+        subscribers: squad.subscribers,
+        telegramMembers: squad.telegramMembers,
+        ownerId: squad.ownerId,
+      });
     } else {
       applySquadRoster(squad.id, squad.roster, {
         subscribers: squad.subscribers,
+        telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
       });
     }
@@ -849,6 +883,7 @@ export async function decideSquadRequest(
     if (remote && remote.roster.some((m) => m.id === applicantId)) {
       applySquadRoster(remote.id, remote.roster, {
         subscribers: remote.subscribers,
+        telegramMembers: remote.telegramMembers,
         ownerId: remote.ownerId,
       });
     }

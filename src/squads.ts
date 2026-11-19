@@ -25,10 +25,10 @@ export type SquadTrend = 'up' | 'down' | 'same';
  */
 export const ACTIVE_CUP_ID = 'cup-200-stars';
 
-/** What a war match pays. A defeat still banks the participation credit: showing up counts. */
+/** What a Channel Wars match pays, in TIQ. A defeat still banks the participation credit. */
 export const WAR_WIN = 25;
 export const WAR_LOSS = 5;
-/** A season's ceiling for one squad. Bounds the save and refuses a hostile write. */
+/** A season's ceiling for one channel. Bounds the save and refuses a hostile write. */
 export const WAR_CAP = 1_000_000;
 
 /** Unified community type: a Telegram Channel (broadcast) or Group (chat). */
@@ -52,6 +52,12 @@ export interface SquadMember {
   username?: string;
   /** The player's Telegram profile photo, when the roster reported one. */
   photo?: string;
+  /**
+   * The Channel Wars TIQ this player has personally banked for the squad. The channel's total is
+   * the sum of this column, so the inspector names who actually carried the channel instead of
+   * splitting one figure across a roster. Only a real Play with Friends match ever adds to it.
+   */
+  warTiq?: number;
 }
 
 /**
@@ -88,6 +94,14 @@ export interface Squad {
    * the community looks like on Telegram, never how many players joined the squad in the game.
    */
   subscribers?: number;
+  /**
+   * The same audience as the Worker read it from `getChatMemberCount`, nullable on purpose: `null`
+   * is "Telegram never answered" — the inspector paints a dash — while `0` is a chat that really
+   * has nobody in it. Absent on a save written before the field existed.
+   */
+  telegramMembers?: number | null;
+  /** How many players of our bot represent this channel. Always the roster's own length. */
+  botFightersCount?: number;
   /** Arithmetic mean of the roster's TIQ: the squad's Squad IQ. */
   trophies: number;
   trend: SquadTrend;
@@ -176,7 +190,8 @@ function memberOk(m: unknown): m is SquadMember {
     && typeof x.country === 'string' && x.country.length <= 2
     /* A portrait is decoration: anything longer than a URL is dropped here rather than
        allowed to invalidate a real player's row. */
-    && (x.photo === undefined || (typeof x.photo === 'string' && x.photo.length <= 300));
+    && (x.photo === undefined || (typeof x.photo === 'string' && x.photo.length <= 300))
+    && (x.warTiq === undefined || (typeof x.warTiq === 'number' && Number.isFinite(x.warTiq) && x.warTiq >= 0));
 }
 
 /** A stored squad, normalised: the roster is the count, and the count is the roster. */
@@ -192,6 +207,9 @@ function squadOk(s: unknown): s is Squad {
     && (x.avatar === undefined || (typeof x.avatar === 'string' && x.avatar.length <= 160))
     && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)))
     && (x.subscribers === undefined || (typeof x.subscribers === 'number' && Number.isFinite(x.subscribers) && x.subscribers >= 0))
+    && (x.telegramMembers === undefined || x.telegramMembers === null
+      || (typeof x.telegramMembers === 'number' && Number.isFinite(x.telegramMembers) && x.telegramMembers >= 0))
+    && (x.botFightersCount === undefined || (typeof x.botFightersCount === 'number' && Number.isFinite(x.botFightersCount) && x.botFightersCount >= 0))
     && (x.ownerId === undefined || (typeof x.ownerId === 'string' && x.ownerId.length <= 24))
     && (x.requireApproval === undefined || typeof x.requireApproval === 'boolean')
     && (x.cupId === undefined || (typeof x.cupId === 'string' && x.cupId.length <= 48))
@@ -583,7 +601,7 @@ function myRow(role: SquadRole, country: string): SquadMember {
 export function applySquadRoster(
   id: string,
   roster: SquadMember[],
-  extra: { subscribers?: number; ownerId?: string; members?: number; tiq?: number } = {},
+  extra: { subscribers?: number; telegramMembers?: number | null; ownerId?: string; members?: number; tiq?: number } = {},
 ): RankedSquad | null {
   const at = save.custom.findIndex((s) => s.id === id);
   if (at < 0) return null;
@@ -592,6 +610,7 @@ export function applySquadRoster(
     ...save.custom[at],
     roster,
     ...(typeof extra.subscribers === 'number' ? { subscribers: extra.subscribers } : {}),
+    ...(extra.telegramMembers !== undefined ? { telegramMembers: extra.telegramMembers } : {}),
     ...(ownerId ? { ownerId } : {}),
   }, ownerId), save.custom[at]);
   flush();
@@ -602,7 +621,7 @@ export function applySquadRoster(
 export function joinSquadLocally(
   id: string,
   roster?: SquadMember[],
-  extra: { subscribers?: number; ownerId?: string; role?: SquadRole } = {},
+  extra: { subscribers?: number; telegramMembers?: number | null; ownerId?: string; role?: SquadRole } = {},
 ): BindResult {
   const at = save.custom.findIndex((s) => s.id === id);
   if (at < 0) return 'bad-handle';
@@ -620,6 +639,7 @@ export function joinSquadLocally(
     ...squad,
     roster: rows,
     ...(typeof extra.subscribers === 'number' ? { subscribers: extra.subscribers } : {}),
+    ...(extra.telegramMembers !== undefined ? { telegramMembers: extra.telegramMembers } : {}),
     ...(extra.ownerId ? { ownerId: extra.ownerId } : {}),
   }, extra.ownerId ?? squad.ownerId);
   const was = save.boundId && save.boundId !== id ? 'switched' : save.boundId === id ? 'already' : 'bound';
@@ -731,6 +751,8 @@ export interface RegisteredSquadInput {
   roster?: SquadMember[];
   members?: number;
   subscribers?: number;
+  /** The chat's real Telegram audience, or `null` when Telegram never answered. */
+  telegramMembers?: number | null;
   kind?: SquadKind;
   avatar?: string;
   tag?: string;
@@ -775,6 +797,9 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',
     ...(typeof input.subscribers === 'number' && Number.isFinite(input.subscribers) && input.subscribers >= 0
       ? { subscribers: Math.floor(input.subscribers) }
+      : {}),
+    ...(input.telegramMembers !== undefined
+      ? { telegramMembers: input.telegramMembers === null ? null : Math.max(0, Math.floor(Number(input.telegramMembers) || 0)) }
       : {}),
     ...(tag ? { tag } : {}),
     ...(ownerId ? { ownerId } : {}),
@@ -840,15 +865,16 @@ export interface ChannelCup {
   top: RankedSquad | null;
 }
 
-/* ---------- Channel Wars: the weekly war-point ladder ----------
-   War points are a different currency from Squad IQ. IQ is the mean of the roster's own TIQ, so
-   it moves when a member gets better; war points only ever move when somebody actually plays a
-   war match. They are banked per squad, credited on the settlement frame, and replicated to the
-   registry afterwards — so the hub a player returns to already shows the win they just earned. */
+/* ---------- Channel Wars: the weekly Channel TIQ ladder ----------
+   Channel TIQ is a different currency from Squad IQ. IQ is the mean of the roster's own TIQ, so
+   it moves when a member gets better; the channel's TIQ only ever moves when somebody actually
+   plays a Play with Friends match — a bot board pays the channel nothing. It is banked per squad,
+   credited on the settlement frame, and replicated to the registry afterwards, so the hub a
+   player returns to already shows the win they just earned. */
 
 /**
- * The live war total for a squad: whichever reading is further ahead. The device credits a win
- * before the Worker acknowledges it, and the registry is the authority once it catches up, so
+ * The live Channel TIQ total for a squad: whichever reading is further ahead. The device credits a
+ * win before the Worker acknowledges it, and the registry is the authority once it catches up, so
  * taking the higher of the two loses neither an unconfirmed win nor a win earned on another phone.
  */
 export function warPointsOf(s: Pick<Squad, 'id' | 'warPoints'>): number {
@@ -857,7 +883,10 @@ export function warPointsOf(s: Pick<Squad, 'id' | 'warPoints'>): number {
   return Math.max(0, Math.min(WAR_CAP, Math.floor(Math.max(local, server))));
 }
 
-/** Every squad this device knows, ranked by war points. The hub's leaderboard order. */
+/** The same reading under the name the war's own screens use. */
+export const channelTiqOf = warPointsOf;
+
+/** Every squad this device knows, ranked by Channel TIQ. The hub's leaderboard order. */
 export function getWarRanking(): RankedSquad[] {
   return getSquadRanking()
     .map((s) => ({ ...s, warPoints: warPointsOf(s) }))
@@ -882,6 +911,10 @@ export function myWarStanding(): { squad: RankedSquad | null; rank: number; poin
 /**
  * Bank a war match's points for the bound squad, locally and immediately. Returns the squad and
  * its new total so the caller can repaint without a second read; null when there is no channel.
+ *
+ * The player's own roster row is credited in the same turn. The channel's TIQ and the sum of its
+ * fighters' TIQ are then one number, which is what lets the inspector rank a roster by what each
+ * person actually brought to the channel.
  */
 export function creditWarPoints(n: number): { squad: RankedSquad; points: number } | null {
   const mine = getMySquad();
@@ -889,6 +922,12 @@ export function creditWarPoints(n: number): { squad: RankedSquad; points: number
   const gain = Math.max(0, Math.min(WAR_WIN, Math.floor(n)));
   const points = Math.min(WAR_CAP, warPointsOf(mine) + gain);
   save.war[mine.id] = points;
+  const at = save.custom.findIndex((s) => s.id === mine.id);
+  if (at >= 0 && gain > 0) {
+    const me = myRosterId();
+    const row = save.custom[at].roster.find((m) => m.id === me);
+    if (row) row.warTiq = Math.min(WAR_CAP, Math.max(0, Math.floor(row.warTiq ?? 0)) + gain);
+  }
   flush();
   return { squad: getMySquad() ?? mine, points };
 }

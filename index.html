@@ -895,6 +895,19 @@
           <path d="M12 18V5" />
         </g>
       </symbol>
+      <!-- TIQ, the unit's own name: the exact brain mark above, drawn again under the id the
+           score surfaces ask for. One silhouette, two names — a second shape would only teach the
+           eye that the same number wears two faces. -->
+      <symbol id="i-tiq" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+          <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+          <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+          <path d="M17.598 6.5A3 3 0 0 0 12 5a3 3 0 0 0-5.598 1.5" />
+          <path d="M9.999 19.5A3 3 0 0 0 12 18a3 3 0 0 0 2.001 1.5" />
+          <path d="M12 18V5" />
+        </g>
+      </symbol>
       <!-- TIQ brain, neon edition: the Nations Cup score token.
            Same two-lobe silhouette as #i-brain, cut deeper and painted with its
            own cyan→violet ramp instead of currentColor, so at 18px it reads as a
@@ -2710,7 +2723,7 @@
             <span class="mm-stakes-t">Win stakes</span>
             <span class="mm-stakes-c is-tiq"><svg class="ico"><use href="#i-brain" /></svg>+<b id="mm-stake-tiq">140</b> TIQ</span>
             <span class="mm-stakes-c is-gold"><svg class="ico"><use href="#i-medal" /></svg>+<b id="mm-stake-gold">65</b> Gold</span>
-            <span class="mm-stakes-c is-war" id="mm-stake-war" hidden><svg class="ico"><use href="#i-swords" /></svg>+<b id="mm-stake-war-n">25</b> <span id="mm-stake-war-u">WAR PTS</span></span>
+            <span class="mm-stakes-c is-war" id="mm-stake-war" hidden><svg class="ico"><use href="#i-swords" /></svg>+<b id="mm-stake-war-n">25</b> <span id="mm-stake-war-u">TIQ</span></span>
             <span class="mm-stakes-c is-cup"><svg class="ico"><use id="mm-season-ico" href="#i-cup" /></svg><span id="mm-stake-season-k">Ranked</span> <b id="mm-stake-season">S4</b></span>
           </div>
 
@@ -4493,10 +4506,11 @@
 
 
       <!-- CHANNEL WARS HUB — the one door the hero's "Fight for your channel" key opens.
-           Three zones, no repeats: the prize rule and its clock, the rankings (with the admins'
-           register door), and one action bar that reads the player's own state. The register
-           sheet is a sub-view of this same panel, never a second modal. src/channelWar.ts owns
-           all of it. -->
+           A flagship tournament sheet: the prize rule and its clock, the friends-only earning
+           rule, the rankings (with the admins' register door), one action bar that reads the
+           player's own state, and a channel inspector behind every row. The register sheet and
+           the inspector are sub-views of this same panel, never a second modal.
+           src/channelWar.ts owns all of it. -->
       <section class="sheet cw-sheet" id="channel-war-modal" hidden role="dialog" aria-modal="true" aria-labelledby="cw-title">
         <span class="sheet-grip" aria-hidden="true"></span>
 
@@ -4524,6 +4538,12 @@
             </span>
           </div>
 
+          <!-- ZONE 1b — how TIQ is actually earned. One line, no asterisk, no footnote. -->
+          <p class="cw-rule" id="cw-rule">
+            <span class="cw-rule-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-tiq" /></svg></span>
+            <span class="cw-rule-t" data-i18n="cwFriendsRule">Earn TIQ only in Play with Friends matches (Bot matches = 0 TIQ)</span>
+          </p>
+
           <!-- ZONE 2 — the ladder, and the admins' own door into it. -->
           <div class="cw-board">
             <div class="cw-board-head">
@@ -4533,7 +4553,7 @@
                 <span data-i18n="cwRegisterCta">Register Channel / Group</span>
               </button>
             </div>
-            <ol class="cw-list" id="cw-board-list" data-scroll></ol>
+            <ol class="cw-list" id="cw-board-list" data-scroll aria-label="Channel rankings"></ol>
 
             <!-- the quick pick: one tap for a player who has not chosen a channel yet -->
             <div class="cw-pick" id="cw-pick" hidden>
@@ -4569,12 +4589,86 @@
 
             <div class="cw-actions">
               <button class="cw-cta" id="cw-join" type="button">
-                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
+                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
                 <span class="cw-cta-t"><b id="cw-join-t">JOIN CHANNEL WARS</b></span>
               </button>
               <button class="cw-invite" id="cw-invite" type="button" hidden>
                 <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
                 <span data-i18n="cwInvite">Invite</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- THE INSPECTOR — one channel: who it is, how big it is, and who fights for it.
+             Every row of the ladder opens this; the back key returns to the ladder it came from. -->
+        <div class="cw-main cw-detail" id="cw-detail" hidden>
+          <header class="cw-head">
+            <button class="cw-back" id="cw-detail-back" type="button">
+              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-back" /></svg>
+              <span data-i18n="cwBack">Back</span>
+            </button>
+            <h2 class="cw-title is-reg" id="cw-detail-title" data-i18n="cwDetailTitle">CHANNEL DETAILS</h2>
+            <span class="cw-head-sp" aria-hidden="true"></span>
+          </header>
+
+          <div class="cw-detail-body" data-scroll>
+            <div class="cw-hero">
+              <span class="cw-hero-av" id="cw-detail-av">
+                <img class="cw-hero-img" id="cw-detail-img" alt="" hidden decoding="async" />
+                <b class="cw-hero-mark" id="cw-detail-mark" aria-hidden="true">?</b>
+              </span>
+              <span class="cw-hero-id">
+                <b class="cw-hero-name"><bdi dir="auto" id="cw-detail-name">Channel</bdi></b>
+                <bdi class="cw-hero-handle" id="cw-detail-handle" dir="ltr">@channel</bdi>
+              </span>
+              <span class="cw-hero-rank" id="cw-detail-rank" dir="ltr">—</span>
+            </div>
+
+            <div class="cw-stats">
+              <div class="cw-stat is-tiq">
+                <span class="cw-stat-k">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-tiq" /></svg>
+                  <span data-i18n="cwStatTiq">Total TIQ</span>
+                </span>
+                <b class="cw-stat-v" id="cw-detail-tiq" dir="ltr">0</b>
+              </div>
+              <div class="cw-stat">
+                <span class="cw-stat-k">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
+                  <span data-i18n="cwStatMembers">Telegram Members</span>
+                </span>
+                <b class="cw-stat-v" id="cw-detail-members" dir="ltr">—</b>
+              </div>
+              <div class="cw-stat">
+                <span class="cw-stat-k">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-swords" /></svg>
+                  <span data-i18n="cwStatFighters">Bot Fighters</span>
+                </span>
+                <b class="cw-stat-v" id="cw-detail-fighters-n" dir="ltr">0</b>
+              </div>
+            </div>
+
+            <div class="cw-fighters">
+              <h3 class="cw-board-t" data-i18n="cwFightersTitle">FIGHTERS IN THIS CHANNEL</h3>
+              <ol class="cw-list cw-fighter-list" id="cw-detail-list" data-scroll></ol>
+            </div>
+          </div>
+
+          <div class="cw-foot">
+            <p class="cw-detail-note" id="cw-detail-note" hidden></p>
+            <div class="cw-actions">
+              <button class="cw-invite is-wide" id="cw-detail-invite" type="button" hidden>
+                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
+                <span data-i18n="cwInviteFriends">Invite Friends</span>
+              </button>
+              <button class="cw-cta" id="cw-detail-play" type="button" hidden>
+                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
+                <span class="cw-cta-t"><b id="cw-detail-play-t">PLAY WITH FRIENDS (+TIQ)</b></span>
+              </button>
+              <button class="cw-cta is-join" id="cw-detail-join" type="button" hidden>
+                <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-user-join" /></svg></span>
+                <span class="cw-cta-t"><b id="cw-detail-join-t">JOIN THIS CHANNEL</b></span>
               </button>
             </div>
           </div>

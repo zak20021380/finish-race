@@ -101,6 +101,14 @@ export interface Menu {
   /** Phase 2: paint the screen's data after the new panel has been shown. */
   refresh(id: string): void;
   /**
+   * Raise the Play with Friends sheet — the room door, its live code and its seats.
+   *
+   * It exists for the one caller that is not a Profile tile: Channel Wars hands an enrolled
+   * fighter straight to the only mode that pays their channel, so the CTA lands on a room rather
+   * than on a queue that would bank them nothing.
+   */
+  openFriends(): void;
+  /**
    * Drop any rival-inspection action the Profile could inherit. The personal profile has no duel
    * CTA at all: a dispatched challenge must never leave a live key on this screen.
    */
@@ -3921,13 +3929,21 @@ export function createMenu(api: MenuApi): Menu {
     }
   };
 
-  friendDuelTile?.addEventListener('click', () => {
-    impact('light');
+  /**
+   * The sheet, raised from anywhere. The tile's own key is one caller; Channel Wars is the other,
+   * and both land on the same room — a second handshake would open two sockets on one code.
+   */
+  const openFriendsSheet = (): void => {
     if (!friendDuelModal) return;
     paintFriendDuel(getFriendDuelSnapshot());
     friendDuelModal.open(friendDuelTile);
     /* Opening the sheet is opening the room: a roster already full re-arms its countdown. */
     syncFriendDuelScreen();
+  };
+
+  friendDuelTile?.addEventListener('click', () => {
+    impact('light');
+    openFriendsSheet();
   });
 
   document.getElementById('fd-create')?.addEventListener('click', () => {
@@ -4985,6 +5001,7 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   return {
+    openFriends() { openFriendsSheet(); },
     setRoute(id) {
       /* Only what the tap must show before the next frame: the dock's active key
          and whether the dock belongs on this screen at all. */

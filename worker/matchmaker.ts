@@ -76,8 +76,8 @@ import {
 } from '../shared/vip';
 import {
   ACTIVE_CUP_ID, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
-  isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
-  SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
+  isSquadAdmin, normalizeChatHandle, readRegisteredSquad, refreshTelegramMembers, removeSquadMember,
+  roleOf, SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
   verifyAndBuildSquad, verifyChannelMembership, verifySquadChat,
   type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow, type SquadVerification,
 } from './squads';
@@ -3312,7 +3312,7 @@ export class MatchmakerDO {
     if (!squad.roster.some((m) => m.id === requester)) {
       return json({ ok: false, error: 'not_a_member', message: 'Join this squad before scoring for it.' }, 409);
     }
-    const total = addWarPoints(squad, typeof body.gain === 'number' ? body.gain : Number(body.gain));
+    const total = addWarPoints(squad, typeof body.gain === 'number' ? body.gain : Number(body.gain), requester);
     this.squadsDirty = true;
     await this.persistSquads();
     return json({ ok: true, warPoints: total, squad: squadViewOf(squad) });
@@ -3590,6 +3590,9 @@ export class MatchmakerDO {
    */
   private async squadBoard(): Promise<Response> {
     await this.syncSquadsFromStorage();
+    /* The Channel Wars ladder is ranked by Channel TIQ — the sum its members banked in Play with
+       Friends matches. Squad IQ breaks a tie, then the roster size, then the handle: the order a
+       client paints is the order this endpoint hands back. */
     const squads = [...this.squads.values()]
       .filter((squad) => !squad.banned && squad.verification !== 'revoked')
       .map((squad) => {
@@ -3597,17 +3600,32 @@ export class MatchmakerDO {
         const { chatId: _chatId, ...view } = squadViewOf(squad);
         return view;
       })
-      .sort((a, b) => b.tiq - a.tiq || b.members - a.members || a.handle.localeCompare(b.handle));
+      .sort((a, b) =>
+        b.warPoints - a.warPoints
+        || b.tiq - a.tiq
+        || b.members - a.members
+        || a.handle.localeCompare(b.handle));
     return json({ ok: true, timestamp: Date.now(), squads });
   }
 
-  /** One squad's live view: identity, the full roster and the derived counts. */
+  /**
+   * One squad's live view: identity, the full roster and the derived counts.
+   *
+   * The audience is re-read here, and only here: this is the door the inspector opens on one
+   * channel, so it is the one place a fresh `getChatMemberCount` is worth a Telegram round trip.
+   * A row that has never answered is retried too — that is how a chat whose bot was only just
+   * added stops printing `—`.
+   */
   private async squadRead(url: URL): Promise<Response> {
     const id = (url.searchParams.get('id') ?? '').trim().slice(0, 48);
     if (!id) return json({ ok: false, error: 'invalid_squad' }, 400);
     const squad = await this.squadNamed(id);
     if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
     if (squad.banned) return json({ ok: false, error: 'squad_banned' }, 403);
+    if (await refreshTelegramMembers(squad, this.env)) {
+      this.squadsDirty = true;
+      await this.persistSquads();
+    }
     return json({ ok: true, squad: squadViewOf(squad) });
   }
 

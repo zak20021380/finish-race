@@ -39,6 +39,12 @@ export interface SquadMemberRow {
    * leaderboard paints a real face instead of a monogram; '' when the player has none.
    */
   photo: string;
+  /**
+   * The Channel Wars TIQ this player has personally banked for the squad. The squad's own total is
+   * this column summed, so the inspector can name who actually carried the channel instead of
+   * splitting one number across a roster. Only a real Play with Friends match ever adds to it.
+   */
+  warTiq: number;
 }
 
 /**
@@ -74,6 +80,12 @@ export interface RegisteredSquad {
    * community looks like on Telegram, never how many players joined the squad in the game.
    */
   subscribers: number;
+  /**
+   * The same audience, kept nullable on purpose: `null` means Telegram never told us (the bot was
+   * never added to the chat, or the call failed), which the inspector paints as `—` instead of a
+   * confident zero. A real `0` is a chat that answered and has no members.
+   */
+  telegramMembers: number | null;
   /** The real players who joined. `members` is always this array's length. */
   roster: SquadMemberRow[];
   /** Joined players — derived from `roster`, never from `subscribers`. */
@@ -317,6 +329,7 @@ export function readSquadMember(raw: unknown): SquadMemberRow | null {
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username: text(row.username, 32).replace(/^@+/, ''),
     photo: photoOf(row.photo),
+    warTiq: warTotalOf(row.warTiq),
   };
 }
 
@@ -412,6 +425,7 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
       country: '',
       username: '',
       photo: '',
+      warTiq: 0,
     });
   }
   /* Exactly one leader, and it is the creator: a promoted or stale row can never hold the crown. */
@@ -420,12 +434,21 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
   }
 
   const subscribers = Number(row.subscribers ?? row.members);
+  /* The nullable audience: an explicit `null` is a chat Telegram never answered for, and a row
+     written before this field existed falls back to the numeric audience it already carried. */
+  const rawMembers = row.telegramMembers;
+  const telegramMembers = rawMembers === null
+    ? null
+    : Number.isFinite(Number(rawMembers)) && Number(rawMembers) >= 0
+      ? Math.floor(Number(rawMembers))
+      : (Number.isFinite(subscribers) && subscribers >= 0 ? Math.floor(subscribers) : null);
   return {
     id,
     chatId: text(row.chatId, 32),
     handle,
     name,
     subscribers: Number.isFinite(subscribers) && subscribers >= 0 ? Math.floor(subscribers) : 0,
+    telegramMembers,
     roster,
     members: roster.length,
     kind: row.kind === 'channel' ? 'channel' : 'group',
@@ -520,6 +543,8 @@ export function upsertSquadMember(
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username,
     photo,
+    /* A fresh row has banked nothing yet: the column is earned by playing, never seeded. */
+    warTiq: 0,
   });
   squad.members = squad.roster.length;
   return true;
@@ -552,10 +577,19 @@ export const WAR_POINTS_CAP = 1_000_000;
 /**
  * Bank a war match's points. The gain is clamped to the two amounts the game actually pays, so a
  * hand-made request cannot mint a lead: a war match is worth a win or a participation credit.
+ *
+ * `playerId` names the fighter who played, and their own row is credited in the same turn: the
+ * squad's total and the sum of its fighters' columns are then the same number, which is what lets
+ * the inspector rank a roster by what each person actually brought to the channel.
  */
-export function addWarPoints(squad: RegisteredSquad, gain: number): number {
+export function addWarPoints(squad: RegisteredSquad, gain: number, playerId = ''): number {
   const paid = Math.max(0, Math.min(WAR_WIN_POINTS, Math.floor(Number(gain) || 0)));
   squad.warPoints = Math.min(WAR_POINTS_CAP, warTotalOf(squad.warPoints) + paid);
+  const id = text(playerId, 24);
+  if (paid > 0 && id) {
+    const row = squad.roster.find((m) => m.id === id);
+    if (row) row.warTiq = Math.min(WAR_POINTS_CAP, warTotalOf(row.warTiq) + paid);
+  }
   return squad.warPoints;
 }
 
@@ -567,6 +601,20 @@ export function squadAvgTiq(squad: RegisteredSquad): number {
   return squad.roster.length
     ? Math.round(squadWarTiq(squad) / squad.roster.length)
     : 0;
+}
+
+/**
+ * One fighter on a channel's roster, as the inspector paints them: the identity a face and a name
+ * need, and the TIQ they personally banked for this channel.
+ */
+export interface SquadFighterView {
+  id: string;
+  name: string;
+  /** The Telegram portrait, or '' when the player has none. */
+  avatar: string;
+  /** Channel Wars TIQ this player earned for the squad. */
+  tiqContributed: number;
+  role: SquadMemberRole;
 }
 
 /**
@@ -587,10 +635,16 @@ export interface SquadView {
   members: number;
   /** Telegram audience — external stat, never the squad's size. */
   subscribers: number;
+  /** The same audience, nullable: `null` when Telegram never answered. The inspector prints `—`. */
+  telegramMembers: number | null;
+  /** Players of this bot representing the channel — the same count as `members`, named for the UI. */
+  botFightersCount: number;
   /** Squad IQ: the arithmetic mean of the roster's TIQ. */
   tiq: number;
-  /** Channel Wars total: the points its members banked by playing war matches. */
+  /** Channel Wars total: the TIQ its members banked in Play with Friends matches. */
   warPoints: number;
+  /** The roster as the inspector ranks it: highest channel TIQ first. */
+  fighters: SquadFighterView[];
   creatorId: string;
   createdAt: number;
   verified: boolean;
@@ -610,6 +664,18 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     /* The @username is stored for the audit trail, never published on a board. The portrait it
        could derive is published as `photo` instead, which is the one thing a face needs. */
     .map((member) => ({ ...member, username: '' }));
+  /* The inspector's own order: whoever banked the most for the channel leads, ties broken by the
+     player's TIQ and then by id so two devices never paint the same roster two ways. */
+  const fighters: SquadFighterView[] = roster
+    .map((member) => ({
+      id: member.id,
+      name: member.name,
+      avatar: member.photo,
+      tiqContributed: warTotalOf(member.warTiq),
+      role: member.role,
+    }))
+    .sort((a, b) => b.tiqContributed - a.tiqContributed || a.id.localeCompare(b.id));
+  const audience = squad.telegramMembers;
   return {
     id: squad.id,
     chatId: squad.chatId,
@@ -620,8 +686,13 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     tag: squad.tag,
     members: roster.length,
     subscribers: squad.subscribers,
+    telegramMembers: typeof audience === 'number' && Number.isFinite(audience) && audience >= 0
+      ? Math.floor(audience)
+      : null,
+    botFightersCount: roster.length,
     tiq: squadAvgTiq(squad),
     warPoints: warTotalOf(squad.warPoints),
+    fighters,
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
     verified: squad.verification === 'verified' && !squad.banned,
@@ -945,7 +1016,8 @@ interface ResolvedChat {
   title: string;
   kind: SquadKind;
   avatar: string;
-  members: number;
+  /** `null` when `getChatMemberCount` refused and `getChat` carried no fallback. */
+  members: number | null;
 }
 
 type ChatFailure = { ok: false; status: number; code: string; message: string; kind?: SquadKind };
@@ -992,7 +1064,12 @@ async function resolveChat(rawHandle: string, token: string): Promise<{ ok: true
   }
 
   const chatId = chat.id === undefined || chat.id === null ? handle : String(chat.id).replace(/[^0-9-]/g, '').slice(0, 32);
-  let members = 0;
+  /* The real audience. `getChatMemberCount` is the documented door and answers for any public
+     chat the bot can read; `getChat`'s own `members_count` is the fallback for a deployment whose
+     bot is not in the chat yet. Neither answering leaves the count UNKNOWN — `null`, never a
+     confident zero — because "we could not read it" and "nobody is in it" are different facts and
+     the inspector prints them differently. */
+  let members: number | null = null;
   try {
     const count = await telegram<number>(token, 'getChatMemberCount', { chat_id: chatId });
     if (typeof count === 'number' && Number.isFinite(count) && count >= 0) members = Math.floor(count);
@@ -1057,7 +1134,7 @@ export async function verifySquadChat(
       name: resolved.chat.title,
       kind: resolved.chat.kind,
       avatar: resolved.chat.avatar,
-      members: resolved.chat.members,
+      members: resolved.chat.members ?? 0,
     },
   };
 }
@@ -1156,7 +1233,8 @@ export async function verifyAndBuildSquad(
       handle: chat.handle,
       name: text(identity?.name, MEMBER_TEXT) || chat.title,
       /* The chat's audience is an external stat; the squad starts with exactly one player. */
-      subscribers: chat.members,
+      subscribers: chat.members ?? 0,
+      telegramMembers: chat.members,
       roster: [{
         id: requester,
         name: text(identity?.memberName, 24),
@@ -1166,6 +1244,7 @@ export async function verifyAndBuildSquad(
         country: '',
         username: text(identity?.username, 32).replace(/^@+/, ''),
         photo: photoOf(identity?.photo),
+        warTiq: 0,
       }],
       members: 1,
       kind: chat.kind,
@@ -1188,6 +1267,37 @@ export async function verifyAndBuildSquad(
       announcements: [],
     },
   };
+}
+
+/**
+ * Re-read one squad's Telegram audience and store it.
+ *
+ * The inspector promises a real member count, and a channel grows after it was enlisted. This is
+ * the refresh door: one `getChatMemberCount` against the chat id the registry already holds, and
+ * the answer written back to `telegramMembers`. Every failure is silent by design — a bot that is
+ * not in the chat, a chat that went private, a Telegram hiccup — because a stale-but-real number
+ * beats an error where a statistic belongs, and `null` is the honest answer for "never read".
+ * Returns true when the stored row actually moved, so the caller knows whether to persist.
+ */
+export async function refreshTelegramMembers(squad: RegisteredSquad, env: Env): Promise<boolean> {
+  const { token } = botToken(env);
+  /* The stored chat id is the canonical target; a row that never captured one is asked for by its
+     public handle instead — `chat_id: '@handle'` is the same chat, by the name a person knows. */
+  const chatId = text(squad.chatId, 32) || `@${squad.handle.replace(/^@+/, '')}`;
+  if (!token || !chatId) return false;
+  let count: number | null = null;
+  try {
+    const answer = await telegram<number>(token, 'getChatMemberCount', { chat_id: chatId });
+    if (typeof answer === 'number' && Number.isFinite(answer) && answer >= 0) count = Math.floor(answer);
+  } catch (error) {
+    if (!(error instanceof TelegramError)) console.warn('[squad-verify] getChatMemberCount refresh failed:', error);
+    return false;
+  }
+  if (count === null || count === squad.telegramMembers) return false;
+  squad.telegramMembers = count;
+  /* The legacy numeric column follows the authoritative one, so an older reader never disagrees. */
+  squad.subscribers = count;
+  return true;
 }
 
 /* ---------- the Channel Wars membership gate ----------

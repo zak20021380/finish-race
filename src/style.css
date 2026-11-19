@@ -35672,8 +35672,16 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   --cw-cyan: #7DEBFF;
   --cw-mint: #6EE7B7;
   --cw-ruby: #FDA4AF;
+  /* A tournament sheet, not a toast: it claims the phone, and the ladder inside it is the only
+     thing that scrolls. `dvh` so the Telegram viewport shrinking under the sheet is accounted for
+     on the very first frame instead of after a resize. */
+  height: 86dvh;
+  min-height: 82dvh;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding-top: var(--s2);
+  padding-top: var(--s3);
   padding-bottom: calc(var(--s3) + env(safe-area-inset-bottom));
   overflow: hidden;
   background:
@@ -35681,6 +35689,9 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
     linear-gradient(180deg, #151D2B 0%, #070B12 100%);
 }
 .cw-sheet .ico { width: 16px; height: 16px; flex: none; }
+/* An author `display` beats the UA's `[hidden]`, and this sheet gives several of its own keys a
+   display. One rule, one meaning: inside the war sheet, hidden is hidden. */
+.cw-sheet [hidden] { display: none !important; }
 
 /* ---- the two views: the hub and the admin door share one column ---- */
 .cw-main {
@@ -35805,6 +35816,66 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   unicode-bidi: isolate;
 }
 
+/* ---- ZONE 1b: the one sentence that decides who can earn ----
+   A rule, not a disclaimer: it sits directly under the prize so the number and the way to reach
+   it are read in one glance. The TIQ mark leads it because the rule is about that unit. */
+.cw-rule {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(125, 235, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(125, 235, 255, .2);
+}
+.cw-rule-ico { display: grid; place-items: center; flex: none; margin-top: 1px; color: var(--cw-cyan); }
+.cw-rule-ico .ico { width: 13px; height: 13px; }
+.cw-rule-t {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #CBE9F4;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the unit itself: `1,450 TIQ`, `+25 TIQ`, `0 TIQ` ----
+   The figure is Latin tabular digits; the unit is a drawn mark and three letters, isolated from
+   whatever direction the sentence around it is running in. */
+.cw-tiq {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.cw-tiq-n {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.cw-tiq-u {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: var(--cw-gold-deep);
+  filter: brightness(1.7);
+}
+/* The sheet's default glyph is 16px; the unit's mark is deliberately smaller than the figure it
+   follows, so it is named through its parent to beat `.cw-sheet .ico`. */
+.cw-tiq .cw-tiq-ico { width: 9px; height: 9px; flex: none; }
+.cw-tiq-w { line-height: 1; }
+
 /* ---- ZONE 2: the rankings ---- */
 .cw-board {
   position: relative;
@@ -35879,10 +35950,11 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-sheet .cw-list::-webkit-scrollbar-thumb { background: rgba(233, 192, 115, .38); border-radius: 999px; }
 .cw-sheet .cw-list::-webkit-scrollbar-thumb:hover { background: rgba(233, 192, 115, .66); }
 
-/* ---- one ladder row: rank, crest, identity, score ---- */
+/* ---- one ladder row: rank, crest, identity, score, and the door into the channel ---- */
 .cw-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 30px 34px minmax(0, 1fr) auto;
+  grid-template-columns: 30px 34px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -35890,8 +35962,16 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   border-radius: 13px;
   background: var(--cw-plate);
   box-shadow: inset 0 0 0 1px var(--cw-hair);
-  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
 }
+/* A tappable row says so: a rim that warms under the thumb, and a press that actually gives. */
+.cw-row.is-inspectable,
+.cw-row[data-select] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cw-row.is-inspectable:hover {
+  background: #182131;
+  box-shadow: inset 0 0 0 1px rgba(233, 192, 115, .2);
+}
+.cw-row.is-inspectable:active { transform: scale(.988); }
 .cw-row.is-you {
   background: linear-gradient(180deg, rgba(233, 192, 115, .14) 0%, rgba(233, 192, 115, .04) 100%), var(--cw-plate);
   box-shadow: inset 0 0 0 1px var(--cw-gold-line);
@@ -36003,26 +36083,38 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-row-pts {
   display: inline-flex;
   align-items: baseline;
-  gap: 3px;
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
   font-size: 12.5px;
   line-height: 1.1;
   font-weight: 800;
   color: var(--cw-gold-hi);
-  direction: ltr;
-  unicode-bidi: isolate;
   white-space: nowrap;
 }
+.cw-row-pts .cw-tiq { color: inherit; }
 .cw-row-pts.is-zero { color: var(--text-dim); }
-.cw-row-pts span:last-child {
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  color: var(--cw-gold-deep);
-  filter: brightness(1.7);
+.cw-row-pts.is-zero .cw-tiq-u { color: var(--text-dim); filter: none; }
+/* The chevron is a real key, not a painted hint: a keyboard reaches the inspector through it,
+   and it is the one element inside the row that is not the row's own tap target. */
+.cw-row-go {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 30px;
+  margin: -4px -4px -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
 }
-.cw-row-pts.is-zero span:last-child { color: var(--text-dim); filter: none; }
+.cw-row-go .cw-row-go-ico { width: 13px; height: 13px; }
+.cw-row-go:hover { color: var(--cw-gold-hi); background: rgba(233, 192, 115, .1); }
+.cw-row-go:active { transform: scale(.9); }
+.cw-row:hover .cw-row-go { color: var(--cw-gold-ink); }
 .cw-pill {
   flex: none;
   display: inline-flex;
@@ -36292,6 +36384,287 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-invite:hover { color: var(--ink); background: rgba(255, 255, 255, .09); }
 .cw-invite:active { transform: scale(.96); }
 
+/* ---- THE INSPECTOR: one channel, told properly ----
+   Hero, three telemetry plates, the roster that earned the number, and one contextual key. The
+   body is the only scroller; the head and the foot stay nailed to the sheet. */
+.cw-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 2px 4px;
+}
+.cw-hero {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px;
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, rgba(233, 192, 115, .12) 0%, rgba(233, 192, 115, .02) 62%),
+    var(--cw-well);
+  box-shadow: inset 0 0 0 1px var(--cw-gold-line);
+}
+.cw-hero-av {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(180deg, hsl(var(--cw-hue, 210) 40% 30%) 0%, hsl(var(--cw-hue, 210) 42% 19%) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 0 0 2px rgba(233, 192, 115, .22);
+}
+.cw-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cw-hero-img[hidden] { display: none; }
+.cw-hero-mark {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .94);
+}
+.cw-hero-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cw-hero-name {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 900;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-hero-name bdi {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-hero-handle {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--font-numeric);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--cw-cyan);
+  opacity: .9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-hero-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px var(--cw-hair);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--cw-silver);
+  /* `#1` is a code and the word for "no place yet" is prose, so the direction comes from the
+     element's own `dir` (set by the painter) rather than from this rule. */
+  unicode-bidi: isolate;
+}
+.cw-hero-rank.is-none { font-size: 8px; letter-spacing: .08em; color: var(--text-dim); }
+.cw-hero-rank.is-1 {
+  background: linear-gradient(180deg, #F7DC98 0%, #C99A34 100%);
+  color: #2A1B05;
+  box-shadow: inset 0 1px 0 rgba(255, 252, 240, .6);
+}
+.cw-hero-rank.is-2 {
+  background: linear-gradient(180deg, #E4EAF2 0%, #97A5B8 100%);
+  color: #1B2432;
+}
+.cw-hero-rank.is-3 {
+  background: linear-gradient(180deg, #F0AE72 0%, #B4682E 100%);
+  color: #2B1607;
+}
+
+/* the three telemetry plates: the channel's TIQ, its Telegram audience, its fighters */
+.cw-stats {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.cw-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 8px;
+  border-radius: 13px;
+  background: var(--cw-plate);
+  box-shadow: inset 0 0 0 1px var(--cw-hair);
+}
+.cw-stat.is-tiq {
+  background: linear-gradient(180deg, rgba(233, 192, 115, .13) 0%, rgba(233, 192, 115, .03) 100%), var(--cw-plate);
+  box-shadow: inset 0 0 0 1px var(--cw-gold-line);
+}
+.cw-stat-k {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 7.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.cw-stat-k .ico { width: 10px; height: 10px; flex: none; }
+.cw-stat.is-tiq .cw-stat-k { color: var(--cw-gold-ink); }
+.cw-stat-v {
+  display: block;
+  min-width: 0;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(12px, 4vw, 15px);
+  line-height: 1.1;
+  font-weight: 900;
+  color: var(--ink);
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-stat.is-tiq .cw-stat-v { color: var(--cw-gold-hi); }
+.cw-stat-v.is-unknown { color: var(--text-dim); }
+/* inside a plate the unit drops to its own line rather than fighting the figure for width */
+.cw-stat-v .cw-tiq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+}
+
+/* the roster that actually earned it */
+.cw-fighters { display: flex; flex-direction: column; gap: 7px; min-height: 0; }
+.cw-fighter-list { flex: 1 1 auto; min-height: 92px; }
+.cw-fighter {
+  display: grid;
+  grid-template-columns: 28px 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 12px;
+  background: var(--cw-plate);
+  box-shadow: inset 0 0 0 1px var(--cw-hair);
+}
+.cw-fighter-rank {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .05);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--ink-soft);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.cw-fighter-rank.is-1 { background: linear-gradient(180deg, #F7DC98 0%, #C99A34 100%); color: #2A1B05; }
+.cw-fighter-rank.is-2 { background: linear-gradient(180deg, #E4EAF2 0%, #97A5B8 100%); color: #1B2432; }
+.cw-fighter-rank.is-3 { background: linear-gradient(180deg, #F0AE72 0%, #B4682E 100%); color: #2B1607; }
+.cw-fighter-av {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(180deg, hsl(var(--cw-hue, 210) 40% 30%) 0%, hsl(var(--cw-hue, 210) 42% 19%) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.cw-fighter-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cw-fighter-mark {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, .92);
+  text-transform: uppercase;
+}
+.cw-fighter-name {
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-fighter-name bdi {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-fighter-tiq {
+  flex: none;
+  font-size: 11.5px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--cw-gold-hi);
+  white-space: nowrap;
+}
+.cw-fighter-tiq .cw-tiq { color: inherit; }
+
+/* the one line a locked visitor gets instead of a key that would refuse them */
+.cw-detail-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px var(--cw-hair);
+  font-size: 9.5px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.cw-detail-note[hidden] { display: none; }
+.cw-actions .cw-cta.is-join { background: linear-gradient(180deg, #7DEBFF 0%, #3FC7E8 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+.cw-actions .cw-cta.is-join .cw-cta-t b { color: #06202B; }
+.cw-actions .cw-cta.is-join .cw-cta-ico { background: rgba(6, 32, 43, .16); color: #06202B; }
+.cw-actions .cw-cta.is-join[aria-disabled="true"] { background: linear-gradient(180deg, #3A4456 0%, #2A3342 100%); }
+.cw-actions .cw-cta.is-join[aria-disabled="true"] .cw-cta-t b { color: var(--ink-soft); }
+.cw-invite.is-wide {
+  width: auto;
+  min-width: 84px;
+  max-width: 40%;
+  flex-direction: row;
+  gap: 5px;
+  padding: 0 9px;
+  font-size: 8.5px;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
+}
+
 /* ---- the admin door: one handle, one title, one key, one link ---- */
 .cw-back {
   appearance: none;
@@ -36467,8 +36840,8 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .mm-stakes-c b[hidden] { display: none; }
 
 /* ---- right-to-left: the prose turns, the numbers and handles never do ---- */
-html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back),
-html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back) {
+html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none),
+html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   direction: rtl;
   letter-spacing: 0;
@@ -36486,7 +36859,7 @@ html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-row-name, .cw-cta-t b, .cw-v
   line-height: 1.55;
 }
 /* A handle, a rank, a score and a count are codes: they never take the prose's direction. */
-.cw-sheet :is(.cw-row-pts, .cw-rank, .cw-prize-clock b, .cw-row-handle, .cw-row-members, .cw-linkcard-v) {
+.cw-sheet :is(.cw-row-pts, .cw-rank, .cw-prize-clock b, .cw-row-handle, .cw-hero-handle, .cw-row-members, .cw-linkcard-v) {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -36499,6 +36872,14 @@ html[data-lang="fa"] .cw-sheet .cw-row-side,
 html[data-lang="ar"] .cw-sheet .cw-row-side { align-items: flex-start; }
 html[data-lang="fa"] .cw-sheet .cw-row-pts,
 html[data-lang="ar"] .cw-sheet .cw-row-pts { direction: rtl; }
+/* The inspector flips the same way: the crest leads on the right, the roster's place column
+   follows the reading direction, and every figure inside keeps its own. */
+html[data-lang="fa"] .cw-sheet :is(.cw-hero, .cw-fighter),
+html[data-lang="ar"] .cw-sheet :is(.cw-hero, .cw-fighter) { direction: rtl; }
+html[data-lang="fa"] .cw-sheet .cw-hero-id,
+html[data-lang="ar"] .cw-sheet .cw-hero-id { align-items: flex-start; }
+html[data-lang="fa"] .cw-sheet .cw-row-go .ico,
+html[data-lang="ar"] .cw-sheet .cw-row-go .ico { transform: scaleX(-1); }
 /* The chrome around the ladder is prose: it flips, and the close key follows it. */
 html[data-lang="fa"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-prize-rule, .cw-actions, .cw-verify-row, .cw-linkcard),
 html[data-lang="ar"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-prize-rule, .cw-actions, .cw-verify-row, .cw-linkcard) {
@@ -36510,15 +36891,30 @@ html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
 /* ---- the narrow and the short ends of the phone range ---- */
 @media (max-width: 360px) {
   .sheet.cw-sheet { gap: 8px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
-  .cw-row { grid-template-columns: 27px 30px minmax(0, 1fr) auto; gap: 7px; padding: 6px 7px; }
+  .cw-row { grid-template-columns: 27px 30px minmax(0, 1fr) auto 20px; gap: 7px; padding: 6px 7px; }
   .cw-av { width: 30px; height: 30px; }
   .cw-av-t { font-size: 10px; }
   .cw-row-name { font-size: 11px; }
   .cw-row-pts { font-size: 11.5px; }
+  .cw-row-go { width: 20px; }
   .cw-reg { padding: 0 7px; font-size: 9px; }
   .cw-cta { min-height: 46px; padding: 7px 10px; }
   .cw-cta-t b { font-size: 12px; }
   .cw-invite { width: 56px; }
+  .cw-rule-t { font-size: 9.5px; }
+  .cw-hero { gap: 9px; padding: 9px; }
+  .cw-hero-av { width: 44px; height: 44px; }
+  .cw-hero-mark { font-size: 15px; }
+  .cw-hero-name { font-size: 12.5px; }
+  .cw-stat { padding: 8px 6px; }
+  .cw-stat-k { font-size: 7px; gap: 3px; }
+  .cw-stat-k .ico { width: 9px; height: 9px; }
+  .cw-stat-v { font-size: 12px; }
+  .cw-fighter { grid-template-columns: 24px 26px minmax(0, 1fr) auto; gap: 6px; padding: 6px 7px; }
+  .cw-fighter-av { width: 26px; height: 26px; }
+  .cw-fighter-name { font-size: 11px; }
+  .cw-fighter-tiq { font-size: 10.5px; }
+  .cw-invite.is-wide { min-width: 70px; max-width: 36%; padding: 0 6px; gap: 3px; font-size: 8px; }
 }
 @media (max-height: 700px) {
   .cw-prize { padding: 7px 9px; }

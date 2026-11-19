@@ -850,7 +850,22 @@ const warText = $<HTMLElement>('iv-war-t');
 
 /** `+25 · @channel · #3` — every figure in its own Latin run, the name in its own direction. */
 function paintWarBadge(gain: number, rank: number, name: string): void {
-  if (warKicker) warKicker.textContent = t('cwWarPts');
+  if (warKicker) {
+    /* The kicker is the unit itself: the TIQ mark and its three letters, then the amount, the
+       channel and the new place — every figure in its own Latin run. */
+    warKicker.textContent = '';
+    const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    mark.setAttribute('class', 'ico iv-war-ico');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.setAttribute('focusable', 'false');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#i-tiq');
+    mark.append(use);
+    const unit = document.createElement('span');
+    unit.setAttribute('dir', 'ltr');
+    unit.textContent = t('cwWarPts');
+    warKicker.append(mark, unit);
+  }
   if (!warText) return;
   const iso = (text: string, dir: 'ltr' | 'auto'): HTMLElement => {
     const el = document.createElement('bdi');
@@ -2724,21 +2739,22 @@ doubleBtn.addEventListener('click', () => { void claimDoubleCoins(); });
 
 let overlayOpen = false;
 /**
- * Pay the channel for the match that just settled.
+ * Pay the channel for the match that just settled — and only when a person was on the far side.
  *
- * Every race a fighter finishes now banks for the channel they enrolled with — the war is not a
- * separate queue, it is what a regular match is worth once you have a team. A win banks the full
- * bonus, a completion banks the participation credit. The local ledger moves on this frame, so the
- * hub the player returns to already shows the new total; the registry call behind it is what makes
- * the ladder shared.
+ * **Channel TIQ is earned in Play with Friends, nowhere else.** A real multiplayer room pays the
+ * win bonus (`+25 TIQ`) or the participation credit (`+5 TIQ`); a bot board, a practice race, a
+ * tutorial and a solo duel all pay the channel exactly nothing. A machine that cannot lose is not
+ * an opponent, and a channel must never be lifted by farming one — which is why the gate is the
+ * board's own reading of who was in the room (`friendsMatch()` for the room, `bot` for the seats)
+ * rather than the queue the player happened to come in through.
  *
- * A solo practice board is the one exception: a machine that cannot lose is not an opponent, and
- * nobody should lift a channel by farming it. A war-queued match that got backfilled with the
- * machine still pays — the player asked for a war match and played it out.
+ * The local ledger moves on this frame, so the hub the player returns to already shows the new
+ * total; the registry call behind it is what makes the ladder shared.
  */
-function settleWarMatch(won: boolean, practice = false): void {
+function settleWarMatch(won: boolean, bot = false): void {
   if (warPaid) return;
-  if (practice && !warMatch) return;
+  /* No room, or a room the machine filled: the channel is owed nothing. */
+  if (!friendsMatch() || bot) return;
   const channel = getMySquad();
   if (!channel) return;
   warPaid = true;
@@ -2782,6 +2798,9 @@ function showOverlay() {
   resultStakeSaved.hidden = true;
   closeAdConfirm(false);
   hideAdToast();
+  /* Last match's channel badge is not this match's news. It is cleared here, once, so a bot race
+     that follows a friends win cannot inherit the +TIQ line the channel earned an hour ago. */
+  warBadge.hidden = true;
   const won = localWon();
   /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
      rematch and banter already dead: there is nobody on the far side of that socket. */
@@ -4521,9 +4540,10 @@ function quitToMenu() {
         if (adjust !== 0) applyTiqDelta(adjust);
         forfeitToast = true;
       }
-      /* Walking out of a war match is still a war match played: the channel keeps its
-         participation credit, and never the win bonus. */
-      settleWarMatch(false);
+      /* Walking out of a friends race is still a friends race played: the channel keeps its
+         participation credit, and never the win bonus. A room the machine filled pays nothing —
+         `mode` is this board's own verdict on who was actually in the other seats. */
+      settleWarMatch(false, mode === 'bot');
     }
     active.close();
     active = null;
@@ -6184,6 +6204,9 @@ menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack }
 const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({
   router, sheets, start: startGame, queue: (mode) => queueMatch(mode),
+  /* Channel Wars' enrolled CTA: the friends room is the only board that pays a channel TIQ, so
+     the hub opens that sheet rather than queueing a match that would bank nothing. */
+  openFriends: () => menu.openFriends(),
 });
 compete = createCompete({
   router, sheets, sheet: sheetById,
