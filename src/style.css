@@ -16136,7 +16136,7 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
 .gm-rw {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-numeric);
@@ -16153,9 +16153,23 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
   transform-origin: 50% 60%;
 }
 .gm-rw-unit { font-size: .84em; font-weight: 900; letter-spacing: .04em; color: var(--honey-ink); }
-.gm-rw .ico { width: 14px; height: 14px; color: var(--honey-ink); }
-.gm-rw .ico.gm-star { width: 15px; height: 15px; color: #fbbf24; }
-.gm-rw .coin { width: 14px; height: 14px; }
+/* The coin and the XP crest are one matched pair: both sit on the same 16px baseline, both
+   inherit middle alignment from .gm-rw, and both wear the same warm drop-shadow so the
+   dimensional gold star reads as polished as the minted coin beside it. */
+.gm-rw .xp-emblem {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .55));
+}
+.gm-rw .coin {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45));
+}
 /* Subtle numeric pulse on every mode / difficulty / seat change. A non-pulse repaint never
    removes the class, so the animation is free to finish even when a watcher repaints twice. */
 .gm-rw.is-pulse b { animation: gm-num-pulse .44s cubic-bezier(.2, .8, .2, 1) both; }
@@ -16167,7 +16181,8 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
 html.reduced-motion .gm-rw.is-pulse b { animation: none; }
 @media (max-width: 360px) {
   .gm-rewards { column-gap: 5px; padding-inline: 7px; }
-  .gm-rw .ico.gm-star, .gm-rw .coin { width: 13px; height: 13px; }
+  .gm-rw .xp-emblem { width: 16px; height: 16px; }
+  .gm-rw .coin { width: 15px; height: 15px; }
 }
 /* the one loud key: a 3D clay slab that sinks into its lip on press */
 .gm-start {

@@ -434,16 +434,19 @@
   filter: drop-shadow(0 0 5px rgba(252, 211, 77, .75));
   animation: result-brain 2.6s ease-in-out infinite;
 }
-/* the XP badge: one gold star in the same 26px well, lit by its own halo */
+/* the XP badge: the same dimensional gold crest as the home stakes strip, in the 26px
+   well, lit by its own warm halo so it matches the minted coin in the neighbouring column */
 .result-bank-ico.is-xp {
   border-radius: 50%;
   background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .3), rgba(252, 211, 77, .16) 48%, transparent 74%);
   color: #FDE68A;
 }
-.result-bank-ico.is-xp .ico {
-  width: 16px;
-  height: 16px;
-  filter: drop-shadow(0 0 5px rgba(253, 230, 138, .7));
+.result-bank-ico.is-xp .xp-emblem {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .65));
 }
 #result-xp-chip .result-bank-value { color: #FDE68A; }
 #result-xp-n {
