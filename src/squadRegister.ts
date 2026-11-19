@@ -492,6 +492,35 @@ export async function registerSquadWithTelegram(
 
 /* ---------- membership ---------- */
 
+/** The answer to "is this player inside the chat they want to represent?". */
+export interface MembershipCheck {
+  /** True when the player may represent the chat — including when the gate could not run. */
+  isMember: boolean;
+  /** The gate could not be enforced (no bot rights, an outage). The door opened. */
+  unverified: boolean;
+}
+
+/**
+ * Ask Telegram, through the Worker, whether this player is inside `@handle`.
+ *
+ * Fails OPEN on every uncertainty: a Worker that never answered, an unbound bot token, a channel
+ * whose member list the bot cannot read. The war is a tournament, not a paywall — a network hop
+ * must never be the reason a fighter cannot represent their channel.
+ */
+export async function checkChannelMembership(handle: string): Promise<MembershipCheck> {
+  const sent = await postJson<{ ok?: boolean; isMember?: boolean; unverifiedFallback?: boolean }>(
+    '/api/squads/verify-member',
+    /* `userId` is what the endpoint documents; the signed initData is what it actually trusts,
+       and `userTelegramId` is the dev door's own spelling of the same fact. */
+    { chatHandle: handle, userId: telegramUserId(), userTelegramId: telegramUserId() },
+  );
+  if (!sent?.ok || !sent.data || sent.data.ok !== true) return { isMember: true, unverified: true };
+  return {
+    isMember: sent.data.isMember === true,
+    unverified: sent.data.unverifiedFallback === true,
+  };
+}
+
 export interface SquadActionResult {
   ok: boolean;
   code?: string;

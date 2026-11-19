@@ -826,6 +826,42 @@ const coachText = $<HTMLElement>('iv-coach-t');
 const bonusKicker = $<HTMLElement>('iv-bonus-k');
 const bonusText = $<HTMLElement>('iv-bonus-t');
 
+/**
+ * The channel's own cut of the match, under the welcome badge.
+ *
+ * A fighter who enrolled in Channel Wars earns for their channel on every race they finish, so
+ * the settlement says so on the result card itself — not only in a toast that fades while they
+ * are still reading the score.
+ */
+const warBadge = document.createElement('div');
+warBadge.className = 'iv-bonus is-war';
+warBadge.id = 'iv-war';
+warBadge.setAttribute('role', 'status');
+warBadge.hidden = true;
+warBadge.innerHTML = '<span class="iv-bonus-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>'
+  + '<span class="iv-bonus-copy">'
+  + '<span class="iv-bonus-k" id="iv-war-k"></span>'
+  + '<span class="iv-bonus-t" id="iv-war-t"></span>'
+  + '</span>';
+bonusBadge.insertAdjacentElement('afterend', warBadge);
+
+const warKicker = $<HTMLElement>('iv-war-k');
+const warText = $<HTMLElement>('iv-war-t');
+
+/** `+25 · @channel · #3` — every figure in its own Latin run, the name in its own direction. */
+function paintWarBadge(gain: number, rank: number, name: string): void {
+  if (warKicker) warKicker.textContent = t('cwWarPts');
+  if (!warText) return;
+  const iso = (text: string, dir: 'ltr' | 'auto'): HTMLElement => {
+    const el = document.createElement('bdi');
+    el.setAttribute('dir', dir);
+    el.textContent = text;
+    return el;
+  };
+  warText.textContent = '';
+  warText.append(iso(`+${gain}`, 'ltr'), ' · ', iso(name, 'auto'), ' · ', iso(`#${rank}`, 'ltr'));
+}
+
 /** The step painted on the pill (1, 2 or 0 for none): a live language flip re-reads it. */
 let coachShownStep: 0 | 1 | 2 = 0;
 let coachTimer = 0;
@@ -843,6 +879,7 @@ const paintInviteSurfaces = (): void => {
   const dir = langDef(lang).dir;
   coachPill.setAttribute('dir', dir);
   bonusBadge.setAttribute('dir', dir);
+  warBadge.setAttribute('dir', dir);
   renderCoach();
   bonusKicker.textContent = t('firstDuelBonusKicker');
   bonusText.textContent = t('firstDuelBonusLine');
@@ -2687,21 +2724,30 @@ doubleBtn.addEventListener('click', () => { void claimDoubleCoins(); });
 
 let overlayOpen = false;
 /**
- * Pay the channel for the war match that just settled.
+ * Pay the channel for the match that just settled.
  *
- * A win banks the full bonus, a defeat banks the participation credit — showing up for your
- * channel counts. The local ledger moves on this frame, so the hub the player returns to already
- * shows the new total; the registry call behind it is what makes the ladder shared.
+ * Every race a fighter finishes now banks for the channel they enrolled with — the war is not a
+ * separate queue, it is what a regular match is worth once you have a team. A win banks the full
+ * bonus, a completion banks the participation credit. The local ledger moves on this frame, so the
+ * hub the player returns to already shows the new total; the registry call behind it is what makes
+ * the ladder shared.
+ *
+ * A solo practice board is the one exception: a machine that cannot lose is not an opponent, and
+ * nobody should lift a channel by farming it. A war-queued match that got backfilled with the
+ * machine still pays — the player asked for a war match and played it out.
  */
-function settleWarMatch(won: boolean): void {
-  if (!warMatch || warPaid) return;
-  warPaid = true;
+function settleWarMatch(won: boolean, practice = false): void {
+  if (warPaid) return;
+  if (practice && !warMatch) return;
   const channel = getMySquad();
   if (!channel) return;
+  warPaid = true;
   const gain = won ? WAR_WIN : WAR_LOSS;
   void awardWarPoints(won).then((standing) => {
     if (!standing) return;
     const name = channel.name || channel.handle;
+    paintWarBadge(gain, standing.rank, name);
+    warBadge.hidden = false;
     showRoyalToast(
       t('cwAwardTitle'),
       t(won ? 'cwAwardWinBody' : 'cwAwardLossBody')
@@ -2800,9 +2846,9 @@ function showOverlay() {
   const stakeTiq = settled.bot || !mine || !won || !forfeited ? 0 : FORFEIT_TIQ;
   forfeitMatch = false;
   if (stakeTiq > 0) afterTiq = Math.max(0, afterTiq + applyTiqDelta(stakeTiq - (afterTiq - beforeTiq)));
-  /* The channel's own ledger moves on the same beat as the player's: a war match pays its squad
-     whether the far side held a person or the machine. */
-  if (mine) settleWarMatch(won);
+  /* The channel's own ledger moves on the same beat as the player's: an enrolled fighter pays
+     their channel on every settled race, whether the far side held a person or the machine. */
+  if (mine) settleWarMatch(won, settled.bot);
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
   /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
@@ -3545,6 +3591,7 @@ function restart() {
   microCoachQuiet = false;
   hideMicroCoach();
   bonusBadge.hidden = true;
+  warBadge.hidden = true;
   /* A lesson is not a match; a real board starts a fresh telemetry clock even when the player
      replayed it from the pause sheet. */
   if (!tutorialStandalone) {

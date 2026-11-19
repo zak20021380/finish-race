@@ -1,25 +1,28 @@
 /**
  * channelWar.ts — the Channel Wars Hub.
  *
- * One bottom sheet, two states. A player with no channel gets three steps, one field and a rail
- * of channels they can join with a single tap; a player with a channel gets the war room — their
- * crest, the live ladder with their own row lit, and the gold key that queues a war match.
+ * One sheet, three zones and no repeats: the prize rule and its clock, the rankings with the
+ * admins' register door, and a single action bar that reads the player's own state. The register
+ * flow is a sub-view of this same panel, never a second modal — an admin who came to enlist a
+ * channel stays inside the tournament they are enlisting into.
  *
  * Every number here is a real one: the ladder is `getWarRanking()`, the points are what settled
- * war matches banked, and the fighter count is the roster's own length. When the registry has no
- * scored field yet the rail switches to open recruiting rather than inventing a leaderboard.
+ * matches banked, and the member count is the roster's own length. When nothing has scored yet
+ * the board says so instead of inventing a field.
  */
 import { onLang, t } from './settings';
-import { impact, notify, openTelegramShare } from './telegram';
+import { impact, notify, openLink, openTelegramShare } from './telegram';
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
 import {
-  bindSquad, cleanHandle, displayNameOf, getMySquad, getSquadRanking, getWarRanking, handleIssue,
-  myWarStanding, onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
+  cleanHandle, displayNameOf, getMySquad, getSquadRanking, getWarRanking, handleIssue,
+  onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf, WAR_WIN,
   type RankedSquad,
 } from './squads';
-import { joinSquadOnServer, refreshSquadBoard } from './squadRegister';
-import { CHANNEL_HANDLE, channelWarAppLink, telegramShareLink } from '../shared/config';
+import {
+  checkChannelMembership, joinSquadOnServer, refreshSquadBoard, registerSquadWithTelegram,
+} from './squadRegister';
+import { channelWarAppLink, telegramShareLink } from '../shared/config';
 
 export interface ChannelWarApi {
   sheets: Sheets;
@@ -28,22 +31,15 @@ export interface ChannelWarApi {
 }
 
 export interface ChannelWarHub {
-  /** Raise the hub. `prefill` seeds the join field (a rally link names a channel). */
+  /** Raise the hub. `prefill` seeds the selection (a rally link names a channel). */
   open(prefill?: string): void;
-  /** Repaint from the live store — called after a war match settles. */
+  /** Repaint from the live store — called after a match settles. */
   refresh(): void;
   readonly isOpen: boolean;
 }
 
-/**
- * Channels open to represent when the registry has no scored field yet. These are real public
- * Telegram communities, not invented squads: they carry zero war points and an empty roster,
- * which is exactly what a channel nobody has fought for yet looks like.
- */
-const RECRUITING: readonly string[] = [CHANNEL_HANDLE, 'telegram', 'toncoin', 'contests', 'durov'];
-
-const RAIL_MAX = 5;
 const LADDER_MAX = 20;
+const PICK_MAX = 6;
 const AVATAR_HUES = [198, 210, 232, 262, 288, 318, 24, 42, 158, 174];
 
 const hash32 = (s: string): number => {
@@ -51,6 +47,10 @@ const hash32 = (s: string): number => {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
 };
+
+/** War points in Latin tabular figures, grouped: `1,450`. A score is a code, not prose. */
+const PTS_FMT = new Intl.NumberFormat('en-US');
+const ptsLabel = (n: number): string => PTS_FMT.format(Math.max(0, Math.floor(n)));
 
 /** The war clock, always in Latin figures: a countdown is a code, not a sentence. */
 function warClock(ms: number): string {
@@ -62,8 +62,8 @@ function warClock(ms: number): string {
   return days > 0 ? `${days}d ${pad(hours)}h` : `${pad(hours)}h ${pad(mins)}m`;
 }
 
-const crewLabel = (n: number): string =>
-  n <= 0 ? t('cwNoFighters') : n === 1 ? t('cwFighterOne') : t('cwFighters').replace('{n}', String(n));
+const membersLabel = (n: number): string =>
+  n <= 0 ? t('cwNoMembers') : n === 1 ? t('cwMemberOne') : t('cwMembers').replace('{n}', String(n));
 
 /** A Latin-digit template with its numbers isolated, so RTL prose never reorders them. */
 function paintTemplate(host: HTMLElement, template: string, vars: Record<string, string>): void {
@@ -85,7 +85,7 @@ function paintTemplate(host: HTMLElement, template: string, vars: Record<string,
 }
 
 /**
- * A clipboard write in an unfocused WebView can hang instead of rejecting, and the rally key must
+ * A clipboard write in an unfocused WebView can hang instead of rejecting, and the invite key must
  * never look dead while it waits. Whatever the clipboard does, the player gets an answer.
  */
 function copyText(value: string): Promise<boolean> {
@@ -114,45 +114,63 @@ function copyText(value: string): Promise<boolean> {
   return Promise.race([attempt, new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1200))]);
 }
 
+/** Why a typed or pasted reference is not a Telegram username, as a message key. */
+const handleErrorKey = (issue: string): string =>
+  issue === 'empty' ? 'cwErrEmpty'
+    : issue === 'short' ? 'cwErrShort'
+      : issue === 'long' ? 'cwErrLong' : 'cwErrChars';
+
 export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const root = document.getElementById('channel-war-modal');
-  const onboard = document.getElementById('cw-onboard');
-  const hubView = document.getElementById('cw-hub');
-  const foot = document.getElementById('cw-foot');
+  const mainView = document.getElementById('cw-main');
+  const regView = document.getElementById('cw-register');
   const clock = document.getElementById('cw-countdown');
-  const input = document.getElementById('cw-handle') as HTMLInputElement | null;
-  const joinBtn = document.getElementById('cw-join-go') as HTMLButtonElement | null;
-  const joinErr = document.getElementById('cw-join-err');
-  const quickList = document.getElementById('cw-quick-list');
-  const railTitle = document.getElementById('cw-rail-title');
+  const prizeRule = document.getElementById('cw-prize-rule');
   const boardList = document.getElementById('cw-board-list');
-  const boardCount = document.getElementById('cw-board-count');
-  const gapLine = document.getElementById('cw-gap');
-  const gapText = document.getElementById('cw-gap-t');
   const liveRegion = document.getElementById('cw-live-region');
-  const heroImg = document.getElementById('cw-hero-img') as HTMLImageElement | null;
-  const heroMark = document.getElementById('cw-hero-mark');
-  const heroAv = document.getElementById('cw-hero-av');
-  const heroName = document.getElementById('cw-hero-name');
-  const heroHandle = document.getElementById('cw-hero-handle');
-  const heroRank = document.getElementById('cw-hero-rank');
-  const heroPts = document.getElementById('cw-hero-pts');
-  const heroCrew = document.getElementById('cw-hero-crew');
 
-  /** True while the player is switching channels: State A even though they already have one. */
-  let switching = false;
+  const regOpen = document.getElementById('cw-reg-open');
+  const regBack = document.getElementById('cw-reg-back');
+  const regHandle = document.getElementById('cw-reg-handle') as HTMLInputElement | null;
+  const regName = document.getElementById('cw-reg-name') as HTMLInputElement | null;
+  const regErr = document.getElementById('cw-reg-err');
+  const regGo = document.getElementById('cw-reg-go') as HTMLButtonElement | null;
+  const regDone = document.getElementById('cw-reg-done');
+  const regLink = document.getElementById('cw-reg-link');
+  const regCopy = document.getElementById('cw-reg-copy');
+
+  const pick = document.getElementById('cw-pick');
+  const pickList = document.getElementById('cw-pick-list');
+  const pickX = document.getElementById('cw-pick-x');
+
+  const verify = document.getElementById('cw-verify');
+  const verifyHandle = document.getElementById('cw-verify-h');
+  const verifyOpen = document.getElementById('cw-verify-open');
+  const verifyOpenT = document.getElementById('cw-verify-open-t');
+  const verifyAgain = document.getElementById('cw-verify-again');
+
+  const joinBtn = document.getElementById('cw-join') as HTMLButtonElement | null;
+  const joinT = document.getElementById('cw-join-t');
+  const inviteBtn = document.getElementById('cw-invite');
+
+  /** The squad chosen but not yet enrolled — a selection, never a membership. */
+  let picked = '';
+  /** The handle whose membership gate is open, or '' when there is nothing to ask. */
+  let awaiting = '';
+  /** A rally link that named a channel this device has not seen yet. */
+  let rallyHandle = '';
+  let view: 'hub' | 'register' = 'hub';
   let joining = false;
+  let checking = false;
+  let registering = false;
   let boardRequest: Promise<void> | null = null;
 
   const isOpen = (): boolean => !!root && !root.hidden;
-
   const say = (text: string): void => { if (liveRegion) liveRegion.textContent = text; };
 
-  function setJoinError(key: string): void {
-    if (!joinErr) return;
-    joinErr.textContent = key ? t(key) : '';
-    joinErr.hidden = !key;
-  }
+  const squadById = (id: string): RankedSquad | undefined => getSquadRanking().find((s) => s.id === id);
+
+  /* ---------- painting ---------- */
 
   /** The crest: Telegram's public photo when it answers, the call sign when it does not. */
   function paintAvatar(img: HTMLImageElement | null, mark: HTMLElement | null, host: HTMLElement | null, s: RankedSquad): void {
@@ -167,18 +185,21 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   /**
-   * One ladder row. `join` turns it into a one-tap door; `you` lights it and swaps the door for
-   * the pill. Every dynamic string rides its own `<bdi>` so an RTL channel name is contained.
+   * One ladder row: rank badge, crest, identity, score. `you` lights the player's own channel and
+   * swaps the door for the pill; `selectable` turns the row into a choice. Every dynamic string
+   * rides its own `<bdi>` so an RTL channel name is contained.
    */
-  function buildRow(s: RankedSquad, opts: { join: boolean; you: boolean; open: boolean }): HTMLLIElement {
+  function buildRow(s: RankedSquad, opts: { you: boolean; selectable: boolean }): HTMLLIElement {
+    const pts = warPointsOf(s);
     const li = document.createElement('li');
-    const tail = opts.join || opts.you;
-    li.className = `cw-row${tail ? ' has-tail' : ''}${opts.you ? ' is-you' : ''}${opts.open ? ' is-open' : ''}`;
+    li.className = `cw-row${opts.you ? ' is-you' : ''}${picked === s.id ? ' is-selected' : ''}`;
 
     const rank = document.createElement('span');
-    rank.className = `cw-rank${s.rank <= 3 ? ` is-${s.rank}` : ''}`;
+    const scored = pts > 0;
+    rank.className = `cw-rank${scored ? (s.rank <= 3 ? ` is-${s.rank}` : '') : ' is-none'}`;
     rank.setAttribute('dir', 'ltr');
-    rank.textContent = `#${s.rank}`;
+    /* A channel nobody has scored for has no place to defend yet: it reads as a dash, never #4. */
+    rank.textContent = scored ? `#${s.rank}` : '—';
 
     const av = document.createElement('span');
     av.className = 'cw-av';
@@ -207,37 +228,45 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     handle.className = 'cw-row-handle';
     handle.setAttribute('dir', 'ltr');
     handle.textContent = s.handle;
+    const dot = document.createElement('span');
+    dot.className = 'cw-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.textContent = '·';
     const crew = document.createElement('span');
-    crew.className = 'cw-row-crew';
-    crew.textContent = opts.open ? t('cwBeFirst') : crewLabel(s.members);
-    meta.append(handle, crew);
+    crew.className = 'cw-row-members';
+    crew.textContent = membersLabel(s.members);
+    meta.append(handle, dot, crew);
     id.append(name, meta);
 
-    const pts = document.createElement('span');
-    pts.className = 'cw-row-pts';
-    const ptsN = document.createElement('b');
-    ptsN.setAttribute('dir', 'ltr');
-    ptsN.textContent = String(warPointsOf(s));
+    const side = document.createElement('span');
+    side.className = 'cw-row-side';
+    const ptsEl = document.createElement('b');
+    ptsEl.className = `cw-row-pts${scored ? '' : ' is-zero'}`;
+    ptsEl.setAttribute('dir', 'ltr');
+    const ptsN = document.createElement('span');
+    ptsN.textContent = ptsLabel(pts);
     const ptsU = document.createElement('span');
     ptsU.textContent = t('cwPts');
-    pts.append(ptsN, ptsU);
-
-    li.append(rank, av, id, pts);
+    ptsEl.append(ptsN, ptsU);
+    side.append(ptsEl);
 
     if (opts.you) {
       const pill = document.createElement('span');
-      pill.className = 'cw-you';
-      pill.textContent = t('cwYou');
-      li.append(pill);
-    } else if (opts.join) {
+      pill.className = 'cw-pill';
+      pill.textContent = t('cwYourTeam');
+      side.append(pill);
+    } else if (opts.selectable) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'cw-row-join';
-      btn.textContent = t('cwRowJoin');
-      btn.dataset.handle = s.handle;
-      btn.setAttribute('aria-label', `${t('cwRowJoin')} ${s.name || s.handle}`);
-      li.append(btn);
+      btn.className = 'cw-sel';
+      btn.textContent = t('cwSelect');
+      btn.dataset.select = s.id;
+      btn.setAttribute('aria-pressed', String(picked === s.id));
+      btn.setAttribute('aria-label', `${t('cwSelect')} ${s.name || s.handle}`);
+      side.append(btn);
     }
+
+    li.append(rank, av, id, side);
     return li;
   }
 
@@ -256,71 +285,19 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     return li;
   }
 
-  /** A recruiting slot: a real public channel with no squad behind it yet. */
-  function recruitingSquad(handle: string, rank: number): RankedSquad {
-    const canonical = `@${handle}`;
-    return {
-      id: `recruit-${handle.toLowerCase()}`,
-      handle: canonical,
-      name: displayNameOf(canonical),
-      roster: [],
-      members: 0,
-      trophies: 0,
-      trend: 'same',
-      kind: 'channel',
-      warPoints: 0,
-      rank,
-      owned: false,
-    };
-  }
-
-  function paintQuickJoin(): void {
-    if (!quickList) return;
-    const mine = getMySquad();
-    const live = getWarRanking().filter((s) => s.id !== mine?.id);
-    const rows: { squad: RankedSquad; open: boolean }[] = live.slice(0, RAIL_MAX).map((s) => ({ squad: s, open: false }));
-    /* No scored field yet: the rail becomes an recruiting door rather than an empty box. Every
-       row is still one tap, and every number on it (0 points, no fighters) is the truth. */
-    const used = new Set(rows.map((r) => r.squad.handle.toLowerCase()));
-    if (mine) used.add(mine.handle.toLowerCase());
-    for (const handle of RECRUITING) {
-      if (rows.length >= RAIL_MAX) break;
-      if (used.has(`@${handle}`.toLowerCase())) continue;
-      rows.push({ squad: recruitingSquad(handle, rows.length + 1), open: true });
-    }
-    if (railTitle) railTitle.textContent = t(live.length ? 'cwPopular' : 'cwRecruiting');
-    quickList.textContent = '';
-    if (!rows.length) { quickList.append(emptyRow('cwNoBoard')); return; }
-    for (const row of rows) quickList.append(buildRow(row.squad, { join: true, you: false, open: row.open }));
-  }
-
-  function paintHero(): void {
-    const standing = myWarStanding();
-    const s = standing.squad;
-    if (!s) return;
-    paintAvatar(heroImg, heroMark, heroAv, s);
-    if (heroName) heroName.textContent = s.name || displayNameOf(s.handle);
-    if (heroHandle) heroHandle.textContent = s.handle;
-    if (heroRank) heroRank.textContent = `#${standing.rank || 1}`;
-    if (heroPts) heroPts.textContent = String(standing.points);
-    if (heroCrew) heroCrew.textContent = String(s.members);
-  }
-
-  function paintLadder(): void {
+  function paintBoard(): void {
     if (!boardList) return;
     const board = getWarRanking();
     const mine = getMySquad();
-    const rows = board.slice(0, LADDER_MAX);
-    const myRow = mine ? board.find((s) => s.id === mine.id) ?? null : null;
-    if (myRow && !rows.some((s) => s.id === myRow.id)) rows.push(myRow);
-    if (boardCount) boardCount.textContent = String(board.length);
+    /* Switching is only free while the channel has nothing to lose: a scored team is a team. */
+    const canSelect = !mine || warPointsOf(mine) === 0;
     boardList.textContent = '';
-    if (!rows.length) { boardList.append(emptyRow('cwNoBoard')); }
-    for (const s of rows) {
-      boardList.append(buildRow(s, { join: false, you: !!mine && s.id === mine.id, open: false }));
+    if (!board.length) { boardList.append(emptyRow('cwEmptyBoard')); return; }
+    for (const s of board.slice(0, LADDER_MAX)) {
+      const you = !!mine && s.id === mine.id;
+      boardList.append(buildRow(s, { you, selectable: canSelect && !you }));
     }
     revealMyRow();
-    paintGap(board, myRow);
   }
 
   /**
@@ -334,63 +311,92 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     boardList.scrollTop = Math.max(0, row.offsetTop - boardList.clientHeight / 2 + row.clientHeight / 2);
   }
 
-  function paintGap(board: RankedSquad[], mine: RankedSquad | null): void {
-    if (!gapLine || !gapText) return;
-    if (!mine) { gapLine.hidden = true; return; }
-    gapLine.hidden = false;
-    const at = board.findIndex((s) => s.id === mine.id);
-    const lead = at <= 0;
-    gapLine.classList.toggle('is-lead', lead);
-    if (lead) { gapText.textContent = t('cwLeading'); return; }
-    const above = board[at - 1];
-    const gap = Math.max(0, warPointsOf(above) - warPointsOf(mine));
-    paintTemplate(
-      gapText,
-      gap > 0 ? t('cwGap') : t('cwGapZero'),
-      { n: String(gap), rank: String(above.rank) },
-    );
+  function paintPrize(): void {
+    if (!prizeRule) return;
+    /* The one rule of the tournament, with the pool in its own Latin run. */
+    paintTemplate(prizeRule, t('cwPrizeRule'), { n: '200' });
+  }
+
+  function paintVerify(): void {
+    if (!verify) return;
+    verify.hidden = !awaiting;
+    if (!awaiting) return;
+    if (verifyHandle) verifyHandle.textContent = awaiting;
+    if (verifyOpenT) paintTemplate(verifyOpenT, t('cwOpenChannel'), { h: awaiting });
+  }
+
+  function paintCta(): void {
+    if (!joinBtn || !joinT) return;
+    const mine = getMySquad();
+    const switching = !!picked && picked !== mine?.id;
+    const playing = !!mine && !switching;
+    if (playing) paintTemplate(joinT, t('cwPlayEarn'), { n: String(WAR_WIN) });
+    else joinT.textContent = t('cwJoinWar');
+    const ready = playing || !!picked;
+    joinBtn.setAttribute('aria-disabled', String(!ready));
+    joinBtn.setAttribute('aria-busy', String(joining || checking));
+    joinBtn.querySelector('use')?.setAttribute('href', playing ? '#i-swords' : '#i-user-join');
+    if (inviteBtn) inviteBtn.hidden = !playing;
   }
 
   function paint(): void {
     if (!root) return;
-    const mine = getMySquad();
-    const showHub = !!mine && !switching;
-    if (onboard) onboard.hidden = showHub;
-    if (hubView) hubView.hidden = !showHub;
-    if (foot) foot.hidden = !showHub;
     if (clock) clock.textContent = warClock(warEndsAt() - Date.now());
-    if (showHub) {
-      paintHero();
-      paintLadder();
-    } else {
-      paintQuickJoin();
-      if (switching && railTitle) railTitle.textContent = t('cwChangeTitle');
+    paintPrize();
+    paintBoard();
+    paintVerify();
+    paintCta();
+    if (pick && !pick.hidden) paintPick();
+  }
+
+  function paintView(): void {
+    if (mainView) mainView.hidden = view !== 'hub';
+    if (regView) regView.hidden = view !== 'register';
+  }
+
+  /* ---------- the quick pick ---------- */
+
+  function paintPick(): void {
+    if (!pickList) return;
+    const mine = getMySquad();
+    const rows = getWarRanking().filter((s) => s.id !== mine?.id).slice(0, PICK_MAX);
+    pickList.textContent = '';
+    if (!rows.length) { pickList.append(emptyRow('cwEmptyBoard')); return; }
+    for (const s of rows) {
+      const li = buildRow(s, { you: false, selectable: true });
+      li.dataset.select = s.id;
+      pickList.append(li);
     }
   }
 
-  /** The registry's board, fetched once per open and merged into the ladder behind the paint. */
-  function warmBoard(): void {
-    if (boardRequest) return;
-    boardRequest = refreshSquadBoard()
-      .then(() => { if (isOpen()) paint(); })
-      .catch(() => { /* the device's own board still paints */ })
-      .finally(() => { boardRequest = null; });
+  function openPick(): void {
+    if (!pick) return;
+    paintPick();
+    pick.hidden = false;
+    boardList?.closest('.cw-board')?.classList.add('is-picking');
+    impact('light');
   }
 
-  function setJoining(on: boolean): void {
-    joining = on;
-    if (!joinBtn) return;
-    joinBtn.disabled = on;
-    joinBtn.setAttribute('aria-busy', on ? 'true' : 'false');
-    const label = joinBtn.querySelector('span');
-    if (label) label.textContent = t(on ? 'cwJoinBusy' : 'cwJoinCta');
+  function closePick(): void {
+    if (pick) pick.hidden = true;
+    boardList?.closest('.cw-board')?.classList.remove('is-picking');
   }
 
-  /** Land on the war room. No sheet swap: the same panel simply changes its contents. */
+  function choose(id: string): void {
+    if (!id) return;
+    picked = id;
+    awaiting = '';
+    impact('light');
+    closePick();
+    paint();
+    say(t('cwSelected'));
+  }
+
+  /* ---------- enrolment: the membership gate, then the roster ---------- */
+
   function welcome(s: RankedSquad): void {
-    switching = false;
-    setJoinError('');
-    if (input) input.value = '';
+    picked = '';
+    awaiting = '';
     impact('medium');
     notify('success');
     paint();
@@ -398,48 +404,166 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     showToastDetail(t('cwJoinedTitle'), `${s.name || displayNameOf(s.handle)} · ${s.handle}`, 'success');
   }
 
-  async function joinHandle(raw: string): Promise<void> {
-    if (joining) return;
-    const issue = handleIssue(raw);
-    if (issue) {
-      setJoinError(issue === 'empty' ? 'cwErrEmpty'
-        : issue === 'short' ? 'cwErrShort'
-          : issue === 'long' ? 'cwErrLong' : 'cwErrChars');
-      notify('warning');
-      impact('light');
-      input?.focus();
-      return;
-    }
-    const handle = cleanHandle(raw);
-    setJoinError('');
-    const known = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
-    /* A handle nobody enlisted yet is a local mint: the squad starts with exactly one fighter,
-       the player doing the joining. Nothing is invented to fill it. */
-    if (!known) {
-      const minted = bindSquad(handle);
-      if (minted === 'bad-handle') { setJoinError('cwErrChars'); notify('warning'); return; }
-      const created = getMySquad();
-      if (created) welcome(created);
-      return;
-    }
-    if (getMySquad()?.id === known.id) { welcome(known); return; }
-    setJoining(true);
-    const result = await joinSquadOnServer(known.id);
-    setJoining(false);
+  async function enrol(squad: RankedSquad): Promise<void> {
+    if (getMySquad()?.id === squad.id) { picked = ''; awaiting = ''; paint(); return; }
+    joining = true;
+    paintCta();
+    const result = await joinSquadOnServer(squad.id);
+    joining = false;
     if (!result.ok) {
-      setJoinError('');
+      paintCta();
       notify('warning');
       showToast(result.message || t('cwJoinFailed'), 'warning');
       return;
     }
     if (result.pending) {
+      picked = '';
+      paint();
       notify('success');
       showToast(t('cwJoinPending'), 'success');
       say(t('cwJoinPending'));
       return;
     }
-    welcome(result.squad ?? known);
+    welcome(result.squad ?? squad);
   }
+
+  /**
+   * Prove the player is inside the chat before putting them on its roster. A refusal is not an
+   * error: it is the inline prompt above the CTA, with the channel's own door and a retry.
+   */
+  async function gate(squad: RankedSquad): Promise<void> {
+    checking = true;
+    paintCta();
+    const verdict = await checkChannelMembership(squad.handle);
+    checking = false;
+    if (!verdict.isMember) {
+      awaiting = squad.handle;
+      paint();
+      notify('warning');
+      impact('light');
+      say(t('cwVerifyLead'));
+      return;
+    }
+    awaiting = '';
+    await enrol(squad);
+  }
+
+  async function onJoin(): Promise<void> {
+    if (joining || checking) return;
+    const mine = getMySquad();
+    const switching = !!picked && picked !== mine?.id;
+    /* Enrolled and staying: the key is the race, not the roster. */
+    if (mine && !switching) {
+      impact('heavy');
+      api.sheets.close();
+      api.queue('channel_war');
+      return;
+    }
+    if (!picked) { openPick(); return; }
+    const squad = squadById(picked);
+    if (!squad) { picked = ''; paint(); return; }
+    await gate(squad);
+  }
+
+  /* ---------- the admin door ---------- */
+
+  function setRegError(key: string): void {
+    if (!regErr) return;
+    regErr.textContent = key ? t(key) : '';
+    regErr.hidden = !key;
+  }
+
+  function setRegErrorText(text: string): void {
+    if (!regErr) return;
+    regErr.textContent = text;
+    regErr.hidden = !text;
+  }
+
+  function setRegBusy(on: boolean): void {
+    if (regGo) {
+      regGo.setAttribute('aria-busy', String(on));
+      regGo.setAttribute('aria-disabled', String(on));
+      const label = regGo.querySelector('b');
+      if (label) label.textContent = t(on ? 'cwRegisterBusy' : 'cwRegisterGo');
+    }
+    if (regHandle) regHandle.disabled = on;
+    if (regName) regName.disabled = on;
+  }
+
+  function showInviteCard(handle: string): void {
+    const link = channelWarAppLink(handle);
+    if (regLink) regLink.textContent = link;
+    if (regDone) regDone.hidden = !link;
+  }
+
+  function openRegister(prefill = ''): void {
+    view = 'register';
+    setRegError('');
+    if (regDone) regDone.hidden = true;
+    if (regLink) regLink.textContent = '';
+    if (regHandle) regHandle.value = prefill;
+    if (regName) regName.value = '';
+    setRegBusy(false);
+    paintView();
+    requestAnimationFrame(() => regHandle?.focus({ preventScroll: true }));
+  }
+
+  function closeRegister(): void {
+    view = 'hub';
+    paintView();
+    paint();
+    requestAnimationFrame(revealMyRow);
+  }
+
+  /**
+   * The registry already holds this chat. That is not a refusal — the admin wanted the channel in
+   * the war and it is already in it — so the device joins the squad that exists instead.
+   */
+  async function adoptRegistered(handle: string): Promise<void> {
+    await refreshSquadBoard();
+    const known = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
+    if (!known) { setRegError('enlistErrAlready'); notify('warning'); return; }
+    const result = await joinSquadOnServer(known.id);
+    if (!result.ok) { setRegErrorText(result.message || t('cwJoinFailed')); notify('warning'); return; }
+    welcome(result.squad ?? known);
+    showInviteCard(handle);
+  }
+
+  async function submitRegister(): Promise<void> {
+    if (registering) return;
+    const issue = handleIssue(regHandle?.value ?? '');
+    if (issue) {
+      setRegError(handleErrorKey(issue));
+      notify('warning');
+      impact('light');
+      regHandle?.focus();
+      return;
+    }
+    const handle = cleanHandle(regHandle?.value ?? '');
+    setRegError('');
+    registering = true;
+    setRegBusy(true);
+    const result = await registerSquadWithTelegram(handle, {
+      name: (regName?.value ?? '').trim().slice(0, 32),
+      tag: '',
+    });
+    registering = false;
+    setRegBusy(false);
+    if (!result.ok) {
+      if (result.error === 'already_registered') { await adoptRegistered(handle); return; }
+      setRegErrorText(result.message || t('cwJoinFailed'));
+      notify('warning');
+      return;
+    }
+    if (!result.squad) { setRegError('enlistErrAlready'); notify('warning'); return; }
+    /* The Worker proved this player is an administrator of the chat, so the membership gate is
+       already answered: the enlistment lands and the invite card takes the stage. */
+    welcome(result.squad);
+    showInviteCard(result.squad.handle);
+    notify('success');
+  }
+
+  /* ---------- the invite link ---------- */
 
   function rally(): void {
     const mine = getMySquad();
@@ -456,10 +580,8 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     }
     void copyText(url).then((copied) => {
       notify(copied ? 'success' : 'warning');
-      /* Outside Telegram the link itself is the deliverable: if the clipboard refused, the player
-         can still read it off the toast and copy it by hand. */
       showToastDetail(
-        copied ? t('cwRallyCopied') : t('cwRallyLink'),
+        copied ? t('cwInviteCopied') : t('cwRallyLink'),
         copied ? t('cwRallyCopiedBody') : url,
         copied ? 'success' : 'warning',
         5200,
@@ -467,23 +589,47 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     });
   }
 
+  /* ---------- the board behind the paint ---------- */
+
+  function warmBoard(): void {
+    if (boardRequest) return;
+    boardRequest = refreshSquadBoard()
+      .then(() => {
+        if (!isOpen()) return;
+        /* A rally link that named a channel this device had never seen becomes the selection the
+           moment the registry names it. */
+        if (rallyHandle) {
+          const hit = getSquadRanking().find((s) => s.handle.toLowerCase() === rallyHandle.toLowerCase());
+          if (hit) picked = hit.id;
+          rallyHandle = '';
+        }
+        paint();
+      })
+      .catch(() => { /* the device's own board still paints */ })
+      .finally(() => { boardRequest = null; });
+  }
+
   const hub: ChannelWarHub = {
     open(prefill = '') {
       if (!root) { api.queue('channel_war'); return; }
-      const target = prefill ? `@${prefill.replace(/^@+/, '')}` : '';
-      const mine = getMySquad();
-      /* A rally for a channel this player is not on yet is a switch, so it opens the join view
-         with the handle already typed. A rally for their own channel opens the war room. */
-      switching = !!target && !!mine && mine.handle.toLowerCase() !== target.toLowerCase();
-      setJoinError('');
-      setJoining(false);
-      if (input) input.value = target;
+      const handle = prefill ? cleanHandle(prefill) : '';
+      const known = handle
+        ? getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase())
+        : undefined;
+      view = 'hub';
+      picked = known?.id ?? '';
+      awaiting = '';
+      rallyHandle = known ? '' : handle;
+      joining = false;
+      checking = false;
+      closePick();
+      setRegError('');
+      paintView();
       paint();
       api.sheets.open(root);
       requestAnimationFrame(revealMyRow);
       warmBoard();
       say(t('cwTitle'));
-      if (switching) requestAnimationFrame(() => joinBtn?.focus({ preventScroll: true }));
     },
     refresh() { if (isOpen()) paint(); },
     get isOpen() { return isOpen(); },
@@ -499,39 +645,56 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
      be brought back under their thumb rather than left wherever the old height put it. */
   window.addEventListener('resize', () => { if (isOpen()) revealMyRow(); });
 
-  joinBtn?.addEventListener('click', () => { void joinHandle(input?.value ?? ''); });
-  input?.addEventListener('keydown', (event) => {
+  joinBtn?.addEventListener('click', () => { void onJoin(); });
+  inviteBtn?.addEventListener('click', () => { rally(); });
+
+  regOpen?.addEventListener('click', () => { impact('light'); openRegister(); });
+  regBack?.addEventListener('click', () => { impact('light'); closeRegister(); });
+  regGo?.addEventListener('click', () => { void submitRegister(); });
+  regHandle?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
-    void joinHandle(input.value);
+    void submitRegister();
   });
-  input?.addEventListener('input', () => { if (joinErr && !joinErr.hidden) setJoinError(''); });
+  regHandle?.addEventListener('input', () => { if (regErr && !regErr.hidden) setRegError(''); });
+  regCopy?.addEventListener('click', () => {
+    const link = regLink?.textContent ?? '';
+    if (!link) return;
+    impact('medium');
+    void copyText(link).then((copied) => {
+      notify(copied ? 'success' : 'warning');
+      showToastDetail(
+        copied ? t('cwInviteCopied') : t('cwRallyLink'),
+        copied ? t('cwRallyCopiedBody') : link,
+        copied ? 'success' : 'warning',
+        5200,
+      );
+    });
+  });
 
-  quickList?.addEventListener('click', (event) => {
-    const btn = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.cw-row-join');
-    if (!btn?.dataset.handle) return;
+  verifyOpen?.addEventListener('click', () => {
+    if (!awaiting) return;
     impact('light');
-    void joinHandle(btn.dataset.handle);
+    openLink(`https://t.me/${awaiting.replace(/^@+/, '')}`);
+  });
+  verifyAgain?.addEventListener('click', () => {
+    const squad = squadById(picked);
+    if (!squad || checking) return;
+    void gate(squad);
   });
 
-  document.getElementById('cw-change')?.addEventListener('click', () => {
-    impact('light');
-    switching = true;
-    setJoinError('');
-    paint();
-    requestAnimationFrame(() => input?.focus({ preventScroll: true }));
-  });
+  /* Both lists answer the same way: a `data-select` names the squad a tap stands for. */
+  for (const list of [boardList, pickList]) {
+    list?.addEventListener('click', (event) => {
+      const hit = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-select]');
+      const id = hit?.dataset.select ?? '';
+      if (id) choose(id);
+    });
+  }
+  pickX?.addEventListener('click', () => { impact('light'); closePick(); });
 
-  document.getElementById('cw-rally')?.addEventListener('click', () => { rally(); });
-
-  document.getElementById('cw-start')?.addEventListener('click', () => {
-    impact('heavy');
-    api.sheets.close();
-    api.queue('channel_war');
-  });
-
-  /* A rally link is a prompt, not an enrolment: it raises the hub with the channel already typed,
-     and the Join key is still the only thing that puts a player on a roster. */
+  /* A rally link is a prompt, not an enrolment: it raises the hub with the channel already
+     selected, and the Join key is still the only thing that puts a player on a roster. */
   window.addEventListener('detour:channel-war-invite', (event) => {
     const handle = (event as CustomEvent<{ handle?: string }>).detail?.handle ?? '';
     if (handle) hub.open(handle);

@@ -78,7 +78,7 @@ import {
   ACTIVE_CUP_ID, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
-  verifyAndBuildSquad, verifySquadChat,
+  verifyAndBuildSquad, verifyChannelMembership, verifySquadChat,
   type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
@@ -2890,6 +2890,12 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadWarCredit(request, url);
     }
+    /* Channel Wars: the membership gate behind the single Join key. It answers about the
+       CALLER's own identity, never about a userId the client typed in. */
+    if (url.pathname === '/api/squads/verify-member') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadVerifyMember(request, url);
+    }
     if (url.pathname === '/api/squads/kick') {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadKick(request, url);
@@ -3310,6 +3316,23 @@ export class MatchmakerDO {
     this.squadsDirty = true;
     await this.persistSquads();
     return json({ ok: true, warPoints: total, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Is this player inside the chat they want to represent?
+   *
+   * The answer is about the caller's own signed identity: `body.userId` is accepted only on the
+   * dev door, inside `squadRequester`, so nobody can vouch for a membership they do not hold.
+   * A chat the bot cannot read answers `unverifiedFallback` rather than a refusal.
+   */
+  private async squadVerifyMember(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const chatHandle = typeof body.chatHandle === 'string' ? body.chatHandle : '';
+    return json(await verifyChannelMembership(chatHandle, requester, this.env));
   }
 
   /**

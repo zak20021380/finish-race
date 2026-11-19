@@ -128,6 +128,8 @@ interface TelegramChat {
 
 interface TelegramMember {
   status?: string;
+  /** Set on `restricted`: a restricted member who is still inside the chat. */
+  is_member?: boolean;
   user?: { id?: number | string };
 }
 
@@ -1186,4 +1188,70 @@ export async function verifyAndBuildSquad(
       announcements: [],
     },
   };
+}
+
+/* ---------- the Channel Wars membership gate ----------
+   A player may only represent a chat they are actually inside, or the ladder is a list of names
+   nobody stands behind. The check is one `getChatMember` call, and it is deliberately a courtesy
+   gate rather than a wall: a bot that was never made an administrator of a public channel cannot
+   read that channel's member list, and that is a configuration gap, not a verdict on the player.
+   Every answer that cannot be proven opens the door and says so. */
+
+export interface ChannelMembership {
+  ok: true;
+  /** Whether the player is inside the chat — or, when unproven, whether the door opens. */
+  isMember: boolean;
+  /** Only present on an explicit refusal: Telegram confirmed the player is not inside. */
+  reason?: 'NOT_MEMBER';
+  /** The gate could not be enforced (no token, no rights, an outage). The door opened. */
+  unverifiedFallback?: boolean;
+}
+
+/** Telegram's answer for "this user is not in this chat": a real verdict, not an outage. */
+const isNonMemberAnswer = (status: string): boolean => status === 'left' || status === 'kicked';
+
+/**
+ * Is `userId` a member of `rawHandle`?
+ *
+ * `chat_id` is the public `@username`, which is the one address a channel and a supergroup share.
+ * Telegram answers `creator`/`administrator`/`member` for the three ways of being inside, and
+ * `left`/`kicked` for the two ways of being outside; `restricted` carries its own `is_member`.
+ */
+export async function verifyChannelMembership(
+  rawHandle: string,
+  userId: string,
+  env: Env | undefined,
+): Promise<ChannelMembership> {
+  const handle = normalizeChatHandle(rawHandle);
+  const member = text(userId, 24).replace(/[^0-9]/g, '');
+  const { token } = botToken(env);
+  /* Nobody to ask, or nothing to ask with: open the door. A tournament must never be bricked by
+     a missing secret or a half-typed handle. */
+  if (!handle || !member || !token) return { ok: true, isMember: true, unverifiedFallback: true };
+
+  let row: TelegramMember;
+  try {
+    row = await telegram<TelegramMember>(token, 'getChatMember', { chat_id: handle, user_id: member });
+  } catch (error) {
+    /* "User not found" is Telegram telling us this player never touched the chat: a real
+       NOT_MEMBER, not a failure. Everything else — a chat the bot cannot see, a timeout, a
+       transport drop — opens the door rather than blaming the player for it. */
+    if (memberFailure(error)) return { ok: true, isMember: false, reason: 'NOT_MEMBER' };
+    const description = error instanceof TelegramError ? error.description : 'unreachable';
+    console.warn(`[squad-verify] verify-member ${handle} → ${description}; opening the door`);
+    return { ok: true, isMember: true, unverifiedFallback: true };
+  }
+
+  const status = memberStatus(row);
+  if (status === 'creator' || status === 'administrator' || status === 'member') {
+    return { ok: true, isMember: true };
+  }
+  if (status === 'restricted') {
+    return row.is_member === true
+      ? { ok: true, isMember: true }
+      : { ok: true, isMember: false, reason: 'NOT_MEMBER' };
+  }
+  if (isNonMemberAnswer(status)) return { ok: true, isMember: false, reason: 'NOT_MEMBER' };
+  /* An empty or unknown status proves nothing about the player. */
+  return { ok: true, isMember: true, unverifiedFallback: true };
 }
