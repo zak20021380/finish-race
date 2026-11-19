@@ -22,11 +22,12 @@ import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
 import {
   cleanHandle, displayNameOf, getMySquad, getSquadRanking, getWarRanking, handleIssue,
-  onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
+  hasWarEarnings, onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
   type RankedSquad, type SquadMember,
 } from './squads';
 import {
   checkChannelMembership, joinSquadOnServer, refreshSquadBoard, registerSquadWithTelegram,
+  syncChannelTiq,
 } from './squadRegister';
 import { channelWarAppLink, telegramShareLink } from '../shared/config';
 
@@ -383,8 +384,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     if (!boardList) return;
     const board = getWarRanking();
     const mine = getMySquad();
-    /* Switching is only free while the channel has nothing to lose: a scored team is a team. */
-    const canSelect = !mine || warPointsOf(mine) === 0;
+    /* Switching is only free while the channel has nothing to lose: a team that has actually
+       fought is a team. The total itself is the roster's real TIQ sum, so the test reads the
+       banked war column instead of locking every channel that merely has members. */
+    const canSelect = !mine || !hasWarEarnings(mine);
     boardList.textContent = '';
     if (!board.length) { boardList.append(emptyRow('cwEmptyBoard')); return; }
     for (const s of board.slice(0, LADDER_MAX)) {
@@ -455,15 +458,16 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   /* ---------- the inspector ---------- */
 
-  /** One fighter's row: place, face, name, and the TIQ they personally banked for the channel. */
+  /** One fighter's row: place, face, name, and the real TIQ balance the channel total sums. */
   function buildFighter(m: SquadMember, place: number): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'cw-fighter';
 
     const rank = document.createElement('span');
     /* The pill always carries the place; the colour stays a prize: muted neutral when the fighter
-       carried nothing for the channel, gold/silver/bronze when they did. */
-    const scored = (m.warTiq ?? 0) > 0;
+       holds no TIQ, gold/silver/bronze when they do. */
+    const balance = Math.max(0, Math.floor(m.tiq || 0));
+    const scored = balance > 0;
     rank.className = `cw-fighter-rank${place <= 3 && scored ? ` is-${place}` : ''}`;
     rank.setAttribute('dir', 'ltr');
     rank.textContent = `#${place}`;
@@ -494,9 +498,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     bdi.textContent = m.name || t('cwNoName');
     name.append(bdi);
 
+    /* The balance itself, never a `+0` contribution delta: the card's label already says TIQ. */
     const tiq = document.createElement('b');
     tiq.className = 'cw-fighter-tiq';
-    tiq.append(tiqFigure(Math.max(0, Math.floor(m.warTiq ?? 0)), { sign: '+' }));
+    tiq.append(tiqFigure(balance));
 
     li.append(rank, av, name, tiq);
     return li;
@@ -505,7 +510,8 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   function paintDetailFighters(s: RankedSquad): void {
     if (!detailList) return;
     const rows = [...s.roster].sort((a, b) =>
-      (b.warTiq ?? 0) - (a.warTiq ?? 0) || b.tiq - a.tiq || a.id.localeCompare(b.id));
+      Math.max(0, Math.floor(b.tiq || 0)) - Math.max(0, Math.floor(a.tiq || 0))
+      || a.id.localeCompare(b.id));
     detailList.textContent = '';
     if (!rows.length) {
       const li = document.createElement('li');
@@ -528,7 +534,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   function paintDetailActions(s: RankedSquad): void {
     const mine = getMySquad();
     const isMine = !!mine && mine.id === s.id;
-    const canJoin = !isMine && (!mine || warPointsOf(mine) === 0);
+    const canJoin = !isMine && (!mine || !hasWarEarnings(mine));
     const locked = !isMine && !canJoin;
     if (detailInvite) detailInvite.hidden = !isMine;
     if (detailPlay) detailPlay.hidden = !isMine;
@@ -862,7 +868,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   function warmBoard(): void {
     if (boardRequest) return;
-    boardRequest = refreshSquadBoard()
+    /* The player's own balance is saved first: the board that comes back sums real TIQ, and the
+       total for their channel must already include the number this device is holding. */
+    boardRequest = syncChannelTiq()
+      .then(() => refreshSquadBoard())
       .then(() => {
         if (!isOpen()) return;
         /* A rally link that named a channel this device had never seen becomes the selection the

@@ -75,10 +75,10 @@ import {
   type VipTierRevenue,
 } from '../shared/vip';
 import {
-  ACTIVE_CUP_ID, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
-  isSquadAdmin, normalizeChatHandle, readRegisteredSquad, refreshTelegramMembers, removeSquadMember,
-  roleOf, SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
-  verifyAndBuildSquad, verifyChannelMembership, verifySquadChat,
+  ACTIVE_CUP_ID, MEMBER_TIQ_CAP, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard,
+  cupSquadIds, isSquadAdmin, normalizeChatHandle, readRegisteredSquad, refreshTelegramMembers,
+  removeSquadMember, roleOf, SQUAD_ALREADY_ENLISTED, squadTotalTiq, squadViewOf, squadWarTiq,
+  telegramPhotoUrl, upsertSquadMember, verifyAndBuildSquad, verifyChannelMembership, verifySquadChat,
   type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow, type SquadVerification,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
@@ -2895,6 +2895,12 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadJoinOrSync(request, url, url.pathname === '/api/squads/join');
     }
+    /* The lightweight balance door: a member's latest real TIQ, saved without touching the
+       roster's shape. Opening Channel Wars calls this so the channel total is never stale. */
+    if (url.pathname === '/api/squads/sync-tiq') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadSyncTiq(request, url);
+    }
     if (url.pathname === '/api/squads/leave') {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadLeave(request, url);
@@ -3216,6 +3222,9 @@ export class MatchmakerDO {
           : typeof body.name === 'string' ? body.name : '',
         username: typeof body.username === 'string' ? body.username : '',
         photo: typeof body.photo === 'string' ? body.photo : '',
+        /* The leader's actual balance seeds their roster row, so the channel's TOTAL TIQ is a
+           real sum from the first frame instead of waiting for a later sync. */
+        playerTiq: Number(body.playerTiq ?? body.tiq),
       });
       if (!result.ok) {
         return json({
@@ -3289,7 +3298,8 @@ export class MatchmakerDO {
     const added = upsertSquadMember(squad, {
       id: requester,
       name: typeof body.name === 'string' ? body.name : '',
-      tiq: typeof body.tiq === 'number' ? body.tiq : Number(body.tiq),
+      /* `playerTiq` is the client's own name for the real balance; `tiq` is the legacy spelling. */
+      tiq: Number(body.playerTiq ?? body.tiq),
       country: typeof body.country === 'string' ? body.country : '',
       username: typeof body.username === 'string' ? body.username : '',
       photo: typeof body.photo === 'string' ? body.photo : '',
@@ -3326,10 +3336,51 @@ export class MatchmakerDO {
     if (!squad.roster.some((m) => m.id === requester)) {
       return json({ ok: false, error: 'not_a_member', message: 'Join this squad before scoring for it.' }, 409);
     }
-    const total = addWarPoints(squad, typeof body.gain === 'number' ? body.gain : Number(body.gain), requester);
+    /* The match's gain lands on the member's real balance, and the channel's TOTAL TIQ is the
+       roster's sum after that credit — never a separate ledger that starts at zero. */
+    const total = addWarPoints(
+      squad,
+      typeof body.gain === 'number' ? body.gain : Number(body.gain),
+      requester,
+      Number(body.playerTiq ?? body.tiq),
+    );
     this.squadsDirty = true;
     await this.persistSquads();
-    return json({ ok: true, warPoints: total, squad: squadViewOf(squad) });
+    return json({ ok: true, warPoints: total, totalTiq: total, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Save a member's latest real TIQ balance without touching the roster's shape.
+   *
+   * This is the door a player's device knocks on when Channel Wars opens: one number, one row,
+   * no membership decision. A player who is not on the roster is refused like any other write; a
+   * balance that is not higher than the stored one is a no-op that still answers with the view.
+   */
+  private async squadSyncTiq(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad', message: 'That squad is no longer enlisted.' }, 404);
+    if (squad.banned) return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
+    const row = squad.roster.find((m) => m.id === requester);
+    if (!row) {
+      return json({ ok: false, error: 'not_a_member', message: 'Join this squad before syncing your score.' }, 409);
+    }
+    const reported = Number(body.playerTiq ?? body.tiq);
+    if (Number.isFinite(reported) && reported > 0) {
+      const next = Math.min(MEMBER_TIQ_CAP, Math.floor(reported));
+      if (next > row.tiq) {
+        row.tiq = next;
+        this.squadsDirty = true;
+        await this.persistSquads();
+      }
+    }
+    const total = squadTotalTiq(squad);
+    return json({ ok: true, totalTiq: total, warPoints: total, squad: squadViewOf(squad) });
   }
 
   /**
@@ -3337,7 +3388,9 @@ export class MatchmakerDO {
    *
    * The answer is about the caller's own signed identity: `body.userId` is accepted only on the
    * dev door, inside `squadRequester`, so nobody can vouch for a membership they do not hold.
-   * A chat the bot cannot read answers `unverifiedFallback` rather than a refusal.
+   * A chat the bot cannot read answers `unverifiedFallback` rather than a refusal. The same call
+   * carries the player's latest balance: proving the chat is also the moment a member's TIQ is
+   * refreshed, so a join flow lands on a roster row that already holds real numbers.
    */
   private async squadVerifyMember(request: Request, url: URL): Promise<Response> {
     const body = await readBody(request);
@@ -3346,7 +3399,25 @@ export class MatchmakerDO {
       return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
     }
     const chatHandle = typeof body.chatHandle === 'string' ? body.chatHandle : '';
-    return json(await verifyChannelMembership(chatHandle, requester, this.env));
+    const verdict = await verifyChannelMembership(chatHandle, requester, this.env);
+    const reported = Number(body.playerTiq ?? body.tiq);
+    const handle = normalizeChatHandle(chatHandle);
+    if (handle && Number.isFinite(reported) && reported > 0) {
+      await this.syncSquadsFromStorage();
+      const squad = [...this.squads.values()]
+        .find((row) => row.handle.toLowerCase() === handle.toLowerCase());
+      const member = squad?.roster.find((m) => m.id === requester);
+      if (squad && member && !squad.banned) {
+        const next = Math.min(MEMBER_TIQ_CAP, Math.floor(reported));
+        if (next > member.tiq) {
+          member.tiq = next;
+          this.squadsDirty = true;
+          await this.persistSquads();
+          return json({ ...verdict, totalTiq: squadTotalTiq(squad) });
+        }
+      }
+    }
+    return json(verdict);
   }
 
   /**

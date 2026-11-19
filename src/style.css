@@ -35736,6 +35736,24 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   align-items: center;
   gap: 10px;
 }
+/* The inspector's header is one row — Back · title · close. The shared grid has three tracks,
+   but this header carries a fourth key (the close button beside the back key), so it lays out
+   as a single non-wrapping flex row: the two keys keep their size, the title takes the middle
+   and centres, and the close never falls onto a second line under Back. */
+#cw-detail .cw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+#cw-detail .cw-head .cw-back,
+#cw-detail .cw-head .cw-x { flex-shrink: 0; }
+#cw-detail .cw-head .cw-title {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
 .cw-crest {
   display: grid;
   place-items: center;

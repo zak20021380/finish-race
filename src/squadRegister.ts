@@ -1,7 +1,7 @@
 import { workerUrl } from './adminApi';
 import { t } from './settings';
 import {
-  ACTIVE_CUP_ID, adoptWarPoints, applySquadRoster, approveSquadRequestLocal, bindSquadById, claimRegisteredSquad,
+  ACTIVE_CUP_ID, applySquadRoster, approveSquadRequestLocal, bindSquadById, claimRegisteredSquad,
   creditWarPoints, dropSquad, getMySquad, getSquadAdminState, getSquadById, getSquadRanking,
   hydrateSquadBoard as mergeSquadBoard, joinSquadLocally, kickSquadMemberLocal, leaveSquad,
   mergeSquadRequests, myPlayerId, mySquadApplicant, myWarStanding, normalizeSquad, queueSquadRequest,
@@ -94,8 +94,10 @@ interface SquadPayload {
   requireApproval?: boolean;
   /** Leader-only: the join requests waiting for an answer. */
   requests?: ApplicantPayload[];
-  /** The registry's Channel Wars TIQ total for this squad. */
+  /** The registry's Channel Wars TOTAL TIQ — the exact sum of the roster's real balances. */
   warPoints?: number;
+  /** The same total under its Channel Wars name; either spelling is accepted. */
+  totalTiq?: number;
   /** The chat's real Telegram audience, or `null` when Telegram never answered. */
   telegramMembers?: number | null;
   /** Players of our bot representing this channel. */
@@ -361,8 +363,9 @@ export function toSquad(payload: SquadPayload): Squad | null {
       ? { cupId: payload.cupId.trim().slice(0, 48) }
       : {}),
     ...(typeof payload.requireApproval === 'boolean' ? { requireApproval: payload.requireApproval } : {}),
-    ...(Number.isFinite(Number(payload.warPoints)) && Number(payload.warPoints) >= 0
-      ? { warPoints: Math.floor(Number(payload.warPoints)) }
+    ...(Number.isFinite(Number(payload.warPoints ?? payload.totalTiq))
+      && Number(payload.warPoints ?? payload.totalTiq) >= 0
+      ? { warPoints: Math.floor(Number(payload.warPoints ?? payload.totalTiq)) }
       : {}),
   }, ownerId || undefined);
 }
@@ -372,10 +375,14 @@ function myPayload(): Record<string, unknown> {
   const u = tgUser();
   const name = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim().slice(0, 24);
   const photo = (u?.photo_url ?? '').trim().slice(0, 300);
+  const tiq = Math.max(0, Math.floor(myTiq()));
   return {
     name,
     username: (u?.username ?? '').slice(0, 32),
-    tiq: Math.max(0, Math.floor(myTiq())),
+    /* `tiq` is the legacy spelling the registry has always read; `playerTiq` is the same real
+       balance under its Channel Wars name. Both travel so neither door reads a stale zero. */
+    tiq,
+    playerTiq: tiq,
     country: /^[A-Za-z]{2}$/.test(profile.country ?? '') ? (profile.country as string).toUpperCase() : '',
     ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
   };
@@ -537,8 +544,14 @@ export async function checkChannelMembership(handle: string): Promise<Membership
   const sent = await postJson<{ ok?: boolean; isMember?: boolean; unverifiedFallback?: boolean }>(
     '/api/squads/verify-member',
     /* `userId` is what the endpoint documents; the signed initData is what it actually trusts,
-       and `userTelegramId` is the dev door's own spelling of the same fact. */
-    { chatHandle: handle, userId: telegramUserId(), userTelegramId: telegramUserId() },
+       and `userTelegramId` is the dev door's own spelling of the same fact. The balance rides
+       along so proving the chat also refreshes the member's real TIQ. */
+    {
+      chatHandle: handle,
+      userId: telegramUserId(),
+      userTelegramId: telegramUserId(),
+      playerTiq: Math.max(0, Math.floor(myTiq())),
+    },
   );
   if (!sent?.ok || !sent.data || sent.data.ok !== true) return { isMember: true, unverified: true };
   return {
@@ -568,7 +581,6 @@ function absorb(payload: SquadPayload | undefined): RankedSquad | null {
   if (!squad) return null;
   const local = getSquadRanking().find((s) => s.id === squad.id);
   if (!local) return null;
-  if (typeof squad.warPoints === 'number') adoptWarPoints(squad.id, squad.warPoints);
   const bound = joinSquadLocally(squad.id, squad.roster, {
     subscribers: squad.subscribers,
     telegramMembers: squad.telegramMembers,
@@ -646,6 +658,24 @@ export async function syncSquadScore(): Promise<RankedSquad | null> {
   const mine = getMySquad();
   if (!mine || !telegramUserId()) return mine;
   const sent = await postJson<MemberResponse>('/api/squads/sync', { squadId: mine.id, ...myPayload() });
+  if (!sent?.ok || !sent.data || sent.data.ok !== true) return mine;
+  return absorb(sent.data.squad) ?? mine;
+}
+
+/**
+ * Save this player's current TIQ balance on their member row — the lightweight door Channel Wars
+ * opens on. One number and no roster decision: the registry answers with the channel's fresh
+ * TOTAL TIQ, so the ladder a player is about to look at always sums real balances.
+ */
+export async function syncChannelTiq(): Promise<RankedSquad | null> {
+  const mine = getMySquad();
+  if (!mine) return null;
+  if (!telegramUserId()) return mine;
+  const sent = await postJson<MemberResponse>('/api/squads/sync-tiq', {
+    squadId: mine.id,
+    playerTiq: Math.max(0, Math.floor(myTiq())),
+    userTelegramId: telegramUserId(),
+  });
   if (!sent?.ok || !sent.data || sent.data.ok !== true) return mine;
   return absorb(sent.data.squad) ?? mine;
 }

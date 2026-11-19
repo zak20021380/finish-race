@@ -42,7 +42,7 @@ export interface SquadMember {
   /** Telegram user id — the one stable key a player has. */
   id: string;
   name: string;
-  /** The player's own Tactical IQ, as the game reads it. */
+  /** The player's own Tactical IQ, as the game reads it. A channel's TOTAL TIQ is this summed. */
   tiq: number;
   role: SquadRole;
   joinedAt: number;
@@ -53,9 +53,8 @@ export interface SquadMember {
   /** The player's Telegram profile photo, when the roster reported one. */
   photo?: string;
   /**
-   * The Channel Wars TIQ this player has personally banked for the squad. The channel's total is
-   * the sum of this column, so the inspector names who actually carried the channel instead of
-   * splitting one figure across a roster. Only a real Play with Friends match ever adds to it.
+   * Legacy audit column: war TIQ banked while Channel Wars kept a separate ledger. Never part of
+   * the channel total any more — that is `tiq`, the player's real balance, summed by `squadTiqSum`.
    */
   warTiq?: number;
 }
@@ -130,8 +129,9 @@ export interface Squad {
    */
   requireApproval?: boolean;
   /**
-   * The registry's Channel Wars total. The device's own live reading lives in `SquadSave.war`
-   * so a win credits the board on the same frame it settles, before the Worker answers.
+   * The registry's Channel Wars total — always the exact sum of the roster's real TIQ. The
+   * device's live reading is derived from the roster itself, so there is no local ledger to keep
+   * in step; this is the server's copy of the same sum.
    */
   warPoints?: number;
 }
@@ -153,16 +153,10 @@ interface SquadSave {
   bonus: Record<string, number>;
   /** Leader-only controls, keyed by squad id. Absent = never touched on this device. */
   admin: Record<string, SquadAdminState>;
-  /**
-   * Channel Wars totals, keyed by squad id. Kept out of `custom` for the same reason `admin` is:
-   * a board hydration replaces a squad wholesale, and a win the Worker has not acknowledged yet
-   * must survive it.
-   */
-  war: Record<string, number>;
 }
 
 function fresh(): SquadSave {
-  return { boundId: null, custom: [], bonus: {}, admin: {}, war: {} };
+  return { boundId: null, custom: [], bonus: {}, admin: {} };
 }
 
 /** A stored join request, normalised so a stale or hostile row cannot break a roster write. */
@@ -298,12 +292,6 @@ function migrate(raw: Partial<SquadSave> | null): SquadSave {
           .map((a) => ({ ...a }))
           .slice(0, 60),
       };
-    }
-  }
-  if (raw.war && typeof raw.war === 'object') {
-    for (const [k, v] of Object.entries(raw.war)) {
-      if (typeof k !== 'string' || k.length > 48) continue;
-      if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= WAR_CAP) s.war[k] = Math.floor(v);
     }
   }
   return s;
@@ -458,14 +446,15 @@ export function squadIdFromPayload(raw: string): string {
 /**
  * The roster a squad paints: leader first, then by TIQ. The local player's own row is refreshed
  * from `myTiq()` on every read, so the score a player sees is always the one their games earned —
- * never a number frozen at join time.
+ * never a number frozen at join time. The stored row wins only when it is ahead (a war credit the
+ * registry already paid), so a win is never walked backwards by a read.
  */
 export function squadRosterOf(squad: Squad): SquadMember[] {
   const me = myRosterId();
   const roster = squad.roster.map((m) => ({ ...m }));
   const row = roster.find((m) => m.id === me);
   if (row) {
-    row.tiq = Math.max(0, Math.floor(myTiq()));
+    row.tiq = Math.max(Math.max(0, Math.floor(row.tiq || 0)), Math.max(0, Math.floor(myTiq())));
     /* The portrait is this device's own fact, so it is refreshed from the live Telegram profile
        on every read: a player who has never re-synced still shows their real face on the board
        instead of the initials their join-day row happened to carry. */
@@ -632,7 +621,9 @@ export function joinSquadLocally(
   if (!existing) {
     rows.push(myRow(extra.role ?? 'member', ''));
   } else {
-    existing.tiq = Math.max(0, Math.floor(myTiq()));
+    /* Mirror the real balance immediately; a server row that is already ahead (a banked war
+       credit) keeps its number so the sync never walks a win backwards. */
+    existing.tiq = Math.max(Math.max(0, Math.floor(existing.tiq || 0)), Math.max(0, Math.floor(myTiq())));
     if (extra.role) existing.role = extra.role;
   }
   save.custom[at] = normalizeSquad({
@@ -665,18 +656,28 @@ export function kickSquadMemberLocal(id: string, memberId: string): boolean {
 }
 
 /**
- * Keep the @username this device already knew for a row the registry does not publish one for.
+ * Keep the facts this device already knew for a row the registry does not publish.
  *
  * The Worker stores a member's handle for its audit trail but never puts it on a board, so a
  * roster hydrated from the server comes back with empty usernames. The device learned its own
  * player's handle at join time; dropping it would take away the one public door to that photo.
+ * The local player's balance is the one number this device can legitimately be ahead on — a war
+ * credit the registry has not acknowledged yet — so it survives a hydration while it is higher.
  */
 function keepUsernames(next: Squad, prev: Squad | undefined): Squad {
   if (!prev || !prev.roster.length) return next;
-  const known = new Map(prev.roster.map((m) => [m.id, m.username ?? '']));
+  const known = new Map(prev.roster.map((m) => [m.id, m]));
+  const me = myRosterId();
   return {
     ...next,
-    roster: next.roster.map((m) => (m.username ? m : { ...m, username: known.get(m.id) ?? '' })),
+    roster: next.roster.map((m) => {
+      const before = known.get(m.id);
+      const username = m.username || before?.username || '';
+      const tiq = m.id === me
+        ? Math.max(Math.max(0, Math.floor(m.tiq || 0)), Math.max(0, Math.floor(before?.tiq ?? 0)))
+        : m.tiq;
+      return { ...m, username, tiq };
+    }),
   };
 }
 
@@ -838,7 +839,6 @@ export function dropSquad(id: string): boolean {
   if (save.boundId === id) save.boundId = null;
   delete save.bonus[id];
   delete save.admin[id];
-  delete save.war[id];
   flush();
   return true;
 }
@@ -866,25 +866,33 @@ export interface ChannelCup {
 }
 
 /* ---------- Channel Wars: the weekly Channel TIQ ladder ----------
-   Channel TIQ is a different currency from Squad IQ. IQ is the mean of the roster's own TIQ, so
-   it moves when a member gets better; the channel's TIQ only ever moves when somebody actually
-   plays a Play with Friends match — a bot board pays the channel nothing. It is banked per squad,
-   credited on the settlement frame, and replicated to the registry afterwards, so the hub a
-   player returns to already shows the win they just earned. */
+   Channel TIQ has exactly one source: the roster's own TIQ balances. A member's real Tactical IQ
+   is the score, and a channel's total is those balances summed — the same arithmetic the
+   inspector lists fighter by fighter. Only a Play with Friends match ever adds to it (a win or a
+   participation credit lands on the fighter's own row), and the registry holds the same sum, so
+   the hub a player returns to already shows the win they just earned. */
 
 /**
- * The live Channel TIQ total for a squad: whichever reading is further ahead. The device credits a
- * win before the Worker acknowledges it, and the registry is the authority once it catches up, so
- * taking the higher of the two loses neither an unconfirmed win nor a win earned on another phone.
+ * The live Channel TIQ total for a squad: the exact sum of its members' real TIQ balances.
+ *
+ * The roster is what paints the ladder, so the total and the fighters listed under it are the
+ * same arithmetic and can never disagree. A squad whose roster has not hydrated falls back to
+ * the registry's own copy of the sum.
  */
-export function warPointsOf(s: Pick<Squad, 'id' | 'warPoints'>): number {
-  const local = save.war[s.id] ?? 0;
+export function warPointsOf(s: Pick<Squad, 'id' | 'warPoints' | 'roster'>): number {
+  const roster = Array.isArray(s.roster) ? s.roster : [];
+  if (roster.length) return squadTiqSum(roster);
   const server = typeof s.warPoints === 'number' && Number.isFinite(s.warPoints) ? s.warPoints : 0;
-  return Math.max(0, Math.min(WAR_CAP, Math.floor(Math.max(local, server))));
+  return Math.max(0, Math.floor(server));
 }
 
 /** The same reading under the name the war's own screens use. */
 export const channelTiqOf = warPointsOf;
+
+/** True when anyone on this roster has actually banked war TIQ for the channel. */
+export function hasWarEarnings(s: Pick<Squad, 'roster'>): boolean {
+  return s.roster.some((m) => Math.max(0, Math.floor(m.warTiq ?? 0)) > 0);
+}
 
 /** Every squad this device knows, ranked by Channel TIQ. The hub's leaderboard order. */
 export function getWarRanking(): RankedSquad[] {
@@ -912,33 +920,26 @@ export function myWarStanding(): { squad: RankedSquad | null; rank: number; poin
  * Bank a war match's points for the bound squad, locally and immediately. Returns the squad and
  * its new total so the caller can repaint without a second read; null when there is no channel.
  *
- * The player's own roster row is credited in the same turn. The channel's TIQ and the sum of its
- * fighters' TIQ are then one number, which is what lets the inspector rank a roster by what each
- * person actually brought to the channel.
+ * The gain lands on this player's own real balance, so the channel's total — the roster summed —
+ * moves on the settlement frame and the inspector's fighter row shows exactly what was credited.
  */
 export function creditWarPoints(n: number): { squad: RankedSquad; points: number } | null {
   const mine = getMySquad();
   if (!mine) return null;
   const gain = Math.max(0, Math.min(WAR_WIN, Math.floor(n)));
-  const points = Math.min(WAR_CAP, warPointsOf(mine) + gain);
-  save.war[mine.id] = points;
   const at = save.custom.findIndex((s) => s.id === mine.id);
   if (at >= 0 && gain > 0) {
     const me = myRosterId();
     const row = save.custom[at].roster.find((m) => m.id === me);
-    if (row) row.warTiq = Math.min(WAR_CAP, Math.max(0, Math.floor(row.warTiq ?? 0)) + gain);
+    if (row) {
+      const balance = Math.max(Math.max(0, Math.floor(row.tiq || 0)), Math.max(0, Math.floor(myTiq())));
+      row.tiq = balance + gain;
+      row.warTiq = Math.min(WAR_CAP, Math.max(0, Math.floor(row.warTiq ?? 0)) + gain);
+    }
   }
   flush();
-  return { squad: getMySquad() ?? mine, points };
-}
-
-/** Adopt the registry's total after a credit or a board read. Never walks a local win backwards. */
-export function adoptWarPoints(id: string, total: number): void {
-  if (!id || !Number.isFinite(total) || total < 0) return;
-  const next = Math.min(WAR_CAP, Math.floor(total));
-  if ((save.war[id] ?? 0) >= next) return;
-  save.war[id] = next;
-  flush();
+  const after = getMySquad() ?? mine;
+  return { squad: after, points: warPointsOf(after) };
 }
 
 /**

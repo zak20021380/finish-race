@@ -40,12 +40,15 @@ export interface SquadMemberRow {
    */
   photo: string;
   /**
-   * The Channel Wars TIQ this player has personally banked for the squad. The squad's own total is
-   * this column summed, so the inspector can name who actually carried the channel instead of
-   * splitting one number across a roster. Only a real Play with Friends match ever adds to it.
+   * Legacy audit column: the Channel Wars TIQ this player banked while the war kept a separate
+   * ledger. The channel's TOTAL TIQ no longer reads it — that is `tiq`, the player's real balance,
+   * summed across the roster. Kept so an older row still reports what it earned.
    */
   warTiq: number;
 }
+
+/** The ceiling one member's reported TIQ may hold. */
+export const MEMBER_TIQ_CAP = 9_999_999;
 
 /**
  * A player waiting for the leader to answer an invite. Deliberately *not* a `SquadMemberRow`:
@@ -117,8 +120,8 @@ export interface RegisteredSquad {
   /** Leader-only queue of join requests awaiting a decision. */
   pending: SquadApplicantRow[];
   /**
-   * Channel Wars total: points its members banked by playing war matches. A different currency
-   * from the roster's TIQ — this one only moves when somebody actually plays.
+   * Legacy war ledger, kept for stored rows from before the channel total became the roster's own
+   * TIQ sum. No view reads it: every Channel Wars total is `squadTotalTiq`.
    */
   warPoints: number;
   /** The last announcements this leader dispatched, newest first. */
@@ -320,16 +323,20 @@ export function readSquadMember(raw: unknown): SquadMemberRow | null {
   const tiq = Number(row.tiq);
   const joinedAt = Number(row.joinedAt);
   const country = text(row.country, 2).toUpperCase();
+  const warTiq = warTotalOf(row.warTiq);
+  const storedTiq = Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0;
   return {
     id,
     name: text(row.name, 24),
-    tiq: Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0,
+    /* A row written before `tiq` existed kept its only score in `warTiq`; that number is the
+       player's best known balance, so it backfills the real column instead of reporting a 0. */
+    tiq: storedTiq || warTiq,
     role,
     joinedAt: Number.isFinite(joinedAt) && joinedAt > 0 ? Math.floor(joinedAt) : 0,
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username: text(row.username, 32).replace(/^@+/, ''),
     photo: photoOf(row.photo),
-    warTiq: warTotalOf(row.warTiq),
+    warTiq,
   };
 }
 
@@ -513,7 +520,7 @@ export function upsertSquadMember(
   const id = text(input.id, 24).replace(/[^0-9A-Za-z_-]/g, '');
   if (!id) return false;
   const tiqRaw = Number(input.tiq);
-  const tiq = Number.isFinite(tiqRaw) && tiqRaw > 0 ? Math.min(Math.floor(tiqRaw), 9_999_999) : 0;
+  const tiq = Number.isFinite(tiqRaw) && tiqRaw > 0 ? Math.min(Math.floor(tiqRaw), MEMBER_TIQ_CAP) : 0;
   const country = text(input.country, 2).toUpperCase();
   const name = text(input.name, 24);
   const username = text(input.username, 32).replace(/^@+/, '');
@@ -560,10 +567,19 @@ export function removeSquadMember(squad: RegisteredSquad, playerId: string): boo
   return squad.roster.length !== before;
 }
 
-/** The squad's war total: every joined player's own TIQ, added up (admin telemetry). */
-export function squadWarTiq(squad: RegisteredSquad): number {
-  return squad.roster.reduce((sum, m) => sum + Math.max(0, m.tiq), 0);
+/**
+ * The channel's TOTAL TIQ: the exact sum of every member's real TIQ balance.
+ *
+ * This is the one authority for every Channel Wars total — the ladder, the inspector's telemetry
+ * card and the fighters' own figures are all this same arithmetic, so two screens can never quote
+ * two different numbers for one channel.
+ */
+export function squadTotalTiq(squad: RegisteredSquad): number {
+  return squad.roster.reduce((sum, m) => sum + Math.max(0, Math.round(m.tiq || 0)), 0);
 }
+
+/** The same sum under the admin telemetry's historical name. */
+export const squadWarTiq = squadTotalTiq;
 
 /** A war-point reading, bounded. Anything malformed is a zero, never a NaN on the board. */
 export function warTotalOf(raw: unknown): number {
@@ -578,19 +594,32 @@ export const WAR_POINTS_CAP = 1_000_000;
  * Bank a war match's points. The gain is clamped to the two amounts the game actually pays, so a
  * hand-made request cannot mint a lead: a war match is worth a win or a participation credit.
  *
- * `playerId` names the fighter who played, and their own row is credited in the same turn: the
- * squad's total and the sum of its fighters' columns are then the same number, which is what lets
- * the inspector rank a roster by what each person actually brought to the channel.
+ * `playerId` names the fighter who played, and their member row is credited in the same turn —
+ * their reported real balance first, then the match's gain on top, so the channel's TOTAL TIQ
+ * (the sum of the roster) moves the moment the match settles. Returns that new total.
  */
-export function addWarPoints(squad: RegisteredSquad, gain: number, playerId = ''): number {
+export function addWarPoints(
+  squad: RegisteredSquad,
+  gain: number,
+  playerId = '',
+  playerTiq = 0,
+): number {
   const paid = Math.max(0, Math.min(WAR_WIN_POINTS, Math.floor(Number(gain) || 0)));
   squad.warPoints = Math.min(WAR_POINTS_CAP, warTotalOf(squad.warPoints) + paid);
   const id = text(playerId, 24);
   if (paid > 0 && id) {
     const row = squad.roster.find((m) => m.id === id);
-    if (row) row.warTiq = Math.min(WAR_POINTS_CAP, warTotalOf(row.warTiq) + paid);
+    if (row) {
+      const reported = Number(playerTiq);
+      const balance = Number.isFinite(reported) && reported > 0
+        ? Math.min(MEMBER_TIQ_CAP, Math.floor(reported))
+        : 0;
+      /* The member's real balance is the score; a stale stored value never walks it backwards. */
+      row.tiq = Math.min(MEMBER_TIQ_CAP, Math.max(0, Math.max(row.tiq, balance) + paid));
+      row.warTiq = Math.min(WAR_POINTS_CAP, warTotalOf(row.warTiq) + paid);
+    }
   }
-  return squad.warPoints;
+  return squadTotalTiq(squad);
 }
 
 /** What a war match pays, mirrored from the client's own settlement. */
@@ -605,14 +634,16 @@ export function squadAvgTiq(squad: RegisteredSquad): number {
 
 /**
  * One fighter on a channel's roster, as the inspector paints them: the identity a face and a name
- * need, and the TIQ they personally banked for this channel.
+ * need, and the TIQ balance the player actually holds.
  */
 export interface SquadFighterView {
   id: string;
   name: string;
   /** The Telegram portrait, or '' when the player has none. */
   avatar: string;
-  /** Channel Wars TIQ this player earned for the squad. */
+  /** The player's real TIQ balance — the number the channel's TOTAL TIQ sums. */
+  tiq: number;
+  /** Legacy audit column: the war TIQ this player banked while the ledger was separate. */
   tiqContributed: number;
   role: SquadMemberRole;
 }
@@ -641,9 +672,14 @@ export interface SquadView {
   botFightersCount: number;
   /** Squad IQ: the arithmetic mean of the roster's TIQ. */
   tiq: number;
-  /** Channel Wars total: the TIQ its members banked in Play with Friends matches. */
+  /**
+   * Channel Wars TOTAL TIQ: the exact sum of every member's real TIQ balance. Never a separate
+   * war ledger — the number here is `sum(member.tiq)`, which is also what `totalTiq` carries.
+   */
   warPoints: number;
-  /** The roster as the inspector ranks it: highest channel TIQ first. */
+  /** The same total under its Channel Wars name. Always equal to `warPoints`. */
+  totalTiq: number;
+  /** The roster as the inspector ranks it: highest real TIQ first. */
   fighters: SquadFighterView[];
   creatorId: string;
   createdAt: number;
@@ -664,17 +700,19 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     /* The @username is stored for the audit trail, never published on a board. The portrait it
        could derive is published as `photo` instead, which is the one thing a face needs. */
     .map((member) => ({ ...member, username: '' }));
-  /* The inspector's own order: whoever banked the most for the channel leads, ties broken by the
-     player's TIQ and then by id so two devices never paint the same roster two ways. */
+  /* The inspector's own order: the roster ranked by real TIQ balance, ties broken by id so two
+     devices never paint the same roster two ways. */
   const fighters: SquadFighterView[] = roster
     .map((member) => ({
       id: member.id,
       name: member.name,
       avatar: member.photo,
+      tiq: Math.max(0, Math.floor(member.tiq)),
       tiqContributed: warTotalOf(member.warTiq),
       role: member.role,
     }))
-    .sort((a, b) => b.tiqContributed - a.tiqContributed || a.id.localeCompare(b.id));
+    .sort((a, b) => b.tiq - a.tiq || a.id.localeCompare(b.id));
+  const totalTiq = squadTotalTiq(squad);
   const audience = squad.telegramMembers;
   return {
     id: squad.id,
@@ -691,7 +729,8 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
       : null,
     botFightersCount: roster.length,
     tiq: squadAvgTiq(squad),
-    warPoints: warTotalOf(squad.warPoints),
+    warPoints: totalTiq,
+    totalTiq,
     fighters,
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
@@ -1147,6 +1186,8 @@ export async function verifyAndBuildSquad(
     name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string;
     /** The enlisting leader's own Telegram portrait. */
     photo?: string;
+    /** The enlisting leader's current real TIQ balance; the roster's first row starts here. */
+    playerTiq?: number;
     /** The cup this enlistment is filed under; the running championship when omitted. */
     cupId?: string;
   },
@@ -1238,7 +1279,10 @@ export async function verifyAndBuildSquad(
       roster: [{
         id: requester,
         name: text(identity?.memberName, 24),
-        tiq: 0,
+        /* The leader already holds a real balance; the channel's TOTAL TIQ starts at it, not 0. */
+        tiq: Number.isFinite(Number(identity?.playerTiq)) && Number(identity?.playerTiq) > 0
+          ? Math.min(MEMBER_TIQ_CAP, Math.floor(Number(identity?.playerTiq)))
+          : 0,
         role: 'leader',
         joinedAt: Date.now(),
         country: '',
