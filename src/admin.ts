@@ -412,6 +412,16 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the trend chart's Monthly window. */
   series30d: SeriesPoint[];
+  /** Stars received from paid invoices. */
+  starsRevenueTotal: number;
+  /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
+  vaultUnlockedTotal: number;
+  /** Payout requests still waiting for the owner. */
+  vaultPendingPayoutsCount: number;
+  /** The Stars those waiting requests would settle. */
+  vaultPendingPayoutsStars: number;
+  /** Stars already marked paid to players. */
+  vaultPaidOutStars: number;
   /** Sections the room could not read, each reporting its own exact zeroes. Empty when all is well. */
   degraded?: string[];
 }
@@ -519,6 +529,11 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     series24h: metricSeries(row.series24h),
     series7d: metricSeries(row.series7d),
     series30d: metricSeries(row.series30d),
+    starsRevenueTotal: metricCount(row.starsRevenueTotal),
+    vaultUnlockedTotal: metricCount(row.vaultUnlockedTotal),
+    vaultPendingPayoutsCount: metricCount(row.vaultPendingPayoutsCount),
+    vaultPendingPayoutsStars: metricCount(row.vaultPendingPayoutsStars),
+    vaultPaidOutStars: metricCount(row.vaultPaidOutStars),
     degraded: Array.isArray(row.degraded)
       ? row.degraded.filter((part): part is string => typeof part === 'string' && part !== '')
       : [],
@@ -1830,13 +1845,18 @@ export function createAdmin(api: AdminApi): Admin {
   /* the Stats dashboard: the strict live reading from `GET /api/admin/metrics` */
   const statsPanel = stage?.querySelector<HTMLElement>('[data-apanel="stats"]') ?? null;
   const statActive = $<HTMLElement>('stat-active');
+  const statActiveMeta = $<HTMLElement>('stat-active-meta');
   const statLiveRooms = $<HTMLElement>('stat-live-rooms');
-  const statLiveDot = $<HTMLElement>('stat-live-dot');
   const statDau = $<HTMLElement>('stat-dau');
   const statMau = $<HTMLElement>('stat-mau');
   const statNewToday = $<HTMLElement>('stat-new-today');
   const statNewWeek = $<HTMLElement>('stat-new-week');
   const statNewMonth = $<HTMLElement>('stat-new-month');
+  /* the Stars economy: invoice revenue, vault unlocks, the payout queue and what was settled */
+  const statStarsIncome = $<HTMLElement>('stat-stars-income');
+  const statStarsPending = $<HTMLElement>('stat-stars-pending');
+  const statStarsPendingReq = $<HTMLElement>('stat-stars-pending-req');
+  const statStarsPaid = $<HTMLElement>('stat-stars-paid');
   const statReturning = $<HTMLElement>('stat-returning');
   const statReturningPct = $<HTMLElement>('stat-returning-pct');
   const statD1 = $<HTMLElement>('stat-d1');
@@ -2938,23 +2958,32 @@ export function createAdmin(api: AdminApi): Admin {
 
     if (statsPanel) statsPanel.setAttribute('aria-busy', String(metricsBusy));
 
-    /* ---- pulse: live concurrency, then the two active-population windows ---- */
+    /* one localized line with its number filled in; a reading that has not answered keeps the
+       same placeholder it starts with rather than inventing a count */
+    const phrase = (key: string, n: number | null | undefined, fallback: string): string =>
+      n == null ? (pending ? '…' : fallback) : t(key).replace('{n}', figure(n));
+
+    /* ---- active players: live concurrency, the registry size, then both population windows ---- */
     const concurrency = m ? m.activeRooms + m.queueLength : null;
     if (statActive) statActive.textContent = metric(concurrency);
-    if (statLiveRooms) {
-      statLiveRooms.textContent = m
-        ? `${figure(m.activeRooms)} rooms · ${figure(m.queueLength)} queued`
-        : '— rooms · — queued';
-    }
-    if (statLiveDot) statLiveDot.dataset.live = String(!!m && (m.activeRooms > 0 || m.queueLength > 0));
+    if (statActiveMeta) statActiveMeta.textContent = phrase('admTotal', m?.totalUsers, '— Total');
+    if (statLiveRooms) statLiveRooms.textContent = phrase('admActiveRooms', m?.activeRooms, '— active rooms');
     if (statDau) statDau.textContent = metric(m?.dau);
     if (statMau) statMau.textContent = metric(m?.mau);
 
-    /* ---- acquisition: rolling first-seen cohorts, plus the registry size for context ---- */
+    /* ---- new signups: rolling first-seen cohorts, plus the registry size for context ---- */
     if (statGrowthMeta) statGrowthMeta.textContent = m ? `${figure(m.totalUsers)} registered` : '— registered';
     if (statNewToday) statNewToday.textContent = metric(m?.signupsToday);
     if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
     if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
+
+    /* ---- Stars revenue: invoice income, the waiting payout queue and what was settled ---- */
+    if (statStarsIncome) statStarsIncome.textContent = metric(m?.starsRevenueTotal);
+    if (statStarsPending) statStarsPending.textContent = metric(m?.vaultPendingPayoutsStars);
+    if (statStarsPendingReq) {
+      statStarsPendingReq.textContent = phrase('admPayoutRequests', m?.vaultPendingPayoutsCount, '— requests');
+    }
+    if (statStarsPaid) statStarsPaid.textContent = metric(m?.vaultPaidOutStars);
 
     /* ---- engagement: today's returners, next-day return, hooked share ---- */
     if (statReturning) statReturning.textContent = metric(m?.returningUsersToday);
@@ -3003,7 +3032,7 @@ export function createAdmin(api: AdminApi): Admin {
               : 'idle';
       statConn.dataset.state = state;
       statConn.textContent = state === 'loading' ? 'SYNCING'
-        : state === 'live' ? 'LIVE'
+        : state === 'live' ? t('admOnline')
           : state === 'locked' ? 'LOCKED'
             : state === 'stale' ? 'STALE'
               : state === 'slow' ? 'SLOW'
@@ -3015,7 +3044,7 @@ export function createAdmin(api: AdminApi): Admin {
       /* A reading the room could only build in part says which part is missing. */
       const partial = m?.degraded?.length ? ` · partial: ${m.degraded.join(', ')}` : '';
       statUpdated.textContent = m
-        ? `${metricsBusy ? 'Syncing · last reading' : 'Updated'} ${clockOf(m.timestamp)}${partial}`
+        ? `${metricsBusy ? t('admSyncLast') : t('admUpdated').replace('{time}', clockOf(m.timestamp))}${partial}`
         : metricsBusy ? 'Reading the Worker…'
           : denied ? 'No live reading'
             : metricsPhase === 'error'
@@ -7255,7 +7284,13 @@ export function createAdmin(api: AdminApi): Admin {
   });
   /* every activity string is built from t(): a language change rebuilds the cards and
      the FAB's spoken label rather than leaving one translated surface behind */
-  onLang(() => paintActivity());
+  onLang(() => {
+    paintActivity();
+    /* the Stats sub-lines carry localized phrases, so a language switch repaints them too */
+    if (open) {
+      try { paintStats(); } catch { /* a paint fault never breaks the switch */ }
+    }
+  });
   onRuntime(() => {
     /* Both queue radii are the server's too: a local change pushes the new values to
        `POST /admin/config`. Offline, `syncConfig` is a no-op. */

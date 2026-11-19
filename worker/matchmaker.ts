@@ -772,6 +772,16 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the chart's Monthly window. */
   series30d: SeriesPoint[];
+  /** Stars received from paid invoices (the lifetime VIP/storefront ledger). */
+  starsRevenueTotal: number;
+  /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
+  vaultUnlockedTotal: number;
+  /** Payout requests still waiting for the owner. */
+  vaultPendingPayoutsCount: number;
+  /** The Stars those waiting requests would settle. */
+  vaultPendingPayoutsStars: number;
+  /** Stars already marked paid to players. */
+  vaultPaidOutStars: number;
   /** The sections of this reading that failed to compute and are reporting their own exact zeroes. */
   degraded: string[];
 }
@@ -816,6 +826,19 @@ const NO_SERIES: Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> = {
   series24h: [],
   series7d: [],
   series30d: [],
+};
+
+/** The Stars economy, unread: exact zeroes, never a modelled payout. */
+type StarsReading = Pick<ServerMetrics,
+  | 'starsRevenueTotal' | 'vaultUnlockedTotal'
+  | 'vaultPendingPayoutsCount' | 'vaultPendingPayoutsStars' | 'vaultPaidOutStars'>;
+
+const NO_STARS: StarsReading = {
+  starsRevenueTotal: 0,
+  vaultUnlockedTotal: 0,
+  vaultPendingPayoutsCount: 0,
+  vaultPendingPayoutsStars: 0,
+  vaultPaidOutStars: 0,
 };
 
 /**
@@ -4070,6 +4093,7 @@ export class MatchmakerDO {
     });
     const population = guarded('population', () => this.populationReading(now), NO_POPULATION);
     const series = guarded('series', () => this.growthWindows(now, mode), NO_SERIES);
+    const stars = guarded('stars', () => this.starsReading(), NO_STARS);
     const environment = guarded('environment', () => this.envLabel(hostname), 'unknown');
     return {
       ok: true,
@@ -4081,7 +4105,36 @@ export class MatchmakerDO {
       ...counters,
       logsSpawned: 0,
       ...series,
+      ...stars,
       degraded,
+    };
+  }
+
+  /**
+   * The Stars economy the operator reads at a glance: what invoices collected, what the vault
+   * unlocked (the free starter gift excluded), what is still waiting to be paid and what already
+   * was. Folded from the same ledgers the VIP and Vault tabs audit — never a separate tally.
+   */
+  private starsReading(): StarsReading {
+    let unlocked = 0;
+    let paid = 0;
+    for (const acc of this.vaultAccounts.values()) {
+      unlocked += acc.earnedStars;
+      paid += acc.paidOutStars;
+    }
+    let pendingCount = 0;
+    let pendingStars = 0;
+    for (const pay of this.vaultPayouts.values()) {
+      if (pay.status !== 'waiting') continue;
+      pendingCount++;
+      pendingStars += pay.amount;
+    }
+    return {
+      starsRevenueTotal: this.vipSales.totalStars,
+      vaultUnlockedTotal: unlocked,
+      vaultPendingPayoutsCount: pendingCount,
+      vaultPendingPayoutsStars: pendingStars,
+      vaultPaidOutStars: paid,
     };
   }
 
@@ -4131,6 +4184,7 @@ export class MatchmakerDO {
       minesPlaced: 0,
       logsSpawned: 0,
       ...NO_SERIES,
+      ...NO_STARS,
       degraded: ['telemetry', reasonOf(err)],
     };
   }

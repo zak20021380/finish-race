@@ -3179,8 +3179,8 @@
       <section class="admin" id="overlay-admin" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
         <header class="admin-head">
           <div class="admin-head-txt">
-            <p class="admin-kicker">COMMAND CENTER</p>
-            <h2 class="admin-title" id="admin-title">Tactix Admin</h2>
+            <p class="admin-kicker" data-i18n="admDashSubtitle">Tactix Live Stats</p>
+            <h2 class="admin-title" id="admin-title" data-i18n="admDashTitle">Admin Dashboard</h2>
           </div>
           <button class="admin-close" id="admin-close" type="button" aria-label="Close Admin Command Center">
             <svg class="ico admin-close-x" aria-hidden="true"><use href="#i-close" /></svg>
@@ -3210,74 +3210,80 @@
               </span>
             </div>
 
-            <!-- A. live engagement pulse: real concurrency, then both active-population windows -->
+            <!-- A. active players: live concurrency, then both active-population windows -->
             <section class="adm-block" data-accent="sky" aria-labelledby="stat-pulse-title">
               <div class="adm-block-h">
-                <h3 class="adm-block-t" id="stat-pulse-title">Live Engagement Pulse</h3>
-                <span class="adm-block-s">Rolling windows</span>
+                <h3 class="adm-block-t" id="stat-pulse-title" data-i18n="admActiveTitle">Active Players</h3>
+                <span class="adm-block-s" id="stat-active-meta">— Total</span>
               </div>
               <div class="adm-grid">
                 <div class="adm-card">
-                  <span class="adm-card-top">
-                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
-                    <span class="adm-live-dot" id="stat-live-dot" data-live="false" aria-hidden="true"></span>
-                  </span>
+                  <span class="adm-card-l" data-i18n="admOnlineNow">Online Now</span>
                   <b class="adm-card-v" id="stat-active">—</b>
-                  <span class="adm-card-l">Live Concurrency</span>
-                  <span class="adm-card-s" id="stat-live-rooms">— rooms · — queued</span>
+                  <span class="adm-card-s" id="stat-live-rooms">— active rooms</span>
                 </div>
                 <div class="adm-card">
-                  <span class="adm-card-top">
-                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
-                  </span>
+                  <span class="adm-card-l" data-i18n="admToday24h">Today (24h)</span>
                   <b class="adm-card-v" id="stat-dau">—</b>
-                  <span class="adm-card-l">DAU</span>
-                  <span class="adm-card-s">24h active</span>
+                  <span class="adm-card-s" data-i18n="admActiveIn24h">Active in 24h</span>
                 </div>
                 <div class="adm-card">
-                  <span class="adm-card-top">
-                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-calendar" /></svg></span>
-                  </span>
+                  <span class="adm-card-l" data-i18n="admThisMonth30d">This Month (30d)</span>
                   <b class="adm-card-v" id="stat-mau">—</b>
-                  <span class="adm-card-l">MAU</span>
-                  <span class="adm-card-s">30d active</span>
+                  <span class="adm-card-s" data-i18n="admActiveIn30d">Active in 30d</span>
                 </div>
               </div>
             </section>
 
-            <!-- B. acquisition: first-seen cohorts as three tone-coded inflow pills -->
+            <!-- B. new signups: first-seen cohorts in the same three-card grid as the row above -->
             <section class="adm-block" data-accent="mint" aria-labelledby="stat-acquire-title">
               <div class="adm-block-h">
-                <h3 class="adm-block-t" id="stat-acquire-title">Player Acquisition</h3>
+                <h3 class="adm-block-t" id="stat-acquire-title" data-i18n="admNewSignups">New Signups</h3>
                 <span class="adm-block-s" id="stat-growth-meta">— registered</span>
               </div>
-              <div class="adm-slab">
-                <div class="adm-inflow-h">
-                  <span class="adm-inflow-t">New Player Inflow</span>
-                  <span class="adm-inflow-s">First-time signups</span>
+              <div class="adm-grid">
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admToday">Today</span>
+                  <b class="adm-card-v" id="stat-new-today">—</b>
+                  <span class="adm-card-s" data-i18n="admLast24h">Last 24h</span>
                 </div>
-                <div class="adm-inflow">
-                  <div class="adm-inflow-pill" data-window="today">
-                    <span class="adm-inflow-dot" aria-hidden="true"></span>
-                    <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">Today · 24H</span>
-                      <b class="adm-inflow-v" id="stat-new-today">—</b>
-                    </span>
-                  </div>
-                  <div class="adm-inflow-pill" data-window="week">
-                    <span class="adm-inflow-dot" aria-hidden="true"></span>
-                    <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">This Week · 7D</span>
-                      <b class="adm-inflow-v" id="stat-new-week">—</b>
-                    </span>
-                  </div>
-                  <div class="adm-inflow-pill" data-window="month">
-                    <span class="adm-inflow-dot" aria-hidden="true"></span>
-                    <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">This Month · 30D</span>
-                      <b class="adm-inflow-v" id="stat-new-month">—</b>
-                    </span>
-                  </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admThisWeek">This Week</span>
+                  <b class="adm-card-v" id="stat-new-week">—</b>
+                  <span class="adm-card-s" data-i18n="admLast7d">Last 7d</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admThisMonth">This Month</span>
+                  <b class="adm-card-v" id="stat-new-month">—</b>
+                  <span class="adm-card-s" data-i18n="admLast30d">Last 30d</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- B1. Stars revenue: what invoices collected, what the vault unlocked, what is
+                 waiting to be paid and what already was — all from the Worker's own ledgers. -->
+            <section class="adm-block" data-accent="gold" aria-labelledby="stat-stars-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-stars-title" data-i18n="admStarsRevenue">Stars Revenue</h3>
+              </div>
+              <div class="adm-grid">
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admStarsIncome">Stars Income</span>
+                  <span class="adm-card-vrow">
+                    <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
+                    <b class="adm-card-v" id="stat-stars-income">—</b>
+                  </span>
+                  <span class="adm-card-s" data-i18n="admStarsCollected">Total collected</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admPendingPayouts">Pending Payouts</span>
+                  <b class="adm-card-v" id="stat-stars-pending">—</b>
+                  <span class="adm-card-s" id="stat-stars-pending-req">— requests</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admPaidOut">Paid Out</span>
+                  <b class="adm-card-v" id="stat-stars-paid">—</b>
+                  <span class="adm-card-s" data-i18n="admCompleted">Completed</span>
                 </div>
               </div>
             </section>
@@ -3286,8 +3292,8 @@
                  point is a real bucket it stamped or folded from its own registry timestamps. -->
             <section class="adm-block" data-accent="sky" aria-labelledby="stat-trend-title">
               <div class="adm-block-h">
-                <h3 class="adm-block-t" id="stat-trend-title">Growth &amp; Activity Trends</h3>
-                <span class="adm-block-s">Bucketed · Tehran</span>
+                <h3 class="adm-block-t" id="stat-trend-title" data-i18n="admGrowthChart">Growth Chart</h3>
+                <span class="adm-block-s" data-i18n="admTehranTime">Tehran Time</span>
               </div>
               <div class="adm-slab adm-trend">
                 <div class="adm-trend-h">
