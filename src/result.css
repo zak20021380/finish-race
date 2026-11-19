@@ -1700,3 +1700,215 @@ html[data-lang="fa"] .cw-war-name {
   letter-spacing: 0;
   line-height: 1.5;
 }
+
+/* ---- THE REMATCH CHALLENGE
+   A friend asked for another round while this seat still owes an answer. One floating glass card
+   over the settled capsule: frosted scrim, gold-and-emerald rim, a pulsing portrait ring, and the
+   two keys that actually decide the next board. No fraction counters, no tiny status pill. */
+.rematch-challenge {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+}
+.rematch-challenge[hidden] { display: none !important; }
+.rematch-challenge-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 8, .58);
+  -webkit-backdrop-filter: blur(10px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+  animation: rematch-scrim-in .24s ease-out both;
+}
+.rematch-challenge-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(100%, 330px);
+  padding: 20px 18px 16px;
+  border: 1px solid rgba(243, 212, 131, .34);
+  border-radius: 22px;
+  background:
+    radial-gradient(92% 62% at 50% -10%, rgba(243, 212, 131, .18), transparent 64%),
+    radial-gradient(70% 50% at 50% 112%, rgba(16, 185, 129, .14), transparent 70%),
+    linear-gradient(180deg, rgba(20, 20, 16, .97) 0%, rgba(7, 9, 13, .99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 220, .16),
+    0 30px 66px -28px rgba(0, 0, 0, .98),
+    0 0 0 1px rgba(16, 185, 129, .12),
+    0 0 52px -20px rgba(243, 212, 131, .5);
+  color: #F6F1E6;
+  text-align: center;
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+  backdrop-filter: blur(18px) saturate(1.16);
+  animation: rematch-card-in .38s cubic-bezier(.16, 1, .3, 1) both;
+}
+.rematch-challenge.is-on .rematch-challenge-card {
+  animation: rematch-card-in .38s cubic-bezier(.16, 1, .3, 1) both;
+}
+.rematch-challenge-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: 2px 0 13px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 246, 214, .5);
+  background: linear-gradient(180deg, #2C3B57 0%, #141B29 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .14),
+    0 10px 24px -12px rgba(0, 0, 0, .9);
+  color: #F3D483;
+  font-size: 23px;
+  font-weight: 900;
+}
+.rematch-challenge-avatar::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(243, 212, 131, .55);
+  animation: rematch-ring-pulse 2.1s cubic-bezier(.4, 0, .2, 1) infinite;
+  pointer-events: none;
+}
+.rematch-challenge-avatar img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.rematch-challenge-avatar b { position: relative; z-index: 0; font: inherit; }
+.rematch-challenge-title {
+  margin: 0;
+  color: #FFF6DC;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 8px 22px rgba(243, 212, 131, .18);
+}
+.rematch-challenge-sub {
+  margin: 7px 0 16px;
+  color: #C9D2E0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  text-wrap: balance;
+}
+.rematch-challenge-sub > bdi { unicode-bidi: isolate; }
+.rematch-challenge-actions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.rematch-challenge-accept {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #F5DFA6 0%, #DFB963 52%, #C49A45 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    0 12px 26px -14px rgba(212, 175, 55, .72);
+  color: #1A1408;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .14s ease, filter .14s ease;
+}
+.rematch-challenge-accept:active { transform: scale(.975); filter: brightness(1.04); }
+.rematch-challenge-accept:focus-visible { outline: 3px solid rgba(243, 212, 131, .65); outline-offset: 3px; }
+.rematch-challenge-decline {
+  appearance: none;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  color: #AEB8C8;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .16s ease, border-color .16s ease, background .16s ease, transform .14s ease;
+}
+@media (hover: hover) {
+  .rematch-challenge-decline:hover {
+    color: #F4F1E8;
+    border-color: rgba(255, 255, 255, .2);
+    background: rgba(255, 255, 255, .06);
+  }
+}
+.rematch-challenge-decline:active { transform: scale(.985); }
+.rematch-challenge-decline:focus-visible { outline: 2px solid rgba(243, 212, 131, .5); outline-offset: 2px; }
+@keyframes rematch-scrim-in { from { opacity: 0; } }
+@keyframes rematch-card-in {
+  from { opacity: 0; transform: translateY(12px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes rematch-ring-pulse {
+  0% { transform: scale(.96); opacity: .85; box-shadow: 0 0 0 0 rgba(243, 212, 131, .38); }
+  70% { transform: scale(1.06); opacity: 0; box-shadow: 0 0 0 10px rgba(243, 212, 131, 0); }
+  100% { transform: scale(1.06); opacity: 0; box-shadow: 0 0 0 10px rgba(243, 212, 131, 0); }
+}
+/* the waiting pill's cancel key is quiet: grey glass, never the crimson decline */
+.result-rematch-decline.is-cancel {
+  border-color: rgba(148, 163, 184, .3);
+  background: rgba(148, 163, 184, .1);
+  color: #C8D2E0;
+}
+.result-rematch-decline.is-cancel:focus-visible { outline-color: rgba(148, 163, 184, .55); }
+/* the waiting line names a friend: let it wrap instead of ellipsizing that name away */
+.result-rematch-t {
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.45;
+}
+/* joined scripts: no tracking, no uppercase transform, taller line boxes */
+html[data-lang="fa"] .rematch-challenge-card,
+html[data-lang="ar"] .rematch-challenge-card {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html[data-lang="fa"] :is(.rematch-challenge-title, .rematch-challenge-sub,
+  .rematch-challenge-accept, .rematch-challenge-decline),
+html[data-lang="ar"] :is(.rematch-challenge-title, .rematch-challenge-sub,
+  .rematch-challenge-accept, .rematch-challenge-decline) {
+  letter-spacing: 0;
+  text-transform: none;
+}
+html[data-lang="fa"] .rematch-challenge-title,
+html[data-lang="ar"] .rematch-challenge-title { font-size: 17px; line-height: 1.45; }
+html[data-lang="fa"] .rematch-challenge-sub,
+html[data-lang="ar"] .rematch-challenge-sub { font-size: 12px; line-height: 1.65; }
+html[data-lang="fa"] .rematch-challenge-accept,
+html[data-lang="ar"] .rematch-challenge-accept { font-size: 12.5px; }
+html[data-lang="fa"] .rematch-challenge-decline,
+html[data-lang="ar"] .rematch-challenge-decline { font-size: 11.5px; }
+@media (max-height: 600px) {
+  .rematch-challenge-card { padding: 16px 15px 13px; }
+  .rematch-challenge-avatar { width: 54px; height: 54px; margin-bottom: 10px; }
+  .rematch-challenge-sub { margin-bottom: 12px; }
+}
+html.reduced-motion .rematch-challenge-card,
+html.reduced-motion .rematch-challenge-scrim,
+html.reduced-motion .rematch-challenge-avatar::before { animation: none; }

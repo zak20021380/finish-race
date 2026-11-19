@@ -296,6 +296,14 @@ const toMenuLabel = $<HTMLSpanElement>('menu-label');
 const rematchBar = $<HTMLElement>('result-rematch');
 const rematchBarText = $<HTMLElement>('result-rematch-t');
 const rematchDeclineBtn = $<HTMLButtonElement>('result-rematch-decline');
+/* the incoming invitation owns its own floating card, so no answer hides in a progress pill */
+const rematchChallenge = $<HTMLElement>('rematch-challenge-modal');
+const rematchChallengeTitle = $<HTMLElement>('rematch-challenge-title');
+const rematchChallengeSub = $<HTMLElement>('rematch-challenge-sub');
+const rematchChallengeAccept = $<HTMLButtonElement>('rematch-challenge-accept');
+const rematchChallengeDecline = $<HTMLButtonElement>('rematch-challenge-decline');
+const rematchChallengePhoto = $<HTMLImageElement>('rematch-challenge-photo');
+const rematchChallengeInitial = $<HTMLElement>('rematch-challenge-initial');
 /* every toast on the page: the board's own, and the shop's copy of it. One message goes to all of
    them, so the note speaks on whichever screen is up; the hidden one costs nothing. */
 const noteEls = [...document.querySelectorAll<HTMLParagraphElement>('.note')];
@@ -845,6 +853,26 @@ function paintIsoLine(el: HTMLElement, text: string, dir: 'ltr' | 'rtl'): void {
     last = at + m[0].length;
   }
   if (last < text.length) el.append(document.createTextNode(text.slice(last)));
+}
+
+/** Paint a template's `{name}` slot as its own auto-direction run, never as bidi-neutral text. */
+function paintNamedLine(el: HTMLElement, template: string, name: string): void {
+  const dir = langDef(lang).dir;
+  el.dir = dir;
+  const at = template.indexOf('{name}');
+  el.replaceChildren();
+  if (at < 0) {
+    el.append(document.createTextNode(template));
+    return;
+  }
+  if (at > 0) el.append(document.createTextNode(template.slice(0, at)));
+  if (name) {
+    const bdi = document.createElement('bdi');
+    bdi.dir = 'auto';
+    bdi.textContent = name;
+    el.append(bdi);
+  }
+  el.append(document.createTextNode(template.slice(at + 6)));
 }
 
 /**
@@ -1768,6 +1796,8 @@ let resultTimers: number[] = [];
 let resultLocked = false;
 /** The friends room's live rematch consensus, or null outside a friends match. */
 let rematchState: RematchState | null = null;
+/** The invitation this seat already answered: the modal never reopens for the same vote. */
+let rematchChallengeDismissed = '';
 /** The channel cut of a friends match, painted synchronously and re-ranked by the registry. */
 let warAward: { gain: number; rank: number; name: string } | null = null;
 /** One settled board owns one channel answer: a late registry reply cannot paint into the next. */
@@ -2126,11 +2156,17 @@ function paintResultLock(): void {
   if (!resultView) return;
   const friends = friendsMatch();
   const dead = rematchDead();
-  const waiting = friends && rematchState?.votes?.[localSide] === 'accepted';
+  const waiting = friends && rematchState?.votes?.[localSide] === 'accepted' && !dead;
   again.disabled = resultLocked || dead || !!waiting;
   again.classList.toggle('is-locked', resultLocked || dead);
   const againText = resultLocked ? t('resultOpponentLeft') : primaryLabel();
-  paintIsoLine(againLabel, againText, langDef(lang).dir);
+  /* a waiting key names the friend it waits on as its own bidi run; everything else is the
+     ordinary one-line label, with its signed figures isolated by the shared painter */
+  if (waiting && sizes.length <= 2) {
+    paintNamedLine(againLabel, t('resultRematchWaitingDuel'), seatFullName(rivalSide()));
+  } else {
+    paintIsoLine(againLabel, againText, langDef(lang).dir);
+  }
   /* the key's spoken name follows the visible one in every language, locked or not */
   again.setAttribute('aria-label', againText);
   if (resultLocked) again.title = t('resultOpponentLeftHint');
@@ -2139,10 +2175,16 @@ function paintResultLock(): void {
 
 /**
  * THE PRIMARY KEY'S ONE SENTENCE. Outside a friends room it is the old pair — Play again, or the
- * revenge line after a loss. Inside one it is the live consensus: `REMATCH` before anybody votes,
- * `ACCEPT REMATCH (1/2)` when the room is waiting on this seat, the exact progress while this seat
- * waits on the others, and the reason once the rematch is dead. Latin digits throughout.
+ * revenge line after a loss. Inside one it is the live consensus: REMATCH before anybody votes,
+ * the friend's name while this seat waits on them, and the reason once the rematch is dead.
+ * Friends rooms rematch without a count or a cap, so no fraction ever appears here.
  */
+function waitingRematchLabel(): string {
+  const party = sizes.length > 2;
+  const template = t(party ? 'resultRematchWaitingParty' : 'resultRematchWaitingDuel');
+  return template.replace('{name}', party ? '' : seatFullName(rivalSide()));
+}
+
 function primaryLabel(): string {
   if (!resultView) return t('resultPlayAgain');
   if (!friendsMatch()) return t(resultView.won ? 'resultPlayAgain' : 'resultRevenge');
@@ -2152,58 +2194,52 @@ function primaryLabel(): string {
     if (state.reason === 'RIVAL_DECLINED') return t('resultRematchRivalDeclined');
     return t('resultRematchNotEnough');
   }
-  const total = Math.max(2, sizes.length);
-  const accepted = state?.acceptedCount ?? 0;
-  const you = state?.votes?.[localSide] ?? 'pending';
-  if (you === 'accepted') {
-    const key = total <= 2 ? 'resultRematchWaitingDuel' : 'resultRematchWaitingParty';
-    return t(key).replace('{n}', String(Math.max(1, accepted))).replace('{total}', String(total));
-  }
-  if (accepted > 0) {
-    return t('resultRematchAccept')
-      .replace('{n}', String(accepted))
-      .replace('{total}', String(total));
-  }
+  if (state?.votes?.[localSide] === 'accepted') return waitingRematchLabel();
   return t('resultRematch');
 }
 
 /**
- * The capsule's consensus surface: the progress line over the actions, the decline key a seat that
- * was asked needs, and one live pill per standings row. Every label here comes from the room —
- * this client never decides that a rematch started, and never decides that one is impossible.
+ * The capsule's consensus surface: one quiet waiting line when this seat has already asked, the
+ * reason once the rematch is dead, and the floating invitation card for the incoming request.
+ * Friends rooms rematch without a count or a cap, so no `0/2` or `1/2` is ever painted here.
  */
 function paintRematchUi(): void {
   if (!resultView || !friendsMatch()) {
     rematchBar.hidden = true;
     rematchDeclineBtn.hidden = true;
     rematchBarText.textContent = '';
+    hideRematchChallenge();
     paintRematchPills();
     return;
   }
   const state = rematchState;
-  const total = Math.max(2, sizes.length);
-  const accepted = state?.acceptedCount ?? 0;
   const you = state?.votes?.[localSide] ?? 'pending';
-  const dir = langDef(lang).dir;
-  rematchBar.hidden = false;
+  const dead = rematchDead();
+  const waiting = you === 'accepted' && !dead;
+  rematchDeclineBtn.classList.toggle('is-cancel', waiting);
   if (state && state.status === 'unavailable') {
+    rematchBar.hidden = false;
     paintIsoLine(rematchBarText,
       state.reason === 'RIVAL_DECLINED' ? t('resultRematchRivalDeclined')
         : state.reason === 'RIVAL_LEFT' ? t('resultRematchRivalLeft')
           : t('resultRematchNotEnough'),
-      dir);
+      langDef(lang).dir);
+    rematchDeclineBtn.hidden = true;
+  } else if (waiting) {
+    /* THIS SEAT ASKED FIRST: one quiet line naming the friend, and a cancel key. Never a fraction. */
+    rematchBar.hidden = false;
+    paintNamedLine(rematchBarText,
+      t(sizes.length > 2 ? 'resultRematchWaitingParty' : 'resultRematchWaitingDuel'),
+      sizes.length > 2 ? '' : seatFullName(rivalSide()));
+    rematchDeclineBtn.hidden = false;
+    rematchDeclineBtn.textContent = t('resultRematchCancel');
+    rematchDeclineBtn.setAttribute('aria-label', t('resultRematchCancel'));
   } else {
-    rematchBarText.dir = dir;
-    rematchBarText.replaceChildren(
-      document.createTextNode(`${t('resultRematchAria')} `),
-      isoText(`${accepted}/${total}`, 'ltr'),
-    );
+    /* an incoming invitation belongs to the floating card, not to a strip over the actions */
+    rematchBar.hidden = true;
+    rematchDeclineBtn.hidden = true;
   }
-  /* The decline key is the answer to a request, never a second way to start one. */
-  const asked = you !== 'accepted' && accepted > 0 && !rematchDead();
-  rematchDeclineBtn.hidden = !asked;
-  rematchDeclineBtn.textContent = t('resultRematchDecline');
-  rematchDeclineBtn.setAttribute('aria-label', t('resultRematchDecline'));
+  paintRematchChallenge();
   paintRematchPills();
 }
 
@@ -2238,6 +2274,63 @@ function paintRematchPills(): void {
   }
 }
 
+/** The first friend who asked for the next board, so a party names the actual challenger. */
+function rematchInviteSeat(state: RematchState | null): Player | null {
+  const votes = state?.votes ?? {};
+  const seat = Object.keys(votes)
+    .map(Number)
+    .filter((side) => side !== localSide && votes[side] === 'accepted')
+    .sort((a, b) => a - b)[0];
+  return Number.isInteger(seat) ? seat as Player : null;
+}
+
+/** The invitation signature: this round plus every OTHER seat that has accepted it. */
+function rematchInviteSig(state: RematchState | null): string {
+  const votes = state?.votes ?? {};
+  const seats = Object.keys(votes)
+    .filter((seat) => Number(seat) !== localSide && votes[Number(seat)] === 'accepted')
+    .sort()
+    .join(',');
+  return seats ? String(state?.round ?? 1) + '|' + seats : '';
+}
+
+function hideRematchChallenge(): void {
+  rematchChallenge.hidden = true;
+  rematchChallenge.classList.remove('is-on');
+}
+
+/**
+ * THE INCOMING INVITATION. A friend tapped rematch while this seat still owes an answer, so the
+ * capsule raises one floating card: their portrait in a pulsing gold ring, their name as its own
+ * bidi run, and the two keys. It closes the moment this seat answers, the rival leaves, or the
+ * room starts the next board.
+ */
+function paintRematchChallenge(): void {
+  const state = rematchState;
+  const you = state?.votes?.[localSide] ?? 'pending';
+  const sig = rematchInviteSig(state);
+  if (!resultView || !friendsMatch() || resultLocked || !sig || you !== 'pending' || rematchDead()) {
+    hideRematchChallenge();
+    if (!sig) rematchChallengeDismissed = '';
+    return;
+  }
+  const from = rematchInviteSeat(state) ?? rivalSide();
+  const name = seatFullName(from);
+  rematchChallengeTitle.textContent = t('rematchChallengeTitle');
+  paintNamedLine(rematchChallengeSub, t('rematchChallengeSubtitle'), name);
+  rematchChallengeAccept.textContent = t('rematchChallengeAccept');
+  rematchChallengeDecline.textContent = t('rematchChallengeDecline');
+  rematchChallengeAccept.setAttribute('aria-label', t('rematchChallengeAccept'));
+  rematchChallengeDecline.setAttribute('aria-label', t('rematchChallengeDecline'));
+  paintResultAvatar(rematchChallengePhoto, rematchChallengeInitial, name, resultPhoto(from));
+  const wasHidden = rematchChallenge.hidden;
+  rematchChallenge.hidden = rematchChallengeDismissed === sig;
+  if (!rematchChallenge.hidden && wasHidden) {
+    restartClass(rematchChallenge, 'is-on');
+    if (overlayOpen) rematchChallengeAccept.focus({ preventScroll: true });
+  }
+}
+
 /**
  * ASK FOR THE REMATCH. The only door a friends capsule has into another board: one vote on the
  * room that is already open. This function can never reach a queue — that is the whole point of
@@ -2259,6 +2352,8 @@ function requestRematch(): void {
     status: 'pending',
     round: rematchState?.round ?? 1,
   };
+  rematchChallengeDismissed = '';
+  hideRematchChallenge();
   paintRematchUi();
   paintResultLock();
 }
@@ -2275,6 +2370,8 @@ function declineRematch(): void {
     status: 'pending',
     round: rematchState?.round ?? 1,
   };
+  rematchChallengeDismissed = rematchInviteSig(rematchState);
+  hideRematchChallenge();
   paintRematchUi();
   paintResultLock();
 }
@@ -3718,6 +3815,7 @@ function restart() {
   resultView = null;
   resultLocked = false;
   rematchState = null;
+  hideRematchChallenge();
   closeVipSheet();
   banter.close();
   overlayOpen = false;
@@ -4458,6 +4556,7 @@ function concedeOnboarding(): void {
 /** The rival is gone: raise the badge, dead the taunt keys and lock the rematch in one beat. */
 function lockResultForLeft(): void {
   resultLocked = true;
+  hideRematchChallenge();
   banter.opponentLeft();
   if (!resultView) return;             // the card is still behind the goal beat: it opens locked
   paintResultLock();
@@ -4560,6 +4659,7 @@ function quitToMenu() {
     closeAdConfirm(false);
     resultView = null;
     resultLocked = false;
+    hideRematchChallenge();
     banter.close();
     overlayOpen = false;
     overlay.hidden = true;
@@ -6117,6 +6217,18 @@ shareBtn.addEventListener('click', () => {
   throwDuelChallenge();
 });
 rematchDeclineBtn.addEventListener('click', () => { impact('light'); declineRematch(); });
+rematchChallengeAccept.addEventListener('click', () => {
+  impact('medium');
+  requestRematch();
+  hideRematchChallenge();
+});
+rematchChallengeDecline.addEventListener('click', () => {
+  impact('light');
+  rematchChallengeDismissed = rematchInviteSig(rematchState);
+  declineRematch();
+  hideRematchChallenge();
+  if (!again.disabled) again.focus({ preventScroll: true });
+});
 toMenu.addEventListener('click', () => {
   impact('light');
   clearResultMotion();

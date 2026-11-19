@@ -2550,6 +2550,26 @@
                 </button>
               </div>
             </div>
+            <!-- REMATCH CHALLENGE. A friend asked for another round: this floating card owns the
+                 answer, so the capsule never has to hide the invitation in a tiny progress pill.
+                 The photo, name and both keys are painted by main.ts; the gold ring pulses. -->
+            <div class="rematch-challenge" id="rematch-challenge-modal" role="alertdialog"
+              aria-modal="true" aria-labelledby="rematch-challenge-title"
+              aria-describedby="rematch-challenge-sub" hidden>
+              <div class="rematch-challenge-scrim" aria-hidden="true"></div>
+              <div class="rematch-challenge-card">
+                <span class="rematch-challenge-avatar" aria-hidden="true">
+                  <img id="rematch-challenge-photo" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
+                  <b id="rematch-challenge-initial"></b>
+                </span>
+                <h3 class="rematch-challenge-title" id="rematch-challenge-title">REMATCH CHALLENGE!</h3>
+                <p class="rematch-challenge-sub" id="rematch-challenge-sub"></p>
+                <div class="rematch-challenge-actions">
+                  <button class="rematch-challenge-accept" id="rematch-challenge-accept" type="button">ACCEPT REMATCH</button>
+                  <button class="rematch-challenge-decline" id="rematch-challenge-decline" type="button">DECLINE</button>
+                </div>
+              </div>
+            </div>
             <!-- The VIP store lives at the document root (see the end of body): it is summoned
                  from the lobby, Home and this result stage by the one controller. -->
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
