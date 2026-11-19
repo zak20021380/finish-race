@@ -1,8 +1,8 @@
 /* ==========================================================================
    POST-MATCH QUICK CHAT — obsidian pills, a gold-gated line, floating bubbles
 
-   The tray is one calm column directly above the rematch key: five quick-chat
-   pills on a horizontal carousel, then the custom capsule. A free seat sees the
+   The tray is one calm column directly above the rematch key: two quick-chat
+   pills on an equal two-track grid, then the custom capsule. A free seat sees the
    capsule behind frosted glass, so the tap is a storefront and never a keyboard.
    Only the bubble is loud, and only for four and a half seconds.
    ========================================================================== */
@@ -151,32 +151,13 @@
   white-space: nowrap;
 }
 
-/* ---- the carousel: five pills, one line, never a wider capsule ---- */
+/* ---- the two pills: two equal tracks, wrapping words, never a horizontal scroll ---- */
 .banter-quick {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   min-width: 0;
-  max-width: 100%;
-  padding: 1px 1px 2px;
-  /* the strip's scroll end owns its own breathing room, so the third pill fades out mid-word
-     instead of being sliced by the capsule's edge */
-  padding-inline-end: 20px;
-  /* a soft edge fade on the scrollport's end: the carousel reads as continuing, not truncated */
-  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
-  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-}
-.banter-quick::-webkit-scrollbar { display: none; }
-/* the joined scripts scroll the other way: the fade follows the inline end, not the pixel left */
-.banter-quick[dir="rtl"] {
-  -webkit-mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 22px), transparent 100%);
-  mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  padding: 1px;
 }
 .banter-chip-ico {
   flex: none;
@@ -190,14 +171,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  flex: none;
+  gap: 6px;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 10px 10px;
   border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 999px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .018));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
   color: #E9EEF7;
@@ -205,11 +186,11 @@
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: .01em;
-  line-height: 1.55;
-  white-space: nowrap;
+  line-height: 1.3;
+  text-align: center;
+  white-space: normal;
   overflow: hidden;
   cursor: pointer;
-  scroll-snap-align: start;
   -webkit-tap-highlight-color: transparent;
   transition:
     transform .16s cubic-bezier(.2, 1.5, .4, 1),
@@ -217,14 +198,16 @@
     background .16s ease,
     color .16s ease;
 }
-/* the words are the only box allowed to give way; the token never shrinks */
+/* the words wrap inside their own track; nothing is ever sliced at the capsule's edge */
 .banter-chip-t {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
 }
 /* legacy labels that still carry a trailing token: the box keeps it whole at the terminal edge */
 .banter-chip-e {
@@ -477,11 +460,14 @@ form.banter-custom:focus-within {
   filter: grayscale(.45);
 }
 
-/* ---- compact trays: the two rows stay two rows ---- */
+/* ---- narrow phones: the two pills stack into full-width rows ---- */
+@media (max-width: 379px) {
+  .banter-quick { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 360px) {
   .banter-label { display: none; }
   .result-banter { gap: 6px; padding: 6px; }
-  .banter-chip { min-height: 32px; padding: 0 10px; font-size: 11px; }
+  .banter-chip { min-height: 38px; padding: 9px 10px; font-size: 11px; }
   .banter-custom { height: 36px; gap: 6px; padding-inline: 9px 3px; }
   .banter-input { height: 22px; font-size: 11.5px; }
   .banter-send { width: 26px; height: 26px; }
@@ -489,7 +475,7 @@ form.banter-custom:focus-within {
 }
 @media (max-height: 600px) {
   .result-banter { gap: 5px; padding: 5px 6px; }
-  .banter-chip { min-height: 31px; }
+  .banter-chip { min-height: 35px; padding: 7px 9px; }
   .banter-custom { height: 34px; }
   .banter-input { height: 20px; }
   .banter-alert { padding: 4px 8px; font-size: 9.5px; }
@@ -1077,14 +1063,12 @@ html[data-lang="fa"] .banter-input {
 html[data-lang="fa"] .banter-alert { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .banter-chip {
   /* the scale is viewport-bound, so a 320px phone gets the small end and a 430px phone the large
-     one: the longest line still fits the capsule's scrollport */
+     one: the longest line still fits its equal track */
   font-size: clamp(11px, 2.9vw, 12.5px);
-  line-height: 1.6;
+  line-height: 1.3;
   padding-inline: 10px;
 }
-/* the line box, not the pill: 1.7 at 11px is 18.7px of room for a 14px glyph, so no descender
-   is ever sliced by the overflow that produces the ellipsis */
-html[data-lang="fa"] .banter-chip-t { line-height: 1.7; }
+html[data-lang="fa"] .banter-chip-t { line-height: 1.3; }
 html[data-lang="fa"] .banter-gate-t { font-size: clamp(11px, 2.9vw, 12px); line-height: 1.6; }
 html[data-lang="fa"] .banter-gate-vip { font-size: 7.5px; }
 /* the joined scripts keep their compact type scale: one crisp line per row, no extra height */

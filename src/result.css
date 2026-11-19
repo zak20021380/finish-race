@@ -82,7 +82,7 @@
 }
 .result-card > * { position: relative; z-index: 1; }
 
-/* ---- verdict ---- */
+/* ---- the hero outcome: one solid gold/emerald line or one coral/slate line ---- */
 .result-kicker {
   margin: 0;
   color: #8B93A6;
@@ -95,46 +95,49 @@
 .result-title {
   display: block;
   max-width: 100%;
-  margin: 3px 0 0;
-  font-size: clamp(2rem, 9vw, 2.6rem);
+  margin: 4px 0 0;
+  color: #F7DB92;
+  font-size: clamp(2.05rem, 9.4vw, 2.7rem);
   font-weight: 900;
-  line-height: 1;
-  letter-spacing: .03em;
+  line-height: 1.05;
+  letter-spacing: .04em;
   text-transform: uppercase;
   overflow-wrap: anywhere;
-  background: linear-gradient(178deg, #FFFBEA 0%, #FDE68A 26%, #FACC15 48%, #F59E0B 68%, #22D3EE 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  filter:
-    drop-shadow(0 3px 0 rgba(6, 41, 47, .8))
-    drop-shadow(0 8px 18px rgba(34, 211, 238, .26));
-  animation: result-title-in .5s cubic-bezier(.2, 1.2, .4, 1) .03s both;
+  -webkit-text-fill-color: currentColor;
+  text-shadow:
+    0 1px 0 rgba(6, 41, 47, .6),
+    0 10px 26px rgba(34, 211, 238, .16);
 }
 .overlay.result.lose .result-title {
-  background:
-    repeating-linear-gradient(114deg,
-      transparent 0 19px,
-      rgba(5, 4, 8, .92) 19px 20.2px,
-      transparent 20.2px 45px),
-    linear-gradient(178deg, #FFE7EA 0%, #FDA4AF 28%, #F43F5E 58%, #BE123C 84%, #4C0519 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  filter:
-    drop-shadow(0 3px 0 rgba(36, 4, 10, .9))
-    drop-shadow(0 8px 20px rgba(244, 63, 94, .35));
+  color: #FDA4AF;
+  text-shadow:
+    0 1px 0 rgba(36, 4, 10, .72),
+    0 10px 26px rgba(244, 63, 94, .2);
 }
+/* the compact mode pill sits directly under the hero, never in a line of its own */
 .result-mode {
-  margin: 7px 0 11px;
-  color: #7F8A9E;
-  font-size: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 7px auto 11px;
+  padding: 4px 12px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  overflow: hidden;
+  color: #A9B5C8;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .18em;
+  letter-spacing: .14em;
   line-height: 1.3;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
 }
 
 /* ---- the standings ladder: one glass table for every seat ---- */
@@ -204,6 +207,11 @@
   line-height: 1;
   direction: ltr;
   unicode-bidi: isolate;
+}
+.result-medal > bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
 }
 .result-medal svg {
   width: 15px;
@@ -275,14 +283,24 @@
   min-width: 0;
 }
 .result-row-name {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: #E9EEF7;
   font-size: 12.5px;
   font-weight: 800;
   letter-spacing: .01em;
   line-height: 1.2;
+}
+/* the name is its own bidi paragraph: a Latin handle and a Persian one both keep their order */
+.result-row-name > bdi {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  unicode-bidi: isolate;
 }
 .result-row.is-you .result-row-name { color: #FFF3D6; }
 
@@ -313,114 +331,62 @@
 .result-you {
   flex: none;
   padding: 2px 6px;
-  border: 1px solid rgba(243, 212, 131, .44);
+  border: 1px solid rgba(243, 212, 131, .3);
   border-radius: 999px;
-  background: rgba(243, 212, 131, .12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
-  color: #FFE9AE;
+  background: rgba(243, 212, 131, .08);
+  color: #F3D483;
   font-size: 7px;
   font-weight: 900;
   letter-spacing: .1em;
   line-height: 1.4;
   text-transform: uppercase;
+  unicode-bidi: isolate;
 }
 
-/* ---- bank: the settlement's own strip — coins, xp, the TIQ ledger ----
-   A BALANCED GRID, not a flex row. Three paid items get three equal tracks, so the coin figure,
-   its `2x` chip, `+35 XP` and `+140 TIQ` each own their column and no digit is ever overlapped on
-   a 320-430px screen. A column that paid nothing is simply not painted: the strip collapses to
-   two tracks (or one) through the `data-paid` count `main.ts` writes, never to an empty track. */
+/* ---- the reward grid: at most two equal cards, one reward on each side ----
+   Card one is always the coins the wallet kept. Card two is the one reward this board actually
+   paid: channel TIQ, ranked TIQ, or XP. Equal tracks and equal heights keep the pair symmetric;
+   a board that paid only one reward gets one full-width card instead of an empty track. */
 .result-bank {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: stretch;
-  min-height: 54px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin: 0 0 10px;
-  padding: 5px 7px;
+}
+.result-bank[hidden] { display: none; }
+.result-bank[data-paid="1"] { grid-template-columns: minmax(0, 1fr); }
+
+.result-reward {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  justify-items: center;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  min-height: 108px;
+  padding: 10px 8px 9px;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01)),
     rgba(7, 9, 14, .44);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
+  text-align: center;
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
-.result-bank[hidden] { display: none; }
-/* the paid-count variants: two tracks, one track, and the staked defeat's shared row */
-.result-bank[data-paid="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.result-bank[data-paid="1"] { grid-template-columns: minmax(0, 1fr); }
-.result-bank.is-staked { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-/* the hairline dividers stop being flex items and become seams between painted tracks */
-.result-bank > .result-bank-div { display: none; }
-/* a column that paid nothing leaves the grid entirely (both attribute and class selectors would
-   otherwise tie, and the coin column's own grid would win the cascade) */
-.result-bank .result-bank-col[hidden] { display: none; }
+.result-reward[hidden] { display: none !important; }
 
-/* fewer than three paid items: the capsule centers them instead of leaving an edge ragged */
-.result-bank.is-centered .result-bank-col { justify-content: center; }
-.result-bank-div {
-  flex: none;
-  width: 1px;
-  margin-block: 8px;
-  background: linear-gradient(transparent, rgba(255, 255, 255, .13) 24%, rgba(255, 255, 255, .13) 76%, transparent);
-}
-.result-bank-col {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding-inline: 6px;
-}
-/* one crisp seam before every column that has a painted column ahead of it */
-.result-bank-col::before {
-  content: "";
-  position: absolute;
-  inset-block: 7px;
-  inset-inline-start: -2px;
-  width: 1px;
-  display: none;
-  background: linear-gradient(transparent, rgba(255, 255, 255, .14) 24%, rgba(255, 255, 255, .14) 76%, transparent);
-}
-.result-bank-col:not([hidden]) ~ .result-bank-col:not([hidden])::before { display: block; }
-
-/* THE COIN COLUMN. The `2x` chip never shares a line with the digits: it takes its own row
-   underneath them, so a 320px track can shrink the value without clipping a single figure. */
-.result-bank-col.is-coins {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 7px;
-  row-gap: 3px;
-}
-.result-bank-col.is-coins .result-bank-ico { grid-column: 1; grid-row: 1 / span 2; }
-.result-bank-col.is-coins .result-bank-body { grid-column: 2; grid-row: 1; min-width: 0; }
-.result-bank-col.is-coins #btn-double-coins {
-  grid-column: 2;
-  grid-row: 2;
-  justify-self: start;
-  margin: 0;
-}
-/* the TIQ column keeps its shield in the flow instead of being pushed past the track's edge */
-.result-bank-col.is-tiq { flex-wrap: wrap; row-gap: 3px; }
-.result-bank-col.is-tiq #btn-recover-tiq { margin-inline-start: 0; }
-.result-bank-col.is-coins { justify-content: flex-start; }
-.result-bank-col.is-xp { justify-content: center; }
-.result-bank-col.is-tiq { justify-content: flex-end; }
-.result-bank-col.is-stake { flex: 1.4 1 0; justify-content: flex-start; gap: 4px; }
-#btn-recover-tiq { margin-inline-start: auto; }
 .result-bank-ico {
   display: grid;
   place-items: center;
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 .result-bank-ico .coin {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   filter: drop-shadow(0 0 7px rgba(245, 158, 11, .4));
 }
 .result-bank-ico.is-tiq {
@@ -429,24 +395,60 @@
   color: #FCD34D;
 }
 .result-bank-ico.is-tiq .ico {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   filter: drop-shadow(0 0 5px rgba(252, 211, 77, .75));
   animation: result-brain 2.6s ease-in-out infinite;
 }
-/* the XP badge: the same dimensional gold crest as the home stakes strip, in the 26px
-   well, lit by its own warm halo so it matches the minted coin in the neighbouring column */
 .result-bank-ico.is-xp {
   border-radius: 50%;
   background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .3), rgba(252, 211, 77, .16) 48%, transparent 74%);
   color: #FDE68A;
 }
 .result-bank-ico.is-xp .xp-emblem {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex: none;
   vertical-align: middle;
   filter: drop-shadow(0 0 6px rgba(245, 158, 11, .65));
+}
+
+/* the card's one large figure, its unit label underneath, then its compact action */
+.result-bank-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  color: #FCD34D;
+  font-family: var(--font-numeric);
+  font-size: clamp(1.35rem, 5.6vw, 1.7rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  direction: ltr;
+  white-space: nowrap;
+}
+.result-bank-value > bdi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+.result-sign { font-size: .72em; opacity: .86; }
+.result-reward-label {
+  min-width: 0;
+  color: #8D99AD;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  line-height: 1.3;
+  text-align: center;
+  text-transform: uppercase;
+  unicode-bidi: plaintext;
 }
 #result-xp-chip .result-bank-value { color: #FDE68A; }
 #result-xp-n {
@@ -454,39 +456,25 @@
   font-variant-numeric: tabular-nums;
   unicode-bidi: isolate;
 }
-.result-bank-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-}
-.result-bank-value {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 1px;
-  color: #FCD34D;
-  font-family: var(--font-numeric);
-  /* a track-bound figure: the value scales with the viewport so three columns never ellipsize */
-  font-size: clamp(.84rem, 3.5vw, 1.06rem);
-  font-variant-numeric: tabular-nums;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  line-height: 1.05;
-  direction: ltr;
-  white-space: nowrap;
-}
-.result-sign { font-size: .86em; opacity: .82; }
-.result-unit {
-  margin-inline-start: 2px;
-  color: inherit;
-  font-family: inherit;
-  font-size: 7.5px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  opacity: .62;
-}
 #result-coin-chip .result-bank-value { color: #FCD34D; }
+
+/* Card two owns the one accent: channel gold, ranked crimson on a loss, emerald once the shield
+   has bought the rank TIQ back. */
+#result-tiq-chip.is-channel .result-bank-value { color: #FBE7B4; }
+#result-tiq-chip.is-loss .result-bank-value {
+  color: #FB7185;
+  text-shadow: 0 0 12px rgba(244, 63, 94, .35);
+}
+#result-tiq-chip.is-restored .result-bank-value {
+  color: #6EE7B7;
+  text-shadow: 0 0 12px rgba(16, 185, 129, .45);
+}
+/* the actions sit on one centred line under the label */
+.result-reward #btn-double-coins,
+.result-reward #btn-recover-tiq {
+  justify-self: center;
+  margin: 5px 0 0;
+}
 /* the double-coin claim: the total pulses once and a gold band sweeps the whole pill */
 #result-coin-chip { position: relative; }
 #result-coin-chip.is-celebrating .result-bank-value {
@@ -523,85 +511,13 @@
   to { background-position: -30% 0; }
 }
 
-.result-stake-k {
-  overflow: hidden;
-  color: #E8A0AC;
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: .13em;
-  line-height: 1.4;
-  opacity: .85;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.result-stake-n {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  color: #FB7185;
-  font-family: var(--font-numeric);
-  font-size: 1rem;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  direction: ltr;
-  unicode-bidi: isolate;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  text-shadow: 0 0 12px rgba(244, 63, 94, .35);
-  transition: color .3s ease, text-shadow .3s ease;
-}
-.result-bank-col.is-stake.is-refunded .result-stake-k,
-.result-stake.is-refunded .result-stake-k { color: #6EE7B7; opacity: .9; }
-.result-bank-col.is-stake.is-refunded .result-stake-n,
-.result-stake.is-refunded .result-stake-n {
-  color: #6EE7B7;
-  text-shadow: 0 0 12px rgba(16, 185, 129, .45);
-}
-/* the strike is the first half of the refusal: the penalty is visibly cancelled, then replaced */
-.result-stake-n.is-struck {
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
-  text-decoration-color: rgba(251, 113, 133, .95);
-  opacity: .5;
-  transition: color .3s ease, text-shadow .3s ease, opacity .26s ease;
-}
-/* the shield that lands after the strike: emerald, compact, one beat of arrival */
-.result-stake-saved {
-  display: inline-block;
-  max-width: 100%;
-  padding: 2px 5px;
-  overflow: hidden;
-  border: 1px solid rgba(16, 185, 129, .5);
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(16, 185, 129, .26), rgba(6, 78, 59, .36));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 0 12px -4px rgba(16, 185, 129, .72);
-  color: #A7F3D0;
-  font-family: var(--font-stat);
-  font-size: 7px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: .02em;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  text-shadow: 0 0 8px rgba(16, 185, 129, .45);
-  white-space: nowrap;
-}
-.result-stake-saved.is-lit { animation: result-stake-saved-in .46s cubic-bezier(.22, 1, .36, 1) both; }
-@keyframes result-stake-saved-in {
-  from { opacity: 0; transform: scale(.82) translateY(2px); }
-  60% { opacity: 1; transform: scale(1.04); }
-  to { opacity: 1; transform: none; }
-}
+/* the shield landing: one emerald pulse across the ranked card */
+#result-tiq-chip.is-restoring { animation: result-coin-pulse .56s cubic-bezier(.22, 1, .36, 1) both; }
 
-/* every reward column is a flex box, so its `hidden` needs the explicit rule the UA style loses */
+/* every reward card hides by attribute; the author grid would otherwise outrank the UA rule */
 #result-tiq-chip[hidden],
 #result-coin-chip[hidden],
 #result-xp-chip[hidden],
-#result-stake[hidden],
 .result-actions [hidden] { display: none !important; }
 
 /* ---- the two rewarded-video keys: smoked gold, compact ---- */
@@ -783,10 +699,9 @@
 .result-vip-boost {
   display: flex;
   width: fit-content;
-  align-self: flex-start;
   align-items: center;
   gap: 4px;
-  margin: 0 0 6px;
+  margin: 0 auto 6px;
   padding: 3px 8px 3px 6px;
   border: 1px solid rgba(243, 212, 131, .34);
   border-radius: 999px;
@@ -800,7 +715,7 @@
 }
 .result-vip-boost[hidden] { display: none; }
 .result-vip-boost .ico { flex: none; width: 11px; height: 11px; color: #F3D483; }
-.result-vip-boost span { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.result-vip-boost bdi { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
 /* the shield key reads AD-FREE for a VIP: one calm notch brighter, never a second glow */
 #btn-recover-tiq.is-vip { border-color: rgba(243, 212, 131, .5); }
 #btn-recover-tiq.is-vip .ad-chip-label { color: #FFF3D6; }
@@ -1520,7 +1435,8 @@ html[data-lang="ar"] .ad-skip-opt {
   .result-mode { margin: 5px 0 8px; }
   .result-row { height: 41px; min-height: 41px; }
   .result-roster { gap: 3px; padding: 4px; margin-bottom: 8px; }
-  .result-bank { min-height: 50px; margin-bottom: 8px; padding: 4px 6px; }
+  .result-bank { gap: 8px; margin-bottom: 8px; }
+  .result-reward { min-height: 98px; padding: 8px 7px; }
   .result-actions { gap: 7px; }
   .result-btn { padding-block: 10px; }
 }
@@ -1532,16 +1448,13 @@ html[data-lang="ar"] .ad-skip-opt {
   .result-row { height: 39px; min-height: 39px; }
   .result-avatar { width: 29px; height: 29px; }
   .result-medal { width: 24px; height: 24px; }
-  .result-bank { min-height: 47px; }
+  .result-reward { min-height: 88px; padding: 7px 6px; gap: 2px; }
+  .result-bank-value { font-size: 1.2rem; }
   .result-actions { gap: 6px; }
   .result-btn { padding-block: 9px; }
 }
 
-/* ---- narrow phones: names keep the room, everything else gives it up ---- */
-@media (max-width: 389px) {
-  /* the 375-class ledger keeps one compact step, so the shield's one-line key fits beside it */
-  .result-stake-n { font-size: .92rem; }
-}
+/* ---- narrow phones: names keep the room, the two cards keep their equal tracks ---- */
 @media (max-width: 360px) {
   .result-card { padding-inline: 12px; }
   .btn-challenge { gap: 9px; padding-inline: 12px; font-size: .72rem; letter-spacing: .1em; }
@@ -1552,12 +1465,11 @@ html[data-lang="ar"] .ad-skip-opt {
   .result-row-name { font-size: 12px; }
   .result-place { font-size: 7px; letter-spacing: .1em; }
   .result-you { padding: 2px 5px; font-size: 6.5px; }
-  #result-coin-chip .result-bank-ico,
-  #result-tiq-chip .result-bank-ico { display: none; }
-  .result-bank-col { gap: 5px; padding-inline: 3px; }
-  .result-bank-col.is-stake { padding-inline: 2px; }
-  .result-bank-value { font-size: .95rem; }
-  .result-stake-n { font-size: .92rem; }
+  .result-bank { gap: 8px; }
+  .result-reward { min-height: 96px; padding: 8px 6px; }
+  .result-bank-ico { width: 26px; height: 26px; }
+  .result-bank-value { font-size: 1.22rem; }
+  .result-reward-label { font-size: 7.5px; letter-spacing: .1em; }
   #btn-double-coins { padding-inline: 7px 8px; }
   .ad-confirm { padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
   .ad-confirm-sheet { padding: 10px 13px calc(12px + env(safe-area-inset-bottom)); border-radius: 19px; }
@@ -1565,31 +1477,13 @@ html[data-lang="ar"] .ad-skip-opt {
   .ad-confirm-desc { font-size: 10.5px; }
 }
 @media (max-width: 340px) {
-  /* 320px: the ledger and the shield share 250px — every glyph pays a pixel */
-  .result-bank-value { font-size: .88rem; }
-  .result-stake-n { font-size: .78rem; }
-  .result-bank-col { gap: 4px; }
-  .result-bank-col.is-stake { gap: 3px; }
-  #btn-recover-tiq { --ad-spin-x: 3px; gap: 2px; padding-inline: 2px; }
+  /* 320px: each card owns half the grid, so the figure and its key each pay a pixel */
+  .result-bank-value { font-size: 1.1rem; }
+  #btn-recover-tiq { --ad-spin-x: 3px; gap: 2px; padding-inline: 4px; }
   .ad-chip-text { gap: 2px; }
   #btn-recover-tiq .ad-chip-ico { width: 9px; height: 9px; }
   #btn-recover-tiq .ad-chip-label { font-size: 7.5px; letter-spacing: 0; }
   .ad-chip-quota { min-width: 14px; height: 10px; padding: 0 1.5px; font-size: 6px; }
-}
-
-/* ---- an old webview without text clipping keeps flat titles instead of blank ones ---- */
-@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
-  .result-title {
-    background: none;
-    color: #FCD34D;
-    -webkit-text-fill-color: #FCD34D;
-    filter: none;
-  }
-  .overlay.result.lose .result-title {
-    background: none;
-    color: #FB7185;
-    -webkit-text-fill-color: #FB7185;
-  }
 }
 
 /* the result stays obsidian in the pearl finish too */
@@ -1621,12 +1515,11 @@ html.reduced-motion .btn-challenge .result-btn-ico { animation: none; }
 html.reduced-motion .btn-play-again::after { opacity: 0; }
 html.reduced-motion .ad-confirm-scrim,
 html.reduced-motion .ad-confirm.open .ad-confirm-sheet,
-html.reduced-motion .result-stake-saved.is-lit,
+html.reduced-motion #result-tiq-chip.is-restoring,
 html.reduced-motion #result-coin-chip.is-celebrating .result-bank-value,
 html.reduced-motion #result-coin-chip.is-celebrating .result-bank-ico .coin,
 html.reduced-motion #result-coin-chip.is-celebrating::after { animation: none; }
 html.reduced-motion #result-coin-chip.is-celebrating::after { opacity: 0; }
-html.reduced-motion .result-stake-n.is-struck { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .btn-play-again::after,
   .btn-challenge .result-btn-ico { animation: none; }
@@ -1654,7 +1547,7 @@ html[data-lang="fa"] .overlay.result :is(
   .result-row-name,
   .result-place,
   .result-you,
-  .result-stake-k,
+  .result-reward-label,
   .result-btn,
   .ad-chip-label
 ) {
@@ -1665,39 +1558,33 @@ html[data-lang="fa"] .overlay.result :is(
   .result-kicker,
   .result-mode,
   .result-place,
-  .result-stake-k
+  .result-reward-label
 ) {
   line-height: 1.5;
 }
 html[data-lang="fa"] .overlay.result .result-title,
 html[data-lang="ar"] .overlay.result .result-title {
-  font-size: clamp(1.8rem, 8.6vw, 2.4rem);
-  line-height: 1.35;
-}
-/* a joined script is never sliced by the glitch bars: the gradient survives, the cuts do not */
-html[data-lang="fa"] .overlay.result.lose .result-title,
-html[data-lang="ar"] .overlay.result.lose .result-title {
-  background: linear-gradient(178deg, #FFE7EA 0%, #FDA4AF 28%, #F43F5E 58%, #BE123C 84%, #4C0519 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+  font-size: clamp(1.85rem, 8.8vw, 2.45rem);
+  line-height: 1.3;
+  letter-spacing: 0;
 }
 html[data-lang="fa"] .overlay.result .result-row-name { text-align: right; }
 html[data-lang="fa"] .overlay.result .result-btn { direction: rtl; }
 html[data-lang="fa"] .overlay.result .result-place { font-size: 8px; }
-html[data-lang="fa"] .overlay.result .result-stake-k { font-size: 7.5px; }
+/* the generic race-tag caption steps up for Persian prose; this pill stays compact */
+html[data-lang="fa"] .overlay.result .result-mode,
+html[data-lang="ar"] .overlay.result .result-mode {
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
 /* the label's Latin display face must yield to Vazirmatn in Persian, id rule and all */
 html[data-lang="fa"] .overlay.result #btn-recover-tiq .ad-chip-label {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
-html[data-lang="fa"] .overlay.result .result-bank-value,
-html[data-lang="fa"] .overlay.result .result-stake-n { direction: ltr; }
-html[data-lang="fa"] .overlay.result .result-stake-n {
-  font-family: var(--font-numeric);
-  unicode-bidi: isolate;
-}
+html[data-lang="fa"] .overlay.result .result-bank-value { direction: ltr; }
+html[data-lang="fa"] .overlay.result .result-reward-label { letter-spacing: 0; }
 /* the consent sheet is a root-level modal now, so its direction rules are root-level too */
 html[data-lang="fa"] .ad-confirm-sheet,
 html[data-lang="ar"] .ad-confirm-sheet { direction: rtl; }
@@ -1706,24 +1593,14 @@ html[data-lang="fa"] :is(.ad-confirm-title, .ad-confirm-desc, .ad-confirm-btn) {
   letter-spacing: 0;
   text-transform: none;
 }
-html[data-lang="fa"] .overlay.result :is(
-  .result-stake-saved
-) {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  letter-spacing: 0;
-  text-transform: none;
-}
-html[data-lang="fa"] .overlay.result .result-stake-saved { unicode-bidi: isolate; }
 
 /* ---- a checkmated seat: the rank is still its own, the row reads as a struck record ---- */
 .result-row.is-out { opacity: .56; }
 .result-row.is-out .result-medal { filter: saturate(.25); }
 .result-row.is-out .result-place { color: #FDA4AF; }
 
-/* ---- the stake reads as one digit-aligned column in every language ---- */
-#result-tiq-chip .result-bank-value,
-#result-stake .result-stake-n,
-#result-stake .result-stake-saved {
+/* ---- the ranked card's figure reads as one digit-aligned run in every language ---- */
+#result-tiq-chip .result-bank-value {
   direction: ltr;
   font-variant-numeric: tabular-nums;
 }
@@ -1745,39 +1622,81 @@ html[data-lang="fa"] .overlay.result .result-stake-saved { unicode-bidi: isolate
 }
 .result-left[hidden] { display: none; }
 
-/* ---- the channel's cut of the match: one compact war line under the welcome badge ----
-   Channel Wars pays the channel a fighter enrolled with on every settled race, so the result
-   card says so itself. It rides the welcome badge's recipe — same plate, same two lines — and
-   only the metal changes: gold for the tournament, mint for nothing here. */
-.iv-bonus.is-war {
-  margin-top: 6px;
-  padding: 8px 11px;
-  border-color: rgba(233, 192, 115, .30);
-  background: linear-gradient(180deg, #171C26 0%, #0A0D13 100%);
-  box-shadow: 0 10px 22px -16px rgba(0, 0, 0, .9), inset 0 0 0 1px rgba(233, 192, 115, .12);
+/* ---- the channel's cut of the match: ONE horizontal strip, shown only when enrolled ----
+   Shield + channel + rank own the start edge, the gold `+5 TIQ` pill owns the opposite edge.
+   No kicker line, no punctuation joiners: the rank and the amount are isolated LTR runs, so the
+   Persian name in the middle can never scramble their order. */
+.cw-war {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 6px 0 2px;
+  padding: 7px 10px;
+  border: 1px solid rgba(233, 192, 115, .28);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(243, 212, 131, .07), rgba(243, 212, 131, .015)),
+    rgba(8, 10, 15, .55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 220, .08),
+    0 10px 22px -16px rgba(0, 0, 0, .9);
+  color: #F3D89A;
+  text-align: start;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
-.iv-bonus.is-war .iv-bonus-ico { color: #FBE7B4; }
-.iv-bonus.is-war .iv-bonus-ico .ico { width: 17px; height: 17px; }
-/* The unit rides its own mark: a drawn TIQ glyph and three Latin letters, never a typed emoji.
-   One flex row, so the kicker's caps and the glyph sit on the same baseline at any width. */
-.iv-bonus.is-war .iv-bonus-k {
+.cw-war[hidden] { display: none !important; }
+.cw-war-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: #FBE7B4;
+}
+.cw-war-ico .ico { width: 16px; height: 16px; }
+.cw-war-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #F1E3C2;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-war-rank {
+  flex: none;
+  color: #D9B877;
+  font-family: var(--font-numeric);
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.cw-war-tiq {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #F3D89A;
-  letter-spacing: .14em;
-}
-.iv-bonus.is-war .iv-war-ico { width: 11px; height: 11px; flex: none; }
-.iv-bonus.is-war .iv-bonus-k span { direction: ltr; unicode-bidi: isolate; }
-.iv-bonus.is-war .iv-bonus-t { font-size: 11.5px; font-weight: 700; line-height: 1.45; }
-/* the figures are a code; the channel's name keeps its own direction and its own face */
-.iv-bonus.is-war .iv-bonus-t bdi[dir="ltr"] {
-  font-family: var(--font-numeric, ui-monospace, monospace);
+  flex: none;
+  margin-inline-start: auto;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 226, 160, .38);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #F9E6B2 0%, #E5C277 54%, #C79B44 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .48);
+  color: #241A05;
+  font-family: var(--font-numeric);
+  font-size: 10.5px;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  line-height: 1.2;
+  white-space: nowrap;
 }
-html[data-lang="fa"] .iv-bonus.is-war .iv-bonus-k,
-html[data-lang="ar"] .iv-bonus.is-war .iv-bonus-k {
+html[data-lang="fa"] .cw-war-name {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.5;
 }

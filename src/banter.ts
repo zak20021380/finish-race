@@ -1,7 +1,7 @@
 /**
- * banter.ts — the post-match reaction tray: five calibrated quick-chat pills and the VIP line.
+ * banter.ts — the post-match reaction tray: two calibrated quick-chat pills and the VIP line.
  *
- * Every seat can broadcast the five pills. They travel as preset IDs, so the receiver paints its
+ * Every seat can broadcast the two pills. They travel as preset IDs, so the receiver paints its
  * own language from the closed table and no free-form text crosses the wire. The custom capsule is
  * the VIP door: a free seat sees a frosted lock that opens #vip-sheet instead of a keyboard, while
  * an entitled seat gets a 40-character field whose sanitized line lands as a gold bubble.
@@ -16,7 +16,7 @@ import { lang, langDef, onLang, t } from './settings';
 import { impact, notify } from './telegram';
 import { isPremiumUser, onVipChange, openVipSheet } from './premium';
 import {
-  POST_CHAT_QUICK_CHATS, postChatPresetText,
+  postChatPresetText,
   type PostChatLine, type PostChatPresetId, type PostChatQuickId,
 } from './data/postchat';
 
@@ -66,7 +66,7 @@ const BOT_MS = 1200;
 const MAX_CHARS = 40;
 const BOT_LINES = 4;
 
-/** The i18n key each active pill paints from, in carousel order. */
+/** The i18n key each line paints from. */
 const QUICK_KEYS: Record<PostChatQuickId, string> = {
   rematch: 'banterQuickRematch',
   respect: 'banterQuickRespect',
@@ -74,6 +74,9 @@ const QUICK_KEYS: Record<PostChatQuickId, string> = {
   vengeance: 'banterQuickVengeance',
   admire: 'banterQuickAdmire',
 };
+
+/** The two pills the tray offers. The other closed lines still resolve for legacy senders. */
+const TRAY_QUICK_IDS: readonly PostChatQuickId[] = ['rematch', 'respect'];
 
 const clip = (raw: string): string => {
   const clean = raw.replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
@@ -181,18 +184,18 @@ export function createBanter(wiring: BanterWiring): Banter {
   const gate = byId<HTMLButtonElement>('banter-gate');
   const gateText = byId<HTMLElement>('banter-gate-t');
 
-  /* ---------- the pills: five closed lines, one tap each ---------- */
+  /* ---------- the pills: two closed lines, one tap each ---------- */
 
   const chips: HTMLButtonElement[] = [];
-  for (const preset of POST_CHAT_QUICK_CHATS) {
+  for (const id of TRAY_QUICK_IDS) {
     const chip = el('button', 'banter-chip');
     chip.type = 'button';
-    chip.dataset.preset = preset.id;
+    chip.dataset.preset = id;
     chip.addEventListener('click', () => {
       if (lockedNow() || cooling()) return;
       pop(chip);
       impact('light');
-      say({ preset: preset.id });
+      say({ preset: id });
     });
     quick.appendChild(chip);
     chips.push(chip);

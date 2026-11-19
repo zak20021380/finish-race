@@ -34,8 +34,9 @@ export interface PostChatQuickChat extends PostChatPreset {
 }
 
 /**
- * The five pills, in the order the carousel paints them: retention, respect, banter, adrenaline,
- * admiration. Every line is deliberately safe to receive from a stranger.
+ * The five closed lines: retention, respect, banter, adrenaline, admiration. The tray paints the
+ * first two; the rest stay resolvable so a tab that has not updated is never muted. Every line is
+ * deliberately safe to receive from a stranger.
  */
 export const POST_CHAT_QUICK_CHATS: readonly PostChatQuickChat[] = [
   { id: 'rematch', en: 'One more round?', fa: 'یک دست دیگه؟' },

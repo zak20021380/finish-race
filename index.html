@@ -2411,65 +2411,41 @@
               <!-- Obsidian VIP: the +50% bonus the settlement already paid, shown beside the rewards -->
               <span class="result-vip-boost" id="result-vip-boost" hidden>
                 <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                <span id="result-vip-boost-t" dir="ltr">VIP +50%</span>
+                <bdi id="result-vip-boost-t" dir="ltr">VIP +50%</bdi>
               </span>
 
-              <!-- Rewards and stakes share one obsidian capsule: a coin bank on the left, the TIQ
-                   ledger on the right. The divider keeps the two columns symmetrical while each
-                   side owns exactly one action (the prism, the shield). -->
+              <!-- THE REWARD GRID. At most two equal cards: coins always, and the one reward the
+                   board actually paid on the other side — channel TIQ, ranked TIQ, or XP. Every
+                   signed figure is its own LTR bdi run, so `+12` / `-14` / `+5` never mirror. -->
               <div class="result-bank" id="result-bank">
-                <div class="result-bank-col is-coins" id="result-coin-chip">
+                <div class="result-reward is-coins" id="result-coin-chip">
                   <span class="result-bank-ico is-coin" aria-hidden="true">
                     <span class="coin" data-coin></span>
                   </span>
-                  <span class="result-bank-body">
-                    <span class="result-bank-value">
-                      <span class="result-sign">+</span><b id="result-coins-n">0</b>
-                      <span class="result-unit" data-i18n="resultCoinsUnit">COINS</span>
-                    </span>
+                  <span class="result-bank-value">
+                    <bdi dir="ltr"><span class="result-sign">+</span><b id="result-coins-n">0</b></bdi>
                   </span>
+                  <span class="result-reward-label" data-i18n="resultCoinsUnit">COINS</span>
                   <button class="ad-chip ad-chip--mini" id="btn-double-coins" type="button" hidden>
                     <svg class="ad-chip-ico" width="12" height="12" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
                       <use id="double-coins-ico" href="#i-play" />
                     </svg>
                     <span class="ad-chip-text">
-                      <span class="ad-chip-label" id="double-coins-label">2×</span>
-                      <span class="ad-chip-sub" id="double-coins-sub" hidden>NO ADS</span>
+                      <span class="ad-chip-label" id="double-coins-label" dir="ltr">×2</span>
+                      <span class="ad-chip-sub" id="double-coins-sub" dir="ltr" hidden>NO ADS</span>
                     </span>
                     <span class="ad-chip-spin" id="double-coins-spin" aria-hidden="true" hidden></span>
                   </button>
                 </div>
-                <span class="result-bank-div" id="result-bank-div-a" aria-hidden="true"></span>
-                <div class="result-bank-col is-xp" id="result-xp-chip" hidden>
-                  <span class="result-bank-ico is-xp" aria-hidden="true">
-                    <svg class="xp-emblem" viewBox="0 0 24 24"><use href="#i-xp" /></svg>
-                  </span>
-                  <span class="result-bank-body">
-                    <span class="result-bank-value">
-                      <span class="result-sign">+</span><b id="result-xp-n">0</b>
-                      <span class="result-unit" data-i18n="resultXpUnit">XP</span>
-                    </span>
-                  </span>
-                </div>
-                <span class="result-bank-div" id="result-bank-div-b" aria-hidden="true"></span>
-                <div class="result-bank-col is-tiq" id="result-tiq-chip">
+                <div class="result-reward is-tiq" id="result-tiq-chip" hidden>
                   <span class="result-bank-ico is-tiq" aria-hidden="true">
-                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-brain" /></svg>
+                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-tiq" /></svg>
                   </span>
-                  <span class="result-bank-body">
-                    <span class="result-bank-value">
-                      <span class="result-sign">+</span><b id="result-tiq-n">0</b>
-                      <span class="result-unit" data-i18n="resultTiqUnit">TIQ</span>
-                    </span>
+                  <span class="result-bank-value">
+                    <bdi dir="ltr"><span class="result-sign" id="result-tiq-sign">+</span><b id="result-tiq-n">0</b></bdi>
                   </span>
-                </div>
-                <div class="result-bank-col is-stake" id="result-stake" hidden>
-                  <span class="result-bank-body">
-                    <span class="result-stake-k sr-only" id="result-stake-k">STAKES LOST</span>
-                    <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
-                    <span class="result-stake-saved" id="result-stake-saved" hidden>SAVED (+0 TIQ)</span>
-                  </span>
+                  <span class="result-reward-label" id="result-tiq-label">TIQ</span>
                   <button class="ad-chip ad-chip--shield" id="btn-recover-tiq" type="button" hidden>
                     <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
@@ -2482,10 +2458,19 @@
                     </svg>
                     <span class="ad-chip-text">
                       <span class="ad-chip-label" id="recover-tiq-label">RECOVER</span>
-                      <span class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</span>
+                      <bdi class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</bdi>
                     </span>
                     <span class="ad-chip-spin" id="recover-tiq-spin" aria-hidden="true" hidden></span>
                   </button>
+                </div>
+                <div class="result-reward is-xp" id="result-xp-chip" hidden>
+                  <span class="result-bank-ico is-xp" aria-hidden="true">
+                    <svg class="xp-emblem" viewBox="0 0 24 24"><use href="#i-xp" /></svg>
+                  </span>
+                  <span class="result-bank-value">
+                    <bdi dir="ltr"><span class="result-sign">+</span><b id="result-xp-n">0</b></bdi>
+                  </span>
+                  <span class="result-reward-label" data-i18n="resultXpUnit">XP</span>
                 </div>
               </div>
 
@@ -2510,8 +2495,8 @@
                     <span id="banter-alert-t">Opponent has left the match.</span>
                   </p>
                   <span class="banter-label" id="banter-label" aria-hidden="true">QUICK CHAT</span>
-                  <!-- Five one-tap lines, scrolled horizontally on a narrow screen so the capsule
-                       never widens: retention, respect, banter, adrenaline, admiration. -->
+                  <!-- Two one-tap lines on an equal two-track grid: retention and respect. The
+                       words wrap inside their pill, so neither ever clips at the capsule's edge. -->
                   <div class="banter-quick" id="banter-quick" role="group"
                     aria-label="Quick chat phrases"></div>
                   <!-- The free seat sees the transmitter behind frosted glass. It is a real button,

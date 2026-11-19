@@ -255,19 +255,15 @@ const resultRoster = $<HTMLOListElement>('result-roster');
 const resultBank = $<HTMLElement>('result-bank');
 const resultTiqChip = $<HTMLElement>('result-tiq-chip');
 const resultTiqN = $<HTMLElement>('result-tiq-n');
+const resultTiqSign = $<HTMLElement>('result-tiq-sign');
+const resultTiqLabel = $<HTMLElement>('result-tiq-label');
 const resultLeft = $<HTMLElement>('result-left');
 const resultLeftTxt = $<HTMLElement>('result-left-txt');
 const resultXpChip = $<HTMLElement>('result-xp-chip');
 const resultXpN = $<HTMLElement>('result-xp-n');
-const resultBankDivA = $<HTMLElement>('result-bank-div-a');
-const resultBankDivB = $<HTMLElement>('result-bank-div-b');
 const resultCoinChip = $<HTMLElement>('result-coin-chip');
 const resultCoinsN = $<HTMLElement>('result-coins-n');
-const resultStake = $<HTMLElement>('result-stake');
-const resultStakeK = $<HTMLElement>('result-stake-k');
-const resultStakeN = $<HTMLElement>('result-stake-n');
-const resultStakeSaved = $<HTMLElement>('result-stake-saved');
-/* the two rewarded-video keys: a chip in the stake band and a chip inside the coin pill */
+/* the two rewarded-video keys: one inside each reward card */
 const recoverBtn = $<HTMLButtonElement>('btn-recover-tiq');
 const recoverLabel = $<HTMLElement>('recover-tiq-label');
 const recoverQuota = $<HTMLElement>('recover-tiq-quota');
@@ -828,55 +824,53 @@ const coachText = $<HTMLElement>('iv-coach-t');
 const bonusKicker = $<HTMLElement>('iv-bonus-k');
 const bonusText = $<HTMLElement>('iv-bonus-t');
 
+/** A bdi-isolated run: signed figures, ratios and rank tags never borrow the paragraph's direction. */
+function isoText(text: string, dir: 'ltr' | 'auto'): HTMLElement {
+  const el = document.createElement('bdi');
+  el.setAttribute('dir', dir);
+  el.textContent = text;
+  return el;
+}
+
+/** Paint a line with every signed figure, ratio and rank tag isolated in its own LTR run. */
+function paintIsoLine(el: HTMLElement, text: string, dir: 'ltr' | 'rtl'): void {
+  el.dir = dir;
+  el.replaceChildren();
+  const re = /([+\-−]?\d+(?:\/\d+)?|#\d+)/g;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0;
+    if (at > last) el.append(document.createTextNode(text.slice(last, at)));
+    el.append(isoText(m[0], 'ltr'));
+    last = at + m[0].length;
+  }
+  if (last < text.length) el.append(document.createTextNode(text.slice(last)));
+}
+
 /**
- * The channel's own cut of the match, under the welcome badge.
- *
- * A fighter who enrolled in Channel Wars earns for their channel on every race they finish, so
- * the settlement says so on the result card itself — not only in a toast that fades while they
- * are still reading the score.
+ * The channel's own cut of the match, as one horizontal strip: shield + channel + rank on the
+ * start edge, the gold `+5 TIQ` pill on the end edge. Shown only for an enrolled fighter in a
+ * Play with Friends room — the one board Channel Wars pays.
  */
 const warBadge = document.createElement('div');
-warBadge.className = 'iv-bonus is-war';
+warBadge.className = 'cw-war';
 warBadge.id = 'iv-war';
 warBadge.setAttribute('role', 'status');
 warBadge.hidden = true;
-warBadge.innerHTML = '<span class="iv-bonus-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>'
-  + '<span class="iv-bonus-copy">'
-  + '<span class="iv-bonus-k" id="iv-war-k"></span>'
-  + '<span class="iv-bonus-t" id="iv-war-t"></span>'
-  + '</span>';
+warBadge.innerHTML = '<span class="cw-war-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>'
+  + '<bdi class="cw-war-name" id="iv-war-name" dir="auto"></bdi>'
+  + '<bdi class="cw-war-rank" id="iv-war-rank" dir="ltr"></bdi>'
+  + '<span class="cw-war-tiq"><bdi id="iv-war-tiq" dir="ltr"></bdi></span>';
 bonusBadge.insertAdjacentElement('afterend', warBadge);
 
-const warKicker = $<HTMLElement>('iv-war-k');
-const warText = $<HTMLElement>('iv-war-t');
+const warName = $<HTMLElement>('iv-war-name');
+const warRank = $<HTMLElement>('iv-war-rank');
+const warTiq = $<HTMLElement>('iv-war-tiq');
 
-/** `+25 · @channel · #3` — every figure in its own Latin run, the name in its own direction. */
 function paintWarBadge(gain: number, rank: number, name: string): void {
-  if (warKicker) {
-    /* The kicker is the unit itself: the TIQ mark and its three letters, then the amount, the
-       channel and the new place — every figure in its own Latin run. */
-    warKicker.textContent = '';
-    const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    mark.setAttribute('class', 'ico iv-war-ico');
-    mark.setAttribute('aria-hidden', 'true');
-    mark.setAttribute('focusable', 'false');
-    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#i-tiq');
-    mark.append(use);
-    const unit = document.createElement('span');
-    unit.setAttribute('dir', 'ltr');
-    unit.textContent = t('cwWarPts');
-    warKicker.append(mark, unit);
-  }
-  if (!warText) return;
-  const iso = (text: string, dir: 'ltr' | 'auto'): HTMLElement => {
-    const el = document.createElement('bdi');
-    el.setAttribute('dir', dir);
-    el.textContent = text;
-    return el;
-  };
-  warText.textContent = '';
-  warText.append(iso(`+${gain}`, 'ltr'), ' · ', iso(name, 'auto'), ' · ', iso(`#${rank}`, 'ltr'));
+  warName.textContent = name;
+  warRank.textContent = `#${Math.max(1, rank)}`;
+  warTiq.textContent = `+${gain} ${t('resultTiqUnit')}`;
 }
 
 /** The step painted on the pill (1, 2 or 0 for none): a live language flip re-reads it. */
@@ -1750,10 +1744,12 @@ interface ResultView {
    * the strip never prints a TIQ pill for it, and the stake band never opens.
    */
   bot: boolean;
-  /** The TIQ a rewarded win actually paid; always 0 on a bot board. */
+  /** The TIQ a rewarded win actually paid; always 0 on a bot or friendly board. */
   tiq: number;
-  /** The magnitude of the crimson stake loss a defeat wears. */
+  /** The magnitude of the ranked stake a defeat wears; a friendly board never charges one. */
   stake: number;
+  /** The matchmaker's ranked gate: only this board may move or print ranked TIQ. */
+  ranked: boolean;
   hardBotDuel: boolean;
   questMatch: () => Promise<string | null>;
   questAdCompleted: boolean;
@@ -1765,15 +1761,17 @@ let hardBotDuel = false;
 let questEpoch = 0;
 let questMatch: () => Promise<string | null> = async () => null;
 let resultRaf = 0;
-/** the coin count-up keeps its own handle: claiming coins must not freeze the stake */
+/** the coin count-up keeps its own handle: claiming coins must not freeze the TIQ ledger */
 let coinRaf = 0;
-/** The stake is mid-morph (struck out, waiting for the shield): repaints must not snap it back. */
-let stakeMorphing = false;
 let resultTimers: number[] = [];
 /** The rival walked out of the settled race: the rematch key and the banter dock are dead. */
 let resultLocked = false;
 /** The friends room's live rematch consensus, or null outside a friends match. */
 let rematchState: RematchState | null = null;
+/** The channel cut of a friends match, painted synchronously and re-ranked by the registry. */
+let warAward: { gain: number; rank: number; name: string } | null = null;
+/** One settled board owns one channel answer: a late registry reply cannot paint into the next. */
+let warEpoch = 0;
 
 /** Stop every clock the result owns: the count-up and the haptic beats. */
 function clearResultMotion() {
@@ -1781,9 +1779,8 @@ function clearResultMotion() {
   if (coinRaf) { cancelAnimationFrame(coinRaf); coinRaf = 0; }
   for (const id of resultTimers) window.clearTimeout(id);
   resultTimers = [];
-  stakeMorphing = false;
   resultCoinChip.classList.remove('is-celebrating');
-  resultStakeSaved.classList.remove('is-lit');
+  resultTiqChip.classList.remove('is-restoring');
 }
 
 const resultLater = (fn: () => void, ms: number) => {
@@ -1968,8 +1965,7 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   medal.className = 'result-medal';
   medal.dataset.place = String(place);
   medal.setAttribute('aria-hidden', 'true');
-  if (place === 1) medal.append(crownMark());
-  else medal.textContent = `#${rank}`;
+  medal.append(isoText(`#${rank}`, 'ltr'));
 
   const avatar = document.createElement('span');
   avatar.className = 'result-avatar';
@@ -1986,7 +1982,7 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   id.className = 'result-row-id';
   const strong = document.createElement('strong');
   strong.className = 'result-row-name';
-  strong.textContent = name;
+  strong.append(isoText(name, 'auto'));
   id.append(strong);
   /* the gold crown is the VIP prestige mark: it sits beside the name on every result row the
      entitlement covers, and it is part of the same aria-label the row already announces */
@@ -2022,8 +2018,9 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   say.setAttribute('role', 'status');
   say.setAttribute('aria-live', 'polite');
   say.hidden = true;
-  const sayText = document.createElement('span');
+  const sayText = document.createElement('bdi');
   sayText.className = 'result-say-t';
+  sayText.dir = 'auto';
   /* the crown a VIP line wears: painted by banter.ts, present from the first paint so a line
      never has to reflow its own bubble to gain a badge */
   const sayVip = document.createElement('span');
@@ -2047,50 +2044,77 @@ function paintResultRoster(): void {
 /** Every word and every state class the current result owns, re-readable after a language flip. */
 function paintResultCopy(): void {
   if (!resultView) return;
-  const { won, coins, xp, bot, tiq, stake } = resultView;
-  /* A checkmate that ended the race is the result's own reason, not a generic victory: the card
-     says how it was won. A trap that only eliminated a party seat is already history by now. */
+  const { won } = resultView;
+  /* The hero outcome is always Victory or Defeat. A checkmate is the reason, so it moves up into
+     the kicker instead of replacing the outcome the player came to read. */
   const trapped = state.checkmate?.decided === true && state.winner !== null;
-  resultKicker.textContent = t(!won && trapped ? 'checkmateKicker' : 'resultKicker');
-  verdict.textContent = t(won ? (trapped ? 'checkmateKicker' : 'resultVictoryTitle') : 'resultDefeatTitle');
+  resultKicker.textContent = t(trapped ? 'checkmateKicker' : 'resultKicker');
+  verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
   shareBtn.setAttribute('aria-label', t('resultShare'));
   toMenu.setAttribute('aria-label', t('resultMenu'));
-  paintStakeValue();
-  /* THE REWARDS STRIP IS THE SETTLEMENT, NOT A LEDGER. Only what the race actually paid is
-     painted: a machine-held board never shows TIQ (its delta is zero by rule, win or lose), a
-     race that paid nothing hides the whole capsule instead of printing +0, and a real win shows
-     coins · xp · tiq in that order. */
-  const staked = !won && stake > 0;
-  const showCoins = coins > 0;
-  const showXp = xp > 0;
-  const showTiq = !bot && tiq > 0;
-  resultCoinChip.hidden = !showCoins;
-  resultXpChip.hidden = !showXp;
-  resultTiqChip.hidden = !showTiq;
-  resultStake.hidden = !staked;
-  resultCoinChip.classList.toggle('is-consolation', !won);
-  const paid = [showCoins, showXp, showTiq].filter(Boolean).length;
-  resultBank.hidden = paid === 0 && !staked;
-  /* a full three-item win keeps its edges; fewer items close up into the middle */
-  resultBank.classList.toggle('is-centered', paid > 0 && paid < 3 && !staked);
-  /* one hairline per shared edge: coin|xp, xp|tiq — or coin|tiq when XP paid nothing */
-  resultBankDivA.hidden = !(showCoins && showXp);
-  resultBankDivB.hidden = !((showXp && showTiq) || (showCoins && showTiq && !showXp));
   /* A FRIENDS CAPSULE OWNS ONE TEAL KEY. The duel challenge is a lobby door — there is nobody to
      challenge in a room the player just raced, and a second call to action there is noise. */
   shareBtn.hidden = !won || friendsMatch();
-  resultBank.dataset.paid = String(paid);
-  resultBank.classList.toggle('is-staked', staked);
   again.classList.toggle('is-revenge', !won);
   againIco?.setAttribute('href', won ? '#i-play' : '#i-restart');
+  paintResultRewards();
   paintResultLock();
   paintRewardButtons();
   paintResultRoster();
   paintRematchUi();
   /* a language flip can land while the consent sheet is up: its warning must switch too */
   paintAdConfirmCopy();
+}
+
+/**
+ * ONE symmetric reward card on each side of the grid. Card one is always the coins the wallet
+ * kept. Card two is the single reward this board actually paid: channel TIQ in a friends room,
+ * ranked TIQ in the matchmaker (a defeat turns it crimson and opens the shield), or XP on a
+ * practice board. A friendly board never prints ranked TIQ, never prints `+0`, and never opens
+ * the stake shield — that contradiction is exactly what this card replaces.
+ */
+type RewardTier = { kind: 'channel' | 'ranked' | 'xp' | 'none'; amount: number; sign: '+' | '-' };
+
+function rewardTier(): RewardTier {
+  if (!resultView) return { kind: 'none', amount: 0, sign: '+' };
+  const v = resultView;
+  if (warAward) return { kind: 'channel', amount: warAward.gain, sign: '+' };
+  if (v.ranked && (v.won ? v.tiq > 0 : v.stake > 0)) {
+    return { kind: 'ranked', amount: v.won ? v.tiq : v.stake, sign: v.won ? '+' : '-' };
+  }
+  if (v.xp > 0) return { kind: 'xp', amount: v.xp, sign: '+' };
+  return { kind: 'none', amount: 0, sign: '+' };
+}
+
+function paintResultRewards(): void {
+  if (!resultView) return;
+  const { won, coins } = resultView;
+  const tier = rewardTier();
+  const claimed = hasClaimedInMatch('recover_tiq');
+  const restored = tier.kind === 'ranked' && tier.sign === '-' && claimed;
+  const doubled = hasClaimedInMatch('double_coins');
+  const showCoins = coins > 0;
+  const showXp = tier.kind === 'xp';
+  const showTiq = tier.kind === 'channel' || tier.kind === 'ranked';
+  resultCoinChip.hidden = !showCoins;
+  resultXpChip.hidden = !showXp;
+  resultTiqChip.hidden = !showTiq;
+  resultCoinChip.classList.toggle('is-consolation', !won && showCoins);
+  const paid = (showCoins ? 1 : 0) + (showXp || showTiq ? 1 : 0);
+  resultBank.hidden = paid === 0;
+  resultBank.dataset.paid = String(Math.max(1, paid));
+  if (showTiq) {
+    resultTiqChip.classList.toggle('is-channel', tier.kind === 'channel');
+    resultTiqChip.classList.toggle('is-loss', tier.kind === 'ranked' && tier.sign === '-');
+    resultTiqChip.classList.toggle('is-restored', restored);
+    resultTiqLabel.textContent = t(tier.kind === 'channel' ? 'resultChannelTiqUnit' : 'resultRankTiqUnit');
+    resultTiqSign.textContent = restored ? '' : tier.sign;
+    resultTiqN.textContent = resultAbs(restored ? 0 : tier.amount);
+  }
+  if (showXp) resultXpN.textContent = resultAbs(resultView.xp);
+  if (showCoins) resultCoinsN.textContent = resultAbs(doubled ? coins * 2 : coins);
 }
 
 /**
@@ -2106,7 +2130,7 @@ function paintResultLock(): void {
   again.disabled = resultLocked || dead || !!waiting;
   again.classList.toggle('is-locked', resultLocked || dead);
   const againText = resultLocked ? t('resultOpponentLeft') : primaryLabel();
-  againLabel.textContent = againText;
+  paintIsoLine(againLabel, againText, langDef(lang).dir);
   /* the key's spoken name follows the visible one in every language, locked or not */
   again.setAttribute('aria-label', againText);
   if (resultLocked) again.title = t('resultOpponentLeftHint');
@@ -2162,12 +2186,19 @@ function paintRematchUi(): void {
   const you = state?.votes?.[localSide] ?? 'pending';
   const dir = langDef(lang).dir;
   rematchBar.hidden = false;
-  rematchBarText.dir = dir;
-  rematchBarText.textContent = state && state.status === 'unavailable'
-    ? (state.reason === 'RIVAL_DECLINED' ? t('resultRematchRivalDeclined')
-      : state.reason === 'RIVAL_LEFT' ? t('resultRematchRivalLeft')
-        : t('resultRematchNotEnough'))
-    : `${t('resultRematchAria')} ${accepted}/${total}`;
+  if (state && state.status === 'unavailable') {
+    paintIsoLine(rematchBarText,
+      state.reason === 'RIVAL_DECLINED' ? t('resultRematchRivalDeclined')
+        : state.reason === 'RIVAL_LEFT' ? t('resultRematchRivalLeft')
+          : t('resultRematchNotEnough'),
+      dir);
+  } else {
+    rematchBarText.dir = dir;
+    rematchBarText.replaceChildren(
+      document.createTextNode(`${t('resultRematchAria')} `),
+      isoText(`${accepted}/${total}`, 'ltr'),
+    );
+  }
   /* The decline key is the answer to a request, never a second way to start one. */
   const asked = you !== 'accepted' && accepted > 0 && !rematchDead();
   rematchDeclineBtn.hidden = !asked;
@@ -2254,7 +2285,10 @@ function declineRematch(): void {
  */
 function rollResultValues(): void {
   if (!resultView) return;
-  const { won, coins, xp, tiq, stake } = resultView;
+  const { coins, xp } = resultView;
+  const tier = rewardTier();
+  const restored = tier.kind === 'ranked' && tier.sign === '-' && hasClaimedInMatch('recover_tiq');
+  const tiqTarget = restored ? 0 : tier.amount;
   const coin = resultCoinChip.querySelector<SVGSVGElement>('.coin');
   if (coin && !motionReduced()) {
     coin.classList.remove('sweep');
@@ -2266,18 +2300,16 @@ function rollResultValues(): void {
   const paint = (now: number) => {
     const k = dur > 0 ? Math.min(1, (now - t0) / dur) : 1;
     const eased = 1 - Math.pow(1 - k, 3);
-    resultTiqN.textContent = resultAbs((won ? tiq : 0) * eased);
+    resultTiqN.textContent = resultAbs(tiqTarget * eased);
     resultCoinsN.textContent = resultAbs(coins * eased);
     resultXpN.textContent = resultAbs(xp * eased);
-    if (!won) resultStakeN.textContent = `−${resultAbs(Math.max(1, stake * eased))} ${t('resultTiqUnit')}`;
     if (k < 1) {
       resultRaf = requestAnimationFrame(paint);
       return;
     }
-    resultTiqN.textContent = resultAbs(won ? tiq : 0);
+    resultTiqN.textContent = resultAbs(tiqTarget);
     resultCoinsN.textContent = resultAbs(coins);
     resultXpN.textContent = resultAbs(xp);
-    if (!won) resultStakeN.textContent = `−${resultAbs(stake)} ${t('resultTiqUnit')}`;
     resultRaf = 0;
   };
   resultRaf = requestAnimationFrame(paint);
@@ -2295,7 +2327,7 @@ function rollResultValues(): void {
  */
 function paintRewardButtons(): void {
   if (!resultView) return;
-  const { won, coins, stake } = resultView;
+  const { coins } = resultView;
   const vip = isPremiumUser();
 
   /* ---- the +50% pill: the bonus the settlement already folded into these rewards ---- */
@@ -2303,8 +2335,9 @@ function paintRewardButtons(): void {
   resultVipBoost.hidden = !boosted;
   if (boosted) resultVipBoostT.textContent = t('resultVipBoost');
 
-  /* ---- TIQ recovery: only a defeat that actually cost TIQ ---- */
-  const lost = !won && stake > 0;
+  /* ---- TIQ recovery: only a ranked defeat that actually cost TIQ ---- */
+  const tier = rewardTier();
+  const lost = tier.kind === 'ranked' && tier.sign === '-';
   const claimed = hasClaimedInMatch('recover_tiq');
   const left = getRemainingTiqRecoveries();
   const limit = tiqRecoveryLimit();
@@ -2372,25 +2405,6 @@ function paintRewardButtons(): void {
   else doubleBtn.removeAttribute('aria-label');
   /* the consolation tint belongs to the reward, never to the key that doubles it */
   resultCoinChip.classList.toggle('is-doubled', coins > 0);
-}
-
-/** The stake band reads what the match owes — or what the shield already gave back. */
-function paintStakeValue(): void {
-  if (!resultView) return;
-  const refunded = hasClaimedInMatch('recover_tiq');
-  resultStake.classList.toggle('is-refunded', refunded);
-  /* the band's header and the key beside it are two different sentences: the header reports
-     the stake ("STAKES BACK"), the key reports its own state ("RECOVERED ✓"). Reusing one
-     string for both is what made the row read twice. */
-  resultStakeK.textContent = t(refunded ? 'resultStakeReturned' : 'resultStakeLost');
-  resultStakeSaved.textContent = t('result_stake_saved');
-  /* the morph owns the pair until the shield lands: a repaint mid-flight (a language flip,
-     a second paint) must not jump the band ahead of the animation already running */
-  if (stakeMorphing) return;
-  resultStakeN.hidden = refunded;
-  resultStakeSaved.hidden = !refunded;
-  resultStakeN.classList.remove('is-struck');
-  if (!refunded) resultStakeN.textContent = `−${resultAbs(resultView.stake)} ${t('resultTiqUnit')}`;
 }
 
 /** A chip's working face: spinner out, taps off, `aria-busy` on. */
@@ -2543,8 +2557,8 @@ function hideAdToast(): void {
 }
 
 /**
- * One claim count-up: `paint` receives the eased fraction, so a signed stake and a bare coin total
- * can share the same clock. Reduced motion lands on the final value in the same frame.
+ * One claim count-up: `paint` receives the eased fraction, so the doubled coin total lands on the
+ * same clock the settlement used. Reduced motion lands on the final value in the same frame.
  */
 function animateClaim(ms: number, paint: (eased: number) => void, store: (id: number) => void): void {
   if (motionReduced() || ms <= 0) {
@@ -2569,28 +2583,12 @@ function animateClaim(ms: number, paint: (eased: number) => void, store: (id: nu
   store(requestAnimationFrame(tick));
 }
 
-/**
- * The crimson `−14 TIQ` is struck out first, then a glowing emerald shield lands in its place.
- * The beat between the two is deliberate: the player reads the penalty being cancelled before
- * the value changes, instead of the number silently turning into a different one.
- */
-function animateStakeRefund(): void {
-  stakeMorphing = true;
-  resultStakeSaved.hidden = true;
-  resultStakeSaved.classList.remove('is-lit');
-  resultStakeN.hidden = false;
-  resultStakeN.classList.add('is-struck');
-  const settle = () => {
-    stakeMorphing = false;
-    resultStakeN.classList.remove('is-struck');
-    resultStakeN.hidden = true;
-    resultStakeSaved.textContent = t('result_stake_saved');
-    resultStakeSaved.hidden = false;
-    resultStake.classList.add('is-refunded');
-    resultStakeK.textContent = t('resultStakeReturned');
-    restartClass(resultStakeSaved, 'is-lit');
-  };
-  resultLater(settle, motionReduced() ? 0 : 480);
+/** The shield lands: the ranked card turns emerald, its value settles on 0 and the key reads RECOVERED. */
+function animateTiqRestore(): void {
+  paintResultRewards();
+  paintRewardButtons();
+  restartClass(resultTiqChip, 'is-restoring');
+  resultLater(() => resultTiqChip.classList.remove('is-restoring'), motionReduced() ? 0 : 700);
 }
 
 /** The pill's total climbs from `+X` to `+(2X)` while the coin takes one gold shimmer. */
@@ -2611,7 +2609,7 @@ let doubleBusy = false;
  */
 async function claimTiqRecovery(): Promise<void> {
   const view = resultView;
-  if (!view || view.won || view.stake <= 0) return;
+  if (!view || view.won || !view.ranked || view.stake <= 0) return;
   /* one video at a time across both chips: the SDK's own mutex would answer `skipped`, which
      reads as the player's fault rather than a tap that simply arrived too early */
   if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
@@ -2625,8 +2623,7 @@ async function claimTiqRecovery(): Promise<void> {
     recordTiqRecovery();
     markClaimedInMatch('recover_tiq');
     paintSeatIdentity();
-    animateStakeRefund();
-    paintRewardButtons();
+    animateTiqRestore();
     showAdToast(t('ad_success_tiq_saved'), 'success');
     notify('success');
     return;
@@ -2666,10 +2663,7 @@ async function claimTiqRecovery(): Promise<void> {
   recordTiqRecovery();                      // the receipt: only a completed view spends a recovery
   markClaimedInMatch('recover_tiq');
   paintSeatIdentity();                      // the top HUD's TIQ pill reads the save
-  /* the strike starts first and owns the number; the repaint then only moves the chip and the
-     band's copy, so the band strikes −stake before the shield replaces it */
-  animateStakeRefund();
-  paintRewardButtons();
+  animateTiqRestore();
   showAdToast(t('ad_success_tiq_saved'), 'success');
   notify('success');
 }
@@ -2769,12 +2763,22 @@ function settleWarMatch(won: boolean, bot = false): void {
   const channel = getMySquad();
   if (!channel) return;
   warPaid = true;
+  const epoch = ++warEpoch;
   const gain = won ? WAR_WIN : WAR_LOSS;
-  void awardWarPoints(won).then((standing) => {
-    if (!standing) return;
-    const name = channel.name || channel.handle;
+  const name = channel.name || channel.handle;
+  /* `awardWarPoints` credits the local roster synchronously, so the channel's new place is
+     readable on this frame; the registry answer only refines the rank a beat later. */
+  const pending = awardWarPoints(won);
+  const live = getMySquad();
+  const rank = Math.max(1, live?.rank ?? channel.rank ?? 1);
+  warAward = { gain, rank, name };
+  paintWarBadge(gain, rank, name);
+  warBadge.hidden = false;
+  void pending.then((standing) => {
+    if (!standing || epoch !== warEpoch) return;
+    warAward = { gain, rank: standing.rank, name };
     paintWarBadge(gain, standing.rank, name);
-    warBadge.hidden = false;
+    if (resultView) paintResultRewards();
     showRoyalToast(
       t('cwAwardTitle'),
       t(won ? 'cwAwardWinBody' : 'cwAwardLossBody')
@@ -2803,15 +2807,14 @@ function showOverlay() {
   adClaimInFlight = false;
   setChipBusy(recoverBtn, recoverSpin, false);
   setChipBusy(doubleBtn, doubleSpin, false);
-  resultStake.classList.remove('is-refunded');
-  resultStakeN.hidden = false;
-  resultStakeN.classList.remove('is-struck');
-  resultStakeSaved.hidden = true;
+  resultTiqChip.classList.remove('is-restored', 'is-loss', 'is-channel', 'is-restoring');
   closeAdConfirm(false);
   hideAdToast();
   /* Last match's channel badge is not this match's news. It is cleared here, once, so a bot race
      that follows a friends win cannot inherit the +TIQ line the channel earned an hour ago. */
   warBadge.hidden = true;
+  warAward = null;
+  warEpoch += 1;
   const won = localWon();
   /* A rival who walked out mid-race leaves a machine in the chair. A duel whose only opponent is
      gone has nobody to answer, so its capsule opens dead. A party still has people at the table
@@ -2837,13 +2840,14 @@ function showOverlay() {
   /* One settlement returns the wallet and the XP pool together, and says whether the machine
      held the far side. A bot board pays coins and XP on a WIN only, and never any TIQ. */
   const boardMode = matchMode();
+  const ranked = rankedPvp();
   const settled = mine
     ? recordGame({
       /* the three inputs the mode sheet quoted: level, seat count and reward family. The
          settlement's payout/XP doors pass these straight into `computeMatchRewards()`. */
       difficulty, won, mode: boardMode, defenseHeld,
       rewardMode: matchRewardMode ?? undefined,
-      ranked: rankedPvp(),
+      ranked,
       /* the race ended without a finish line: a ranked run never survives a void board */
       forfeit: forfeit !== null,
       seats: sizes.length,
@@ -2895,9 +2899,11 @@ function showOverlay() {
     coins: earned,
     xp: settled.xp,
     bot: settled.bot,
-    /* a bot board is TIQ-neutral by rule, so its pill and its stake never exist */
-    tiq: settled.bot || !mine ? 0 : Math.max(0, afterTiq - beforeTiq),
-    stake: settled.bot || !mine ? 0 : Math.max(5, Math.round(runtime.winTiq * 0.1)),
+    ranked,
+    /* Only a ranked board prints or charges TIQ: a bot board is neutral by rule and a friends
+       room is a friendly duel, so neither may show a ranked figure or open the stake shield. */
+    tiq: settled.bot || !mine || !ranked ? 0 : Math.max(0, afterTiq - beforeTiq),
+    stake: settled.bot || !mine || !ranked ? 0 : Math.max(5, Math.round(runtime.winTiq * 0.1)),
     hardBotDuel: hardBotDuel && !active && forfeit === null,
     questMatch,
     questAdCompleted: false,
@@ -2913,8 +2919,9 @@ function showOverlay() {
   resultTiqN.textContent = '0';
   resultCoinsN.textContent = '0';
   resultXpN.textContent = '0';
-  resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
+  /* The card is one reused object: a previous scroll must not open this result below its hero. */
+  resultCard.scrollTop = 0;
   /* the card and its standings ladder are on screen: the one moment the result fanfare belongs to.
      The two voices are mutually exclusive by construction — a win gets the victory fanfare, a loss
      gets the defeat sting, and whichever engine is asked, the other one is handed back first — and
@@ -3627,6 +3634,8 @@ function referralQuestSetup(): ReferralQuestMatchSetup {
 function restart() {
   /* Replaying a war board is another war match: the channel is owed its points again. */
   warPaid = false;
+  warAward = null;
+  warEpoch += 1;
   /* every new board is a new match: the last result's celebration (or its defeat sting) cannot
      survive into it */
   stopVictoryFanfare();
@@ -4041,7 +4050,7 @@ function paintRaceTags(): void {
     : t(kind === 'duel' ? 'pauseTagFriends' : 'pauseTagOnline');
   const mode = `${raceShapeTag()} · ${context}`;
   pauseMode.textContent = ` · ${mode}`;
-  overMode.textContent = toLatinDigits(mode);
+  overMode.replaceChildren(isoText(toLatinDigits(mode), 'auto'));
 }
 
 /**
@@ -4152,6 +4161,8 @@ function startGame(setup: StartSetup) {
   warMatch = warPending;
   warPending = false;
   warPaid = false;
+  warAward = null;
+  warEpoch += 1;
   cancelTutorial();
   /* A status pill from the previous race is not this race's news. */
   hidePeerPill();
