@@ -272,11 +272,16 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   /**
-   * One ladder row: rank badge, crest, identity, Channel TIQ, and the door into the inspector.
+   * One ladder row: rank + crest, a spacious two-line identity, Channel TIQ, and the door in.
+   *
+   * The identity owns the whole middle column so a bilingual title can breathe on line one; the
+   * handle, the member count and the team pill share the quieter line beneath it. In an RTL locale
+   * the flex row lays these out right-to-left, while `<bdi dir="auto">` keeps every dynamic name,
+   * handle and title bidi-contained — no mixed-script word gets chewed up mid-clip.
    *
    * `inspectable` makes the whole row a pointer target and gives it a real chevron key, so a
    * keyboard reaches the same place a thumb does. `selectable` turns the row into a choice in the
-   * quick pick. Every dynamic string rides its own `<bdi>` so an RTL channel name is contained.
+   * quick pick.
    */
   function buildRow(
     s: RankedSquad,
@@ -308,12 +313,15 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
     const id = document.createElement('span');
     id.className = 'cw-row-id';
-    const name = document.createElement('b');
-    name.className = 'cw-row-name';
-    const nameBdi = document.createElement('bdi');
-    nameBdi.setAttribute('dir', 'auto');
-    nameBdi.textContent = s.name || displayNameOf(s.handle);
-    name.append(nameBdi);
+
+    /* Line 1 — the full-width title. Its own <bdi> isolates a mixed Persian/Latin name so the
+       ellipsis lands cleanly at the end of the whole title instead of inside a Persian word. */
+    const title = document.createElement('bdi');
+    title.className = 'cw-row-title';
+    title.setAttribute('dir', 'auto');
+    title.textContent = s.name || displayNameOf(s.handle);
+
+    /* Line 2 — the quiet metadata: handle · count, then the team pill as a compact inline tag. */
     const meta = document.createElement('span');
     meta.className = 'cw-row-meta';
     const handle = document.createElement('bdi');
@@ -326,9 +334,17 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     dot.textContent = '·';
     const crew = document.createElement('span');
     crew.className = 'cw-row-members';
+    crew.setAttribute('dir', 'auto');
     crew.textContent = membersLabel(s.members);
     meta.append(handle, dot, crew);
-    id.append(name, meta);
+
+    if (opts.you) {
+      const pill = document.createElement('span');
+      pill.className = 'cw-pill cw-you-pill';
+      pill.textContent = t('cwYourTeam');
+      meta.append(pill);
+    }
+    id.append(title, meta);
 
     const side = document.createElement('span');
     side.className = 'cw-row-side';
@@ -337,12 +353,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     ptsEl.append(tiqFigure(tiq));
     side.append(ptsEl);
 
-    if (opts.you) {
-      const pill = document.createElement('span');
-      pill.className = 'cw-pill';
-      pill.textContent = t('cwYourTeam');
-      side.append(pill);
-    } else if (opts.selectable) {
+    if (opts.selectable) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cw-sel';

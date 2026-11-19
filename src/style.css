@@ -35883,16 +35883,18 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-rule {
   flex: none;
   display: flex;
-  align-items: flex-start;
-  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin: 0;
   padding: 7px 10px;
   border-radius: 12px;
   background: rgba(125, 235, 255, .06);
   box-shadow: inset 0 0 0 1px rgba(125, 235, 255, .2);
+  text-align: start;
 }
-.cw-rule-ico { display: grid; place-items: center; flex: none; margin-top: 1px; color: var(--cw-cyan); }
-.cw-rule-ico .ico { width: 13px; height: 13px; }
+.cw-rule-ico { display: grid; place-items: center; flex-shrink: 0; color: var(--cw-cyan); }
+.cw-rule-ico .ico { width: 13px; height: 13px; flex-shrink: 0; }
 .cw-rule-t {
   min-width: 0;
   font-size: 10px;
@@ -36011,15 +36013,17 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-sheet .cw-list::-webkit-scrollbar-thumb { background: rgba(233, 192, 115, .38); border-radius: 999px; }
 .cw-sheet .cw-list::-webkit-scrollbar-thumb:hover { background: rgba(233, 192, 115, .66); }
 
-/* ---- one ladder row: rank, crest, identity, score, and the door into the channel ---- */
+/* ---- one ladder row: rank + crest, a two-line identity, score, and the door ----
+   A flex row gives the identity column every pixel the rank, the 44px crest, the score and the
+   chevron do not need. In RTL the whole row flips, so the start pair sits on the right and the
+   score + chevron land on the left, exactly where a Persian reader expects them. */
 .cw-row {
   position: relative;
-  display: grid;
-  grid-template-columns: 30px 34px minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 7px 9px;
+  padding: 9px 10px;
   border-radius: 13px;
   background: var(--cw-plate);
   box-shadow: inset 0 0 0 1px var(--cw-hair);
@@ -36042,8 +36046,10 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   box-shadow: inset 0 0 0 1px rgba(125, 235, 255, .38);
 }
 .cw-rank {
+  flex: none;
   display: grid;
   place-items: center;
+  width: 30px;
   height: 24px;
   border-radius: 8px;
   background: rgba(255, 255, 255, .05);
@@ -36074,10 +36080,11 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-av {
   position: relative;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   overflow: hidden;
   background: linear-gradient(180deg, hsl(var(--cw-hue, 210) 40% 30%) 0%, hsl(var(--cw-hue, 210) 42% 19%) 100%);
@@ -36086,29 +36093,29 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cw-av-img[hidden] { display: none; }
 .cw-av-t {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .02em;
   color: rgba(255, 255, 255, .92);
   text-transform: uppercase;
 }
-.cw-row-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cw-row-name {
+/* The middle column takes all the slack. Line 1 is the whole title; line 2 carries the quiet
+   facts. `min-width: 0` on every flex level is what lets the ellipsis actually engage. */
+.cw-row-id {
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 100%;
-  font-size: 11.5px;
-  line-height: 1.25;
-  font-weight: 800;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.cw-row-name bdi,
-.cw-row-handle {
+.cw-row-title {
   display: block;
   min-width: 0;
   max-width: 100%;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 800;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -36125,14 +36132,26 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-row-handle {
   flex: 0 1 auto;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   direction: ltr;
   text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--cw-cyan);
   opacity: .82;
 }
-.cw-row-members { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cw-row-members {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
 .cw-row-meta .cw-dot { flex: none; opacity: .5; }
 
+/* Generous 12px of air between the identity and the score (8px row gap + 4px inline margin). */
 .cw-row-side {
   flex: none;
   display: flex;
@@ -36140,10 +36159,12 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   align-items: flex-end;
   gap: 3px;
   min-width: 0;
+  margin-inline-start: 4px;
 }
 .cw-row-pts {
   display: inline-flex;
   align-items: baseline;
+  font-variant-numeric: tabular-nums;
   font-size: 12.5px;
   line-height: 1.1;
   font-weight: 800;
@@ -36158,11 +36179,12 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-row-go {
   appearance: none;
   flex: none;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   width: 22px;
   height: 30px;
-  margin: -4px -4px -4px 0;
+  margin: 0;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -36187,11 +36209,16 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   background: rgba(110, 231, 183, .15);
   box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .32);
   font-size: 8px;
+  /* The team tag now rides the metadata line, so it shrinks to sit inline with the count. */
+  line-height: 1;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--cw-mint);
 }
+/* The inline team tag: a hair shorter and tighter than the standalone pill so the metadata
+   line stays one clean row on a 320px screen. */
+.cw-you-pill { height: 16px; padding: 0 6px; font-size: 7.5px; letter-spacing: .04em; }
 .cw-sel {
   appearance: none;
   flex: none;
@@ -36909,26 +36936,41 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .mm-stakes-c b[hidden] { display: none; }
 
 /* ---- right-to-left: the prose turns, the numbers and handles never do ---- */
-html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none),
-html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-reg, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none) {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title),
+html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-rule-t, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   direction: rtl;
   letter-spacing: 0;
   text-transform: none;
 }
-html[data-lang="fa"] .cw-sheet :is(.cw-title, .cw-cta-t b, .cw-invite, .cw-pill, .cw-sel, .cw-linkcard-k, .cw-row-members),
-html[data-lang="ar"] .cw-sheet :is(.cw-title, .cw-cta-t b, .cw-invite, .cw-pill, .cw-sel, .cw-linkcard-k, .cw-row-members) {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+html[data-lang="fa"] .cw-sheet :is(.cw-title, .cw-detail-title, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-pill, .cw-you-pill, .cw-sel, .cw-linkcard-k, .cw-row-members),
+html[data-lang="ar"] .cw-sheet :is(.cw-title, .cw-detail-title, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-pill, .cw-you-pill, .cw-sel, .cw-linkcard-k, .cw-row-members) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   letter-spacing: 0;
   text-transform: none;
 }
+/* ---- native Persian/Arabic type: no Latin tracking, no uppercase, no Latin face ----
+   Applied everywhere inside the hub, the inspector and the register pane. The `!important`
+   outranks the tracked/uppercased Latin styles those elements share with English. */
+html[data-lang="fa"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-rule-t, .cw-prize-t, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k),
+html[data-lang="ar"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-rule-t, .cw-prize-t, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none;
+}
+:is(#channel-war-modal, #cw-detail) [dir="rtl"] {
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none;
+}
 /* Persian and Arabic ascenders need a taller line box than Latin caps do. */
-html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-row-name, .cw-cta-t b, .cw-verify-t),
-html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-row-name, .cw-cta-t b, .cw-verify-t) {
+html[data-lang="fa"] .cw-sheet :is(.cw-prize-t, .cw-row-title, .cw-cta-t b, .cw-verify-t),
+html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-row-title, .cw-cta-t b, .cw-verify-t) {
   line-height: 1.55;
 }
-/* A handle, a rank, a score and a count are codes: they never take the prose's direction. */
-.cw-sheet :is(.cw-row-pts, .cw-rank, .cw-prize-clock b, .cw-row-handle, .cw-hero-handle, .cw-row-members, .cw-linkcard-v) {
+/* A handle, a rank and a score are codes: they never take the prose's direction. The member
+   count is prose (`2 عضو`) and stays `dir="auto"`, so it reads count-first in Persian. */
+.cw-sheet :is(.cw-row-pts, .cw-rank, .cw-prize-clock b, .cw-row-handle, .cw-hero-handle, .cw-linkcard-v) {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -36938,7 +36980,7 @@ html[data-lang="ar"] .cw-sheet :is(.cw-prize-t, .cw-row-name, .cw-cta-t b, .cw-v
 html[data-lang="fa"] .cw-sheet .cw-row,
 html[data-lang="ar"] .cw-sheet .cw-row { direction: rtl; }
 html[data-lang="fa"] .cw-sheet .cw-row-side,
-html[data-lang="ar"] .cw-sheet .cw-row-side { align-items: flex-start; }
+html[data-lang="ar"] .cw-sheet .cw-row-side { align-items: flex-end; }
 html[data-lang="fa"] .cw-sheet .cw-row-pts,
 html[data-lang="ar"] .cw-sheet .cw-row-pts { direction: rtl; }
 /* The inspector flips the same way: the crest leads on the right, the roster's place column
@@ -36960,10 +37002,12 @@ html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
 /* ---- the narrow and the short ends of the phone range ---- */
 @media (max-width: 360px) {
   .sheet.cw-sheet { gap: 8px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
-  .cw-row { grid-template-columns: 27px 30px minmax(0, 1fr) auto 20px; gap: 7px; padding: 6px 7px; }
-  .cw-av { width: 30px; height: 30px; }
-  .cw-av-t { font-size: 10px; }
-  .cw-row-name { font-size: 11px; }
+  .cw-row { gap: 7px; padding: 7px 8px; }
+  .cw-rank { width: 27px; }
+  .cw-av { width: 40px; height: 40px; }
+  .cw-av-t { font-size: 11px; }
+  .cw-row-title { font-size: 11.5px; }
+  .cw-row-side { margin-inline-start: 3px; }
   .cw-row-pts { font-size: 11.5px; }
   .cw-row-go { width: 20px; }
   .cw-reg { padding: 0 7px; font-size: 9px; }
@@ -36987,8 +37031,7 @@ html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
 @media (max-height: 700px) {
   .cw-prize { padding: 7px 9px; }
   .cw-cta { min-height: 44px; }
-  .cw-row { padding: 6px 8px; }
-  .cw-av { width: 30px; height: 30px; }
+  .cw-row { padding: 7px 9px; }
 }
 @media (max-height: 620px) {
   .cw-list { min-height: 48px; }
