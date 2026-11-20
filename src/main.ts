@@ -1772,12 +1772,10 @@ interface ResultView {
    * the strip never prints a TIQ pill for it, and the stake band never opens.
    */
   bot: boolean;
-  /** The TIQ a rewarded win actually paid; always 0 on a bot or friendly board. */
+  /** The TIQ a win actually paid; always 0 on a bot board. */
   tiq: number;
-  /** The magnitude of the ranked stake a defeat wears; a friendly board never charges one. */
+  /** The magnitude of the stake a defeat wears; a bot board never charges one. */
   stake: number;
-  /** The matchmaker's ranked gate: only this board may move or print ranked TIQ. */
-  ranked: boolean;
   hardBotDuel: boolean;
   questMatch: () => Promise<string | null>;
   questAdCompleted: boolean;
@@ -1798,8 +1796,6 @@ let resultLocked = false;
 let rematchState: RematchState | null = null;
 /** The invitation this seat already answered: the modal never reopens for the same vote. */
 let rematchChallengeDismissed = '';
-/** The channel cut of a friends match, painted synchronously and re-ranked by the registry. */
-let warAward: { gain: number; rank: number; name: string } | null = null;
 /** One settled board owns one channel answer: a late registry reply cannot paint into the next. */
 let warEpoch = 0;
 
@@ -2100,19 +2096,19 @@ function paintResultCopy(): void {
 
 /**
  * ONE symmetric reward card on each side of the grid. Card one is always the coins the wallet
- * kept. Card two is the single reward this board actually paid: channel TIQ in a friends room,
- * ranked TIQ in the matchmaker (a defeat turns it crimson and opens the shield), or XP on a
- * practice board. A friendly board never prints ranked TIQ, never prints `+0`, and never opens
- * the stake shield — that contradiction is exactly what this card replaces.
+ * kept. Card two is the player's OWN TIQ for the match — a win prints the gain, a defeat turns
+ * crimson and opens the recovery shield — on every board with a person on the far side, friendly
+ * rooms included. The channel's cut lives in its own strip above the grid, never in this card, so
+ * the two ledgers can never overwrite each other. A practice board pays XP instead, and a bot
+ * board is TIQ-neutral by rule.
  */
-type RewardTier = { kind: 'channel' | 'ranked' | 'xp' | 'none'; amount: number; sign: '+' | '-' };
+type RewardTier = { kind: 'personal' | 'xp' | 'none'; amount: number; sign: '+' | '-' };
 
 function rewardTier(): RewardTier {
   if (!resultView) return { kind: 'none', amount: 0, sign: '+' };
   const v = resultView;
-  if (warAward) return { kind: 'channel', amount: warAward.gain, sign: '+' };
-  if (v.ranked && (v.won ? v.tiq > 0 : v.stake > 0)) {
-    return { kind: 'ranked', amount: v.won ? v.tiq : v.stake, sign: v.won ? '+' : '-' };
+  if (!v.bot && (v.won ? v.tiq > 0 : v.stake > 0)) {
+    return { kind: 'personal', amount: v.won ? v.tiq : v.stake, sign: v.won ? '+' : '-' };
   }
   if (v.xp > 0) return { kind: 'xp', amount: v.xp, sign: '+' };
   return { kind: 'none', amount: 0, sign: '+' };
@@ -2123,11 +2119,11 @@ function paintResultRewards(): void {
   const { won, coins } = resultView;
   const tier = rewardTier();
   const claimed = hasClaimedInMatch('recover_tiq');
-  const restored = tier.kind === 'ranked' && tier.sign === '-' && claimed;
+  const restored = tier.kind === 'personal' && tier.sign === '-' && claimed;
   const doubled = hasClaimedInMatch('double_coins');
   const showCoins = coins > 0;
   const showXp = tier.kind === 'xp';
-  const showTiq = tier.kind === 'channel' || tier.kind === 'ranked';
+  const showTiq = tier.kind === 'personal';
   resultCoinChip.hidden = !showCoins;
   resultXpChip.hidden = !showXp;
   resultTiqChip.hidden = !showTiq;
@@ -2136,10 +2132,9 @@ function paintResultRewards(): void {
   resultBank.hidden = paid === 0;
   resultBank.dataset.paid = String(Math.max(1, paid));
   if (showTiq) {
-    resultTiqChip.classList.toggle('is-channel', tier.kind === 'channel');
-    resultTiqChip.classList.toggle('is-loss', tier.kind === 'ranked' && tier.sign === '-');
+    resultTiqChip.classList.toggle('is-loss', tier.sign === '-');
     resultTiqChip.classList.toggle('is-restored', restored);
-    resultTiqLabel.textContent = t(tier.kind === 'channel' ? 'resultChannelTiqUnit' : 'resultRankTiqUnit');
+    resultTiqLabel.textContent = t('resultTiqUnit');
     resultTiqSign.textContent = restored ? '' : tier.sign;
     resultTiqN.textContent = resultAbs(restored ? 0 : tier.amount);
   }
@@ -2384,7 +2379,7 @@ function rollResultValues(): void {
   if (!resultView) return;
   const { coins, xp } = resultView;
   const tier = rewardTier();
-  const restored = tier.kind === 'ranked' && tier.sign === '-' && hasClaimedInMatch('recover_tiq');
+  const restored = tier.kind === 'personal' && tier.sign === '-' && hasClaimedInMatch('recover_tiq');
   const tiqTarget = restored ? 0 : tier.amount;
   const coin = resultCoinChip.querySelector<SVGSVGElement>('.coin');
   if (coin && !motionReduced()) {
@@ -2432,9 +2427,9 @@ function paintRewardButtons(): void {
   resultVipBoost.hidden = !boosted;
   if (boosted) resultVipBoostT.textContent = t('resultVipBoost');
 
-  /* ---- TIQ recovery: only a ranked defeat that actually cost TIQ ---- */
+  /* ---- TIQ recovery: any defeat that cost personal TIQ, friendly rooms included ---- */
   const tier = rewardTier();
-  const lost = tier.kind === 'ranked' && tier.sign === '-';
+  const lost = tier.kind === 'personal' && tier.sign === '-';
   const claimed = hasClaimedInMatch('recover_tiq');
   const left = getRemainingTiqRecoveries();
   const limit = tiqRecoveryLimit();
@@ -2706,7 +2701,7 @@ let doubleBusy = false;
  */
 async function claimTiqRecovery(): Promise<void> {
   const view = resultView;
-  if (!view || view.won || !view.ranked || view.stake <= 0) return;
+  if (!view || view.won || view.stake <= 0) return;
   /* one video at a time across both chips: the SDK's own mutex would answer `skipped`, which
      reads as the player's fault rather than a tap that simply arrived too early */
   if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
@@ -2868,14 +2863,11 @@ function settleWarMatch(won: boolean, bot = false): void {
   const pending = awardWarPoints(won);
   const live = getMySquad();
   const rank = Math.max(1, live?.rank ?? channel.rank ?? 1);
-  warAward = { gain, rank, name };
   paintWarBadge(gain, rank, name);
   warBadge.hidden = false;
   void pending.then((standing) => {
     if (!standing || epoch !== warEpoch) return;
-    warAward = { gain, rank: standing.rank, name };
     paintWarBadge(gain, standing.rank, name);
-    if (resultView) paintResultRewards();
     showRoyalToast(
       t('cwAwardTitle'),
       t(won ? 'cwAwardWinBody' : 'cwAwardLossBody')
@@ -2904,13 +2896,12 @@ function showOverlay() {
   adClaimInFlight = false;
   setChipBusy(recoverBtn, recoverSpin, false);
   setChipBusy(doubleBtn, doubleSpin, false);
-  resultTiqChip.classList.remove('is-restored', 'is-loss', 'is-channel', 'is-restoring');
+  resultTiqChip.classList.remove('is-restored', 'is-loss', 'is-restoring');
   closeAdConfirm(false);
   hideAdToast();
   /* Last match's channel badge is not this match's news. It is cleared here, once, so a bot race
      that follows a friends win cannot inherit the +TIQ line the channel earned an hour ago. */
   warBadge.hidden = true;
-  warAward = null;
   warEpoch += 1;
   const won = localWon();
   /* A rival who walked out mid-race leaves a machine in the chair. A duel whose only opponent is
@@ -2996,11 +2987,11 @@ function showOverlay() {
     coins: earned,
     xp: settled.xp,
     bot: settled.bot,
-    ranked,
-    /* Only a ranked board prints or charges TIQ: a bot board is neutral by rule and a friends
-       room is a friendly duel, so neither may show a ranked figure or open the stake shield. */
-    tiq: settled.bot || !mine || !ranked ? 0 : Math.max(0, afterTiq - beforeTiq),
-    stake: settled.bot || !mine || !ranked ? 0 : Math.max(5, Math.round(runtime.winTiq * 0.1)),
+    /* Every board with a person on the far side prints its OWN TIQ — a friendly room included.
+       A win shows the gain the ladder paid; a defeat wears the stake and opens the recovery
+       shield. Only a bot board is TIQ-neutral by rule, and a seat the machine held pays nothing. */
+    tiq: settled.bot || !mine ? 0 : Math.max(0, afterTiq - beforeTiq),
+    stake: settled.bot || !mine ? 0 : Math.max(5, Math.round(runtime.winTiq * 0.1)),
     hardBotDuel: hardBotDuel && !active && forfeit === null,
     questMatch,
     questAdCompleted: false,
@@ -3731,7 +3722,6 @@ function referralQuestSetup(): ReferralQuestMatchSetup {
 function restart() {
   /* Replaying a war board is another war match: the channel is owed its points again. */
   warPaid = false;
-  warAward = null;
   warEpoch += 1;
   /* every new board is a new match: the last result's celebration (or its defeat sting) cannot
      survive into it */
@@ -4259,7 +4249,6 @@ function startGame(setup: StartSetup) {
   warMatch = warPending;
   warPending = false;
   warPaid = false;
-  warAward = null;
   warEpoch += 1;
   cancelTutorial();
   /* A status pill from the previous race is not this race's news. */

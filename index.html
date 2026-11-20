@@ -2452,9 +2452,11 @@
                 <bdi id="result-vip-boost-t" dir="ltr">VIP +50%</bdi>
               </span>
 
-              <!-- THE REWARD GRID. At most two equal cards: coins always, and the one reward the
-                   board actually paid on the other side — channel TIQ, ranked TIQ, or XP. Every
-                   signed figure is its own LTR bdi run, so `+12` / `-14` / `+5` never mirror. -->
+              <!-- THE REWARD GRID. At most two equal cards: coins always, and the player's OWN
+                   TIQ on the other side — a win's gain, or a defeat's crimson stake with its
+                   rewarded-ad recovery shield — on every human board, friendly rooms included.
+                   The channel's cut stays in its own strip above. Every signed figure is its own
+                   LTR bdi run, so `+12` / `-14` / `+5` never mirror. -->
               <div class="result-bank" id="result-bank">
                 <div class="result-reward is-coins" id="result-coin-chip">
                   <span class="result-bank-ico is-coin" aria-hidden="true">

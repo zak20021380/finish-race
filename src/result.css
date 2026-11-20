@@ -41,7 +41,7 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding: clamp(13px, 4.2vw, 19px) clamp(13px, 4.4vw, 18px) clamp(11px, 3.4vw, 15px);
+  padding: clamp(11px, 3.8vw, 16px) clamp(13px, 4.4vw, 18px) clamp(9px, 3vw, 13px);
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, .08);
   background:
@@ -95,7 +95,7 @@
 .result-title {
   display: block;
   max-width: 100%;
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: #F7DB92;
   font-size: clamp(2.05rem, 9.4vw, 2.7rem);
   font-weight: 900;
@@ -122,8 +122,8 @@
   gap: 4px;
   width: fit-content;
   max-width: 100%;
-  margin: 7px auto 11px;
-  padding: 4px 12px;
+  margin: 6px auto 9px;
+  padding: 3px 12px;
   border: 1px solid rgba(148, 163, 184, .22);
   border-radius: 999px;
   background: rgba(148, 163, 184, .08);
@@ -143,9 +143,9 @@
 /* ---- the standings ladder: one glass table for every seat ---- */
 .result-roster {
   display: grid;
-  gap: 4px;
-  margin: 0 0 10px;
-  padding: 5px;
+  gap: 3px;
+  margin: 0 0 8px;
+  padding: 4px;
   list-style: none;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 18px;
@@ -161,8 +161,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
-  min-height: 44px;
+  height: 40px;
+  min-height: 40px;
   /* logical, so the tighter inset stays on the avatar's side and the looser one on the trailing
      side when the capsule reads right-to-left */
   padding-block: 0;
@@ -344,14 +344,14 @@
 }
 
 /* ---- the reward grid: at most two equal cards, one reward on each side ----
-   Card one is always the coins the wallet kept. Card two is the one reward this board actually
-   paid: channel TIQ, ranked TIQ, or XP. Equal tracks and equal heights keep the pair symmetric;
-   a board that paid only one reward gets one full-width card instead of an empty track. */
+   Card one is always the coins the wallet kept. Card two is the player's own TIQ — a win's gain
+   or a defeat's stake with its recovery shield — or XP on a practice board. Equal tracks and equal
+   heights keep the pair symmetric; a board that paid only one reward gets one full-width card. */
 .result-bank {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 .result-bank[hidden] { display: none; }
 .result-bank[data-paid="1"] { grid-template-columns: minmax(0, 1fr); }
@@ -361,10 +361,10 @@
   grid-template-rows: auto auto auto 1fr;
   justify-items: center;
   align-content: start;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  min-height: 108px;
-  padding: 10px 8px 9px;
+  min-height: 100px;
+  padding: 8px 8px 7px;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 16px;
   background:
@@ -381,8 +381,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 .result-bank-ico .coin {
   width: 24px;
@@ -458,9 +458,8 @@
 }
 #result-coin-chip .result-bank-value { color: #FCD34D; }
 
-/* Card two owns the one accent: channel gold, ranked crimson on a loss, emerald once the shield
-   has bought the rank TIQ back. */
-#result-tiq-chip.is-channel .result-bank-value { color: #FBE7B4; }
+/* Card two owns the one accent: gold on a win, crimson on a loss, emerald once the shield
+   has bought the personal TIQ back. */
 #result-tiq-chip.is-loss .result-bank-value {
   color: #FB7185;
   text-shadow: 0 0 12px rgba(244, 63, 94, .35);
@@ -473,7 +472,7 @@
 .result-reward #btn-double-coins,
 .result-reward #btn-recover-tiq {
   justify-self: center;
-  margin: 5px 0 0;
+  margin: 4px 0 0;
 }
 /* the double-coin claim: the total pulses once and a gold band sweeps the whole pill */
 #result-coin-chip { position: relative; }
@@ -759,7 +758,7 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
    ========================================================================== */
 .result-actions {
   display: grid;
-  gap: 9px;
+  gap: 7px;
   margin-top: 2px;
   min-width: 0;
 }
@@ -773,10 +772,10 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  /* 46px, not a slab: the whole capsule fits a compact phone without the keys feeling cramped */
-  min-height: 46px;
+  /* 44px, not a slab: the whole capsule fits a compact phone without the keys feeling cramped */
+  min-height: 44px;
   margin: 0;
-  padding: 8px 14px;
+  padding: 7px 14px;
   overflow: hidden;
   border: 0;
   border-radius: 16px;
@@ -841,7 +840,7 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
 
 /* ---- 1. the hero: deep royal cyan under a gold-leaf crown ---- */
 .btn-play-again {
-  min-height: 48px;
+  min-height: 46px;
   color: #032B2B;
   background:
     radial-gradient(120% 200% at 50% -60%, rgba(255, 248, 220, .8) 0%, rgba(255, 236, 176, .26) 40%, transparent 68%),
@@ -931,7 +930,7 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
    order only reads if the middle key is a restrained gold outline on the same obsidian glass,
    never a violet gradient with gradient-filled type. */
 .btn-challenge {
-  min-height: 50px;
+  min-height: 46px;
   gap: 11px;
   padding-inline: 16px;
   color: #fef3c7;
@@ -976,7 +975,7 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
 
 /* ---- 3. the return plate: frosted obsidian, no theatre ---- */
 .btn-main-menu {
-  min-height: 50px;
+  min-height: 44px;
   gap: 9px;
   color: #C8C0B0;
   border: 1px solid rgba(255, 255, 255, .08);
@@ -1427,31 +1426,40 @@ html[data-lang="ar"] .ad-skip-opt {
   100% { transform: scale(1); }
 }
 
-/* ---- compact heights: the default capusle fits 320x568 without scrolling ---- */
+/* ---- compact heights: both action keys stay above the fold on a 667px phone ---- */
 @media (max-height: 700px) {
   .overlay.result { padding: 7px; }
-  .result-card { padding: 12px 14px 10px; border-radius: 23px; }
-  .result-title { font-size: clamp(1.85rem, 8.4vw, 2.25rem); }
-  .result-mode { margin: 5px 0 8px; }
-  .result-row { height: 41px; min-height: 41px; }
-  .result-roster { gap: 3px; padding: 4px; margin-bottom: 8px; }
-  .result-bank { gap: 8px; margin-bottom: 8px; }
-  .result-reward { min-height: 98px; padding: 8px 7px; }
-  .result-actions { gap: 7px; }
-  .result-btn { padding-block: 10px; }
+  .result-card { padding: 10px 14px 9px; border-radius: 23px; }
+  .result-title { font-size: clamp(1.8rem, 8vw, 2.2rem); margin-top: 2px; }
+  .result-mode { margin: 4px 0 6px; padding-block: 3px; }
+  .result-row { height: 38px; min-height: 38px; }
+  .result-roster { gap: 2px; padding: 3px; margin-bottom: 6px; }
+  .result-bank { gap: 8px; margin-bottom: 6px; }
+  .result-reward { min-height: 0; padding: 6px 7px; }
+  .result-bank-ico { width: 26px; height: 26px; }
+  .result-reward #btn-double-coins,
+  .result-reward #btn-recover-tiq { margin-top: 3px; }
+  .result-actions { gap: 6px; }
+  .result-btn { padding-block: 8px; }
+  .cw-war { margin: 4px 0 2px; padding-block: 5px; }
 }
 @media (max-height: 600px) {
-  .result-card { padding: 10px 13px 9px; }
+  .result-card { padding: 8px 13px; }
   .result-kicker { font-size: 8px; }
-  .result-title { font-size: clamp(1.65rem, 7.8vw, 2rem); }
-  .result-mode { margin: 4px 0 7px; }
-  .result-row { height: 39px; min-height: 39px; }
-  .result-avatar { width: 29px; height: 29px; }
-  .result-medal { width: 24px; height: 24px; }
-  .result-reward { min-height: 88px; padding: 7px 6px; gap: 2px; }
+  .result-title { font-size: clamp(1.6rem, 7.6vw, 1.95rem); }
+  .result-mode { margin: 3px 0 5px; }
+  .result-row { height: 35px; min-height: 35px; }
+  .result-avatar { width: 27px; height: 27px; }
+  .result-medal { width: 23px; height: 23px; }
+  .result-roster { margin-bottom: 5px; }
+  .result-bank { margin-bottom: 5px; }
+  .result-reward { min-height: 0; padding: 5px 6px; gap: 2px; }
+  .result-bank-ico { width: 24px; height: 24px; }
   .result-bank-value { font-size: 1.2rem; }
-  .result-actions { gap: 6px; }
-  .result-btn { padding-block: 9px; }
+  .result-actions { gap: 5px; }
+  .result-btn { padding-block: 7px; min-height: 42px; }
+  .btn-play-again { min-height: 44px; }
+  .cw-war { padding-block: 4px; }
 }
 
 /* ---- narrow phones: names keep the room, the two cards keep their equal tracks ---- */
@@ -1466,7 +1474,7 @@ html[data-lang="ar"] .ad-skip-opt {
   .result-place { font-size: 7px; letter-spacing: .1em; }
   .result-you { padding: 2px 5px; font-size: 6.5px; }
   .result-bank { gap: 8px; }
-  .result-reward { min-height: 96px; padding: 8px 6px; }
+  .result-reward { min-height: 0; padding: 6px; }
   .result-bank-ico { width: 26px; height: 26px; }
   .result-bank-value { font-size: 1.22rem; }
   .result-reward-label { font-size: 7.5px; letter-spacing: .1em; }
@@ -1565,7 +1573,7 @@ html[data-lang="fa"] .overlay.result :is(
 html[data-lang="fa"] .overlay.result .result-title,
 html[data-lang="ar"] .overlay.result .result-title {
   font-size: clamp(1.85rem, 8.8vw, 2.45rem);
-  line-height: 1.3;
+  line-height: 1.15;
   letter-spacing: 0;
 }
 html[data-lang="fa"] .overlay.result .result-row-name { text-align: right; }
@@ -1632,8 +1640,8 @@ html[data-lang="fa"] :is(.ad-confirm-title, .ad-confirm-desc, .ad-confirm-btn) {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  margin: 6px 0 2px;
-  padding: 7px 10px;
+  margin: 5px 0 2px;
+  padding: 6px 10px;
   border: 1px solid rgba(233, 192, 115, .28);
   border-radius: 12px;
   background:
