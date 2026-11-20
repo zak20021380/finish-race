@@ -28463,15 +28463,55 @@ html.reduced-motion .toast.toast-royal { transition: none; }
 
 /* The art frame is a circular, GPU-promoted box holding the image, its vector fallback and a
    loading shimmer. translateZ(0) plus a hidden backface stops iOS/Android WebViews from dropping
-   the layer mid-scroll, which is what left a crest stuck on its silhouette before. */
+   the layer mid-scroll, which is what left a crest stuck on its silhouette before.
+
+   The box is a strict square that clips to its own circle: the image is pulled off the inline
+   formatting context and stretched across that square with `object-fit: cover` and a centred
+   object position. Nothing here is direction-aware — no left/right, no margin-inline — so the
+   coin is dead-centre in both LTR and RTL, and its rim meets the glow ring instead of leaving a
+   crescent of empty tray along one edge. */
 .badge-art-frame {
   position: relative;
-  display: inline-block;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  margin: 0;
   line-height: 0;
   border-radius: 50%;
+  overflow: hidden;
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+/* The rendered medallion fills the frame's square exactly. Hosts still own the box size through
+   their `.badge-crest` rules; this only removes any inline-baseline slack, any inherited direction
+   offset, and the letterboxing that `contain` left on the non-square renders. */
+.badge-art-frame > .badge-crest-art {
+  position: relative;
+  grid-area: 1 / 1;
+  inset: auto;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  display: block;
+  /* the host's own `.badge-crest` size still owns the box; nothing here stretches or offsets it */
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  object-fit: cover;
+  object-position: center center;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* the vector fallback shares the same square, centred, never nudged by the writing direction */
+.badge-art-frame > .badge-art-fallback {
+  grid-area: 1 / 1;
+  padding: 0;
+  margin: 0;
 }
 .badge-art-fallback {
   position: absolute;
@@ -29706,11 +29746,14 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   justify-content: normal;
+  justify-items: center;
   gap: 10px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding: 10px;
+  /* symmetric inline padding: the outer cards sit the same distance from both tray edges */
+  padding-block: 10px;
+  padding-inline: 10px;
   border-radius: 18px;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(148, 163, 184, .07) 0%, rgba(148, 163, 184, 0) 58%),
@@ -29756,11 +29799,14 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   --badge-ink: #CBD5E1;
   position: relative;
   isolation: isolate;
+  /* one centreline for the medal, the figure's name and the edition plate: every child is a
+     column item centred on the same axis, in both writing directions */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
   width: 100%;
   min-width: 0;
   min-height: 180px;
@@ -29847,19 +29893,39 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   width: 100%;
   min-width: 0;
+  margin-inline: auto;
+  text-align: center;
 }
 #s-profile .badge-slot-crest {
   position: relative;
   flex: none;
   width: 74px;
   height: 74px;
+  /* a strict square, so the round frame and its glow ring share one centre */
+  aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
+  justify-items: center;
+  align-items: center;
+  padding: 0;
+  margin-inline: auto;
   border-radius: 50%;
   box-shadow: 0 0 22px var(--medal-halo);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+/* the art frame is exactly the coin box: no slack for the image to drift inside */
+#s-profile .badge-slot-crest .badge-art-frame {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto;
+}
+#s-profile .badge-slot-crest .badge-art-frame > .badge-crest-art {
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 /* the illuminated museum floor beneath the coin */
 #s-profile .badge-slot-pedestal {
@@ -29952,6 +30018,11 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-inline: auto;
+  text-align: center;
+  /* the edition stamp is Latin by contract: `# 001` keeps its hash before the digits in FA/AR */
+  direction: ltr;
+  unicode-bidi: isolate;
   width: 100%;
   max-width: 100%;
   min-width: 0;
