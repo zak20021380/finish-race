@@ -219,7 +219,9 @@ try {
         return {
           lobby: !document.getElementById('gm-view-lobby')?.hidden,
           room: !document.getElementById('gm-view-room')?.hidden,
-          code: document.getElementById('lb-code')?.textContent?.trim(),
+          /* the lobby shares its room by invite link only: no code plate, no code text */
+          noCodePill: document.getElementById('lb-code') === null
+            && !/#\s*\d{4}/.test(document.getElementById('gm-view-lobby')?.textContent ?? ''),
           count: document.getElementById('lb-count')?.textContent?.trim(),
           slots: slots.length,
           open: slots.filter((s) => s.classList.contains('is-open')).length,
@@ -231,7 +233,7 @@ try {
       });
       expect(
         `create room ${tag}`,
-        created.lobby === true && created.room === false && /^\d{4}$/.test(created.code || '')
+        created.lobby === true && created.room === false && created.noCodePill === true
           && created.count === '1/4 Players' && created.slots === 4 && created.open === 3
           && created.host === true && created.crown === true
           && created.start === 'Start Match' && created.off === 'true',

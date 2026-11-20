@@ -494,10 +494,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     copyFailed: 'Could not copy the invite link.',
     roomCode: 'Room code',
     roomCodeOf: 'Room code {code}',
-    copyInviteFor: 'Copy invite link for room {code}',
-    copyRoomCodeFor: 'Copy room code {code}',
-    roomCodeCopiedTitle: 'Room Code Copied!',
-    roomCodeCopiedBody: 'Share code {code} with your friend. They can enter it in "Join with Code" to hop directly into this lobby!',
+    copyInviteFor: 'Copy invite link',
     players: 'Players',
     hintInviteMore: 'Invite one more player to start',
     /* ---- the lobby footer: the hint owns room context, the CTA owns its own label ---- */
@@ -1608,10 +1605,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     copyFailed: 'کپی لینک نشد.',
     roomCode: 'کد اتاق',
     roomCodeOf: 'کد اتاق {code}',
-    copyInviteFor: 'کپی لینک دعوت اتاق {code}',
-    copyRoomCodeFor: 'کپی کد اتاق {code}',
-    roomCodeCopiedTitle: 'کد اتاق کپی شد!',
-    roomCodeCopiedBody: 'کد {code} رو برای دوستت بفرست تا توی بخش «ورود با کد» واردش کنه و مستقیم بیاد توی این بازی!',
+    copyInviteFor: 'کپی لینک دعوت',
     players: 'بازیکن',
     hintInviteMore: 'برای شروع، یک بازیکن دیگر دعوت کن',
     /* ---- پایین لابی: خط راهنما فقط وضعیت اتاق، دکمه فقط برچسب خودش ---- */

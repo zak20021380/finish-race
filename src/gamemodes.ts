@@ -28,7 +28,7 @@ import {
 } from './storage';
 import { menuState, lang, onLang, onMenuChange, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
-import { showToast, showToastDetail } from './toast';
+import { showToast } from './toast';
 import type { Sheets } from './sheets';
 import {
   MIN_START, canStart, humans, isHost, nextTeam, occupied, openLobby,
@@ -1106,18 +1106,9 @@ function paintLobbyPane(l: Lobby): void {
      answers, so the surface holds the Latin placeholder and every invite key stays cold — nobody
      is ever told a number the server is not holding a seat in. */
   if (l.code) activeCode = l.code;
-  const url = inviteUrl(l.code);
-  const codeEl = document.getElementById('lb-code');
-  if (codeEl) codeEl.textContent = l.code || '0000';
-  const codeTag = document.getElementById('lb-code-tag');
-  if (codeTag) {
-    codeTag.setAttribute('aria-label', t('copyRoomCodeFor').replace('{code}', l.code || '0000'));
-    /* the badge carries the same URL the copy key writes: one room, one link */
-    if (url) codeTag.setAttribute('data-invite', url);
-    else codeTag.removeAttribute('data-invite');
-    codeTag.classList.toggle('is-pending', !l.code);
-  }
-  document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor').replace('{code}', l.code || '0000'));
+  /* The room's key is its invite link, not a number the screen prints: the code stays inside the
+     `?startapp=room_...` payload, so nothing here has to show or copy it. */
+  document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor'));
 
   const count = document.getElementById('lb-count');
   if (count) count.textContent = `${occupied(l)}/${l.capacity} ${t('players')}`;
@@ -2257,36 +2248,6 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     }
     showToast(t('copyFailed'), 'error');
     notify('warning');
-  });
-
-  /* The badge is the room's key: one tap writes the bare number to the clipboard, the pill wears
-     the success state for a beat, and the toast says who to send it to and where they type it.
-     It prints the very code `buildInviteLink` turns into the link, and carries that URL on
-     `data-invite`, so the code on screen and the link every door copies are one value. */
-  let codeCopiedTimer = 0;
-  document.getElementById('lb-code-tag')?.addEventListener('click', async () => {
-    const badge = document.getElementById('lb-code-tag');
-    const raw = handle?.lobby.code ?? activeCode ?? badge?.textContent ?? '';
-    const code = raw.replace(/\D/g, '').slice(0, 4);
-    if (!/^\d{4}$/.test(code)) return;
-    const ok = await copyText(code);
-    if (!ok) {
-      notify('warning');
-      showToast(t('copyFailed'), 'error');
-      return;
-    }
-    notify('success');
-    if (badge) {
-      badge.classList.add('is-copied');
-      window.clearTimeout(codeCopiedTimer);
-      codeCopiedTimer = window.setTimeout(() => badge.classList.remove('is-copied'), 1500);
-    }
-    showToastDetail(
-      t('roomCodeCopiedTitle'),
-      t('roomCodeCopiedBody').replace('{code}', code),
-      'success',
-      4600,
-    );
   });
 
   /* the header pill and the empty rival plate: the same canonical link, through Telegram */

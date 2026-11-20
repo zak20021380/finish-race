@@ -14747,71 +14747,20 @@ html.reduced-motion .stars-av-photo { transition: none; }
    surface is clay: raised for something held, carved for something waiting to be filled. */
 .lb { display: flex; flex-direction: column; gap: var(--s3); }
 
-.lb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
-/* the code is the room's key: one tap copies the bare number, and the pill answers the press */
-.lb-code {
-  position: relative;
-  flex: none;
-  display: inline-flex;
+.lb-bar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 0 11px;
-  appearance: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #2C3A57 0%, #222C41 100%);
-  color: var(--honey-ink);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(252, 211, 77, .22);
-  transition:
-    transform var(--motion-fast),
-    background-color var(--motion-fast),
-    box-shadow var(--motion-fast);
+  min-width: 0;
 }
-.lb-code:hover { transform: scale(1.02); }
-.lb-code:active { transform: scale(.96); }
-.lb-code:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
-.lb-hash { font-size: var(--t-micro); font-weight: 900; color: var(--honey-ink); }
-.lb-code b { font-size: var(--t-2); font-weight: 900; letter-spacing: .1em; line-height: 1; }
-
-/* the reward: a gold ring runs off the pill while a check takes the hash's place */
-.lb-code-check { display: none; width: 14px; height: 14px; flex: none; color: #6EE7B7; }
-.lb-code.is-copied {
-  animation: lb-code-pop 1.5s cubic-bezier(.2, .7, .2, 1);
-  background: linear-gradient(180deg, #354964 0%, #222C41 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 0 0 1.5px rgba(252, 211, 77, .9),
-    0 0 0 3px rgba(252, 211, 77, .14),
-    0 0 20px rgba(252, 211, 77, .32);
-}
-.lb-code.is-copied .lb-code-check { display: block; }
-.lb-code.is-copied .lb-hash { display: none; }
-.lb-code.is-copied::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: calc(var(--radius-sm) + 3px);
-  border: 1px solid rgba(252, 211, 77, .7);
-  pointer-events: none;
-  animation: lb-code-ring .9s ease-out 1;
-}
-@keyframes lb-code-pop {
-  0% { transform: scale(.94); }
-  45% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-@keyframes lb-code-ring {
-  0% { opacity: .95; transform: scale(.96); }
-  100% { opacity: 0; transform: scale(1.14); }
+/* The room is shared by link alone. The two invite keys split the row evenly and the seat counter
+   takes the far end, so removing the code plate leaves no empty stretch behind it. */
+.lb-bar .lb-copy-link,
+.lb-bar .lb-invite {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
 }
 
 .lb-copy-link {
@@ -14867,7 +14816,8 @@ html.reduced-motion .stars-av-photo { transition: none; }
 html.reduced-motion .lb-invite.is-attn { animation: none; }
 
 .lb-count {
-  margin-left: auto;
+  /* logical, so the counter takes the far end in both reading directions */
+  margin-inline-start: auto;
   flex: none;
   font-size: var(--t-micro);
   font-weight: 800;
@@ -16158,11 +16108,9 @@ html.reduced-motion .gm-rw.is-pulse b { animation: none; }
 }
 html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-card,
 html.reduced-motion .fr-create,
-html.reduced-motion .lb-code, html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
+html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
 html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
 html.reduced-motion .lb-badge-away, html.reduced-motion .lb-away-dot, html.reduced-motion .lb-hud.is-in .lb-hud-card { animation: none; }
-html.reduced-motion .lb-code.is-copied { animation: none; }
-html.reduced-motion .lb-code.is-copied::after { display: none; }
 html.reduced-motion .lb-hud-b { transition: none; }
 
 
@@ -34112,7 +34060,7 @@ html[data-lang="ar"] :is(#sheet-pause, #sheet-quit) .btn .ico { margin-inline-en
 html[data-lang="fa"] :is(
   #p-coins, #hud-tiq, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-streak,
   #pf-badge-count,
-  .gm-rw, #lb-count, #lb-code, .lb-count,
+  .gm-rw, #lb-count, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
   .id-team-rank, .stars-count, .pf-xp-lvl, .pf-xp-meta,
@@ -34186,9 +34134,9 @@ html[data-lang="fa"] .lb-hint { line-height: 1.45; }
 /* ---- Arabic lobby copy: only the line that actually carries Arabic text gets the RTL base;
    the rest of this pane is still an English fallback and must keep its LTR reading order ---- */
 html[data-lang="ar"] .lb-hint { direction: rtl; line-height: 1.45; }
-/* room codes and the seat counter are Latin by construction: they keep their own direction */
-html[data-lang="fa"] :is(#lb-code, #lb-count),
-html[data-lang="ar"] :is(#lb-code, #lb-count) {
+/* the seat counter is Latin by construction: it keeps its own direction */
+html[data-lang="fa"] :is(#lb-count),
+html[data-lang="ar"] :is(#lb-count) {
   direction: ltr;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
