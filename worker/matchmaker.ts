@@ -159,6 +159,10 @@ type ClientMessage =
   /* The seat is already in another board: the room still holds it, but nobody counts it down and
      nobody launches into it until it says otherwise. Persisted on the member, echoed in `LOBBY`. */
   | { type: 'BUSY'; busy: boolean }
+  /* The Mini App's own foreground state. `false` is sent on the way out (visibility hidden, or a
+     pagehide) while the socket is still open, so the room knows instantly that this seat can no
+     longer see the lobby — and a launch must wait for it to come back. */
+  | { type: 'LOBBY_PRESENCE'; active: boolean }
   | { type: 'SET_FORMAT'; format: LobbyFormat }
   | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
   | { type: 'SET_TEAM'; side: number; team: 0 | 1 }
@@ -349,6 +353,14 @@ interface RoomMember {
    */
   lastSeenAt: number;
   /**
+   * True while this seat's Mini App is actually open and in the foreground. The chair is kept
+   * either way — a player who closed Telegram still owns their seat — but the launch gate reads
+   * this flag, so nobody is ever counted down into a board their screen is not showing.
+   */
+  lobbyActive: boolean;
+  /** When `lobbyActive` last went false, or 0 while the app is on screen. The away-release clock reads it. */
+  awaySince: number;
+  /**
    * True once a `reconnecting` pill has been broadcast for the current dropped episode. Cleared the
    * moment the seat speaks again, so a hand-off that heals inside the announce delay never paints a
    * banner, and a recovery only says "online" when a "reconnecting" actually went out.
@@ -417,6 +429,12 @@ interface LiveRoom {
    * gap (a dropped relay) and ask for the authoritative snapshot instead of drifting out of turn.
    */
   seq: number;
+  /**
+   * The instant the room's pre-match countdown finishes, on the server's wall clock; 0 while the
+   * lobby is simply waiting. The server owns this number, every client derives its numeral from it,
+   * and only a countdown that runs out with every seat still in the foreground launches the board.
+   */
+  countdownEndsAt: number;
   /**
    * True once the board has reached its verdict and been paid. A settled room is KEPT (never
    * deleted mid-capsule) so its friends can vote a rematch on the very sockets they are already
@@ -541,6 +559,16 @@ const NOTIFY_COOLDOWN_MS = 30_000;
  * heartbeat is never mistaken for a dead one.
  */
 const SEAT_SILENCE_MS = 12_000;
+/**
+ * The pre-match countdown every full lobby plays before its board: 3 - 2 - 1, owned by this room.
+ * Slightly longer than three seconds so the "1" has its full second on a slow phone.
+ */
+const LOBBY_COUNTDOWN_MS = 3_200;
+/**
+ * How long a non-host seat may sit in a lobby with its Mini App closed before the chair is handed
+ * back. A player who swiped Telegram away is not blocking four friends for ten minutes.
+ */
+const LOBBY_AWAY_RELEASE_MS = 20_000;
 /**
  * A live friend-room seat whose socket drops is held this long before the machine finishes it.
  * Long enough for a phone that slept, a carrier hand-off or a brief tunnel; short enough that the
@@ -1906,7 +1934,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
       preset?: unknown; targetUserId?: unknown; relicId?: unknown; relicSerial?: unknown; challengeId?: unknown;
-      code?: unknown; moveId?: unknown; vote?: unknown;
+      code?: unknown; moveId?: unknown; vote?: unknown; active?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1920,6 +1948,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
        every shipped client still uses. They are the same tap and reach the same gate. */
     if (msg.type === 'ROOM_START' || msg.type === 'START_MATCH') return { type: 'ROOM_START' };
     if (msg.type === 'BUSY') return { type: 'BUSY', busy: msg.busy === true };
+    if (msg.type === 'LOBBY_PRESENCE') return { type: 'LOBBY_PRESENCE', active: msg.active === true };
     /* ---- the Play with Friends verbs -------------------------------------------------------- */
     if (msg.type === 'CREATE_ROOM') {
       /* a create with no shape asked for is the duel: the smallest room, and the one a code opens */
@@ -3152,6 +3181,14 @@ export class MatchmakerDO {
     this.expireRelicChallenges(now);
     for (const live of [...this.openRooms]) {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
+    }
+    /* A lobby whose 3 - 2 - 1 has run out launches only if every seat is still at an open Mini App;
+       otherwise the countdown is rewound and the room goes back to WAITING out loud. */
+    for (const live of [...this.lobbies.values()]) {
+      if (live.driver || live.countdownEndsAt <= 0 || now < live.countdownEndsAt) continue;
+      live.countdownEndsAt = 0;
+      if (this.lobbyReadyToStart(live)) this.launchRoom(live);
+      else this.broadcastLobby(live);
     }
     /* The friends lobbies' own clocks: a dropped guest's chair goes back on the market, and a
        room nobody has held for ten minutes is retired so its code can be reused. */
@@ -7146,6 +7183,7 @@ export class MatchmakerDO {
         hostPending: false,
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
+        countdownEndsAt: 0,
       };
       this.openRooms.push(live);
     }
@@ -7158,6 +7196,7 @@ export class MatchmakerDO {
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
       lastSeenAt: Date.now(), reconnectAnnounced: false, lastMoveId: '',
+      lobbyActive: true, awaySince: 0,
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -7268,6 +7307,7 @@ export class MatchmakerDO {
         hostPending: false,
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
+        countdownEndsAt: 0,
       };
       this.lobbies.set(key, room);
     }
@@ -7297,6 +7337,7 @@ export class MatchmakerDO {
       premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
       lastSeenAt: Date.now(), reconnectAnnounced: false, lastMoveId: '',
+      lobbyActive: true, awaySince: 0,
     };
     room.room = seatHuman(room.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -7309,6 +7350,9 @@ export class MatchmakerDO {
     this.watchRoomSocket(room, ws);
 
     this.broadcastLobby(room);
+    /* The last chair just filled with a player whose Mini App is open: the room counts itself down
+       instead of waiting for the host's tap. The gate holds it if anybody is away. */
+    if (room.members.every((m) => m !== null)) this.beginLobbyCountdown(room);
     /* A friend who walks in while the other chair is empty at the socket — but not in the room —
        gets a Telegram nudge. It is scheduled on the object's own ctx so the socket answer never
        waits for the Bot API round trip. */
@@ -7565,6 +7609,8 @@ export class MatchmakerDO {
            `online` is the contract; `connected` stays for clients that learned the older name. */
         online: m.connected,
         connected: m.connected,
+        /* the foreground gate: a held chair whose Mini App is closed reads `Away · Reopen app` */
+        active: m.connected && m.lobbyActive,
         busy: m.busy,
       });
     }
@@ -7590,10 +7636,59 @@ export class MatchmakerDO {
       /* A guest who landed first owns the room without owning the crown: the host's plate is
          reserved, not offered to the next arrival. */
       pendingHost: live.hostPending && !live.members[live.hostSeat],
+      /* The room's own pre-match countdown. `countdownEndsAt` is the authority; `countdownMs` is
+         the same instant already measured, so a client never has to trust its own clock. */
+      countdownEndsAt: live.countdownEndsAt,
+      countdownMs: Math.max(0, live.countdownEndsAt - Date.now()),
+      phase: live.countdownEndsAt > 0 ? 'countdown' : 'waiting',
       seats,
       /* the same roster under the name the room verbs use, so one frame serves both readers */
       players: seats,
     });
+  }
+
+  /**
+   * May this lobby count itself down? Every chair the format fields is held by a person whose Mini
+   * App is open in the foreground RIGHT NOW, and nobody is off playing another board. A seat that
+   * closed Telegram keeps its chair, but a board must never launch behind a screen that is not
+   * showing it — that is exactly the ghost launch this gate exists to stop.
+   */
+  private lobbyReadyToStart(live: LiveRoom): boolean {
+    if (live.driver) return false;
+    if (live.size < 2) return false;
+    return live.members.every((m) => !!m && m.connected && m.lobbyActive && !m.busy);
+  }
+
+  /** Why the gate is shut, in the words `START_FAILED` carries. */
+  private lobbyGateReason(live: LiveRoom): string {
+    const seated = live.members.filter((m) => !!m).length;
+    if (seated < 2) return 'waiting_for_players';
+    if (live.members.some((m) => !!m && !m.connected)) return 'player_offline';
+    return 'player_away';
+  }
+
+  /**
+   * Begin the room's 3 - 2 - 1. Nothing launches here: the room only says the instant it will
+   * launch on, and the alarm finishes the job if every seat is still in the foreground then.
+   */
+  private beginLobbyCountdown(live: LiveRoom): boolean {
+    if (live.driver || live.countdownEndsAt > 0) return false;
+    if (!this.lobbyReadyToStart(live)) return false;
+    live.countdownEndsAt = Date.now() + LOBBY_COUNTDOWN_MS;
+    this.broadcastLobby(live);
+    this.rearm();
+    return true;
+  }
+
+  /**
+   * Rewind a running countdown to WAITING. Called the moment any seat closes its Mini App, drops or
+   * leaves: the board is not launched behind a player who just walked away from it.
+   */
+  private pauseLobbyCountdown(live: LiveRoom): boolean {
+    if (live.driver || live.countdownEndsAt <= 0) return false;
+    live.countdownEndsAt = 0;
+    this.rearm();
+    return true;
   }
 
   /** Tell every seat what the room now looks like. The one write path for lobby state. */
@@ -7609,6 +7704,8 @@ export class MatchmakerDO {
    * a room whose host walked out is still somebody's room — and the last person out closes it.
    */
   private lobbyDepart(live: LiveRoom, seat: number): void {
+    /* Any departure rewinds a running countdown: the room is not full any more. */
+    this.pauseLobbyCountdown(live);
     if (!live.members.some((m) => m !== null)) {
       this.lobbies.delete(lobbyKey(live.room.code));
       this.retire(live.room.code);
@@ -7779,6 +7876,25 @@ export class MatchmakerDO {
         if (m.connected && m.lastPingAt > 0 && now - m.lastSeenAt >= SEAT_SILENCE_MS) {
           m.connected = false;
           m.droppedAt = now;
+          m.lobbyActive = false;
+          m.awaySince = now;
+          changed = true;
+          if (live.countdownEndsAt > 0) { live.countdownEndsAt = 0; this.rearm(); }
+          continue;
+        }
+        /* A guest whose Mini App has been closed for a while is not coming back to this countdown:
+           the chair is released so the friends still in the lobby are not blocked by a ghost. */
+        if (!m.lobbyActive && i !== live.hostSeat && m.awaySince > 0
+          && now - m.awaySince >= LOBBY_AWAY_RELEASE_MS) {
+          this.refs.delete(m.ws);
+          try {
+            m.ws.close(1000, 'lobby_away');
+          } catch {
+            /* the socket is already gone */
+          }
+          live.members[i] = null;
+          live.room = unseat(live.room, i);
+          if (live.countdownEndsAt > 0) { live.countdownEndsAt = 0; this.rearm(); }
           changed = true;
           continue;
         }
@@ -7938,6 +8054,9 @@ export class MatchmakerDO {
           lastSeenAt: now,
           reconnectAnnounced: false,
           lastMoveId: '',
+          /* a rehydrated chair has no Mini App behind it until its player opens the app again */
+          lobbyActive: false,
+          awaySince: now,
         };
         room = seatHuman(room, seat, { kind: 'human', id: m.id, name: m.name });
       }
@@ -7966,6 +8085,7 @@ export class MatchmakerDO {
         hostPending: row.hostPending === true && !members[hostSeat],
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
+        countdownEndsAt: 0,
       });
     }
   }
@@ -8173,7 +8293,13 @@ export class MatchmakerDO {
         if (!m.connected && i !== live.hostSeat) {
           soonest = Math.min(soonest, m.droppedAt + ROOM_SEAT_HOLD_MS);
         }
+        /* A guest whose Mini App stays closed is released rather than left blocking the room. */
+        if (!m.lobbyActive && m.awaySince > 0 && i !== live.hostSeat) {
+          soonest = Math.min(soonest, m.awaySince + LOBBY_AWAY_RELEASE_MS);
+        }
       }
+      /* the pre-match countdown is an alarm too, or an eviction would strand a frozen room */
+      if (live.countdownEndsAt > 0) soonest = Math.min(soonest, live.countdownEndsAt);
     }
     if (this.arena.status === 'active') soonest = Math.min(soonest, this.arena.endsAt);
     /* A pending relic challenge is a clock too: the alarm is what turns 25 seconds of silence
@@ -8356,6 +8482,26 @@ export class MatchmakerDO {
         this.broadcastLobby(live);
         return;
       }
+      if (msg.type === 'LOBBY_PRESENCE') {
+        if (!member) return;
+        const active = msg.active && member.connected;
+        if (active !== member.lobbyActive) {
+          member.lobbyActive = active;
+          member.awaySince = active ? 0 : Date.now();
+        } else if (!active && member.awaySince === 0) {
+          member.awaySince = now;
+        }
+        if (active) {
+          /* Back on screen: repaint the badge away, then let the gate re-arm the 3 - 2 - 1. */
+          this.broadcastLobby(live);
+          this.beginLobbyCountdown(live);
+          return;
+        }
+        /* Off screen (closing or minimising the Mini App): the countdown stops on this very beat. */
+        this.pauseLobbyCountdown(live);
+        this.broadcastLobby(live);
+        return;
+      }
       /* The create/join verbs are the handshake's own (`roomcode=new`, `roomcode=5923`): a socket
          that is already seated and asks again is answered with the room it holds, never with a
          second one. One registry, one room per socket — a frame can never mint a room beside it. */
@@ -8366,17 +8512,21 @@ export class MatchmakerDO {
       }
       if (msg.type === 'ROOM_START' || msg.type === 'START_ROOM_MATCH') {
         if (ref.seat !== live.hostSeat) return;
-        /* A friends room launches the moment two people are actually at their sockets. A stale
-           `busy` flag must never freeze the host's Start: being seated in this lobby is the whole
-           of "ready", and the server is the one that decides who is here. */
-        const online = live.members.filter((m) => !!m && m.connected).length;
-        const seated = live.members.filter((m) => !!m).length;
+        /* A stale `busy` flag must never freeze the host's Start: being seated in this lobby with
+           the app open is the whole of "ready", and the server is the one that decides who is. */
         if (live.code) {
           for (const m of live.members) if (m) m.busy = false;
         }
-        if (!live.code || online >= 2) { this.launchRoom(live); return; }
+        /* An auto-pair room has nobody to wait for beyond its own two sockets. A code lobby does:
+           its board only launches from a 3 - 2 - 1 that every seated Mini App is watching. */
+        if (!live.code) {
+          const online = live.members.filter((m) => !!m && m.connected).length;
+          if (online >= 2) { this.launchRoom(live); return; }
+        } else if (live.countdownEndsAt > 0 || this.beginLobbyCountdown(live)) {
+          return;
+        }
         /* Say why nothing happened, then repaint: a silent refusal is the frozen Start button. */
-        const reason = seated >= 2 ? 'player_offline' : 'waiting_for_players';
+        const reason = this.lobbyGateReason(live);
         if (member) this.postTo(member.ws, JSON.stringify({ type: 'START_FAILED', reason }));
         this.broadcastLobby(live);
         return;
@@ -8962,7 +9112,11 @@ export class MatchmakerDO {
          the room if nobody ever does. */
       member.connected = false;
       member.droppedAt = Date.now();
+      member.lobbyActive = false;
+      member.awaySince = Date.now();
       live.lastSeenAt = Date.now();
+      /* a room cannot launch into a seat whose socket just closed */
+      this.pauseLobbyCountdown(live);
       this.broadcastLobby(live);
       this.rearm();
       return;

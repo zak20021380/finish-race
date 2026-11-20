@@ -58,6 +58,11 @@ export interface LobbySeat {
   team: 0 | 1;
   /** True while this seat's socket is open; a reserved host seat reads false and can still hold. */
   connected: boolean;
+  /**
+   * True while this seat's Mini App is actually on screen. A player who closed Telegram keeps the
+   * chair but reads away here — and the room holds its countdown until every seat is back.
+   */
+  active: boolean;
   /** True while this person is already playing another board: a launch waits for them to finish. */
   busy: boolean;
 }
@@ -78,6 +83,11 @@ export interface Lobby {
   /** True while a socket carries this lobby; false is the local fallback. */
   online: boolean;
   status: 'connecting' | 'live' | 'solo' | 'closed';
+  /**
+   * The worker's own instant for the pre-match 3 - 2 - 1, or 0 while the room is waiting. Every
+   * numeral on screen is derived from this one number, never from a local timer.
+   */
+  countdownEndsAt: number;
 }
 
 /* ---------- the roster, as pure arithmetic ---------- */
@@ -438,6 +448,7 @@ export function hostLobby(code: string, name: string, online: boolean, format: L
     bot: false,
     team: 0,
     connected: true,
+    active: true,
     busy: false,
   };
   return {
@@ -454,6 +465,7 @@ export function hostLobby(code: string, name: string, online: boolean, format: L
     pendingHost: false,
     online,
     status: online ? 'connecting' : 'solo',
+    countdownEndsAt: 0,
   };
 }
 
@@ -497,6 +509,9 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
       team: s.team === 1 ? 1 : 0,
       /* `online` is the worker's contract; `connected` is the older spelling, honoured too. */
       connected: s.online === false ? false : s.connected !== false,
+      /* `active` is the foreground gate the worker owns. A frame from a build that predates it is
+         judged on the socket alone, so an older room never paints every seat as away. */
+      active: typeof s.active === 'boolean' ? s.active : (s.online !== false && s.connected !== false),
       busy: s.busy === true,
     };
   }
@@ -514,6 +529,9 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     pendingHost: raw.pendingHost === true,
     online: true,
     status: 'live',
+    /* Absent means no countdown: an older worker simply never counts down. */
+    countdownEndsAt: typeof raw.countdownEndsAt === 'number' && Number.isFinite(raw.countdownEndsAt)
+      ? Math.max(0, raw.countdownEndsAt) : 0,
   };
 }
 
@@ -598,10 +616,25 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     }
   };
 
+  /**
+   * Tell the room whether this Mini App is on screen. The launch gate is the worker's, and it can
+   * only hold a countdown if it hears the instant a player backgrounds Telegram — so the `false`
+   * goes out on the way out, while the socket is still open, and the `true` on the way back.
+   */
+  const reportPresence = (active: boolean): void => {
+    if (left || solo || race) return;
+    send({ type: 'LOBBY_PRESENCE', active });
+  };
+
   const onVisible = (): void => {
-    if (document.hidden) return;
+    /* A hidden page fires this on the way out: the room must know before the webview freezes. */
+    if (document.hidden) { reportPresence(false); return; }
+    reportPresence(true);
     wake();
   };
+
+  const onPageHide = (): void => { reportPresence(false); };
+  const onPageShow = (): void => { reportPresence(true); wake(); };
 
   /** The OS network came back: the same wake-up, without waiting for a visibility change. */
   const onOnline = (): void => { wake(); };
@@ -610,6 +643,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     stopBeat();
     document.removeEventListener('visibilitychange', onVisible);
     window.removeEventListener('online', onOnline);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('pageshow', onPageShow);
   };
 
   const paint = (): void => opts.onState(lobby);
@@ -1231,6 +1266,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       }
       aliveAt = Date.now();
       startBeat();
+      /* A fresh lobby socket is this seat's presence: the room may count down again. */
+      if (!race) reportPresence(true);
       /* A resumed race paints from its snapshot, not from a roster placeholder. */
       if (race || settled) return;
       /* An open socket is not a roster: only a `LOBBY` frame is (`readLobby` flips the status).
@@ -1335,6 +1372,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   }
   document.addEventListener('visibilitychange', onVisible);
   window.addEventListener('online', onOnline);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('pageshow', onPageShow);
 
   /**
    * The connect window. A socket still in `CONNECTING` is a slow network, not a missing server —
@@ -1367,7 +1406,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         seats: lobby.seats.map((s, i) => (i === seat
           ? {
             seat, id: `bot:${i}`, name: i === 1 ? 'Bot' : `Bot ${i}`, initial: 'B',
-            host: false, bot: true, team: teamFor(lobby), connected: true, busy: false,
+            host: false, bot: true, team: teamFor(lobby), connected: true, active: true, busy: false,
           }
           : s)),
       });

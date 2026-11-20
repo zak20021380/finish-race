@@ -5742,6 +5742,14 @@
               <div class="lb-slots" id="lb-slots" role="list" aria-label="Players in this room"></div>
               <p class="lb-hint" id="lb-hint" role="status" aria-live="polite">Invite one more player to start</p>
 
+              <!-- The room's own 3 - 2 - 1. The numeral is read from the worker's instant, never
+                   counted locally, so every phone in the lobby shows the same second. -->
+              <div class="lb-cd" id="lb-countdown" hidden role="status" aria-live="polite">
+                <span class="lb-cd-label" id="lb-cd-label">Starting in</span>
+                <b class="lb-cd-n" id="lb-cd-n" dir="ltr">3</b>
+                <span class="lb-cd-bar" aria-hidden="true"><i class="lb-cd-fill" id="lb-cd-fill"></i></span>
+              </div>
+
               <!-- tapping an open well in a local lobby offers the machine a seat; online the well
                    is simply the invite door, so this picker only ever appears offline -->
               <div class="lb-pick" id="lb-pick" hidden>

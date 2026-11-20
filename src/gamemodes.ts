@@ -202,12 +202,18 @@ function hostNameOf(l: Lobby): string | null {
  * who owns the launch.
  */
 function hintText(l: Lobby): string {
+  /* A countdown the room just rewound says why, for a beat: the pill vanished, the reason stays. */
+  if (Date.now() - lobbyCountdownPausedAt < LOBBY_PAUSED_MS) return t('lobbyCountdownPaused');
   /* An armed duel owns this caption until the challenged seat is filled: the room is not short
      "one more player", it is waiting for somebody to accept a challenge. */
   if (armedDuelHint && !canStart(l)) return armedDuelHint;
   /* A reserved chair is its own line: the guest is told what happened, not just that time passes. */
   if (hostAway(l)) return l.pendingHost ? t('lobbyHostPendingSub') : t('lobbyHostAwaySub');
-  /* A friend whose socket dropped is not "ready": the room says so before the host taps Start. */
+  /* A friend whose Mini App closed is named, and the room waits: nobody is launched into a board
+     their screen is not showing. */
+  const away = awaySeatOf(l);
+  if (away) return t('lobbyWaitingReturn').replace('{name}', away.name);
+  /* A friend whose socket dropped is not "ready" either: the room says so before the host taps. */
   if (l.seats.some((s) => !!s && !s.bot && !s.connected)) return t('errStartOffline');
   if (isHost(l)) return canStart(l) ? t('hintHostReady') : t('hintHostWaitingPlayers');
   const hostName = hostNameOf(l);
@@ -811,7 +817,7 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
       + `<span class="lb-open-t">${t('inviteFriend')}</span></button>`;
   }
   const role = s.host ? t('host') : s.bot ? t('bot') : s.seat === l.you ? t('you')
-    : s.connected ? t('ready') : t('seatReconnecting');
+    : !s.connected ? t('seatReconnecting') : s.active ? t('ready') : t('lobbyAwayBadge');
   const color = seat % FFA_COLOR.length;
   /* the host may move any seat between the teams; a player may move their own */
   const canMove = team !== null && (isHost(l) || s.seat === l.you);
@@ -821,15 +827,16 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
         + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
       : '',
     team === null ? `<span class="lb-color" data-color="${color}">${t(FFA_COLOR[color])}</span>` : '',
-    !s.bot && !s.connected
+    !s.bot && (!s.connected || !s.active)
       ? `<span class="lb-badge lb-badge-away" role="status">`
-        + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('seatReconnecting'))}</span>`
+        + `<i class="lb-away-dot" aria-hidden="true"></i>`
+        + `${esc(t(s.connected ? 'lobbyAwayBadge' : 'seatReconnecting'))}</span>`
       : '',
   ].filter(Boolean).join('');
   const cls = ['lb-slot', 'is-held'];
   if (s.host) cls.push('is-host');
   if (s.seat === l.you) cls.push('is-you');
-  if (!s.connected) cls.push('is-away');
+  if (!s.connected || !s.active) cls.push('is-away');
   const hint = canMove
     ? ` title="${t('switchTeamTo')
       .replace('{name}', esc(s.name))
@@ -915,14 +922,17 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
   if (s.host && side !== 'host') cls.push('is-host');
   if (s.host && !s.connected) cls.push('is-waiting-host');
   if (s.seat === l.you) cls.push('is-you');
-  if (!s.connected) cls.push('is-away');
+  /* `active` is the foreground gate: a seat whose Mini App is closed is away, not merely idle. */
+  const here = s.connected && s.active;
+  if (!here) cls.push('is-away');
   /* the rival's plate only reads "ready" once a person is actually sitting in it: a well the host
      filled with the machine is not somebody waiting to play */
   if (side === 'rival' && !s.bot) cls.push('is-rival', 'is-ready');
   const role = s.host
     ? (s.connected ? t('host') : t('waitingForHost'))
     : s.seat === l.you ? t('you') : s.bot ? t('bot')
-      : s.connected ? t('rival') : t('seatReconnecting');
+      : !s.connected ? t('seatReconnecting')
+        : s.active ? t('rival') : t('lobbyAwayBadge');
   const label = `${s.name}, ${role}`;
   /* The crown always marks the host's chair. A host whose socket stepped away keeps it and gains the
      amber status line; a host who is here wears only the struck-gold crown. */
@@ -931,15 +941,19 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
       + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
     : '';
   const badge = s.host
-    ? (s.connected
+    ? (s.connected && s.active
       ? ''
       : `<span class="lb-badge lb-badge-away" role="status">`
-        + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('waitingForHost'))}</span>`)
+        + `<i class="lb-away-dot" aria-hidden="true"></i>`
+        + `${esc(t(s.connected ? 'lobbyAwayBadge' : 'waitingForHost'))}</span>`)
     : s.bot ? ''
       : !s.connected
         ? `<span class="lb-badge lb-badge-away" role="status">`
           + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('seatReconnecting'))}</span>`
-        : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
+        : !s.active
+          ? `<span class="lb-badge lb-badge-away" role="status">`
+            + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('lobbyAwayBadge'))}</span>`
+          : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
   return kickableCard(`<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + ` aria-label="${esc(label)}">`
     + `<span class="lb-plate-halo" aria-hidden="true"></span>`
@@ -978,7 +992,7 @@ function paintSlots(l: Lobby): void {
      rebuild the plate it belongs to, even when every other field on the seat is unchanged */
   const sig = `${l.you}|${l.hostSeat}|${l.format}|${l.pendingHost}|${lang}|`
     + l.seats.map((s) => (s
-      ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}:${s.busy}`
+      ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}:${s.active}:${s.busy}`
       : '-')).join(',');
   if (sig === slotSig) return;
   slotSig = sig;
@@ -1000,6 +1014,90 @@ function paintSlots(l: Lobby): void {
 }
 
 /** Everything the lobby screen shows, from the value alone. */
+/** The first human seat whose Mini App is not on screen, if any. */
+function awaySeatOf(l: Lobby): Lobby['seats'][number] {
+  return l.seats.find((s) => !!s && !s.bot && (!s.connected || !s.active)) ?? null;
+}
+
+/* ---------- the room's own 3 - 2 - 1 ---------- */
+
+/** How long the room's countdown runs: mirrors the worker's `LOBBY_COUNTDOWN_MS`. */
+const LOBBY_COUNT_MS = 3_200;
+/** How long a rewound countdown's reason stays in the hint after the pill folds away. */
+const LOBBY_PAUSED_MS = 2_600;
+/** When the room last rewound a countdown; 0 while none has. */
+let lobbyCountdownPausedAt = 0;
+/** The instant the run on screen was armed for: a different instant is a different countdown. */
+let lobbyCountdownSig = '';
+/** The one ticker painting that countdown; module-level, like the room's other timers. */
+let lobbyCountdownTimer = 0;
+/** The last countdown this screen saw, so a drop to zero reads as a rewind and not as "never ran". */
+let lobbyCountdownLast = 0;
+
+/**
+ * Paint the room's server-owned countdown. The numeral is re-derived from `countdownEndsAt` on every
+ * tick, so every phone in the room shows the same second no matter how its own clock runs — the
+ * worker owns the instant, this screen only reads it. A countdown that disappears while a seat is
+ * away is a rewind, and says so once the pill folds away.
+ */
+function paintLobbyCountdown(l: Lobby): void {
+  const root = document.getElementById('lb-countdown');
+  if (!root) return;
+  const ends = l.countdownEndsAt;
+  const stop = (): void => {
+    if (lobbyCountdownTimer) {
+      window.clearInterval(lobbyCountdownTimer);
+      lobbyCountdownTimer = 0;
+    }
+    lobbyCountdownSig = '';
+  };
+  if (ends <= 0) {
+    root.hidden = true;
+    root.classList.remove('is-on');
+    stop();
+    /* The pill was up and the room took it back: that is a paused start, and the hint explains
+       it for a beat before the ordinary lobby line returns. */
+    if (lobbyCountdownLast > 0) {
+      lobbyCountdownPausedAt = Date.now();
+      const hint = document.getElementById('lb-hint');
+      if (hint) hint.textContent = t('lobbyCountdownPaused');
+      window.setTimeout(() => {
+        const live = handle?.lobby;
+        if (live && Date.now() - lobbyCountdownPausedAt >= LOBBY_PAUSED_MS) paintLobbyPane(live);
+      }, LOBBY_PAUSED_MS + 60);
+    }
+    lobbyCountdownLast = 0;
+    return;
+  }
+  lobbyCountdownLast = ends;
+  root.hidden = false;
+  root.classList.add('is-on');
+  const label = document.getElementById('lb-cd-label');
+  if (label) label.textContent = t('lobbyCountdownLabel');
+  const num = document.getElementById('lb-cd-n');
+  const fill = document.getElementById('lb-cd-fill');
+  const tick = (): void => {
+    const left = Math.max(0, ends - Date.now());
+    const secs = Math.max(1, Math.ceil(left / 1000));
+    if (num && num.textContent !== String(secs)) {
+      num.textContent = String(secs);
+      num.classList.remove('is-tick');
+      void num.offsetWidth;
+      num.classList.add('is-tick');
+    }
+    if (fill) fill.style.transform = `scaleX(${Math.min(1, left / LOBBY_COUNT_MS)})`;
+  };
+  const sig = `${l.code}|${ends}`;
+  if (sig === lobbyCountdownSig) { tick(); return; }
+  stop();
+  lobbyCountdownSig = sig;
+  tick();
+  lobbyCountdownTimer = window.setInterval(() => {
+    if (!handle || handle.lobby.countdownEndsAt !== ends) { stop(); return; }
+    tick();
+  }, 100);
+}
+
 function paintLobbyPane(l: Lobby): void {
   /* A closed room has no screen: the caller is already walking this client out of it. */
   if (l.status === 'closed') return;
@@ -1055,6 +1153,9 @@ function paintLobbyPane(l: Lobby): void {
     hint.classList.toggle('is-ready', l.status !== 'connecting' && !away && canStart(l));
   }
 
+  /* the room's pre-match countdown, painted from its own instant, after the roster is up */
+  paintLobbyCountdown(l);
+
   const botKey = document.getElementById('lb-pick-bot');
   if (botKey) botKey.hidden = l.online;
 
@@ -1067,8 +1168,9 @@ function paintLobbyPane(l: Lobby): void {
   if (start) {
     /* a room that is reconnecting cannot start: the frame would go nowhere; neither can one
        holding a seat whose friend is reconnecting — there is nobody to launch yet */
-    const awaySeat = l.seats.some((s) => !!s && !s.bot && s.connected === false);
-    const ready = host && canStart(l) && l.status !== 'connecting' && !awaySeat;
+    const away = awaySeatOf(l);
+    const counting = l.countdownEndsAt > 0;
+    const ready = host && canStart(l) && l.status !== 'connecting' && !away && !counting;
     /* The CTA is the action/state label and nothing else: the context lives in the hint above.
        A guest's key never pretends to be an action — it is one clean status pill. */
     start.textContent = host
@@ -1077,8 +1179,10 @@ function paintLobbyPane(l: Lobby): void {
     start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
       start.setAttribute('title', t('hintInviteMore'));
-    } else if (host && awaySeat) {
-      start.setAttribute('title', t('errStartOffline'));
+    } else if (host && away) {
+      start.setAttribute('title', away.connected
+        ? t('lobbyWaitingReturn').replace('{name}', away.name)
+        : t('errStartOffline'));
     } else {
       start.removeAttribute('title');
     }
@@ -1137,7 +1241,7 @@ const botsIn = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && s.bot ? 
 
 /** Every human seat is at its socket and not already playing somewhere else. */
 const everyoneHere = (l: Lobby): boolean =>
-  l.seats.every((s) => !s || s.bot || (s.connected && !s.busy));
+  l.seats.every((s) => !s || s.bot || (s.connected && s.active && !s.busy));
 
 /**
  * May this lobby count itself down? The host's own room, every seat held by people who are all
@@ -1145,7 +1249,9 @@ const everyoneHere = (l: Lobby): boolean =>
  * the countdown rather than dragging them into a race they cannot see.
  */
 function armedForCountdown(l: Lobby): boolean {
-  return isHost(l) && l.online && l.status === 'live' && lobbyOnScreen()
+  /* An online room is counted down by the worker, from its own instant — this local ceremony is
+     only for a lobby with no socket, where nobody else can own the beat. */
+  return !l.online && isHost(l) && l.status === 'live' && lobbyOnScreen()
     && !hostAway(l) && everyoneHere(l)
     && roomReady(l.format, humans(l), botsIn(l));
 }
@@ -2272,11 +2378,14 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
         showToast(t('hintInviteMore'), 'warning');
         return;
       }
-      /* A seat held for a friend whose socket is gone is not a friend who can be launched. Say
-         that instead of sending Start into a room that will refuse it. */
-      if (l.seats.some((s) => !!s && !s.bot && !s.connected)) {
+      /* A seat held for a friend whose socket is gone — or whose Mini App is closed — is not a
+         friend who can be launched. Say that instead of sending Start into a room that refuses it. */
+      const away = awaySeatOf(l);
+      if (away) {
         notify('warning');
-        showToast(t('errStartOffline'), 'warning');
+        showToast(away.connected
+          ? t('lobbyWaitingReturn').replace('{name}', away.name)
+          : t('errStartOffline'), 'warning');
         return;
       }
       impact('medium');

@@ -14938,6 +14938,65 @@ html.reduced-motion .lb-invite.is-attn { animation: none; }
 }
 .lb-hint.is-ready { color: var(--honey-ink); }
 
+/* the room's own 3 - 2 - 1: one centered pill, the label above a large tabular numeral, and a
+   bar that drains on the worker's clock. No local timer ever decides the number. */
+.lb-cd {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  margin: 2px auto 0;
+  padding: 8px 16px 9px;
+  min-width: 132px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2A3550 0%, #1D2636 100%);
+  box-shadow:
+    0 3px 0 #0C121C,
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(252, 211, 77, .28);
+}
+.lb-cd[hidden] { display: none; }
+.lb-cd-label {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.lb-cd-n {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  color: #FFC53D;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.lb-cd-n.is-tick { animation: lb-cd-pop .34s cubic-bezier(.22, 1.2, .36, 1); }
+.lb-cd-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .12);
+}
+.lb-cd-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #FFD97A 0%, #E09A0E 100%);
+  transform-origin: left center;
+  transition: transform .1s linear;
+}
+html[dir="rtl"] .lb-cd-fill { transform-origin: right center; }
+@keyframes lb-cd-pop {
+  0% { transform: scale(.72); opacity: .4; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+html.reduced-motion .lb-cd-n.is-tick { animation: none; }
+
 /* the roster. The format owns the shape: a 1v1 duel is two large cards around the crest, 3P is a
    single row of three, 4P a two-by-two, and the 2v2 is Blue's column against Orange's.
    Raised for a person, carved and dashed for a well still open. */
