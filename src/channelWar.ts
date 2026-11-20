@@ -412,60 +412,30 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     boardList.textContent = '';
     if (!board.length) {
       boardList.append(emptyRow('cwEmptyBoard'));
-      paintSlots();
+      paintWait();
       return;
     }
     for (const s of board.slice(0, LADDER_MAX)) {
       const you = !!mine && s.id === mine.id;
       boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true }));
     }
-    paintSlots();
+    paintWait();
     revealMyRow();
   }
 
   /* ---------- the open challenger slots ---------- */
 
   /**
-   * One open challenger card: the silver/bronze badge names the place, the copy explains that a
-   * rival hasn't claimed it yet, and the claim pill opens registration — or the invite flow when
-   * the player already holds a channel. The place number and the label are Latin tabular figures.
+   * One quiet invitation, and only one: while the ladder holds fewer than three channels a single
+   * dashed card explains that rivals are missing. It sits directly under the rows and is read,
+   * not tapped — the register key above it is the only door into the ladder.
    */
-  function buildOpenSlot(place: number): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'cw-slot';
-    const badge = document.createElement('span');
-    badge.className = `cw-slot-badge is-${place}`;
-    badge.setAttribute('aria-hidden', 'true');
-    badge.textContent = `#${place}`;
-    const label = document.createElement('bdi');
-    label.className = 'cw-slot-t';
-    label.setAttribute('dir', 'auto');
-    paintTemplate(label, t('cwOpenSlot'), { n: String(place) });
-    const claim = document.createElement('button');
-    claim.type = 'button';
-    claim.className = 'cw-slot-claim';
-    claim.textContent = t('cwClaim');
-    claim.addEventListener('click', () => {
-      impact('light');
-      const mine = getMySquad();
-      if (mine) rally(); else openRegister();
-    });
-    li.append(badge, label, claim);
-    return li;
-  }
-
-  /**
-   * When the ladder holds fewer than three places, the open slots stand under the ranked rows:
-   * a persistent invitation that competes with the board and fills the half-empty void.
-   */
-  function paintSlots(): void {
-    const slots = document.getElementById('cw-slots');
-    if (!slots) return;
-    slots.textContent = '';
-    const held = getWarRanking().length;
-    for (const place of [2, 3].filter((n) => n > held)) {
-      slots.append(buildOpenSlot(place));
-    }
+  function paintWait(): void {
+    const wait = document.getElementById('cw-wait');
+    if (!wait) return;
+    const open = getWarRanking().length < 3;
+    wait.hidden = !open;
+    if (open) wait.textContent = t('cwWaitingRivals');
   }
 
   /**
@@ -480,10 +450,17 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   function paintPrize(): void {
-    /* The hero headline names the season's crown — the number is an isolated run so the Latin
-       figure reads the same in every prose direction; the friends rule rides as the card's
-       integrated rule pill, never as a second row. */
-    if (prizeRule) paintTemplate(prizeRule, t('cwPrizeHero'), { n: '200' });
+    /* The headline names the season's crown and its clock sits at the far end of the same line.
+       The prize figure is its own `<bdi dir="ltr">` run so `200` never flips inside a Persian
+       sentence; the friends rule under it is one plain muted line, not a second boxed card. */
+    if (prizeRule) {
+      const [lead, tail = ''] = t('cwPrizeHero').split('{n}');
+      const figure = document.createElement('bdi');
+      figure.setAttribute('dir', 'ltr');
+      figure.textContent = '200';
+      prizeRule.textContent = '';
+      prizeRule.append(lead, figure, tail);
+    }
     if (prizeSub) prizeSub.textContent = t('cwPrizeSub');
   }
 
