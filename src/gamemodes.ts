@@ -24,7 +24,7 @@
  */
 import {
   adoptUserStorageKey, computeMatchRewards, hasCompletedTutorial, readJson, rewardFamilyOf,
-  userScopedKey, writeJson,
+  takePendingDuelRoom, userScopedKey, writeJson,
 } from './storage';
 import { menuState, lang, onLang, onMenuChange, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
@@ -651,13 +651,21 @@ const START_FAILURE_KEY: Record<string, string> = {
 const startFailureLine = (reason: string): string => t(START_FAILURE_KEY[reason] ?? 'errJoinUnknown');
 
 /**
- * The line a refused *invite* gets. A link that points at a match already under way, or at a room
- * its host disbanded, is the same thing to the person holding it: the invite is spent. Everything
- * else keeps its own reason.
+ * The line a refused *invite* gets. Whatever the room's own reason — spent, gone, full or over —
+ * a link that cannot seat the person holding it is one story, and it is the invite's: no longer
+ * usable. Everything a mirror cannot explain keeps its own reason.
  */
-const inviteLine = (reason: string): string => (reason === 'room_consumed' || reason === 'room_started'
-  || reason === 'ROOM_STARTED'
-  ? t('errInviteExpired')
+const INVITE_SPENT = new Set([
+  'room_not_found', 'ROOM_NOT_FOUND', 'NOT_FOUND',
+  'room_full', 'ROOM_FULL',
+  'room_consumed', 'CONSUMED',
+  'room_started', 'ROOM_STARTED',
+  'room_closed', 'ROOM_CLOSED',
+  'room_malformed', 'ROOM_MALFORMED',
+  'room_refused', 'ROOM_REFUSED',
+]);
+const inviteLine = (reason: string): string => (INVITE_SPENT.has(reason)
+  ? t('inviteExpiredToast')
   : errorLine(reason));
 
 /** The FFA badge colours, in seat order: every slot is told apart without a team label. */
@@ -1087,7 +1095,6 @@ function paintLobbyPane(l: Lobby): void {
 
   /* Last: a room every seat of which is held counts itself down and starts. Everything above has
      already painted, so the countdown never races the roster it is counting. */
-  emitFriendDuel(l);
   hooks.onLobbyState?.(l);
   armDuelCountdown(l);
 }
@@ -1218,10 +1225,6 @@ function fireCountdown(): void {
   if (!isHost(l) || !canStart(l)) return;
   /* the overlay is gone, the start is on its way: this is the one path that skips the face-off */
   autoLaunched = true;
-  if (friendDuelActive) {
-    friendDuelLaunching = true;
-    emitFriendDuel(l);
-  }
   impact('heavy');
   notify('success');
   const ok = handle?.start() ?? false;
@@ -1230,11 +1233,6 @@ function fireCountdown(): void {
        the room count down again once it is back */
     autoLaunched = false;
     countdownSpent = '';
-    if (friendDuelActive) {
-      friendDuelLaunching = false;
-      friendDuelError = t('errReconnecting');
-      emitFriendDuel(l);
-    }
     showToast(t('errReconnecting'), 'warning');
     return;
   }
@@ -1410,13 +1408,6 @@ function connect(
     },
     onRace: (race) => {
       if (token !== roomToken) return;
-      /* The sheet's race is on its way: tell it before the room lets go of the socket, so the
-         guest's sheet closes on the same beat the host's does. */
-      if (friendDuelActive) {
-        friendDuelRacing = true;
-        if (friendDuelLast) publishFriendDuel({ ...friendDuelLast, racing: true, error: null });
-        friendDuelActive = false;
-      }
       /* the lobby's work is done: the board owns the socket, and the code is spent */
       handle = null;
       roomToken++;
@@ -1438,7 +1429,6 @@ function connect(
       if (reason === 'MAINTENANCE') {
         saveSession(null);
         showView('room');
-        if (friendDuelActive) failFriendDuel(errorLine(reason));
         hooks.onMaintenance?.();
         return;
       }
@@ -1457,12 +1447,6 @@ function connect(
         return;
       }
       saveSession(null);
-      if (friendDuelActive) {
-        failFriendDuel(invite ? inviteLine(reason)
-          : reason === 'room_consumed' || reason === 'room_started'
-            ? t('errRoomExpired')
-            : errorLine(reason));
-      }
       /* an invite that cannot be honoured hands the player back to Home with the reason on screen */
       if (invite) { inviteRefused(inviteLine(reason)); return; }
       roomFailed(reason === 'room_consumed' || reason === 'room_started'
@@ -1476,11 +1460,6 @@ function connect(
     onStartFailed: (reason) => {
       if (token !== roomToken) return;
       countdownSpent = '';
-      if (friendDuelActive) {
-        friendDuelLaunching = false;
-        friendDuelError = startFailureLine(reason);
-        if (handle) emitFriendDuel(handle.lobby);
-      }
       notify('warning');
       showToast(startFailureLine(reason), 'warning');
       if (handle) paintLobbyPane(handle.lobby);
@@ -1508,256 +1487,29 @@ function connect(
   });
 }
 
-/* ---------- the Career tile's Play with Friends sheet ----------
-   The same live room the drawer opens, published as one snapshot so a sheet outside the drawer
-   can paint it. Nothing extra is invented here: the code, the seats and the socket are
-   `openLobby`'s, and a room only ever counts down when two real people are connected. */
-
-export interface FriendDuelSnapshot {
-  code: string;
-  host: boolean;
-  status: Lobby['status'];
-  online: boolean;
-  /** The other seat's person, or null while the chair is empty, a bot's or disconnected. */
-  rival: string | null;
-  humans: number;
-  /** Both seats are people at their sockets, free to play: the countdown may arm on this. */
-  ready: boolean;
-  /** The host's countdown asked the room to launch. */
-  launching: boolean;
-  /** The room's race has started; the sheet hands the screen to the board. */
-  racing: boolean;
-  /** A localised refusal to print in the sheet; null while the room is healthy. */
-  error: string | null;
-  /* ---- the live roster --------------------------------------------------------------------
-     The sheet paints the same grid the drawer does, from the same value: the format owns the
-     shape, the seats are the chairs, and `taken` is the `2/3` the counter prints. */
-  format: LobbyFormat;
-  capacity: number;
-  /** My own chair, or -1 while the registry has not seated us yet. */
-  you: number;
-  hostSeat: number;
-  seats: (LobbySeat | null)[];
-  /** Chairs somebody is actually sitting in. */
-  taken: number;
-}
-
-let friendDuelActive = false;
-let friendDuelLaunching = false;
-let friendDuelRacing = false;
-let friendDuelError: string | null = null;
-let friendDuelLast: FriendDuelSnapshot | null = null;
-const friendDuelWatchers: Array<(snap: FriendDuelSnapshot) => void> = [];
-
-function publishFriendDuel(snap: FriendDuelSnapshot): void {
-  friendDuelLast = snap;
-  for (const w of [...friendDuelWatchers]) {
-    try { w(snap); } catch { /* watcher threw */ }
-  }
-}
-
-function snapshotOf(l: Lobby): FriendDuelSnapshot {
-  /* A seat only counts as the friend once its socket is actually there: a reserved chair is not
-     somebody waiting, and a dropped guest must put the sheet back into its waiting line. */
-  const rivalSeat = l.seats.find((s, i) => !!s && !s.bot && i !== l.you && s.connected) ?? null;
-  return {
-    code: l.code,
-    host: isHost(l),
-    status: l.status,
-    online: l.online,
-    rival: rivalSeat?.name ?? null,
-    humans: humans(l),
-    ready: !hostAway(l)
-      && l.seats.every((s) => !s || s.bot || (s.connected && !s.busy))
-      && roomReady(l.format, humans(l), botsIn(l)),
-    launching: friendDuelLaunching,
-    racing: friendDuelRacing,
-    error: friendDuelError,
-    format: l.format,
-    capacity: l.capacity,
-    you: l.you,
-    hostSeat: l.hostSeat,
-    seats: l.seats,
-    taken: occupied(l),
-  };
-}
-
-/** Fold a room frame into the sheet's snapshot. Called by `paintLobbyPane`. */
-function emitFriendDuel(l: Lobby): void {
-  if (!friendDuelActive) return;
-  publishFriendDuel(snapshotOf(l));
-}
-
-function failFriendDuel(msg: string): void {
-  friendDuelLaunching = false;
-  friendDuelError = msg;
-  const base = friendDuelLast;
-  publishFriendDuel({
-    code: base?.code ?? '',
-    host: base?.host ?? false,
-    status: 'closed',
-    online: false,
-    rival: null,
-    humans: 0,
-    ready: false,
-    launching: false,
-    racing: false,
-    error: msg,
-    format: base?.format ?? 'duel',
-    capacity: base?.capacity ?? 2,
-    you: -1,
-    hostSeat: -1,
-    seats: Array.from({ length: base?.capacity ?? 2 }, () => null),
-    taken: 0,
-  });
-}
-
-export function onFriendDuelState(cb: (snap: FriendDuelSnapshot) => void): () => void {
-  friendDuelWatchers.push(cb);
-  if (friendDuelLast) {
-    try { cb(friendDuelLast); } catch { /* watcher threw */ }
-  }
-  return () => {
-    const i = friendDuelWatchers.indexOf(cb);
-    if (i >= 0) friendDuelWatchers.splice(i, 1);
-  };
-}
-
-export const getFriendDuelSnapshot = (): FriendDuelSnapshot | null => friendDuelLast;
-
-/** Is the Play with Friends sheet the surface the player is looking at right now? */
-function friendDuelSheetOpen(): boolean {
-  const sheet = document.getElementById('modal-friend-duel');
-  return !!sheet && !sheet.hidden;
-}
-
 /**
- * Open the Play with Friends room: mint a fresh code when `rawCode` is omitted, or walk into a
- * friend's code. A room this client already holds is shown again rather than handshaken twice.
+ * The one friends door outside the drawer: the Career tile and the Channel Wars CTA hand the
+ * player to the drawer's friends pane, which owns the live code, the seats and the invite link.
+ * There is no second sheet and no manual code entry: a friend joins by tapping the room link.
  */
-export function openFriendDuel(rawCode?: string): boolean {
-  if (hooks.maintenance?.()) {
-    hooks.onMaintenance?.();
-    return false;
-  }
-  const joining = typeof rawCode === 'string';
-  const clean = joining ? cleanRoomCode(rawCode) : null;
-  if (joining && !clean) {
-    friendDuelActive = true;
-    failFriendDuel(t('fdJoinInvalid'));
-    return false;
-  }
-  /* Only a room this sheet is already holding may be reused by Create: a lobby the player
-     opened somewhere else is not this tile's to re-label. */
-  const held = friendDuelActive;
-  friendDuelActive = true;
-  friendDuelLaunching = false;
-  friendDuelRacing = false;
-  friendDuelError = null;
-  if (handle && handle.lobby.status !== 'closed'
-    && (clean === null ? held : handle.lobby.code === clean)) {
-    showView('lobby');
-    paintLobbyPane(handle.lobby);
+export function openFriendsDoor(): boolean {
+  const sheet = document.getElementById('sheet-game-modes');
+  if (!sheetHost || !sheet) return false;
+  if (handle && handle.lobby.status !== 'closed') {
+    setGameMode('room', { roomCode: handle.lobby.code });
+    revealLobby();
     return true;
   }
-  /* A create names no digits: the registry mints them, and the sheet prints the four it gets back.
-     A client-side guess is exactly how two players end up sitting in two rooms with one number. */
-  const code = clean ?? NEW_ROOM;
-  setGameMode('room', { roomCode: code });
-  if (clean === null) {
-    openRoom(code, true, { format: 'duel' });
-    return true;
+  setGameMode('room', { roomCode: null });
+  if (sheet.hidden || !sheet.classList.contains('open')) sheetHost.open(sheet);
+  showView(session ? 'lobby' : 'room');
+  if (session && !handle) {
+    window.clearTimeout(resumeTimer);
+    resumeTimer = 0;
+    resumeRoom();
   }
-  /* A code this client already holds is walked back in, never opened as a second handshake. */
-  if (session?.code === code) {
-    showView('lobby');
-    if (!handle) {
-      window.clearTimeout(resumeTimer);
-      resumeTimer = 0;
-      resumeRoom();
-    }
-    return true;
-  }
-  openRoom(code, false, { invite: true });
+  paintRewardPreview(true);
   return true;
-}
-
-/** Re-read the sheet's screen state: opening or closing it re-arms or cancels the countdown. */
-export function syncFriendDuelScreen(): void {
-  if (!friendDuelActive) return;
-  if (handle) paintLobbyPane(handle.lobby);
-  else if (session) resumeRoom();
-}
-
-/** Walk out of the sheet's room for good. Closing the sheet never does this by itself. */
-export function leaveFriendDuel(): void {
-  const hadRoom = !!handle || !!session;
-  friendDuelActive = false;
-  friendDuelLaunching = false;
-  friendDuelRacing = false;
-  friendDuelError = null;
-  friendDuelLast = null;
-  if (hadRoom) leaveRoom();
-}
-
-/**
- * The sheet's format pick. The host re-shapes the room the same way the drawer does — through the
- * one live socket — so the server's `ROOM_STATE` is what every other seat repaints from. False
- * means the pick was not the host's to make, or nobody would fit in the smaller room.
- */
-export function friendDuelSetFormat(format: LobbyFormat): boolean {
-  if (!handle || !isHost(handle.lobby)) return false;
-  const next = handle.setFormat(format);
-  if (!next) notify('warning');
-  return next;
-}
-
-/**
- * The sheet's primary key.
- *
- * Two people are seated: the host asks the room to launch, and the room answers every seat at
- * once. One person: the key is an honest practice race — the room is given up (a host's exit
- * disbands the code) and the board opens against the machine, exactly as the drawer's own
- * practice door does. It is never a fake multiplayer start: the server would refuse one, and a
- * key that lies is worse than a key that says what it does.
- */
-export function friendDuelStart(): void {
-  const l = handle?.lobby;
-  if (!l || !isHost(l)) { notify('warning'); return; }
-  if (occupied(l) < MIN_START) { friendDuelPractice(); return; }
-  if (l.status === 'connecting' || l.seats.some((s) => !!s && !s.bot && !s.connected)) {
-    notify('warning');
-    showToast(t('errStartOffline'), 'warning');
-    return;
-  }
-  friendDuelLaunching = true;
-  emitFriendDuel(l);
-  impact('medium');
-  if (handle?.start()) return;
-  friendDuelLaunching = false;
-  notify('warning');
-  showToast(t('errReconnecting'), 'warning');
-  emitFriendDuel(l);
-}
-
-/** Give up the room and put a practice race on the board. The one solo path this sheet has. */
-export function friendDuelPractice(): void {
-  impact('light');
-  notify('success');
-  leaveFriendDuel();
-  try {
-    saveMenu({ mode: 'bot', sizes: sizesForMode('bot') });
-  } catch {
-    /* stay in memory */
-  }
-  sheetHost?.close();
-  hooks.onStart?.();
-}
-
-/** The crown's remove key, on the sheet's own grid. Same door as the drawer's. */
-export function friendDuelKick(seat: number): boolean {
-  if (!handle || !isHost(handle.lobby)) return false;
-  return handle.kick(seat);
 }
 
 /** How long to wait before walking back into a room whose socket dropped, per attempt. */
@@ -1805,9 +1557,6 @@ function scheduleResume(): void {
 
 /** Is the lobby actually in front of the player? A countdown must never run behind a closed sheet. */
 function lobbyOnScreen(): boolean {
-  /* The Career tile's sheet is the same room's second surface: a duel hosted there counts down
-     and launches exactly as one hosted in the drawer does. */
-  if (friendDuelActive && friendDuelSheetOpen()) return true;
   if (view !== 'lobby') return false;
   const sheet = document.getElementById('sheet-game-modes');
   return !!sheet && !sheet.hidden;
@@ -1947,17 +1696,35 @@ function noteArrival(l: Lobby): LobbySeat | null {
 }
 
 /**
- * An invite that cannot be honoured: say why in one toast, close the drawer, and leave the player
- * on the home lobby exactly as they arrived. No half-open room, no dead-end pane.
+ * An invite that cannot be honoured: one clean toast at the top of Home, the drawer closed, and
+ * the player exactly where they arrived. No half-open room, no dead-end pane, no second modal.
  */
 function inviteRefused(msg: string): void {
+  forgetInviteLaunch();
   saveSession(null);
   setGameMode('room', { roomCode: null });
   showView('modes');
   hideLobbyBanner();
   sheetHost?.close();
-  showToast(msg, 'error');
-  notify('error');
+  showToast(msg, 'warning', 4000);
+  notify('warning');
+}
+
+/**
+ * A spent invite must not be re-read: the code leaves the URL, and the invite parked for the
+ * language gate is consumed. Anything the player taps afterwards starts clean.
+ */
+function forgetInviteLaunch(): void {
+  takePendingDuelRoom();
+  try {
+    const url = new URL(window.location.href);
+    for (const key of ['startapp', 'tgWebAppStartParam', 'start_param', 'room', 'roomcode', 'duel']) {
+      url.searchParams.delete(key);
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    /* a webview that refuses history still boots normally */
+  }
 }
 
 /**
@@ -2041,12 +1808,6 @@ function leaveRoom(): void {
   if (pick) pick.hidden = true;
   /* the code is spent on the server and forgotten here: a stale link must not resurrect it */
   saveSession(null);
-  /* leaving the room from anywhere ends the tile's room too: its sheet has nothing left to show */
-  friendDuelActive = false;
-  friendDuelLaunching = false;
-  friendDuelRacing = false;
-  friendDuelError = null;
-  friendDuelLast = null;
   /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
   setGameMode('room', { roomCode: null });
 }
@@ -2076,15 +1837,6 @@ function ejectedFromRoom(eliminated = false): void {
   if (pick) pick.hidden = true;
   /* the server already freed the chair: the code must not resurrect it from this device */
   saveSession(null);
-  /* the career tile's sheet is the same room's second surface: it closes too */
-  if (friendDuelActive) {
-    friendDuelActive = false;
-    friendDuelLaunching = false;
-    friendDuelRacing = false;
-    friendDuelError = null;
-    friendDuelLast = null;
-    document.getElementById('fd-close')?.click();
-  }
   /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
   setGameMode('room', { roomCode: null });
   sheetHost?.close();

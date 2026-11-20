@@ -2083,7 +2083,7 @@
                 <!-- The career glimpse is a single horizontal key, not a poster: it carries the
                      human-only record and opens the dedicated Play with Friends duel sheet. -->
                 <button class="career-preview-tile" type="button" id="pf-quest-empty"
-                        aria-haspopup="dialog" aria-controls="modal-friend-duel"
+                        aria-haspopup="dialog" aria-controls="sheet-game-modes"
                         data-i18n-aria="pfCareerTileAria" aria-label="Open Play with Friends">
                   <span class="cpt-ico" aria-hidden="true">
                     <svg class="ico"><use href="#i-swords" /></svg>
@@ -3091,129 +3091,6 @@
               <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
               <span data-i18n="vaultGuideDone">Got It</span>
             </button>
-          </div>
-        </section>
-      </div>
-
-      <!-- ============ Play with Friends · the Career tile's dedicated duel sheet ============
-           One live room, human-only. Create mints a 4-digit code and the native Telegram share;
-           Join takes a friend's code. There is no bot path here at all: the room only launches
-           once a second real person is seated and connected. Painted by src/menu.ts from the
-           room snapshot src/gamemodes.ts publishes. -->
-      <div class="vault-modal fd-modal" id="modal-friend-duel" hidden>
-        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
-        <section class="vault-modal-sheet fd-sheet" role="dialog" aria-modal="true" tabindex="-1"
-                 aria-labelledby="fd-title" aria-describedby="fd-sub">
-          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
-          <button class="vault-modal-x" type="button" id="fd-close" data-modal-close
-                  data-i18n-aria="fdCloseAria" aria-label="Close Play with Friends">
-            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-
-          <div class="vault-modal-body fd-body">
-            <header class="vm-head">
-              <span class="vm-head-i fd-head-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-              <span class="vm-head-t">
-                <h2 class="vm-title" id="fd-title" data-i18n="fdTitle">Play with Friends</h2>
-                <p class="vm-sub" id="fd-sub" data-i18n="fdSub">Live 1v1 PvP Duel · Real Opponents Only</p>
-              </span>
-            </header>
-
-            <p class="fd-real-pill">
-              <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
-              <span data-i18n="fdHumanPill">REAL PLAYERS · NO BOTS</span>
-            </p>
-
-            <!-- the two pathways: host a private duel, or enter a friend's code -->
-            <div class="fd-gateway" id="fd-gateway">
-              <button class="fd-host" type="button" id="fd-create">
-                <span class="fd-host-ico" aria-hidden="true"><svg class="ico"><use href="#i-plus" /></svg></span>
-                <span class="fd-host-txt">
-                  <span class="fd-host-t" data-i18n="fdHostTitle">Create Private Duel</span>
-                  <span class="fd-host-s" data-i18n="fdHostSub">Mint a room code and invite a friend</span>
-                </span>
-                <span class="fd-host-go" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
-              </button>
-
-              <p class="fd-or" aria-hidden="true"><span data-i18n="fdOr">or join a friend’s room</span></p>
-
-              <div class="fd-join">
-                <label class="fd-well" id="fd-well" for="fd-code">
-                  <span class="fd-hash" aria-hidden="true">#</span>
-                  <input id="fd-code" class="fd-input" type="text" inputmode="numeric" maxlength="4"
-                    placeholder="Enter Code" data-i18n-ph="fdCodePlaceholder" autocomplete="off"
-                    autocorrect="off" autocapitalize="characters" spellcheck="false"
-                    enterkeyhint="go" dir="ltr" data-i18n-aria="fdCodeAria"
-                    aria-label="Enter a 4-digit room code" />
-                  <!-- the paste key: one tap pulls the copied code into the field instead of typing -->
-                  <button type="button" class="fd-paste" id="fd-paste"
-                          data-i18n-aria="fdPasteAria" aria-label="Paste room code" title="Paste room code">
-                    <svg class="ico" aria-hidden="true"><use href="#i-paste" /></svg>
-                  </button>
-                </label>
-                <button class="fd-join-btn" type="button" id="fd-join" disabled data-i18n="fdJoinBtn">Join &amp; Play</button>
-              </div>
-            </div>
-
-            <!-- the live room: one code, the live roster, the format, and the honest wait -->
-            <div class="fd-room" id="fd-room" hidden>
-              <div class="fd-code-card">
-                <span class="fd-code-k" data-i18n="fdRoomCodeLabel">ROOM CODE</span>
-                <button class="fd-code" type="button" id="fd-code-tag"
-                        data-i18n-aria="fdCopyCodeAria" aria-label="Copy room code">
-                  <svg class="fd-code-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M4 12.5l5.2 5.2L20 6.8" fill="none" stroke="currentColor" stroke-width="3"
-                      stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span class="fd-code-hash" aria-hidden="true">#</span>
-                  <b id="fd-room-code" dir="ltr">0000</b>
-                </button>
-                <!-- the seat counter: `1/2` .. `4/4`, Latin tabular digits, isolated LTR so it never
-                     mirrors in FA/AR -->
-                <span class="fd-count" id="fd-count" dir="ltr" role="status" aria-live="polite">1/2</span>
-              </div>
-
-              <div class="fd-room-actions">
-                <button class="fd-share" type="button" id="fd-share">
-                  <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-                  <span data-i18n="fdShare">Share Invite Link</span>
-                </button>
-                <button class="fd-copy" type="button" id="fd-copy"
-                        data-i18n-aria="fdCopyCodeAria" aria-label="Copy room code">
-                  <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
-                  <span data-i18n="fdCopyCode">Copy Code</span>
-                </button>
-              </div>
-
-              <!-- the room's shape: the host's pick, read-only for every guest -->
-              <div class="fd-formats" id="fd-formats" role="group" aria-label="Match format">
-                <button class="fd-fmt" type="button" data-format="duel" aria-pressed="true">1v1</button>
-                <button class="fd-fmt" type="button" data-format="3p" aria-pressed="false">3P</button>
-                <button class="fd-fmt" type="button" data-format="4p" aria-pressed="false">4P</button>
-                <button class="fd-fmt" type="button" data-format="2v2" aria-pressed="false">2v2</button>
-              </div>
-              <p class="fd-mode-sub" id="fd-mode-sub"></p>
-
-              <!-- exactly the chairs the format fields: 2, 3 or 4, with Team 1 / Team 2 in 2v2 -->
-              <div class="fd-slots" id="fd-slots" role="list" aria-label="Players in this room"></div>
-
-              <p class="fd-wait" id="fd-wait" data-state="waiting" role="status" aria-live="polite">
-                <span class="fd-wait-dot" aria-hidden="true"></span>
-                <span class="fd-wait-t" id="fd-wait-t">Waiting for friend to join…</span>
-              </p>
-
-              <!-- the one primary key: Start Match with a friend, practice alone, or the guest's
-                   status pill. Never a dead button. -->
-              <button class="fd-start" type="button" id="fd-start" aria-disabled="false">
-                <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
-                <span class="fd-start-t" id="fd-start-t">Start practice match</span>
-              </button>
-
-              <p class="fd-fine" data-i18n="fdRealNote">Only people you invite can take these seats — the host starts the match for the whole room.</p>
-              <button class="fd-cancel" type="button" id="fd-cancel" data-i18n="fdCancelRoom">Cancel room</button>
-            </div>
-
-            <p class="fd-err" id="fd-err" role="status" hidden></p>
           </div>
         </section>
       </div>

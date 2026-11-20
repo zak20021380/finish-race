@@ -77,7 +77,7 @@ import {
 import { applyFlagSupport } from './countries';
 import {
   autoTutorialForLaunch, createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy,
-  onGameModeChange, openFriendDuel, openInviteRoom, rewardModeFor, resumeRoom, setGameMode,
+  onGameModeChange, openInviteRoom, rewardModeFor, resumeRoom, setGameMode,
   setRewardSeats, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
@@ -6942,18 +6942,12 @@ if (invitedRoom && !INVITE_FTUE) {
   let inviteDoorDone = false;
   const openInvite = (attempt = 0): void => {
     if (inviteDoorDone) return;
+    /* The drawer's friends lobby is the ONE surface a room invite opens: the guest lands on the
+       roster they were invited to. A link that turns out to be spent — expired, already used,
+       full or gone — is answered there with a single toast on Home (`inviteRefused`), never with
+       a second modal over a blank screen. */
     if (openInviteRoom(invitedRoom)) {
       inviteDoorDone = true;
-      /* The Play with Friends sheet is the front door for a room invite: the guest lands on the
-         roster — `Joining #5923…` on the wait line, the seats filling in — rather than on the
-         drawer's mode list. `openFriendDuel` reuses the membership `openInviteRoom` just took, so
-         this is one socket and one room, never a second handshake. The drawer's lobby stays behind
-         it as the fallback surface, and a shell without the sheet simply never opens it. */
-      if (openFriendDuel(invitedRoom)) {
-        try {
-          window.dispatchEvent(new CustomEvent('detour:friend-duel', { detail: { code: invitedRoom } }));
-        } catch { /* a shell without CustomEvent: the drawer's lobby is still up */ }
-      }
       return;
     }
     if (attempt < 12) window.setTimeout(() => openInvite(attempt + 1), 250);
