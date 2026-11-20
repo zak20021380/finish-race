@@ -670,7 +670,7 @@ export interface SquadView {
   telegramMembers: number | null;
   /** Players of this bot representing the channel — the same count as `members`, named for the UI. */
   botFightersCount: number;
-  /** Squad IQ: the arithmetic mean of the roster's TIQ. */
+  /** Squad IQ: the exact sum of the roster's TIQ — the same figure as `totalTiq`. */
   tiq: number;
   /**
    * Channel Wars TOTAL TIQ: the exact sum of every member's real TIQ balance. Never a separate
@@ -728,7 +728,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
       ? Math.floor(audience)
       : null,
     botFightersCount: roster.length,
-    tiq: squadAvgTiq(squad),
+    tiq: totalTiq,
     warPoints: totalTiq,
     totalTiq,
     fighters,

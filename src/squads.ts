@@ -101,7 +101,7 @@ export interface Squad {
   telegramMembers?: number | null;
   /** How many players of our bot represent this channel. Always the roster's own length. */
   botFightersCount?: number;
-  /** Arithmetic mean of the roster's TIQ: the squad's Squad IQ. */
+  /** The exact sum of the roster's TIQ: the squad's score on the ladder. */
   trophies: number;
   trend: SquadTrend;
   /** community type; optional so older saves without it still validate */
@@ -219,14 +219,9 @@ export function squadKind(s: Pick<Squad, 'id' | 'kind'>): SquadKind {
   return h % 2 === 0 ? 'channel' : 'group';
 }
 
-/** The roster's TIQ total — the numerator of the squad's average. */
+/** The roster's TIQ total — the squad's score on the ladder. */
 export const squadTiqSum = (roster: SquadMember[]): number =>
   roster.reduce((sum, m) => sum + Math.max(0, Math.floor(m.tiq)), 0);
-
-/** Squad IQ: the arithmetic mean of the roster's own TIQ, rounded once. */
-export function squadTiqOf(roster: SquadMember[]): number {
-  return roster.length ? Math.round(squadTiqSum(roster) / roster.length) : 0;
-}
 
 /**
  * Normalise a squad read from anywhere (this device's save, the Worker's board): dedupe the
@@ -248,7 +243,7 @@ export function normalizeSquad(squad: Squad, ownerId?: string): Squad {
       else if (m.role === 'leader') m.role = 'member';
     }
   }
-  return { ...squad, roster, members: roster.length, trophies: squadTiqOf(roster) };
+  return { ...squad, roster, members: roster.length, trophies: squadTiqSum(roster) };
 }
 
 function migrate(raw: Partial<SquadSave> | null): SquadSave {
@@ -470,7 +465,7 @@ export function squadRosterOf(squad: Squad): SquadMember[] {
     || a.id.localeCompare(b.id));
 }
 
-/** Customs, ranked by their roster's average TIQ, 1..n. Pure. */
+/** Customs, ranked by their roster's total TIQ, 1..n. Pure. */
 export function getSquadRanking(): RankedSquad[] {
   const me = myPlayerId();
   const all: (Squad & { owned: boolean })[] = save.custom.map((s) => {
@@ -479,7 +474,7 @@ export function getSquadRanking(): RankedSquad[] {
       ...s,
       roster,
       members: roster.length,
-      trophies: squadTiqOf(roster),
+      trophies: squadTiqSum(roster),
       /* A squad with no recorded owner was minted on this device, so this device founded it. */
       owned: s.ownerId ? s.ownerId === me : true,
     };
@@ -792,7 +787,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     name,
     roster,
     members: roster.length,
-    trophies: squadTiqOf(roster),
+    trophies: squadTiqSum(roster),
     trend: 'same',
     kind: input.kind === 'group' ? 'group' : 'channel',
     avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',

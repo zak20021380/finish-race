@@ -84,7 +84,6 @@ import {
 import { botAppLink, squadAppLink } from '../shared/config';
 import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralConfig';
 import { referralBinding, type ReferralBindingPayload } from './referrals';
-import { NATION_TOP_SAMPLE, representativeAverage } from '../shared/nations';
 import { relicShelter } from '../shared/relic';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
@@ -937,15 +936,6 @@ const NATION_WIN_TIQ = 140;
  */
 const FORFEIT_TIQ = 15;
 const WIN_TIQ = 15;
-/**
- * A settled match count is the proof a seat races. Below it a seat is enrolled but not yet
- * proven — its current TIQ still carries the flag, it is simply not preferred over a proven
- * sample. There is no hard drop and no penalty multiplier: a country is never deleted for
- * being young, and a lone warrior is never halved for being alone.
- */
-const NATION_MIN_MATCHES = 3;
-/** A rolling 30-day competitive window — one full arena season plus the rollover's grace. */
-const NATION_ACTIVE_MS = 30 * 86400_000;
 
 /**
  * One season's national war chest, persisted under `nations_s<season>_scores`. Points are only
@@ -3775,9 +3765,9 @@ export class MatchmakerDO {
    */
   private async squadBoard(): Promise<Response> {
     await this.syncSquadsFromStorage();
-    /* The Channel Wars ladder is ranked by Channel TIQ — the sum its members banked in Play with
-       Friends matches. Squad IQ breaks a tie, then the roster size, then the handle: the order a
-       client paints is the order this endpoint hands back. */
+    /* The Squad IQ ladder is ranked by the exact sum of the TIQ its joined players hold, ties
+       broken by the roster size, then the handle: the order a client paints is the order this
+       endpoint hands back. */
     const squads = [...this.squads.values()]
       .filter((squad) => !squad.banned && squad.verification !== 'revoked')
       .map((squad) => {
@@ -3786,8 +3776,7 @@ export class MatchmakerDO {
         return view;
       })
       .sort((a, b) =>
-        b.warPoints - a.warPoints
-        || b.tiq - a.tiq
+        b.totalTiq - a.totalTiq
         || b.members - a.members
         || a.handle.localeCompare(b.handle));
     return json({ ok: true, timestamp: Date.now(), squads });
@@ -5027,13 +5016,10 @@ export class MatchmakerDO {
   }
 
   /**
-   * The Nations Cup: every enrolled flag, ranked by a top-ten representative average TIQ. A flag
-   * is never dropped for being young or quiet — its rated seats carry it, and a country the
-   * registry has not produced yet is filled from the founding baseline. Proven warriors (three
-   * settled races, a human-vs-human clock inside the rolling season window) form the preferred
-   * sample; everyone else still carries the flag with their current TIQ. The season's banked win
-   * points ride along as a separate award, and the caller's own row quotes both their personal
-   * TIQ and the nation's average back.
+   * The Nations Cup: every enrolled flag, ranked by the exact sum of its members' TIQ. A flag
+   * is never dropped for being young or quiet — its rated seats carry it. The season's banked
+   * win points ride along as a separate award, and the caller's own row quotes both their
+   * personal TIQ and the nation's total back.
    */
   private async nationsBoard(request: Request, url: URL): Promise<{
     ok: true;
@@ -5046,12 +5032,10 @@ export class MatchmakerDO {
       name: string;
       points: number;
       players: number;
-      warriorCount: number;
+      /** The exact sum of every member's TIQ: the figure the whole board is sorted by. */
       totalTiq: number;
-      /** The calculated representative TIQ: the figure the whole board is sorted by. */
-      averageTiq: number;
     }>;
-    you: { code: string; rank: number; points: number; tiq: number; averageTiq: number; total: number } | null;
+    you: { code: string; rank: number; points: number; tiq: number; total: number } | null;
   }> {
     /* A board read carries the caller's profile flag, so a nation chosen in Profile is enrolled
        before the standings are cut — a player who has not queued yet still has a country. */
@@ -5061,7 +5045,7 @@ export class MatchmakerDO {
     const ledger = this.nations.seasonNo === seasonNo ? this.nations : emptyNationLedger(seasonNo);
 
     /* The caller's own live reading is quoted back on their seat, but it is deliberately never
-       folded into the national sample: the query string is caller-controlled, and a ranking read
+       folded into the national total: the query string is caller-controlled, and a ranking read
        must not be able to move a flag's score. The registry record is the only input. */
     const mine = mineId ? this.players.get(mineId) : undefined;
     const rawTiq = Number(url.searchParams.get('tiq'));
@@ -5072,10 +5056,8 @@ export class MatchmakerDO {
       code: row.code,
       name: row.name,
       players: row.players,
-      warriorCount: row.warriorCount,
       points: row.points,
       totalTiq: row.totalTiq,
-      averageTiq: row.averageTiq,
     }));
 
     const myCode = normalizeCountry(mine?.country);
@@ -5086,7 +5068,6 @@ export class MatchmakerDO {
         rank: hit.rank,
         points: Math.max(0, whole(ledger.byPlayer[mineId]?.[myCode])),
         tiq: myTiq,
-        averageTiq: hit.averageTiq,
         total: nations.length,
       }
       : null;
@@ -5140,93 +5121,54 @@ export class MatchmakerDO {
   }
 
   /**
-   * Every enrolled flag, folded from the registry, ranked by its representative average TIQ.
+   * Every enrolled flag, folded from the registry, ranked by the exact sum of its members' TIQ.
    *
    * The board is a census first and a contest second: a seat that has picked a flag is on the
    * ladder before its first settled race, so a country cannot vanish because its players are
-   * new, quiet, or playing alone. The average is cut from the flag's best ten rated warriors —
-   * the proven sample (three settled races, a human-vs-human clock inside the season window)
-   * when there is one, and every rated seat as the honest fallback when there is not. The
-   * divisor is the size of that sample, so a nation carried by one warrior is quoted at that
-   * warrior's own TIQ; it is never halved for being small.
+   * new, quiet, or playing alone. A zero-TIQ seat counts in the census but adds nothing to the
+   * sum, so a fresh signup cannot drag its country's score down.
    *
    * There is no baseline and no filler: a flag exists only because at least one active,
    * unbanned registry seat carries it. A thin registry returns a thin array — two real
    * countries produce exactly two rows, never a padded field.
    *
-   * The order is strictly descending by the calculated representative average TIQ, so rank
-   * #1 always holds the highest score. Only genuinely equal scores are broken by total TIQ
-   * (a deeper rated pool ranks higher), then the sample size, then head-count, then the flag
-   * whose earliest player registered first. Banked season points are an award, not the
-   * ranking metric. The code is the final, deterministic tie-break.
+   * The order is strictly descending by total TIQ, so rank #1 always holds the highest score.
+   * Only genuinely equal sums are broken by head-count (the deeper roster ranks higher), then
+   * the code as the final, deterministic tie-break. Banked season points are an award, not the
+   * ranking metric.
    */
   private nationStandings(
     ledger: NationLedger,
-    now = Date.now(),
   ): Array<{
-    code: string; name: string; points: number; players: number; warriorCount: number;
-    totalTiq: number; averageTiq: number; since: number;
+    code: string; name: string; points: number; players: number; totalTiq: number;
   }> {
-    const activeSince = now - NATION_ACTIVE_MS;
-    const enrolled = new Map<string, {
-      players: number;
-      totalTiq: number;
-      since: number;
-      /** Every rated seat under the flag: the fallback sample. */
-      scores: number[];
-      /** Seats with a proven record: the preferred sample. */
-      proven: number[];
-    }>();
+    const enrolled = new Map<string, { players: number; totalTiq: number }>();
     for (const p of this.players.values()) {
       const cc = normalizeCountry(p.country);
       if (!cc || p.banned || this.banned.has(p.id)) continue;
-      const since = p.firstSeen > 0 ? p.firstSeen : Number.MAX_SAFE_INTEGER;
       let row = enrolled.get(cc);
       if (!row) {
-        row = { players: 0, totalTiq: 0, since, scores: [], proven: [] };
+        row = { players: 0, totalTiq: 0 };
         enrolled.set(cc, row);
       }
       row.players += 1;
-      if (since < row.since) row.since = since;
-
-      /* A zero-TIQ seat is a spectator wearing a flag: it counts in the census, never in the
-         average, so a fresh signup cannot drag its country's rating down. */
-      const tiq = Math.max(0, whole(p.tiq));
-      if (tiq <= 0) continue;
-      row.totalTiq += tiq;
-      row.scores.push(tiq);
-
-      /* Proven is a preference, not a gate: a seat still warming up its record keeps its
-         current TIQ in the fallback sample instead of being dropped from the nation. */
-      const humanRace = p.modeSeen.pvp > 0 || p.modeSeen.arena > 0;
-      if (humanRace && p.matches >= NATION_MIN_MATCHES && p.lastSeen >= activeSince) {
-        row.proven.push(tiq);
-      }
+      row.totalTiq += Math.max(0, whole(p.tiq));
     }
 
-    const live = [...enrolled.entries()].map(([code, row]) => {
-      const sample = row.proven.length > 0 ? row.proven : row.scores;
-      return {
-        code,
-        name: countryName(code),
-        players: row.players,
-        warriorCount: Math.min(sample.length, NATION_TOP_SAMPLE),
-        totalTiq: row.totalTiq,
-        averageTiq: representativeAverage(sample),
-        points: Math.max(0, whole(ledger.points[code])),
-        since: row.since,
-      };
-    });
+    const live = [...enrolled.entries()].map(([code, row]) => ({
+      code,
+      name: countryName(code),
+      players: row.players,
+      totalTiq: row.totalTiq,
+      points: Math.max(0, whole(ledger.points[code])),
+    }));
 
-    /* Strictly descending by the calculated average: rank #1 is always the highest score.
-       Everything after the first term only orders exact ties, it can never promote a lower
-       average above a higher one. `live` is already the complete board — no rows are added. */
+    /* Strictly descending by the summed TIQ: rank #1 is always the highest score. Everything
+       after the first term only orders exact ties, it can never promote a lower sum above a
+       higher one. `live` is already the complete board — no rows are added. */
     return live.sort((a, b) => (
-      b.averageTiq - a.averageTiq
-      || b.totalTiq - a.totalTiq
-      || b.warriorCount - a.warriorCount
+      b.totalTiq - a.totalTiq
       || b.players - a.players
-      || a.since - b.since
       || a.code.localeCompare(b.code)
     ));
   }

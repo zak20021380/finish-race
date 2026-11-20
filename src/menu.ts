@@ -1340,8 +1340,8 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
-  /** The squad's Squad IQ — the roster average the ranking already stores. */
-  const squadPreviewAvg = (s: { trophies: number }): number =>
+  /** The squad's ladder score — the roster total the ranking already stores. */
+  const squadPreviewTiq = (s: { trophies: number }): number =>
     Math.max(0, Math.floor(s.trophies));
 
   interface SquadCardOpts {
@@ -1458,7 +1458,7 @@ export function createMenu(api: MenuApi): Menu {
     const s = previewSquad;
     const handle = s?.handle ?? previewHandle;
     const name = (s ? squadDisplayName(s.name) : '') || displayNameOf(handle);
-    const tiq = s ? squadPreviewAvg(s) : myTiq();
+    const tiq = s ? squadPreviewTiq(s) : myTiq();
     const members = s ? s.members : 1;
     const rank = s?.rank ?? 0;
 
@@ -1609,7 +1609,7 @@ export function createMenu(api: MenuApi): Menu {
         name: label,
         handle: s.handle,
         members: s.members,
-        tiq: squadPreviewAvg(s),
+        tiq: squadPreviewTiq(s),
         aria: joined
           ? `${label}, ${s.handle} — your squad. Inspect squad details.`
           : `Inspect ${label}, ${s.handle}, rank ${s.rank}`,

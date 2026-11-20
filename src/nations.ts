@@ -2,15 +2,14 @@
  * nations.ts — the live Nations IQ feed.
  *
  * Home and the Ranks board read this one function, so the card and the cup table can never
- * disagree about a nation's standing. The Worker owns the ledger: a flag's score is the
- * top-ten representative TIQ of its rated warriors — every enrolled seat that carries a score,
- * with proven racers preferred — so fresh accounts and dormant ghosts cannot drag a nation
- * down. A nation is never deleted for being young or quiet, and its average is divided by the
- * sample it actually has, so a flag carried by one warrior is quoted at full strength.
+ * disagree about a nation's standing. The Worker owns the ledger: a flag's score is the exact
+ * sum of the TIQ its rated members hold — every enrolled seat that carries a score adds to the
+ * total, so fresh accounts and dormant ghosts cannot drag a nation down. A nation is never
+ * deleted for being young or quiet.
  *
  * There is no baseline, seed or placeholder anywhere in this feed. Every row is a flag the
  * Worker folded from active, unbanned registry seats; a database holding two countries yields
- * exactly two rows, and rank #1 is always the flag with the highest calculated average TIQ.
+ * exactly two rows, and rank #1 is always the flag with the highest total TIQ.
  *
  * The season's banked win points ride along as a separate award. A read carries the caller's
  * profile flag, so a country picked before the first race is folded into that registry, and
@@ -33,12 +32,8 @@ export interface NationRow {
   points: number;
   /** Every enrolled seat under this flag, rated or not. */
   players: number;
-  /** The seats inside the average sample — the divisor the Worker used, never a fixed floor. */
-  warriors: number;
-  /** The TIQ every rated warrior carries, added up. */
+  /** The exact sum of every member's TIQ; the number the board is ranked by. */
   totalTiq: number;
-  /** The Worker's top-ten representative average (avgTiq); the number the board is ranked by. */
-  avg: number;
   trend: NationTrend;
   /** Positive = climbed, negative = slipped, 0 without a previous reading. */
   delta: number;
@@ -51,8 +46,8 @@ export interface NationStanding {
   points: number;
   /** The caller's own TIQ, which is what the contribution badge quotes back. */
   tiq: number;
-  /** The nation's average TIQ, so a seat can see its own score against the flag's. */
-  avg: number;
+  /** The nation's total TIQ, so a seat can see its own score against the flag's. */
+  totalTiq: number;
   total: number;
   pct: number;
 }
@@ -101,10 +96,8 @@ interface WireNation {
   name?: unknown;
   points?: unknown;
   players?: unknown;
-  warriorCount?: unknown;
   rank?: unknown;
   totalTiq?: unknown;
-  averageTiq?: unknown;
 }
 
 interface WireYou {
@@ -112,7 +105,6 @@ interface WireYou {
   points?: unknown;
   total?: unknown;
   tiq?: unknown;
-  averageTiq?: unknown;
 }
 
 interface WireFeed {
@@ -175,7 +167,7 @@ function writeRanks(season: number, ranks: Record<string, number>): void {
   writeJson(RANK_KEY, { season, at: Date.now(), ranks });
 }
 
-/** Validate the wire, sort it by avgTiq DESC, rank it 1..N, then stamp real movement. */
+/** Validate the wire, sort it by totalTiq DESC, rank it 1..N, then stamp real movement. */
 function adopt(data: WireFeed): NationFeed | null {
   if (!data || data.ok !== true) return null;
   const seasonNo = whole(data.seasonNo);
@@ -190,24 +182,13 @@ function adopt(data: WireFeed): NationFeed | null {
     seen.add(code);
     const players = whole(raw.players);
     const totalTiq = whole(raw.totalTiq);
-    /* An older Worker carries no warrior count; the full roster is the only honest stand-in. */
-    const warriors = raw.warriorCount !== undefined ? whole(raw.warriorCount) : players;
-    /* The Worker owns the average. A reply from before it carried one is still never painted at
-       zero while its players hold TIQ, so the legacy fallback divides the wire's total by the
-       sample it actually describes — the rated warriors. Never by a fixed minimum: a nation
-       carried by one warrior keeps its full score instead of being halved for being small. */
-    const avg = raw.averageTiq !== undefined
-      ? whole(raw.averageTiq)
-      : Math.round(totalTiq / Math.max(1, warriors));
     rows.push({
       rank: whole(raw.rank),
       code,
       name: text(raw.name, 40),
       points: whole(raw.points),
       players,
-      warriors,
       totalTiq,
-      avg,
       trend: 'same',
       delta: 0,
     });
@@ -215,15 +196,13 @@ function adopt(data: WireFeed): NationFeed | null {
   }
   if (!rows.length) return { rows: [], total: 0, standing: null, seasonNo, live: true };
 
-  /* Strict mathematical descending sort by the calculated avgTiq. The ranks below are then
+  /* Strict mathematical descending sort by the summed TIQ. The ranks below are then
      reassigned 1..N in that order, so rank #1 always holds the highest score, #2 the next,
      #3 the next — regardless of the order (or rank stamps) an older Worker sent. Everything
-     after the first term only orders exact ties; it can never promote a lower average above
+     after the first term only orders exact ties; it can never promote a lower total above
      a higher one. No row is synthesized here: `rows` is exactly the live wire field. */
   rows.sort((a, b) => (
-    b.avg - a.avg
-    || b.totalTiq - a.totalTiq
-    || b.warriors - a.warriors
+    b.totalTiq - a.totalTiq
     || b.players - a.players
     || a.code.localeCompare(b.code)
   ));
@@ -256,7 +235,7 @@ function adopt(data: WireFeed): NationFeed | null {
       /* The seat's own TIQ as the room holds it. A guest read has no verified seat, so this stays
          0 here and the caller substitutes the save's TIQ rather than showing an empty badge. */
       tiq: wireCode === hit.code ? whole(mine?.tiq) : 0,
-      avg: hit.avg,
+      totalTiq: hit.totalTiq,
       total: rows.length,
       pct: Math.max(1, Math.min(100, Math.round((hit.rank / rows.length) * 100))),
     }
@@ -287,12 +266,11 @@ async function readBoard(url: string): Promise<NationFeed | null> {
 }
 
 /**
- * The nations ladder, ranked by the top-ten representative average TIQ each flag's rated
- * warriors carry, plus the caller's standing. Only flags folded from real registered seats
- * are on the board — there is no baseline, seed or filler, so a thin registry returns exactly
- * the countries it holds. The read carries the caller's flag so a chosen nation is enrolled,
- * and their own TIQ so their seat is quoted back — never so a query string can move a
- * national score. Never throws.
+ * The nations ladder, ranked by the exact total TIQ each flag's members hold, plus the
+ * caller's standing. Only flags folded from real registered seats are on the board — there
+ * is no baseline, seed or filler, so a thin registry returns exactly the countries it holds.
+ * The read carries the caller's flag so a chosen nation is enrolled, and their own TIQ so
+ * their seat is quoted back — never so a query string can move a national score. Never throws.
  */
 export async function fetchNationBoard(tiq: number): Promise<NationFeed> {
   const country = iso2(profile.country ?? '');

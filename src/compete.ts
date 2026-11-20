@@ -1171,7 +1171,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     return rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name || nameOf(c.code),
-      score: c.avg.toLocaleString('en-US'),
+      score: c.totalTiq.toLocaleString('en-US'),
       code: c.code,
       onTap: () => openNation(c),
       tapHint: 'open the nation roster',
@@ -1421,7 +1421,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   /* ---------- the mind sheet: one ladder name's cognitive profile (bottom clay sheet) ----------
      One panel, two shapes. A *mind* is a read-only dossier: its challenge key is parked, and
      the primary key opens that player's own squad when the local registry knows one. A *guild*
-     never gets the four-axis read — a channel's average Squad IQ is not a mind — it gets density
+     never gets the four-axis read — a channel's total Squad IQ is not a mind — it gets density
      and its real join / invite key. */
 
   const msEls = {
@@ -1560,7 +1560,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     col.className = 'ms-hero-id';
     const kick = document.createElement('small');
     kick.className = 'ms-hero-k';
-    kick.textContent = squad ? t('squadAvgIq') : t('arenaTiqLabel');
+    kick.textContent = squad ? t('squadTotalTiq') : t('arenaTiqLabel');
     const iq = document.createElement('span');
     iq.className = 'ms-iq';
     iq.append(svgIcon('#i-brain', 'tiq'));
@@ -1811,15 +1811,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     return wrap;
   }
 
-  /** Three focused cards: headcount, the squad's per-mind average, and your own share. */
+  /** Three focused cards: headcount, the squad's total TIQ, and your own share. */
   function msSquadMetrics(s: RankedSquad, mine: boolean, contrib: number): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'ms-squad-grid';
     grid.setAttribute('role', 'list');
-    /* `trophies` is the roster average, so the total is read off the same rows rather
-       than re-multiplied (which would round twice). */
     const total = squadTiqSum(s.roster);
-    const avg = s.members > 0 ? s.trophies : 0;
     const cards: { icon: string; label: string; value: string; title: string; empty?: boolean; share?: boolean }[] = [
       {
         icon: '#i-users',
@@ -1829,9 +1826,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       },
       {
         icon: '#i-target',
-        label: t('squadAvgIq'),
-        value: avg.toLocaleString('en-US'),
-        title: `${avg.toLocaleString('en-US')} ${t('squadAvgIq')} · ${total.toLocaleString('en-US')} TIQ / ${s.members.toLocaleString('en-US')}`,
+        label: t('squadTotalTiq'),
+        value: total.toLocaleString('en-US'),
+        title: `${total.toLocaleString('en-US')} ${t('squadTotalTiq')} · ${s.members.toLocaleString('en-US')} members`,
       },
       {
         icon: '#i-brain',
@@ -2089,12 +2086,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
     const totals = document.createElement('div');
     totals.className = 'nd-totals';
-    totals.setAttribute('aria-label', `${c.avg.toLocaleString('en-US')} average nation Tactical IQ · ${total.toLocaleString('en-US')} players`);
+    totals.setAttribute('aria-label', `${c.totalTiq.toLocaleString('en-US')} total nation Tactical IQ · ${total.toLocaleString('en-US')} players`);
     const tiq = document.createElement('span');
     tiq.className = 'nd-total is-tiq';
     tiq.append(svgIcon('#i-brain', 'nd-total-ico nd-total-tiq'));
     const tiqN = document.createElement('b');
-    tiqN.textContent = c.avg.toLocaleString('en-US');
+    tiqN.textContent = c.totalTiq.toLocaleString('en-US');
     const tiqK = document.createElement('small');
     tiqK.textContent = 'TIQ';
     tiq.append(tiqN, tiqK);
@@ -2265,7 +2262,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (ndEls.kicker) ndEls.kicker.textContent = `#${c.rank} worldwide`;
     el.setAttribute(
       'aria-label',
-      `Nation roster: ${label}, #${c.rank} worldwide, ${c.avg.toLocaleString('en-US')} average Tactical IQ across ${c.players.toLocaleString('en-US')} players`,
+      `Nation roster: ${label}, #${c.rank} worldwide, ${c.totalTiq.toLocaleString('en-US')} total Tactical IQ across ${c.players.toLocaleString('en-US')} players`,
     );
 
     body.textContent = '';
@@ -2282,7 +2279,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     impact('light');
 
     const seq = ++nationSeq;
-    const key = `${c.code}|${c.avg}|${c.players}|${profile.country ?? '-'}`;
+    const key = `${c.code}|${c.totalTiq}|${c.players}|${profile.country ?? '-'}`;
     let roster = nationRosters.get(key) ?? null;
     if (!roster) {
       try {
@@ -2431,17 +2428,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     av.className = 'nh-av';
     av.append(flagPhoto(code, 'fp-nation'));
 
-    /* The badge is this seat's own TIQ as the room holds it — the score its nation's average is
+    /* The badge is this seat's own TIQ as the room holds it — the score its nation's total is
        built from. A guest read carries no verified seat, so the save's own ladder TIQ stands in
        rather than an empty zero. */
     const standing = nationFeed?.standing?.code?.toUpperCase() === code
       ? nationFeed.standing
       : null;
     const mine = standing?.tiq || myTrophyScore();
-    /* A flag with no qualified warrior yet has no representative average. Painting it as 0
-       would be a second, false metric beside the hero card's honest dash. */
-    const average = standing?.avg ?? hit?.avg ?? 0;
-    const hasAverage = Boolean(standing || hit);
+    /* A flag with no rated member yet has no total to quote. Painting it as 0 would be a
+       second, false metric beside the hero card's honest dash. */
+    const total = standing?.totalTiq ?? hit?.totalTiq ?? 0;
+    const hasTotal = Boolean(standing || hit);
 
     const id = document.createElement('span');
     id.className = 'nh-id';
@@ -2455,15 +2452,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     tag.className = 'nh-tag';
     tag.textContent = t('ranksYourContribution');
     idLine.append(name, tag);
-    /* The national average rides on the identity tier, under the flag's name, the way a ladder
+    /* The national total rides on the identity tier, under the flag's name, the way a ladder
        row wears its player count. Out of the score column, so a longer national figure can never
        squeeze the country name off a 320px screen. */
-    const avgCap = document.createElement('small');
-    avgCap.className = 'nh-avg';
-    avgCap.textContent = hasAverage
-      ? `${t('nationAverageTiq')} ${average.toLocaleString('en-US')}`
-      : `${t('nationAverageTiq')} —`;
-    id.append(idLine, avgCap);
+    const totalCap = document.createElement('small');
+    totalCap.className = 'nh-avg';
+    totalCap.textContent = hasTotal
+      ? `${t('nationTotalTiq')} ${total.toLocaleString('en-US')}`
+      : `${t('nationTotalTiq')} —`;
+    id.append(idLine, totalCap);
 
     const score = document.createElement('span');
     score.className = 'nh-score';
@@ -2471,16 +2468,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const num = document.createElement('b');
     num.textContent = mine.toLocaleString('en-US');
     score.append(num);
-    score.title = hasAverage
+    score.title = hasTotal
       ? `${mine.toLocaleString('en-US')} Tactical IQ earned · `
-        + `${average.toLocaleString('en-US')} ${t('nationAverageTiq')}`
-      : `${mine.toLocaleString('en-US')} Tactical IQ earned · ${t('nationAverageTiq')} —`;
+        + `${total.toLocaleString('en-US')} ${t('nationTotalTiq')}`
+      : `${mine.toLocaleString('en-US')} Tactical IQ earned · ${t('nationTotalTiq')} —`;
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
     const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, `
       + `${mine.toLocaleString('en-US')} Tactical IQ earned, `
-      + (hasAverage ? `${average.toLocaleString('en-US')} national average` : 'national average pending');
+      + (hasTotal ? `${total.toLocaleString('en-US')} national total` : 'national total pending');
     hud.setAttribute('aria-label', `Your Nation: ${seen}. National allegiance is permanently locked.`);
     hud.title = 'National allegiance locked — your flag is permanent';
     hud.addEventListener('click', openPicker);
@@ -2493,7 +2490,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const el = panes.nations;
     if (!el) return;
     const key = `${lang}|${profile.country ?? ''}|${myTrophyScore()}|`
-      + boardSignature(rows.flatMap((c) => [c.rank, c.code, c.name, c.avg, c.players, c.trend, c.delta]));
+      + boardSignature(rows.flatMap((c) => [c.rank, c.code, c.name, c.totalTiq, c.players, c.trend, c.delta]));
     if (!force && key === nationsKey) return;
     nationsKey = key;
     paintPodium(nationsPodiumEntries(rows));
@@ -2513,7 +2510,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       /* The census is real: a nation with no rated warrior still has registered seats. */
       sub: t('nationPlayers').replace('{n}', c.players.toLocaleString('en-US')),
       subClass: 'nd-count',
-      points: c.avg.toLocaleString('en-US'),
+      points: c.totalTiq.toLocaleString('en-US'),
       me: (profile.country ?? '').trim().toUpperCase() === c.code,
       onOpen: () => openNation(c),
       openHint: 'open the nation roster',
@@ -2770,13 +2767,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     line.append(num);
-    const avgCap = document.createElement('small');
-    avgCap.textContent = t('squadAvgIq');
-    score.append(line, avgCap);
-    score.title = `${me.trophies.toLocaleString('en-US')} ${t('squadAvgIq')} · ${squadTiqSum(me.roster).toLocaleString('en-US')} TIQ / ${me.members.toLocaleString('en-US')} minds`;
+    const totalCap = document.createElement('small');
+    totalCap.textContent = t('squadTotalTiq');
+    score.append(line, totalCap);
+    score.title = `${me.trophies.toLocaleString('en-US')} ${t('squadTotalTiq')} · ${me.members.toLocaleString('en-US')} minds`;
 
     host.append(txt, score);
-    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} average Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
+    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} total Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
   }
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
@@ -2918,10 +2915,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     score.append(num);
-    score.title = `${me.trophies.toLocaleString('en-US')} average Tactical IQ`;
+    score.title = `${me.trophies.toLocaleString('en-US')} total Tactical IQ`;
 
     dock.append(av, txt, score);
-    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} average Tactical IQ.`);
+    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} total Tactical IQ.`);
   }
 
   let guildsKey = '';

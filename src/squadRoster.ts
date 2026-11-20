@@ -68,8 +68,6 @@ export interface SquadRoster {
   members: SquadMember[];
   /** The headcount the hub quotes: the roster's own length, at least one (the player). */
   count: number;
-  /** Sum(Member TIQ) / Total Members, read off the rows above. */
-  avgTiq: number;
   totalTiq: number;
   yourRank: number;
   yourTiq: number;
@@ -77,8 +75,6 @@ export interface SquadRoster {
   yourMedal: WornEdition | null;
   youName: string;
   yourArena: ArenaStanding;
-  /** The tier the whole squad wears, read off `avgTiq`. */
-  squadArena: ArenaStanding;
   /** The Telegram chat's audience, when the Worker reported one. An external stat. */
   subscribers: number;
 }
@@ -221,13 +217,11 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
 
   const you = members.find((m) => m.isYou);
   const totalTiq = members.reduce((sum, m) => sum + m.tiq, 0);
-  const avgTiq = members.length ? Math.round(totalTiq / members.length) : 0;
   const yourRole: SquadRole = you?.role ?? (squad.owned ? 'leader' : 'member');
 
   return {
     members,
     count: members.length,
-    avgTiq,
     totalTiq,
     yourRank: you?.rank ?? 0,
     yourTiq,
@@ -235,7 +229,6 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     yourMedal: you?.medal ?? wornEdition(),
     youName: you?.name || myName(),
     yourArena: arenaStandingOf(yourTiq),
-    squadArena: arenaStandingOf(avgTiq),
     subscribers: Math.max(0, Math.floor(squad.subscribers ?? 0)),
   };
 }

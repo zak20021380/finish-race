@@ -244,7 +244,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      The carousel slide is a PREVIEW, hard-limited to three 44px rows. The complete ladder
      lives only in the Ranks board behind `#home-cup-table` (`#sheet-nations` drawer). Data
      is the live Worker ledger (`fetchNationBoard`): real registered players grouped by
-     country, strictly descending by calculated avgTiq, with no baseline, seed or filler —
+     country, strictly descending by total TIQ, with no baseline, seed or filler —
      a registry holding two nations paints exactly two rows. Flags come from the shared CDN
      resolver in a 28px circle. The foot pill mirrors `nations[0]`, the reigning champion. */
 
@@ -317,17 +317,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (me) li.classList.add('me');
     const label = c.name || nameOf(c.code);
     /* The board's figures are Latin integers in both languages: `en-US` grouping keeps the
-       thousands separators, and the rounded value is the Worker's own representative average. */
-    const avg = Math.round(c.avg);
-    const pts = avg.toLocaleString('en-US');
-    /* Every row is a real flag: the sample it quotes is the sample the Worker actually used. */
-    const sample = Math.min(10, Math.max(1, c.warriors));
-    const sampleText = `top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
+       thousands separators, and the value is the Worker's own summed member TIQ. */
+    const pts = c.totalTiq.toLocaleString('en-US');
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    const rosterText = `${c.warriors.toLocaleString('en-US')} rated warriors`;
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} average TIQ, ${rosterText}, ${trendLabel}`);
+    const rosterText = `${c.players.toLocaleString('en-US')} ${c.players === 1 ? 'player' : 'players'}`;
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} total TIQ, ${rosterText}, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -353,7 +349,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     identity.append(fl, nm);
     const pt = nationScore(pts);
     pt.dir = 'ltr';
-    pt.title = `${pts} average TIQ · ${sampleText}`;
+    pt.title = `${pts} total TIQ · ${rosterText}`;
     li.append(rk, identity, pt);
     return li;
   };
@@ -368,8 +364,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /** The player's own national standing, painted into the two-sided HUD bar.
    *  LEFT = flag + full country name, with the rank chip and the reigning-champion chip
-   *  on a quiet second line. RIGHT = the flag's representative average TIQ, the exact
-   *  figure the rows above are ranked by, ending in the same brain token they wear.
+   *  on a quiet second line. RIGHT = the flag's total TIQ, the exact figure the rows
+   *  above are ranked by, ending in the same brain token they wear.
    *  The name owns its own line, so a long country can never be crushed into an ellipsis
    *  by the chips. No nation is ever authored here: the champion label, code and
    *  accessible text all come from row #1 of the live board. */
@@ -382,10 +378,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
        quotes is derived from that one row, so it can never disagree with the rows above it. */
     const champion = nations[0] ?? null;
     const championLabel = champion ? (champion.name || nameOf(champion.code)) : '';
-    const championScore = champion ? Math.round(champion.avg).toLocaleString('en-US') : '0';
+    const championScore = champion ? champion.totalTiq.toLocaleString('en-US') : '0';
     const key = `${lang}|${profile.country ?? ''}|${feed?.live ? 1 : 0}|${nations.length}`
-      + `|${mine?.rank ?? ''}/${mine?.avg ?? ''}/${mine?.warriors ?? ''}`
-      + `|${champion?.code ?? ''}/${champion?.avg ?? ''}/${championLabel}`;
+      + `|${mine?.rank ?? ''}/${mine?.totalTiq ?? ''}`
+      + `|${champion?.code ?? ''}/${champion?.totalTiq ?? ''}/${championLabel}`;
     if (key === nationMineKey) return;
     nationMineKey = key;
     const bar = document.getElementById('home-nation-mine');
@@ -403,15 +399,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
     const pts = document.getElementById('home-nation-pts');
-    /* The badge quotes the same representative average the rows and the drawer read. It is
-       deliberately not the seat's own TIQ: two metrics on one card is exactly the desync this
-       bar used to show. A flag whose rated warriors all sit at zero has no average to quote —
-       the dash says so instead of printing a "+0" that reads like a broken counter. */
-    const avg = mine ? Math.round(mine.avg) : 0;
-    const avgText = mine && avg > 0 ? `+${avg.toLocaleString('en-US')}` : '—';
-    if (pts) pts.textContent = avgText;
+    /* The badge quotes the same total the rows and the drawer read. It is deliberately not
+       the seat's own TIQ: two metrics on one card is exactly the desync this bar used to show.
+       A flag whose members all sit at zero has no total to quote — the dash says so instead
+       of printing a "0" that reads like a broken counter. */
+    const sum = mine ? mine.totalTiq : 0;
+    const sumText = mine && sum > 0 ? sum.toLocaleString('en-US') : '—';
+    if (pts) pts.textContent = sumText;
     const unit = bar.querySelector<HTMLElement>('.hm-u');
-    if (unit) unit.textContent = 'AVG TIQ';
+    if (unit) unit.textContent = 'TOTAL TIQ';
 
     /* The rank chip is the seat's own board position, never the champion's. It lives on
        the quiet second line beside the champion chip, so it can never squeeze the name. */
@@ -433,7 +429,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (pill) {
       pill.classList.toggle('is-off', !champion);
       pill.title = champion
-        ? `${t('countryTopNation')}: ${championLabel} · ${championScore} AVG TIQ`
+        ? `${t('countryTopNation')}: ${championLabel} · ${championScore} TOTAL TIQ`
         : '';
     }
 
@@ -453,7 +449,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
         name.dir = 'auto';
         fitOneLine(name, 9);
       }
-      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${avgText} AVG TIQ${championFact}`);
+      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${sumText} TOTAL TIQ${championFact}`);
       bar.removeAttribute('title');
       return;
     }
@@ -470,10 +466,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       fitOneLine(name, 9);
     }
     bar.setAttribute('aria-label', mine
-      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${avgText} AVG TIQ${championFact}`
-      : `${label} · ${avgText} AVG TIQ${championFact}`);
+      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${sumText} TOTAL TIQ${championFact}`
+      : `${label} · ${sumText} TOTAL TIQ${championFact}`);
     bar.setAttribute('title', champion
-      ? `You fight for ${label} — ${standing}. ${t('countryTopNation')}: ${championLabel} · ${championScore} average TIQ`
+      ? `You fight for ${label} — ${standing}. ${t('countryTopNation')}: ${championLabel} · ${championScore} total TIQ`
       : `You fight for ${label} — ${standing}`);
   };
 
@@ -486,7 +482,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const nations = nationFeed?.rows ?? [];
     const preview = nations.slice(0, 3);
     const feedKey = nationFeed
-      ? `${nationFeed.live ? 1 : 0}:${preview.map((c) => `${c.rank},${c.code},${c.avg},${c.warriors},${c.trend},${c.delta}`).join(';')}`
+      ? `${nationFeed.live ? 1 : 0}:${preview.map((c) => `${c.rank},${c.code},${c.totalTiq},${c.trend},${c.delta}`).join(';')}`
       : 'none';
     const key = `${lang}|${profile.country ?? ''}|${feedKey}`;
     if (key === nationListKey) return;
