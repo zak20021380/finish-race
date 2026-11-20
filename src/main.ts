@@ -6683,7 +6683,11 @@ function launchSelectedMode(): void {
     if (drawer) sheets.open(drawer);
     return;
   }
-  const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
+  /* Play with friends is a room, not a race: the drawer's Start opens Create / Join (or the live
+     lobby) before this hook is ever reached. Never let a friends selection fall through to a bot
+     board here — a mode the player did not pick must not be what launches. */
+  if (sel.id === 'room') return;
+  const botTier: BotTier = menuState.difficulty;
   const lobby = openLocalRoom(botTier);
   showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
   startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby,

@@ -67,9 +67,13 @@ const QUICK_LOCKED = true;
 /** The one line a tap on the parked row answers with. */
 const QUICK_LOCKED_NOTE = 'Online servers undergoing tuning · Live soon';
 
-/** The door everyone walks through while the queue is parked: practice needs nobody else. */
+/**
+ * The door the drawer opens on: Play with friends. It is the card the list highlights, so it must
+ * also be the selection `Start Match` reads — a visual default that the JS state does not share is
+ * exactly how Start used to launch a bot race from a friends-looking screen.
+ */
 const DEFAULT_SELECTION: GameModeSelection = QUICK_LOCKED
-  ? { id: 'bot', roomCode: null }
+  ? { id: 'room', roomCode: null }
   : { id: 'duel_1v1', roomCode: null };
 
 /* ---- what the sheet renders: the DOM stays declarative, the labels live here ---- */
@@ -93,7 +97,7 @@ const startLabel = (id: GameModeId): string => {
     case 'duel_1v1': return t('start1v1');
     case 'party_2v2': return t('start2v2');
     case 'bot': return t('startPractice');
-    case 'room': return t('startPrivate');
+    case 'room': return t('startMatch');
   }
 };
 
@@ -378,7 +382,10 @@ export function setGameMode(id: GameModeId, opts?: { roomCode?: string | null })
   previewMode = null;
   /* the parked queue can never *become* the selection: every door lands on an open mode */
   const target: GameModeId = QUICK_LOCKED && isQuick(id) ? DEFAULT_SELECTION.id : id;
-  const roomCode = target === 'room' ? cleanRoomCode(opts?.roomCode ?? current.roomCode) : null;
+  /* An explicit `roomCode: null` clears the code; omitting the field keeps the one already held. */
+  const roomCode = target === 'room'
+    ? cleanRoomCode(opts && 'roomCode' in opts ? opts.roomCode : current.roomCode)
+    : null;
   current = { id: target, roomCode };
   try {
     saveMenu({ mode: 'bot', sizes: sizesForMode(target) });
@@ -2312,10 +2319,11 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       if (raw === 'room') {
         /* a room this client still holds reopens its lobby, even while it is reconnecting */
         const held = inLobby() || !!session;
+        /* The friends card is a real selection, not a preview: the check, the highlight, the stakes
+           strip and `Start Match` all read this one value from here on. */
+        setGameMode('room', { roomCode: null });
         showView(held ? 'lobby' : 'room');
         if (held && !handle) resumeRoom();
-        /* the selection stays put, but the tapped row is what the strip prices right now */
-        previewMode = REWARD_MODE_OF[raw] ?? null;
         paintRewardPreview(true);
         return;
       }
@@ -2571,6 +2579,16 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       saveSession(null);
       hooks.onRoomStart?.(l);
       setGameMode('room', { roomCode: null });
+      return;
+    }
+    /* Play with friends is a room, never a race: Start opens the Create / Join pane (or the live
+       lobby this client still holds) instead of putting a bot board on the screen. */
+    if (current.id === 'room') {
+      impact('light');
+      clearRoomError();
+      const held = inLobby() || !!session;
+      showView(held ? 'lobby' : 'room');
+      if (held && !handle) resumeRoom();
       return;
     }
     impact('light');

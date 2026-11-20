@@ -1080,16 +1080,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       return;
     }
     try {
+      /* The drawer opens on Play with friends, and that is the JS selection too — the card the
+         player sees checked is the mode `Start Match` launches. */
+      setGameMode('room', { roomCode: null });
       resetSheetView();          // always opens on the three rows
       paintGameSheet();
     } catch {
       /* paint on open anyway */
     }
     api.sheets.open(el);
-    /* The Practice card is the selected one, so bring its difficulty and seat pills into
-       view even on the shortest phones, where the three rows outgrow the drawer. */
+    /* Bring the selected friends card fully into view on the shortest phones, where the three
+       rows outgrow the drawer. */
     requestAnimationFrame(() => {
-      el.querySelector<HTMLElement>('.gm-card[data-row="bot"]')
+      el.querySelector<HTMLElement>('.gm-card[data-row="room"]')
         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
   };
@@ -1166,11 +1169,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- launcher input ---------- */
 
-  /* PLAY is the drawer's front door, never a direct launch: Practice is selected and
-     expanded first, and only the drawer's bottom Start can put a race on the board. */
+  /* PLAY is the drawer's front door, never a direct launch: the drawer opens on Play with
+     friends, and only its bottom Start can open a room or put a race on the board. */
   homePlay.addEventListener('click', () => {
     impact('medium');
-    setGameMode('bot');
     openGameModes();
   });
 
