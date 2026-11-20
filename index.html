@@ -942,6 +942,35 @@
       <symbol id="i-star" viewBox="0 0 24 24">
         <polygon points="12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- the Tournament Arena Star: a sharp five-point silhouette, faceted — an inset pentagon
+           ring through the valleys, a small center medallion with a dark eye and a lit diamond
+           facet, and six short ridge ticks cutting the arms. Full colour on purpose, like
+           #i-star-3d: the prize emblem never inherits currentColor, so the radial gold-amber
+           gradient reads identically in every theme. -->
+      <symbol id="i-tg-star" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="tg-star-gold" gradientUnits="userSpaceOnUse" x1="3" y1="4" x2="21" y2="20">
+            <stop offset="0" stop-color="#FFE680" />
+            <stop offset=".48" stop-color="#F5A623" />
+            <stop offset="1" stop-color="#C97A00" />
+          </linearGradient>
+        </defs>
+        <path d="M12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6Z"
+              fill="none" stroke="url(#tg-star-gold)" stroke-width="1.9" stroke-linejoin="miter" />
+        <path d="M14.32 9.28 15.76 13.68 12 16.4 8.24 13.68 9.68 9.28Z"
+              fill="none" stroke="url(#tg-star-gold)" stroke-width=".7" />
+        <circle cx="12" cy="12" r="2.7" fill="url(#tg-star-gold)" />
+        <circle cx="12" cy="12" r="1.5" fill="#0F0A03" opacity=".9" />
+        <path d="M11.3 12 12 11.3 12.7 12 12 12.7Z" fill="url(#tg-star-gold)" />
+        <g stroke="url(#tg-star-gold)" stroke-width=".7" stroke-linecap="round" opacity=".85">
+          <path d="M21.4 9.5 19.05 11.8" />
+          <path d="M17.8 20.6 14.9 19.05" />
+          <path d="M6.2 20.6 9.1 19.05" />
+          <path d="M2.6 9.5 5.85 9.05" />
+          <path d="M12 2.6 13.45 5.6" />
+          <path d="M12 2.6 10.55 5.6" />
+        </g>
+      </symbol>
       <!-- the XP emblem: a struck hexagon badge carrying a bold double upward chevron — a rank-up
            mark, deliberately NOT a five-point star, so it never reads as a Telegram Star. Thin
            currentColor strokes keep it crisp at 16px inside the profile's XP pill. -->
@@ -4598,23 +4627,26 @@
             </button>
           </header>
 
-          <!-- ZONE 1 — the one rule of the tournament, and the clock it runs on. -->
+          <!-- ZONE 1 — the Tournament Arena Hero Card: the prize headline, the live countdown,
+               and the friends-earning rule, one cohesive surface with a gold-amber radial glow. -->
           <div class="cw-prize">
-            <span class="cw-prize-rule">
-              <span class="cw-prize-star" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-star-3d" /></svg></span>
-              <b class="cw-prize-t" id="cw-prize-rule">#1 Channel Wins <bdi dir="auto">200</bdi> Stars</b>
+            <span class="cw-prize-top">
+              <span class="cw-prize-star" aria-hidden="true">
+                <svg class="ico" viewBox="0 0 24 24" focusable="false"><use href="#i-tg-star" /></svg>
+              </span>
+              <b class="cw-prize-t" id="cw-prize-rule">200 Stars Grand Prize</b>
+              <span class="cw-prize-clock">
+                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-clock" /></svg>
+                <b id="cw-countdown" dir="ltr">--</b>
+              </span>
             </span>
-            <span class="cw-prize-clock">
-              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-clock" /></svg>
-              <b id="cw-countdown" dir="ltr">--</b>
+            <span class="cw-prize-sub">
+              <span class="cw-prize-sub-ico" aria-hidden="true">
+                <svg class="ico" focusable="false"><use href="#i-tiq" /></svg>
+              </span>
+              <b class="cw-prize-sub-t" id="cw-prize-sub">Earn TIQ in Play with Friends matches</b>
             </span>
           </div>
-
-          <!-- ZONE 1b — how TIQ is actually earned. One line, no asterisk, no footnote. -->
-          <p class="cw-rule" id="cw-rule">
-            <span class="cw-rule-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-tiq" /></svg></span>
-            <span class="cw-rule-t" data-i18n="cwFriendsRule">Earn TIQ only in Play with Friends matches (Bot matches = 0 TIQ)</span>
-          </p>
 
           <!-- ZONE 2 — the ladder, and the admins' own door into it. -->
           <div class="cw-board">
@@ -4626,6 +4658,10 @@
               </button>
             </div>
             <ol class="cw-list" id="cw-board-list" data-scroll aria-label="Channel rankings"></ol>
+
+            <!-- the open challenger slots: dashed-border cards for the places the ladder does
+                 not hold yet — they sit right under the ranked rows and read as invitations -->
+            <ol class="cw-slots" id="cw-slots" aria-label="Open challenger slots"></ol>
 
             <!-- the quick pick: one tap for a player who has not chosen a channel yet -->
             <div class="cw-pick" id="cw-pick" hidden>

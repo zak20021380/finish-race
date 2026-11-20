@@ -187,6 +187,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const detailView = document.getElementById('cw-detail');
   const clock = document.getElementById('cw-countdown');
   const prizeRule = document.getElementById('cw-prize-rule');
+  const prizeSub = document.getElementById('cw-prize-sub');
   const boardList = document.getElementById('cw-board-list');
   const liveRegion = document.getElementById('cw-live-region');
 
@@ -250,7 +251,16 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   let boardRequest: Promise<void> | null = null;
 
   const isOpen = (): boolean => !!root && !root.hidden;
-  const say = (text: string): void => { if (liveRegion) liveRegion.textContent = text; };
+  /* A name spoken aloud rides the same bdi wrap as names on the board: RTL prose must not
+     reorder a Latin channel title or handle that lands in the reader's ear. */
+  const say = (text: string): void => {
+    if (!liveRegion) return;
+    const iso = document.createElement('bdi');
+    iso.setAttribute('dir', 'auto');
+    iso.textContent = text;
+    liveRegion.textContent = '';
+    liveRegion.append(iso);
+  };
 
   const squadById = (id: string): RankedSquad | undefined => getSquadRanking().find((s) => s.id === id);
   /** The inspected channel, read through the war ladder so its rank and total are the board's own. */
@@ -326,7 +336,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     meta.className = 'cw-row-meta';
     const handle = document.createElement('bdi');
     handle.className = 'cw-row-handle';
-    handle.setAttribute('dir', 'ltr');
+    handle.setAttribute('dir', 'auto');
     handle.textContent = s.handle;
     const dot = document.createElement('span');
     dot.className = 'cw-dot';
@@ -400,12 +410,62 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
        banked war column instead of locking every channel that merely has members. */
     const canSelect = !mine || !hasWarEarnings(mine);
     boardList.textContent = '';
-    if (!board.length) { boardList.append(emptyRow('cwEmptyBoard')); return; }
+    if (!board.length) {
+      boardList.append(emptyRow('cwEmptyBoard'));
+      paintSlots();
+      return;
+    }
     for (const s of board.slice(0, LADDER_MAX)) {
       const you = !!mine && s.id === mine.id;
       boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true }));
     }
+    paintSlots();
     revealMyRow();
+  }
+
+  /* ---------- the open challenger slots ---------- */
+
+  /**
+   * One open challenger card: the silver/bronze badge names the place, the copy explains that a
+   * rival hasn't claimed it yet, and the claim pill opens registration — or the invite flow when
+   * the player already holds a channel. The place number and the label are Latin tabular figures.
+   */
+  function buildOpenSlot(place: number): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'cw-slot';
+    const badge = document.createElement('span');
+    badge.className = `cw-slot-badge is-${place}`;
+    badge.setAttribute('aria-hidden', 'true');
+    badge.textContent = `#${place}`;
+    const label = document.createElement('bdi');
+    label.className = 'cw-slot-t';
+    label.setAttribute('dir', 'auto');
+    paintTemplate(label, t('cwOpenSlot'), { n: String(place) });
+    const claim = document.createElement('button');
+    claim.type = 'button';
+    claim.className = 'cw-slot-claim';
+    claim.textContent = t('cwClaim');
+    claim.addEventListener('click', () => {
+      impact('light');
+      const mine = getMySquad();
+      if (mine) rally(); else openRegister();
+    });
+    li.append(badge, label, claim);
+    return li;
+  }
+
+  /**
+   * When the ladder holds fewer than three places, the open slots stand under the ranked rows:
+   * a persistent invitation that competes with the board and fills the half-empty void.
+   */
+  function paintSlots(): void {
+    const slots = document.getElementById('cw-slots');
+    if (!slots) return;
+    slots.textContent = '';
+    const held = getWarRanking().length;
+    for (const place of [2, 3].filter((n) => n > held)) {
+      slots.append(buildOpenSlot(place));
+    }
   }
 
   /**
@@ -420,9 +480,11 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   function paintPrize(): void {
-    if (!prizeRule) return;
-    /* The one rule of the tournament, with the pool in its own Latin run. */
-    paintTemplate(prizeRule, t('cwPrizeRule'), { n: '200' });
+    /* The hero headline names the season's crown — the number is an isolated run so the Latin
+       figure reads the same in every prose direction; the friends rule rides as the card's
+       integrated rule pill, never as a second row. */
+    if (prizeRule) paintTemplate(prizeRule, t('cwPrizeHero'), { n: '200' });
+    if (prizeSub) prizeSub.textContent = t('cwPrizeSub');
   }
 
   function paintVerify(): void {
