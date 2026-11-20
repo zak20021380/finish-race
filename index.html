@@ -2505,7 +2505,10 @@
                 </div>
                 <div class="result-reward is-xp" id="result-xp-chip" hidden>
                   <span class="result-bank-ico is-xp" aria-hidden="true">
-                    <svg class="xp-emblem" viewBox="0 0 24 24"><use href="#i-xp" /></svg>
+                    <!-- the geometric XP badge, not the old faceted star: one hex plate, two chevrons -->
+                    <svg class="xp-emblem" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <use href="#i-xp-emblem" />
+                    </svg>
                   </span>
                   <span class="result-bank-value">
                     <bdi dir="ltr"><span class="result-sign">+</span><b id="result-xp-n">0</b></bdi>

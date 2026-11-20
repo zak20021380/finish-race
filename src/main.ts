@@ -3026,6 +3026,10 @@ function showOverlay() {
   /* The reaction tray serves every capsule: a duel lands its bubbles on the speaker's row, a
      party on whichever row they own, and a race against the machine answers on its own. */
   banter.open({ localSide, rivalSide: rivalSide(), locked: resultLocked });
+  /* A board the machine held has nobody on the far side to talk to: the reaction tray would only
+     eat the capsule's height. Real human and friends boards keep it. Set after `open`, which
+     un-hides the dock itself. */
+  $<HTMLElement>('result-banter').hidden = settled.bot;
   if (won && !motionReduced()) { confetti.burst(); invalidate(); }
   rollResultValues();
   if (!won) {

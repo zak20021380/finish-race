@@ -41,7 +41,7 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding: clamp(11px, 3.8vw, 16px) clamp(13px, 4.4vw, 18px) clamp(9px, 3vw, 13px);
+  padding: clamp(11px, 3.8vw, 16px) clamp(13px, 4.4vw, 18px) clamp(12px, 3.6vw, 16px);
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, .08);
   background:
@@ -82,9 +82,12 @@
 }
 .result-card > * { position: relative; z-index: 1; }
 
-/* ---- the hero outcome: one solid gold/emerald line or one coral/slate line ---- */
+/* ---- the hero outcome: one solid gold/emerald line or one coral/slate line ----
+   The whole header is one centred column: eyebrow, verdict, mode pill — all on the capsule's
+   centre line, so the mode never floats off to one edge. */
 .result-kicker {
   margin: 0;
+  text-align: center;
   color: #8B93A6;
   font-size: 8.5px;
   font-weight: 800;
@@ -93,9 +96,11 @@
   text-transform: uppercase;
 }
 .result-title {
+  position: relative;
   display: block;
   max-width: 100%;
   margin: 3px 0 0;
+  text-align: center;
   color: #F7DB92;
   font-size: clamp(2.05rem, 9.4vw, 2.7rem);
   font-weight: 900;
@@ -114,15 +119,32 @@
     0 1px 0 rgba(36, 4, 10, .72),
     0 10px 26px rgba(244, 63, 94, .2);
 }
-/* the compact mode pill sits directly under the hero, never in a line of its own */
+/* the ambient halo behind the verdict: a soft radial wash, painted under the letterforms */
+.result-card > .result-title::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -20px -22px -16px;
+  background: radial-gradient(56% 58% at 50% 52%, rgba(247, 219, 146, .18), transparent 72%);
+  pointer-events: none;
+}
+.overlay.result.lose .result-card > .result-title::before {
+  background: radial-gradient(56% 58% at 50% 52%, rgba(253, 164, 175, .16), transparent 72%);
+}
+/* the compact mode pill sits on the capsule's centre line, directly under the verdict — never
+   floating to an edge, whichever direction the caption reads in */
 .result-mode {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   width: fit-content;
   max-width: 100%;
-  margin: 6px auto 9px;
+  margin-block: 7px 9px;
+  margin-inline: auto;
+  align-self: center;
+  justify-self: center;
+  text-align: center;
   padding: 3px 12px;
   border: 1px solid rgba(148, 163, 184, .22);
   border-radius: 999px;
@@ -143,9 +165,9 @@
 /* ---- the standings ladder: one glass table for every seat ---- */
 .result-roster {
   display: grid;
-  gap: 3px;
+  gap: 8px;
   margin: 0 0 8px;
-  padding: 4px;
+  padding: 5px;
   list-style: none;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 18px;
@@ -161,8 +183,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  min-height: 40px;
+  height: 42px;
+  min-height: 42px;
   /* logical, so the tighter inset stays on the avatar's side and the looser one on the trailing
      side when the capsule reads right-to-left */
   padding-block: 0;
@@ -356,15 +378,17 @@
 .result-bank[hidden] { display: none; }
 .result-bank[data-paid="1"] { grid-template-columns: minmax(0, 1fr); }
 
+/* Zero void: three content rows and nothing else — no stretching row, no fixed floor, so the card
+   ends where its label ends instead of trailing a black band. */
 .result-reward {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto auto;
   justify-items: center;
   align-content: start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
-  min-height: 100px;
-  padding: 8px 8px 7px;
+  min-height: 0;
+  padding: 12px 10px;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 16px;
   background:
@@ -756,12 +780,33 @@ html[data-lang="fa"] .overlay.result .ad-chip-sub {
    quiet frosted return plate. Every key is a 50px+ target; labels are bidi
    isolated, so a Persian row never flips its glyph away from its word.
    ========================================================================== */
+/* Two ergonomic rows under the tray: the glowing hero key owns the whole first row, and the two
+   quiet doors below share one compact row — so every key clears the phone's bottom edge. */
 .result-actions {
   display: grid;
-  gap: 7px;
-  margin-top: 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 2px;
   min-width: 0;
 }
+.result-actions > .result-banter,
+.result-actions > .btn-play-again { grid-column: 1 / -1; }
+.result-actions > .btn-play-again { min-height: 48px; }
+.result-actions > .btn-challenge,
+.result-actions > .btn-main-menu {
+  min-height: 46px;
+  gap: 8px;
+  padding-inline: 10px;
+  font-size: .78rem;
+  letter-spacing: .04em;
+}
+.result-actions > .btn-challenge .result-btn-ico,
+.result-actions > .btn-main-menu .result-btn-ico { width: 24px; height: 24px; border-radius: 8px; }
+.result-actions > .btn-challenge .ico,
+.result-actions > .btn-main-menu .ico { width: 16px; height: 16px; }
+/* No duel key in this finish: the return plate takes the whole row instead of half of it. */
+.result-actions > .btn-challenge[hidden] + .btn-main-menu { grid-column: 1 / -1; }
 .result-btn {
   appearance: none;
   position: relative;
@@ -1429,9 +1474,10 @@ html[data-lang="ar"] .ad-skip-opt {
 /* ---- compact heights: both action keys stay above the fold on a 667px phone ---- */
 @media (max-height: 700px) {
   .overlay.result { padding: 7px; }
-  .result-card { padding: 10px 14px 9px; border-radius: 23px; }
+  .result-card { padding: 10px 14px 12px; border-radius: 23px; }
   .result-title { font-size: clamp(1.8rem, 8vw, 2.2rem); margin-top: 2px; }
-  .result-mode { margin: 4px 0 6px; padding-block: 3px; }
+  /* block margins only: the pill keeps its auto inline margins, so it stays on the centre line */
+  .result-mode { margin-block: 4px 6px; padding-block: 3px; }
   .result-row { height: 38px; min-height: 38px; }
   .result-roster { gap: 2px; padding: 3px; margin-bottom: 6px; }
   .result-bank { gap: 8px; margin-bottom: 6px; }
@@ -1447,7 +1493,7 @@ html[data-lang="ar"] .ad-skip-opt {
   .result-card { padding: 8px 13px; }
   .result-kicker { font-size: 8px; }
   .result-title { font-size: clamp(1.6rem, 7.6vw, 1.95rem); }
-  .result-mode { margin: 3px 0 5px; }
+  .result-mode { margin-block: 3px 5px; }
   .result-row { height: 35px; min-height: 35px; }
   .result-avatar { width: 27px; height: 27px; }
   .result-medal { width: 23px; height: 23px; }
