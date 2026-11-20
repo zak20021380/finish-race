@@ -14683,14 +14683,14 @@ html.reduced-motion .stars-av-photo { transition: none; }
 }
 
 /* ---- FRIENDS: the entry pane ----
-   Two actions and nothing else: a gold clay commitment, a hairline, a recessed well. The
-   old pane stacked a code block, a coral invite slab and a second form on top of the
-   create key, which is what made it read as three competing screens. */
+   One action and nothing else: the gold clay commitment. The wood-grain slab hugs it with even
+   top and bottom breathing room, so the pane stays balanced instead of carrying dead space where
+   the old code well used to sit. */
 .fr {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s3);
+  gap: 12px;
+  padding: 16px;
   border-radius: var(--radius-md);
   background-color: #1C2433;
   background-image:
@@ -14739,89 +14739,6 @@ html.reduced-motion .stars-av-photo { transition: none; }
 .fr-create-t { font-size: var(--t-2); font-weight: 900; letter-spacing: -.01em; line-height: 1.15; }
 .fr-create-s { font-size: 10px; font-weight: 800; letter-spacing: .02em; color: #3A2604; }
 
-/* the divider is a hairline with a word in it, never a second card */
-.fr-or {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.fr-or::before,
-.fr-or::after {
-  content: '';
-  flex: 1 1 auto;
-  height: 1px;
-  background: rgba(255, 255, 255, .09);
-}
-
-.fr-join { display: flex; align-items: center; gap: var(--s2); }
-/* a carved well: the code is typed into the slab, not onto a floating field */
-.fr-well {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 14px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 255, 255, .05);
-  transition: box-shadow var(--motion-fast);
-}
-.fr-well:focus-within {
-  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .45);
-}
-.fr-hash { flex: none; font-size: var(--t-micro); font-weight: 900; color: var(--ink-soft); }
-.fr-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--t-1);
-  font-weight: 800;
-  letter-spacing: .2em;
-  font-variant-numeric: tabular-nums;
-  outline: none;
-}
-.fr-input::placeholder { letter-spacing: .02em; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
-.fr-join-btn {
-  --d: 4px;
-  flex: none;
-  min-width: 84px;
-  min-height: 52px;
-  padding: 0 16px;
-  appearance: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
-  color: var(--ink-soft);
-  font-size: var(--t-2);
-  font-weight: 900;
-  cursor: default;
-  box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .12), var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
-}
-/* lit only once the well holds a full code — a Join that cannot work never looks pressable */
-.fr-join-btn:not(:disabled) {
-  background: linear-gradient(180deg, #FFC53D 0%, #D98E0B 100%);
-  color: #2B1B02;
-  cursor: pointer;
-  box-shadow:
-    0 var(--d) 0 #8A5604,
-    inset 0 1px 0 rgba(255, 255, 255, .5);
-}
-.fr-join-btn:not(:disabled):active { transform: translateY(var(--press-y)); --d: 1px; }
-.fr-join-btn:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 .gm-err { margin: 0; font-size: var(--t-micro); font-weight: 700; }
 .gm-err:not([hidden]) { color: var(--danger); }
 
@@ -16181,7 +16098,7 @@ html.reduced-motion .gm-rw.is-pulse b { animation: none; }
   .gm-rewards { min-height: 24px; padding: 2px var(--s3); }
 }
 html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-card,
-html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
+html.reduced-motion .fr-create,
 html.reduced-motion .lb-code, html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
 html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
 html.reduced-motion .lb-badge-away, html.reduced-motion .lb-away-dot, html.reduced-motion .lb-hud.is-in .lb-hud-card { animation: none; }
@@ -33970,7 +33887,7 @@ html[data-lang="fa"] :is(
   .m-title, .sheet-t, .sheet-p, .set-title, .set-card-h > span,
   .row-t, .row-s, .pick-n, .pick-empty,
   .gm-title, .gm-sub, .gm-name, .gm-desc,
-  .fr-create-t, .fr-create-s, .fr-or span, .fr-join-btn,
+  .fr-create-t, .fr-create-s,
   .lb-mode-sub, .lb-hint, .lb-name, .lb-role, .lb-open-t, .lb-team-t,
   .sq-title, .sq-sub, .sq-create-label, .sq-card-note, .sq-roster-title, .sq-name, .sq-banner-name, .sq-role,
   .sqp-join-t, .sqp-fine, .sqp-kind, .sqp-tile-s, .sqp-lore p,
@@ -34112,10 +34029,10 @@ html[data-lang="fa"] :is(
 }
 
 /* centred micro-lines stay centred — they only need the RTL base */
-html[data-lang="fa"] :is(.lb-mode-sub, .lb-hint, .fr-or, .lb-team-t) {
+html[data-lang="fa"] :is(.lb-mode-sub, .lb-hint, .lb-team-t) {
   direction: rtl;
 }
-html[data-lang="fa"] :is(.lb-open-t, .sq-role, .sqp-join-t, .fr-join-btn) {
+html[data-lang="fa"] :is(.lb-open-t, .sq-role, .sqp-join-t) {
   direction: rtl;
 }
 
@@ -34172,7 +34089,7 @@ html[data-lang="fa"] .id-team-t { font-size: 10.5px; }
 html[data-lang="fa"] #help-tutorial { font-size: 12px; white-space: nowrap; }
 
 /* ---- Persian placeholders read from the right; the fields stay LTR ---- */
-html[data-lang="fa"] :is(#squad-q, #squad-member-q, #gm-join-input, #support-msg)::placeholder {
+html[data-lang="fa"] :is(#squad-q, #squad-member-q, #support-msg)::placeholder {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   direction: rtl;
   text-align: right;

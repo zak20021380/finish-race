@@ -502,7 +502,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     pickHowRace: 'Pick how you want to race',
     playWithFriends: 'Play with Friends',
     friendsLobbySub: 'Invite friends, pick a format, start together',
-    friendsEntrySub: 'Create a room or join with a code',
+    friendsEntrySub: 'Create a room & invite friends',
     quickMatch: 'Quick match',
     quickDesc: 'Undergoing elite server tuning · Live soon',
     friendsMode: 'Play with friends',
@@ -1639,7 +1639,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     pickHowRace: 'حالت بازی رو انتخاب کن',
     playWithFriends: 'بازی با دوستان',
     friendsLobbySub: 'دوستانت رو دعوت کن، حالت بازی رو انتخاب کن و بزن بریم!',
-    friendsEntrySub: 'ساخت اتاق یا ورود با کد',
+    friendsEntrySub: 'ساخت اتاق و دعوت دوستان',
     quickMatch: 'حریف شانسی',
     quickDesc: 'در حال بهینه‌سازی سرورهای آنلاین · آغاز به زودی',
     friendsMode: 'بازی با دوستان',
@@ -2747,6 +2747,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportPlaceholder: 'Напишите здесь ваше сообщение или отзыв...',
     maintenanceBody: 'Арена закрыта на время технических работ. Новые матчи, комнаты и лобби временно недоступны. Пожалуйста, загляните чуть позже.',
     /* ---- нижняя панель лобби и удаление игрока хозяином ---- */
+    friendsEntrySub: 'Создай комнату и пригласи друзей',
     startMatch: 'Начать матч',
     hintHostWaitingPlayers: 'Ожидание игроков...',
     hintHostReady: 'Все готовы — можно начинать',
@@ -3147,6 +3148,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     friendsLead: 'الأصدقاء',
     rankedLead: 'تنافسي',
     /* ---- أسفل الردهة وإزالة اللاعب بواسطة المضيف ---- */
+    friendsEntrySub: 'أنشئ غرفة وادعُ أصدقاءك',
     startMatch: 'ابدأ المباراة',
     hintHostWaitingPlayers: 'بانتظار انضمام اللاعبين...',
     hintHostReady: 'الجميع جاهز — يمكن البدء',
@@ -3663,6 +3665,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     friendsLead: 'Amigos',
     rankedLead: 'Competitivo',
     /* ---- pie del vestíbulo y expulsión por el anfitrión ---- */
+    friendsEntrySub: 'Crea una sala e invita a tus amigos',
     startMatch: 'Iniciar partida',
     hintHostWaitingPlayers: 'Esperando a que se unan jugadores...',
     hintHostReady: 'Todo listo — puedes empezar',

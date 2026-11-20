@@ -2384,45 +2384,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     openRoom(NEW_ROOM, true);
   });
 
-  const joinInput = document.getElementById('gm-join-input') as HTMLInputElement | null;
-  const joinBtn = document.getElementById('gm-join') as HTMLButtonElement | null;
-  /** Join only lights up once the field holds a full 4-digit code — in any numeral system. */
-  const syncJoin = (): void => {
-    if (!joinBtn) return;
-    joinBtn.disabled = normalizeRoomCode(joinInput?.value ?? '').length !== 4;
-  };
-  syncJoin();
-
-  const doJoin = (): void => {
-    const input = joinInput;
-    if (!input) return;
-    const res = joinRoomCode(input.value);
-    if (!res.ok) {
-      impact('light');
-      showRoomError(res.error);
-      input.focus({ preventScroll: true });
-      return;
-    }
-    if (hooks.maintenance?.()) {
-      hooks.onMaintenance?.();
-      return;
-    }
-    impact('medium');
-    clearRoomError();
-    openRoom(res.code, false);
-  };
-
-  document.getElementById('gm-join')?.addEventListener('click', doJoin);
-  joinInput?.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    doJoin();
-  });
-  joinInput?.addEventListener('input', () => {
-    clearRoomError();
-    if (joinInput) joinInput.value = joinInput.value.replace(/\D/g, '').slice(0, 4);
-    syncJoin();
-  });
+  /* A friend joins through the invite link this room hands out (`?startapp=room_XXXX`), never a
+     typed code: the entry pane has no field and no Join key, so nothing is wired to one here. */
 
   /* ---- lobby: the code bar. Every door reads the same active code and the same URL ---- */
   document.getElementById('lb-copy-link')?.addEventListener('click', async () => {
