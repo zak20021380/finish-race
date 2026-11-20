@@ -4518,9 +4518,11 @@ function endOnline(end: RaceEnd): void {
   stopClock();
   ui();
   notify(end.win ? 'success' : 'error');
+  /* The reason is the player's own language: an operator's close and a lost link are different
+     events, and neither may surface a raw wire phrase. */
   showNote(end.win
     ? (end.why === 'resign' ? 'Rival resigned — you win' : 'Rival left — you win')
-    : end.why === 'aborted' ? 'Room closed by an operator' : 'Connection lost',
+    : end.why === 'aborted' ? t('roomClosedByServer') : t('connectionLost'),
   !end.win, 3000);
 }
 

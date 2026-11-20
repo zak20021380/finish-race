@@ -577,6 +577,12 @@ const LOBBY_AWAY_RELEASE_MS = 20_000;
  */
 const RECONNECT_GRACE_MS = 20_000;
 /**
+ * The close code for a board the OPERATOR pulled, and the only one a client may read as "this room
+ * was closed on purpose". Everything else closes with 1000/1001/1011 — an eviction, a deploy, an
+ * edge recycle — and a client retries those silently instead of calling the match over.
+ */
+const CLOSE_OPERATOR = 4001;
+/**
  * How long a dropped seat is given to walk back in BEFORE the room tells the rivals it is
  * reconnecting. A mobile network hand-off closes and reopens a socket inside a second or two;
  * announcing every one of those would paint a phantom banner over a board that never stopped.
@@ -6570,7 +6576,7 @@ export class MatchmakerDO {
     for (const seat of race.seats) {
       this.deliver(seat, JSON.stringify({ type: 'ABORTED', matchId: race.matchId }));
       try {
-        seat.ws.close(1000, 'aborted');
+        seat.ws.close(CLOSE_OPERATOR, 'operator');
       } catch {
         /* the socket is already gone */
       }
@@ -6587,7 +6593,7 @@ export class MatchmakerDO {
       this.verdict(m.id, null, false);
       try {
         m.ws.send(JSON.stringify({ type: 'ABORTED', matchId: live.matchId }));
-        m.ws.close(1000, 'aborted');
+        m.ws.close(CLOSE_OPERATOR, 'operator');
       } catch {
         /* the socket is already gone */
       }
@@ -7865,6 +7871,9 @@ export class MatchmakerDO {
   private sweepLobbies(now: number): void {
     let touched = false;
     for (const live of [...this.lobbies.values()]) {
+      /* THE GUARD: a lobby that has launched is somebody's live board. No idle clock, seat hold
+         or away release may touch it — the only things that end an active match are its own
+         verdict and the per-seat reconnect grace in `sweepRacedRooms`. */
       if (live.driver) continue;
       let changed = false;
       for (let i = 0; i < live.members.length; i++) {

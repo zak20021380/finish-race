@@ -422,6 +422,18 @@ const DEAD_MS = 12_000;
 
 const faceOf = (name: string): string => (name.trim().charAt(0) || 'P').toUpperCase();
 
+/**
+ * The close code the worker uses for a room the OPERATOR pulled. Every other close — an edge
+ * recycle, a sleeping webview, a carrier hand-off — is a transport event and must be retried
+ * silently before the match is called over.
+ */
+const OP_CLOSE_CODE = 4001;
+
+/** Reasons the server means as "this race cannot go on": no reconnect can change the answer. */
+const HARD_DOWN: ReadonlySet<string> = new Set([
+  'MAINTENANCE', 'BANNED', 'SEASON_ENDED', 'FORCE_STOP', 'CLEARED', 'MATCHING_LOCKED', 'SHUTDOWN',
+]);
+
 /** The name and the face this device races under — the same pair the 1v1 queue sends. */
 function myFace(): { name: string; avatarUrl: string | null } {
   const el = document.getElementById('p-name')?.textContent?.trim();
@@ -674,6 +686,25 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     racePostGone = true;
     for (const cb of raceLefts) cb();
   };
+  /**
+   * The board is over: the server said so in as many words (an operator's pull, or a second refusal
+   * that leaves no room to walk back into). `aborted` is the one ending that is nobody's forfeit.
+   */
+  const endAborted = (): void => {
+    if (raceDead) return;
+    raceDead = true;
+    if (raceTimer) {
+      globalThis.clearTimeout(raceTimer);
+      raceTimer = 0;
+    }
+    if (raceOpenTimer) {
+      globalThis.clearTimeout(raceOpenTimer);
+      raceOpenTimer = 0;
+    }
+    outbox.length = 0;
+    markPostGone();
+    for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
+  };
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
   const racePeers: Array<(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number, name: string) => void> = [];
@@ -686,8 +717,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   let pendingMove: { moveId: string; action: Action; since: number } | null = null;
   let moveRetryTimer = 0;
   let moveCounter = 0;
-  /** The live race's reconnect attempts, in the order they are spaced. */
-  const RACE_RESUME_STEPS = [250, 600, 1200, 2000] as const;
+  /** The live race's silent reconnect attempts, in the order they are spaced. */
+  const RACE_RESUME_STEPS = [400, 1000, 2000] as const;
   /** The server holds the seat this long; keep trying at the last beat until it runs out. */
   const RACE_GRACE_MS = 20_000;
   /** An unacknowledged move is retried with the same id after this long; the room deduplicates it. */
@@ -884,14 +915,17 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         const code = typeof msg.code === 'string' ? msg.code : '';
         const reason = typeof msg.reason === 'string' ? msg.reason : 'ERROR';
         if (race) {
-          raceDead = true;
-          if (raceTimer) {
-            globalThis.clearTimeout(raceTimer);
-            raceTimer = 0;
+          /* A room error is a verdict about this SEAT, and a worker that recycled its edge can
+             answer an old socket with one that no longer applies. So the first refusal is not the
+             end of the match: the socket is let go and the resume ladder asks again. A re-seated
+             snapshot clears the question; a second refusal is the server saying it twice, and that
+             is what ends the race. */
+          if (raceTries === 0) {
+            stopBeat();
+            try { sock?.close(); } catch { /* already gone */ }
+            return;
           }
-          outbox.length = 0;
-          markPostGone();
-          for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
+          endAborted();
           return;
         }
         settled = true;
@@ -1212,21 +1246,24 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         for (const cb of racePeers) cb(side, 'bot', 0, typeof msg.name === 'string' ? msg.name : '');
         return;
       }
+      case 'ABORTED':
+        /* The operator pulled the board: the server states it on this frame, so it is the one
+           ending that needs no reconnect attempt. */
+        if (race && !raceDead) endAborted();
+        return;
       case 'ERROR': {
         const reason = typeof msg.reason === 'string' ? msg.reason : 'ERROR';
         if (race) {
-          raceDead = true;
-          if (raceTimer) {
-            globalThis.clearTimeout(raceTimer);
-            raceTimer = 0;
+          /* A hard-down answer (maintenance, a ban, a season stop) is the server stating the race
+             cannot continue at all. Anything else — a setup error on a recycled edge, a refused
+             handshake — gets the same one-retry treatment a room error does, so a transient blink
+             never reads as an operator kick. */
+          if (!HARD_DOWN.has(reason) && raceTries === 0) {
+            stopBeat();
+            try { sock?.close(); } catch { /* already gone */ }
+            return;
           }
-          if (raceOpenTimer) {
-            globalThis.clearTimeout(raceOpenTimer);
-            raceOpenTimer = 0;
-          }
-          outbox.length = 0;
-          markPostGone();
-          for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
+          endAborted();
           return;
         }
         settled = true;
@@ -1284,13 +1321,21 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         try { ws.close(); } catch { /* already gone */ }
       }
     });
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (ev: CloseEvent) => {
       if (ws !== sock) return;
       if (raceOpenTimer) {
         globalThis.clearTimeout(raceOpenTimer);
         raceOpenTimer = 0;
       }
       if (race && !raceDead) {
+        /* An operator's own close carries the private code the worker sends with it: that is a
+           real pull and the only close that ends the board on the spot. Every other close is a
+           link that went away — a Cloudflare edge recycling the object included — and the silent
+           resume ladder gets its chance to walk back into the same seat first. */
+        if (ev && ev.code === OP_CLOSE_CODE) {
+          endAborted();
+          return;
+        }
         /* A live board outlives a blinking mobile link: the room keeps the seat for its grace
            window, so retry fast instead of ending a match the rival is still playing. */
         stopBeat();
