@@ -16,6 +16,7 @@ import {
   type ShopVipTier,
 } from './premium';
 import { VIP_HERO_PLAN, type VipPlanId } from '../shared/vip';
+import telegramStarsImg from './assets/images/telegram_stars.png';
 import type { Sheets } from './sheets';
 
 export interface ShopApi {
@@ -52,6 +53,18 @@ const bdi = (text: string): HTMLElement => {
   node.textContent = text;
   return node;
 };
+
+/** The authentic Telegram Stars PNG, bundled and hashed by Vite — never a glyph, sprite or emoji.
+ *  `draggable="false"` keeps a mouse drag from peeling the currency mark off the card. */
+function starIcon(cls = 'tg-star-icon'): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = telegramStarsImg;
+  img.className = cls;
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  img.draggable = false;
+  return img;
+}
 
 function svg(href: string, cls: string): SVGSVGElement {
   const NS = 'http://www.w3.org/2000/svg';
@@ -94,6 +107,14 @@ export function createShop(api: ShopApi): Shop {
 
   const planOf = (): ShopVipTier | null => tiers.find((tier) => tier.id === selected) ?? tiers[0] ?? null;
 
+  /** Retire the last checkout note so an idle card shows no leftover copy under the CTA. */
+  function clearStatus(): void {
+    statusKey = '';
+    if (!status) return;
+    status.textContent = '';
+    status.hidden = true;
+  }
+
   function paintTiers(): void {
     if (!tierRow) return;
     tierRow.setAttribute('aria-label', t('vipPlansLabel'));
@@ -114,8 +135,8 @@ export function createShop(api: ShopApi): Shop {
       const days = el('span', 'vip-flag-tier-days');
       days.append(bdi(String(tier.days)), el('span', 'vip-flag-tier-unit', t('vipPlanUnitDays')));
       const price = el('span', 'vip-flag-tier-price');
-      /* #i-star-3d is a filled gold silhouette: crisp at price-row size in every locale. */
-      price.append(bdi(String(tier.stars)), svg('#i-star-3d', 'vip-flag-tier-star'));
+      /* the bundled Telegram Stars artwork rides the price row at its own crisp size in every locale */
+      price.append(bdi(String(tier.stars)), starIcon());
 
       button.append(days, price);
       return button;
@@ -166,7 +187,7 @@ export function createShop(api: ShopApi): Shop {
         days: String(plan.days),
         price: String(plan.stars),
       });
-      ctaText.append(svg('#i-star', 'vip-flag-cta-star'));
+      ctaText.append(starIcon());
     }
 
     if (status) {
@@ -193,7 +214,8 @@ export function createShop(api: ShopApi): Shop {
     const plan = planOf();
     if (!plan) return;
     busy = true;
-    statusKey = '';
+    /* a new checkout starts from a clean card: the previous attempt's note is retired */
+    clearStatus();
     paint();
     impact('light');
     void purchaseVip(plan.id).then((result) => {
@@ -230,6 +252,8 @@ export function createShop(api: ShopApi): Shop {
         const id = tier.dataset.plan as VipPlanId | undefined;
         if (id && id !== selected && !busy) {
           selected = id;
+          /* a fresh pick retires the last checkout note: the idle card never keeps stale copy */
+          clearStatus();
           impact('light');
           paint();
         }

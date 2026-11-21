@@ -43501,6 +43501,24 @@ bdi { unicode-bidi: isolate; }
   z-index: 2;
 }
 
+/* Chrome-free scrolling on the Shop: the pane and the screen lose the native bar
+   entirely. `scrollbar-width: thin` here used to override the global
+   `[data-scroll] { scrollbar-width: none }` on specificity, which is exactly what
+   painted the white edge bar over the obsidian card. Gestures stay intact:
+   [data-scroll] already carries touch-action: pan-y, overscroll-behavior: contain
+   and -webkit-overflow-scrolling: touch, and wheel scrolling is never gated. */
+#s-shop,
+.shop-pane {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#s-shop::-webkit-scrollbar,
+.shop-pane::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .shop-pane {
   flex: 1 1 auto;
   min-height: 0;
@@ -43509,9 +43527,10 @@ bdi { unicode-bidi: isolate; }
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  /* generous clearance: the four locked preview cards clear the floating bottom nav
+     with breathing room, plus the home-indicator inset on notched phones */
+  padding: 10px 16px calc(116px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
 .vip-flag {
@@ -43522,17 +43541,16 @@ bdi { unicode-bidi: isolate; }
   overflow: visible;
   display: flex;
   flex-direction: column;
-  gap: 13px;
-  padding: 16px 15px 15px;
+  /* one uniform vertical rhythm: header -> tier cards -> perk pills -> gold CTA */
+  gap: 14px;
+  padding: 18px 16px;
   border-radius: 22px;
-  border: 1px solid rgba(245, 196, 81, 0.38);
-  background:
-    radial-gradient(120% 90% at 50% -24%, rgba(245, 196, 81, 0.16) 0%, rgba(245, 196, 81, 0) 58%),
-    radial-gradient(145% 130% at 0% 0%, #151822 0%, #0b0d13 62%, #07090e 100%);
+  border: 1px solid rgba(245, 196, 81, 0.32);
+  /* deep matte obsidian: a whisper of gold at the crest, then near-black at the base */
+  background: linear-gradient(180deg, rgba(245, 196, 81, 0.08) 0%, #0d1017 34%, #090b10 100%);
   box-shadow:
-    0 22px 46px -26px rgba(0, 0, 0, 0.95),
-    inset 0 1px 0 rgba(255, 246, 220, 0.06),
-    0 0 42px -24px rgba(245, 177, 59, 0.55);
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 224, 138, 0.16);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -43547,7 +43565,16 @@ bdi { unicode-bidi: isolate; }
   background: radial-gradient(52% 100% at 50% 100%, rgba(245, 196, 81, 0.3) 0%, rgba(245, 196, 81, 0) 72%);
 }
 
-.vip-flag-head { display: flex; align-items: center; gap: 11px; min-width: 0; }
+/* the crest stack: crown, name and promise share one centred column, so the head reads
+   as a balanced emblem instead of a badge with a dead gutter beside it. */
+.vip-flag-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  min-width: 0;
+}
 .vip-flag-crest {
   flex: none;
   display: inline-flex;
@@ -43561,7 +43588,7 @@ bdi { unicode-bidi: isolate; }
   box-shadow: inset 0 1px 0 rgba(255, 246, 220, 0.12), 0 8px 20px -14px rgba(245, 177, 59, 0.9);
 }
 .vip-flag-crest-svg { width: 30px; height: 30px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)); }
-.vip-flag-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vip-flag-copy { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
 .vip-flag-kicker {
   margin: 0;
   font-size: 8.5px;
@@ -43618,8 +43645,9 @@ bdi { unicode-bidi: isolate; }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  /* room for the floating POPULAR / -45% pills above their own cards */
-  margin-top: 12px;
+  /* no extra top margin: the card's uniform 14px gap already clears the floating
+     POPULAR / -45% pills, which rise 10px above their own cards */
+  margin: 0;
 }
 .vip-flag-tier {
   position: relative;
@@ -43657,7 +43685,20 @@ bdi { unicode-bidi: isolate; }
   font-weight: 700;
   color: #e8c477;
 }
-.vip-flag-tier-star { width: 11px; height: 11px; color: #f5c451; flex: none; pointer-events: none; }
+/* the bundled Telegram Stars artwork: full-colour PNG, never re-tinted, never a glyph.
+   It rides the price rows and the gold CTA, lifted off the metal by a soft contact shadow. */
+.tg-star-icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
 .vip-flag-tier-badge,
 .vip-flag-tier-tag {
   position: absolute;
@@ -43763,7 +43804,8 @@ bdi { unicode-bidi: isolate; }
 }
 .vip-flag-cta:disabled { cursor: default; opacity: 0.72; }
 .vip-flag-cta.is-busy::after { animation: none; }
-.vip-flag-cta-star { width: 12px; height: 12px; color: #241804; }
+/* on the brushed-gold CTA the Star steps up one size so it holds the label's cap height */
+.vip-flag-cta .tg-star-icon { width: 19px; height: 19px; }
 .vip-flag-cta-t { display: inline-flex; align-items: center; gap: 5px; }
 
 .vip-flag-status {
@@ -43774,6 +43816,8 @@ bdi { unicode-bidi: isolate; }
   color: #e8a79a;
 }
 .vip-flag-status[hidden] { display: none; }
+/* an idle card keeps its footer tight: an empty note collapses to nothing at all */
+.vip-flag-status:empty { display: none; }
 
 .shop-sec { display: flex; flex-direction: column; gap: 9px; }
 .shop-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -43864,12 +43908,15 @@ html[data-lang="fa"] .vip-flag-sub,
 html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
 
 @media (max-width: 360px) {
-  .vip-flag { padding: 14px 11px 13px; gap: 11px; }
+  /* same centred crest stack and 22px plate, only the rhythm tightens to fit 320px,
+     while the 12px gap still clears the floating POPULAR / -45% pills above their cards */
+  .vip-flag { padding: 16px 12px; gap: 12px; }
   .vip-flag-title { font-size: 14.5px; }
   .vip-flag-perk { padding: 8px 7px; gap: 6px; }
   .vip-flag-perk-label { font-size: 9.5px; }
   .vip-flag-tier-days { font-size: 12px; }
   .vip-flag-cta { font-size: 11.5px; }
+  .tg-star-icon { width: 16px; height: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .vip-flag-cta::after { animation: none; }
