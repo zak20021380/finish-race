@@ -1517,7 +1517,7 @@ let tutorial: Tutorial | null = null;
 let tutPending: TutorialAction | null = null;
 /** Set by the on-demand door: the lesson opens on the next race even if it was read before. */
 let tutorialRequested = false;
-/** A lesson that replaces the launch is its own match: finishing or skipping it returns to Home. */
+/** A lesson that replaces the launch is its own match; finishing or skipping it keeps the board. */
 let tutorialStandalone = false;
 /**
  * ACTION-FIRST FIRST OPEN. True only while a true first-time player is inside the lesson that
@@ -5905,7 +5905,8 @@ function joinPendingDuelRoom(): void {
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
- * board the thirteen steps were written against. It is a standalone lesson: `end` returns to Home.
+ * board the thirteen steps were written against. It is a standalone lesson: `end` closes it on the
+ * same live board.
  */
 function startTutorial() {
   if (sheets.isOpen) sheets.close();
@@ -6021,9 +6022,10 @@ function hasLaunchDeepLink(): boolean {
  *      ROOM/DUEL invite is an explicit promise to land in that live seat: `INVITE_DUEL_LAUNCH`
  *      short-circuits the standalone lesson even for a profile that has never played a move.
  *
- * When the lesson is skipped (or Escape / Back is pressed) `end()` routes straight Home. When it
- * is finished, the completion flag is persisted at once and the player sprints to the FINISH line;
- * `showOverlay()` then lands them on #s-home once that first match is settled.
+ * When the lesson is skipped (or Escape / Back is pressed) `end()` only dismisses the overlay: the
+ * player stays in the match already on the board. When it is finished, the completion flag is
+ * persisted at once and the player sprints to the FINISH line; `showOverlay()` then lands them on
+ * #s-home once that first match is settled.
  */
 function bootFirstRunTutorial(): void {
   reconcileTutorialFromHistory();
@@ -6135,17 +6137,11 @@ tutorial = createTutorial({
       if (wantsOpponent()) void runOpponent();
       return;
     }
-    /* Skip (or Escape) leaves the lesson for good: a standalone lesson goes Home, a Pause → Replay
-       hands the real match straight back. */
+    /* Skip (or Escape) DISMISSES the lesson and leaves the player inside the match already on the
+       board — the flag above is saved, the overlay is torn down, and the ordinary controls and
+       clock are handed straight back. A standalone lesson never routes out to Home. */
+    tutorialStandalone = false;
     endTutorialMatch();
-    if (tutorialStandalone) {
-      tutorialStandalone = false;
-      quitToMenu();
-      /* Safety net: hand over any invite still parked in session memory so a lesson that ends can
-         never strand a waiting friend. */
-      joinPendingDuelRoom();
-      return;
-    }
     $<HTMLElement>('s-game').focus({ preventScroll: true });
     ui();
     startClock();

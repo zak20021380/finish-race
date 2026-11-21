@@ -2958,21 +2958,36 @@ export function createAdmin(api: AdminApi): Admin {
 
     if (statsPanel) statsPanel.setAttribute('aria-busy', String(metricsBusy));
 
-    /* one localized line with its number filled in; a reading that has not answered keeps the
-       same placeholder it starts with rather than inventing a count */
-    const phrase = (key: string, n: number | null | undefined, fallback: string): string =>
-      n == null ? (pending ? '…' : fallback) : t(key).replace('{n}', figure(n));
+    /* One localized line with its measurement filled in. The figure rides a <bdi dir="ltr">,
+       so a Persian or Arabic sentence keeps the number ahead of its unit and the digits stay
+       left-to-right. A reading that has not answered keeps its placeholder. */
+    const paintPhrase = (
+      el: HTMLElement | null,
+      key: string,
+      n: number | null | undefined,
+      fallback: string,
+    ): void => {
+      if (!el) return;
+      el.textContent = '';
+      if (n == null) { el.textContent = pending ? '…' : fallback; return; }
+      const [before, after = ''] = t(key).split('{n}');
+      el.append(before);
+      const num = document.createElement('bdi');
+      num.dir = 'ltr';
+      num.textContent = figure(n);
+      el.append(num, after);
+    };
 
     /* ---- active players: live concurrency, the registry size, then both population windows ---- */
     const concurrency = m ? m.activeRooms + m.queueLength : null;
     if (statActive) statActive.textContent = metric(concurrency);
-    if (statActiveMeta) statActiveMeta.textContent = phrase('admTotal', m?.totalUsers, '— Total');
-    if (statLiveRooms) statLiveRooms.textContent = phrase('admActiveRooms', m?.activeRooms, '— active rooms');
+    paintPhrase(statActiveMeta, 'admTotal', m?.totalUsers, '— Total');
+    paintPhrase(statLiveRooms, 'admActiveRooms', m?.activeRooms, '— active rooms');
     if (statDau) statDau.textContent = metric(m?.dau);
     if (statMau) statMau.textContent = metric(m?.mau);
 
     /* ---- new signups: rolling first-seen cohorts, plus the registry size for context ---- */
-    if (statGrowthMeta) statGrowthMeta.textContent = m ? `${figure(m.totalUsers)} registered` : '— registered';
+    paintPhrase(statGrowthMeta, 'admRegistered', m?.totalUsers, '— registered');
     if (statNewToday) statNewToday.textContent = metric(m?.signupsToday);
     if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
     if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
@@ -2980,9 +2995,7 @@ export function createAdmin(api: AdminApi): Admin {
     /* ---- Stars revenue: invoice income, the waiting payout queue and what was settled ---- */
     if (statStarsIncome) statStarsIncome.textContent = metric(m?.starsRevenueTotal);
     if (statStarsPending) statStarsPending.textContent = metric(m?.vaultPendingPayoutsStars);
-    if (statStarsPendingReq) {
-      statStarsPendingReq.textContent = phrase('admPayoutRequests', m?.vaultPendingPayoutsCount, '— requests');
-    }
+    paintPhrase(statStarsPendingReq, 'admPayoutRequests', m?.vaultPendingPayoutsCount, '— requests');
     if (statStarsPaid) statStarsPaid.textContent = metric(m?.vaultPaidOutStars);
 
     /* ---- engagement: today's returners, next-day return, hooked share ---- */
@@ -3043,15 +3056,27 @@ export function createAdmin(api: AdminApi): Admin {
     if (statUpdated) {
       /* A reading the room could only build in part says which part is missing. */
       const partial = m?.degraded?.length ? ` · partial: ${m.degraded.join(', ')}` : '';
-      statUpdated.textContent = m
-        ? `${metricsBusy ? t('admSyncLast') : t('admUpdated').replace('{time}', clockOf(m.timestamp))}${partial}`
-        : metricsBusy ? 'Reading the Worker…'
+      if (!m) {
+        statUpdated.textContent = metricsBusy ? 'Reading the Worker…'
           : denied ? 'No live reading'
             : metricsPhase === 'error'
               ? metricsReason === 'timeout' ? 'Worker slow, not gone'
                 : metricsReason === 'offline' || metricsReason === 'no-origin' ? 'Worker unreachable'
                   : 'Worker answered with an error'
               : 'Awaiting telemetry';
+      } else if (metricsBusy) {
+        statUpdated.textContent = `${t('admSyncLast')}${partial}`;
+      } else {
+        /* the capture clock is Latin digits in an LTR isolate: `14:37:10` never flips inside
+           the Persian sentence that introduces it */
+        statUpdated.textContent = '';
+        const [before, after = ''] = t('admUpdated').split('{time}');
+        statUpdated.append(before);
+        const clock = document.createElement('bdi');
+        clock.dir = 'ltr';
+        clock.textContent = clockOf(m.timestamp);
+        statUpdated.append(clock, after, partial);
+      }
     }
 
     if (statRefresh) {

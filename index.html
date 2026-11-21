@@ -3154,14 +3154,14 @@
                   <span class="adm-card-s" id="stat-live-rooms">— active rooms</span>
                 </div>
                 <div class="adm-card">
-                  <span class="adm-card-l" data-i18n="admToday24h">Today (24h)</span>
+                  <span class="adm-card-l" data-i18n-html="admToday24h">Today (24h)</span>
                   <b class="adm-card-v" id="stat-dau">—</b>
-                  <span class="adm-card-s" data-i18n="admActiveIn24h">Active in 24h</span>
+                  <span class="adm-card-s" data-i18n-html="admActiveIn24h">Active in 24h</span>
                 </div>
                 <div class="adm-card">
-                  <span class="adm-card-l" data-i18n="admThisMonth30d">This Month (30d)</span>
+                  <span class="adm-card-l" data-i18n-html="admThisMonth30d">This Month (30d)</span>
                   <b class="adm-card-v" id="stat-mau">—</b>
-                  <span class="adm-card-s" data-i18n="admActiveIn30d">Active in 30d</span>
+                  <span class="adm-card-s" data-i18n-html="admActiveIn30d">Active in 30d</span>
                 </div>
               </div>
             </section>
@@ -3176,17 +3176,17 @@
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admToday">Today</span>
                   <b class="adm-card-v" id="stat-new-today">—</b>
-                  <span class="adm-card-s" data-i18n="admLast24h">Last 24h</span>
+                  <span class="adm-card-s" data-i18n-html="admLast24h">Last 24h</span>
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admThisWeek">This Week</span>
                   <b class="adm-card-v" id="stat-new-week">—</b>
-                  <span class="adm-card-s" data-i18n="admLast7d">Last 7d</span>
+                  <span class="adm-card-s" data-i18n-html="admLast7d">Last 7d</span>
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admThisMonth">This Month</span>
                   <b class="adm-card-v" id="stat-new-month">—</b>
-                  <span class="adm-card-s" data-i18n="admLast30d">Last 30d</span>
+                  <span class="adm-card-s" data-i18n-html="admLast30d">Last 30d</span>
                 </div>
               </div>
             </section>
@@ -3208,12 +3208,18 @@
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admPendingPayouts">Pending Payouts</span>
-                  <b class="adm-card-v" id="stat-stars-pending">—</b>
+                  <span class="adm-card-vrow">
+                    <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
+                    <b class="adm-card-v" id="stat-stars-pending">—</b>
+                  </span>
                   <span class="adm-card-s" id="stat-stars-pending-req">— requests</span>
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admPaidOut">Paid Out</span>
-                  <b class="adm-card-v" id="stat-stars-paid">—</b>
+                  <span class="adm-card-vrow">
+                    <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
+                    <b class="adm-card-v" id="stat-stars-paid">—</b>
+                  </span>
                   <span class="adm-card-s" data-i18n="admCompleted">Completed</span>
                 </div>
               </div>
@@ -4266,40 +4272,40 @@
         <nav class="admin-nav" role="tablist" aria-label="Command Center sections">
           <span class="admin-nav-pill" id="admin-nav-pill" aria-hidden="true"></span>
           <button class="admin-tab" type="button" role="tab" id="atab-stats" data-atab="stats"
-            aria-selected="true" aria-controls="apanel-stats" aria-label="Stats">
+            aria-selected="true" aria-controls="apanel-stats" aria-label="Stats" data-i18n-aria="admTabStats">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-users" /></svg>
-            <span class="admin-tab-l">Stats</span>
+            <span class="admin-tab-l" data-i18n="admTabStats">Stats</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-users" data-atab="users"
-            aria-selected="false" aria-controls="apanel-users" aria-label="Users">
+            aria-selected="false" aria-controls="apanel-users" aria-label="Users" data-i18n-aria="admTabUsers">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-user" /></svg>
-            <span class="admin-tab-l">Users</span>
+            <span class="admin-tab-l" data-i18n="admTabUsers">Users</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-squads" data-atab="squads"
-            aria-selected="false" aria-controls="apanel-squads" aria-label="Squads">
+            aria-selected="false" aria-controls="apanel-squads" aria-label="Squads" data-i18n-aria="admTabSquads">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-flag" /></svg>
-            <span class="admin-tab-l">Squads</span>
+            <span class="admin-tab-l" data-i18n="admTabSquads">Squads</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
-            aria-selected="false" aria-controls="apanel-controls" aria-label="Controls">
+            aria-selected="false" aria-controls="apanel-controls" aria-label="Controls" data-i18n-aria="admTabControls">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-tune" /></svg>
-            <span class="admin-tab-l">Controls</span>
+            <span class="admin-tab-l" data-i18n="admTabControls">Controls</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
-            aria-selected="false" aria-controls="apanel-server" aria-label="Server">
+            aria-selected="false" aria-controls="apanel-server" aria-label="Server" data-i18n-aria="admTabServer">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-globe" /></svg>
-            <span class="admin-tab-l">Server</span>
+            <span class="admin-tab-l" data-i18n="admTabServer">Server</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-inbox" data-atab="inbox"
-            aria-selected="false" aria-controls="apanel-inbox" aria-label="Inbox">
+            aria-selected="false" aria-controls="apanel-inbox" aria-label="Inbox" data-i18n-aria="admTabInbox">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-chat" /></svg>
-            <span class="admin-tab-l">Inbox</span>
+            <span class="admin-tab-l" data-i18n="admTabInbox">Inbox</span>
             <span class="admin-nav-badge" id="admin-inbox-badge" hidden>0</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
-            aria-selected="false" aria-controls="apanel-tools" aria-label="Tools">
+            aria-selected="false" aria-controls="apanel-tools" aria-label="Tools" data-i18n-aria="admTabTools">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
-            <span class="admin-tab-l">Tools</span>
+            <span class="admin-tab-l" data-i18n="admTabTools">Tools</span>
           </button>
         </nav>
 

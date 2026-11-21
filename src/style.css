@@ -18491,9 +18491,10 @@ html.reduced-motion .admin-fab-badge.is-in {
   display: flex;
   flex-direction: column;
   gap: var(--s3);
-  /* the Telegram viewport is the phone's: the stage honours both safe areas */
+  /* the Telegram viewport is the phone's: the stage honours both safe areas, and the
+     header keeps 14px of clear air so the kicker is never sliced by the modal's top edge */
   padding:
-    max(var(--s3), env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-top))
     max(var(--pad-app-x), env(safe-area-inset-right))
     max(var(--s3), env(safe-area-inset-bottom))
     max(var(--pad-app-x), env(safe-area-inset-left));
@@ -18580,7 +18581,7 @@ html.reduced-motion .admin-close { transition: none; }
   display: flex;
   gap: 2px;
   min-height: 64px;
-  padding: 5px;
+  padding: 6px 8px;
   border-radius: var(--radius-lg);
   background:
     radial-gradient(120% 150% at 50% 0%, rgba(56, 189, 248, .08), rgba(56, 189, 248, 0) 58%),
@@ -18593,10 +18594,10 @@ html.reduced-motion .admin-close { transition: none; }
 }
 .admin-nav-pill {
   position: absolute;
-  top: 5px;
-  bottom: 5px;
-  left: 5px;
-  width: calc((100% - 22px) / 7);
+  top: 6px;
+  bottom: 6px;
+  left: 8px;
+  width: calc((100% - 28px) / 7);
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(252, 211, 77, .2) 0%, rgba(245, 158, 11, .06) 100%);
   box-shadow:
@@ -18639,6 +18640,7 @@ html.reduced-motion .admin-nav-pill { transition: none; }
 .admin-tab-l {
   display: block;
   max-width: 100%;
+  font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -18695,8 +18697,8 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 }
 .admin-nav-badge[hidden] { display: none; }
 @media (max-height: 660px) {
-  .admin-nav { min-height: 60px; padding: 4px; }
-  .admin-nav-pill { top: 4px; bottom: 4px; left: 4px; width: calc((100% - 20px) / 7); }
+  .admin-nav { min-height: 60px; padding: 5px 8px; }
+  .admin-nav-pill { top: 5px; bottom: 5px; left: 8px; width: calc((100% - 26px) / 7); }
   .admin-tab { min-height: 48px; }
 }
 @media (max-height: 600px) {
@@ -18719,7 +18721,7 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   flex-direction: column;
   gap: var(--s2);
   /* the dashboard is long now: the tail clears the pinned dock on every phone */
-  padding-bottom: 80px;
+  padding-bottom: 96px;
 }
 .admin-panel { display: flex; flex-direction: column; gap: var(--s2); }
 
@@ -19040,11 +19042,11 @@ html.reduced-motion .adm-live-refresh[data-busy="true"] .ico { animation-duratio
   display: grid;
   grid-template-rows: auto auto auto;
   align-content: space-between;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  min-height: 118px;
-  padding: 10px 9px 11px;
-  border-radius: var(--radius-md);
+  min-height: auto;
+  padding: 10px 8px;
+  border-radius: 14px;
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
@@ -19092,9 +19094,9 @@ html.reduced-motion .adm-live-refresh[data-busy="true"] .ico { animation-duratio
 html.reduced-motion .adm-live-dot { animation: none; }
 /* the figure is the whole point: bold gold, tabular, engraved into the slab */
 .adm-card-v {
-  font-size: clamp(1.3rem, 1rem + 1.6vw, 1.7rem);
+  font-size: 22px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
   color: var(--honey-ink);
   text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
