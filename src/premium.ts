@@ -157,12 +157,13 @@ export type VipPurchaseResult = 'paid' | 'preview' | 'cancelled' | 'failed' | 'u
 /**
  * Wait for the room to write the receipt. Telegram's webhook can land a few hundred milliseconds
  * after the payment sheet closes, so a single reading may still be the pre-payment entitlement.
- * Returns true only when the room itself confirms a running term.
+ * Returns true only when the room reports a term longer than the one held before checkout, so a
+ * renewing VIP's already-running pass is never mistaken for the new receipt.
  */
-async function awaitVipReceipt(): Promise<boolean> {
+async function awaitVipReceipt(baselineUntil: number): Promise<boolean> {
   for (const delay of [0, 400, 800, 1200]) {
     if (delay > 0) await new Promise<void>((done) => { window.setTimeout(done, delay); });
-    if (await refreshVip() && vipUntil > Date.now()) return true;
+    if (await refreshVip() && vipUntil > baselineUntil) return true;
   }
   return false;
 }
@@ -243,12 +244,15 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
     return 'unavailable';
   }
 
+  /* The term this seat already held: a renewal must be confirmed by an extension of THIS number,
+     never by the pre-purchase entitlement still being live. */
+  const baselineUntil = vipUntil;
   return new Promise<VipPurchaseResult>((resolve) => {
     const opened = openInvoice(invoiceUrl, (status: InvoiceStatus) => {
       if (status === 'paid') {
         notify('success');
         void (async (): Promise<void> => {
-          if (await awaitVipReceipt()) {
+          if (await awaitVipReceipt(baselineUntil)) {
             /* Only the room's own confirmation earns the celebration, and every perk repaints on
                the change signal it just emitted. */
             showToast(t('vipActivatedToast'), 'success', 4600);
