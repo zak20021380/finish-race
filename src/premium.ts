@@ -296,6 +296,11 @@ const PLAN_KEYS: Record<VipPlanId, { name: string; badge?: string }> = {
 /** The admin's live sheet; the bundled defaults until the first successful read. */
 let planConfig: VipPlanConfig = readVipPlanConfig(null);
 let plansRefreshing: Promise<boolean> | null = null;
+/* The Shop tab re-enters on every tap. Prices are admin-set and change on the order of days, so a
+   read that landed inside the window is reused instead of re-fetching on each visit. `null` means
+   no read has ever landed, which always fetches. */
+const PLANS_TTL_MS = 5 * 60_000;
+let lastPlansFetchedAt: number | null = null;
 
 const storePlans = (): VipPlan[] => activeVipPlans(planConfig);
 
@@ -310,7 +315,13 @@ export function shopVipTiers(): ShopVipTier[] {
   return storePlans().map((plan) => ({ id: plan.id, days: plan.days, stars: plan.stars }));
 }
 
-/** Re-read the admin's sheet before the Shop paints a price. Never throws. */
+/**
+ * Re-read the admin's sheet before the Shop paints a price. Never throws.
+ *
+ * Resolves `true` only when this call actually moved the prices: a read served from the TTL
+ * window, or a fetch whose payload matches what is already on screen, resolves `false` so the
+ * caller can skip its DOM rebuild.
+ */
 export function refreshShopVipTiers(): Promise<boolean> {
   return refreshPlans();
 }
@@ -328,9 +339,13 @@ function selectedPlan(): VipPlan | null {
 
 /**
  * Read `/api/vip/plans`. The route lists only the tiers on sale, so an absent tier is disabled;
- * a failed or offline read keeps the sheet already on screen and never invents a price.
+ * a failed or offline read keeps the sheet already on screen and never invents a price. A read
+ * inside `PLANS_TTL_MS` is served from `planConfig` and touches the network not at all.
  */
 function refreshPlans(): Promise<boolean> {
+  if (lastPlansFetchedAt !== null && Date.now() - lastPlansFetchedAt < PLANS_TTL_MS) {
+    return Promise.resolve(false);
+  }
   if (plansRefreshing) return plansRefreshing;
   const url = workerUrl('/api/vip/plans');
   if (!url) return Promise.resolve(false);
@@ -348,6 +363,7 @@ function refreshPlans(): Promise<boolean> {
       const data = (await response.json()) as { ok?: unknown; plans?: unknown } | null;
       if (!data || data.ok !== true || !Array.isArray(data.plans)) return false;
 
+      const previous = planConfig;
       const next = readVipPlanConfig(null);
       for (const id of VIP_PLAN_IDS) next[id] = { ...next[id], enabled: false };
       for (const item of data.plans) {
@@ -360,8 +376,12 @@ function refreshPlans(): Promise<boolean> {
           : next[base.id].stars;
         next[base.id] = { stars, enabled: true };
       }
+      /* the fetch landed — the window starts now whether or not the prices moved */
+      lastPlansFetchedAt = Date.now();
+      const changed = VIP_PLAN_IDS.some((id) =>
+        previous[id].stars !== next[id].stars || previous[id].enabled !== next[id].enabled);
       planConfig = next;
-      return true;
+      return changed;
     } catch {
       return false;
     } finally {

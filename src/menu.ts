@@ -2773,16 +2773,44 @@ export function createMenu(api: MenuApi): Menu {
     el.title = state === 'offline' ? 'Offline — showing the last confirmed editions' : '';
   };
 
+  /* The shelf and the catalogue are ~30 crests of markup between them, so both memoize on one
+     cheap signature — unlocked ids, the progress each honor reads, the mint/sync state and the
+     active language. An equip, an unlock, a progress move, a language switch or a mint/offline
+     transition repaints; any other Profile entry reuses the tree already on screen instead of
+     tearing it down and rebuilding it. */
+  const badgeShelfSignature = (): string => {
+    const parts = [lang, profile.badge ?? '', editionSyncState()];
+    for (const b of BADGES) {
+      const prog = badgeProgress(b.id);
+      const ed = badgeEdition(b.id);
+      parts.push(
+        `${b.id}:${prog.met ? 1 : 0}:${prog.label}:${prog.pct}:${prog.need}`,
+        `${ed.serial ?? '-'}:${ed.minting ? 1 : 0}:${ed.awaiting ? 1 : 0}:${ed.exhausted ? 1 : 0}`,
+      );
+    }
+    return parts.join('|');
+  };
+  let badgeShelfKey: string | null = null;
+  let badgeListKey: string | null = null;
+
   /* Boot never builds the rack: the medallion art is heavy, and Profile is a
      destination the player may not visit at all. The shelf hydrates on the
      first Profile entry; the badge sheet paints its own crest when opened. */
-  const paintBadges = () => {
+  const paintBadges = (force = false) => {
     if (pfScreen.hidden) return;
-    const rack = document.getElementById('honor-badges-rack');
+    const key = badgeShelfSignature();
+    /* the count and the sub line are two text writes, far cheaper than the signature above,
+       so they always land — the memo only skips the crest tree itself. */
     const count = document.getElementById('pf-badge-count');
     if (count) count.textContent = `(${unlockedCount()}/${BADGES.length})`;
     const sub = document.getElementById('badges-sub');
     if (sub) sub.textContent = `${unlockedCount()} of ${BADGES.length} honors unlocked. Equip the mind that races like you.`;
+    if (!force && badgeShelfKey !== null && key === badgeShelfKey) {
+      paintBadgeStatus();
+      return;
+    }
+    badgeShelfKey = key;
+    const rack = document.getElementById('honor-badges-rack');
     if (!rack) return;
     rack.textContent = '';
     for (const b of BADGES) {
@@ -2790,7 +2818,7 @@ export function createMenu(api: MenuApi): Menu {
       const prog = badgeProgress(b.id);
       rack.append(makeSlot(b, unlocked, unlocked && profile.badge === b.id, prog.label));
     }
-    paintBadgeList();
+    paintBadgeList(key);
     paintBadgeStatus();
   };
 
@@ -2798,10 +2826,18 @@ export function createMenu(api: MenuApi): Menu {
      carries its crest, title, archetype/pillar line, one-line archetype
      description and its requirement meter, with an EQUIPPED seal, a Details
      pill or a locked pill. A card opens the detail drawer, where the full
-     requirement, progress and the equip action live. */
-  function paintBadgeList() {
+     requirement, progress and the equip action live.
+
+     The catalogue is a second ~30-card tree built from the same reads as the shelf, so it shares
+     the shelf's signature. `force` (the "View All" door, which has just opened a fresh sheet)
+     always repaints; every other call reuses the list already mounted. */
+  function paintBadgeList(force: string | boolean = false) {
     const list = document.getElementById('badge-list');
     if (!list) return;
+    const key = typeof force === 'string' ? force : badgeShelfSignature();
+    const forced = force !== false && typeof force !== 'string';
+    if (!forced && badgeListKey === key) return;
+    badgeListKey = key;
     list.textContent = '';
     for (const b of BADGES) {
       const unlocked = isBadgeUnlocked(b.id);
@@ -3960,7 +3996,7 @@ export function createMenu(api: MenuApi): Menu {
   document.getElementById('pf-badges-all')?.addEventListener('click', () => {
     const sheet = api.sheet('sheet-badges');
     if (!sheet) return;
-    paintBadgeList();
+    paintBadgeList(true);
     api.sheets.open(sheet);
     /* every card is freshly painted, but re-trigger any crest left in a fallback state */
     reloadFailedBadgeArt(sheet);
@@ -4706,11 +4742,12 @@ export function createMenu(api: MenuApi): Menu {
         void refreshReferralQuest();
       }
       if (id === 'profile') {
-        clearRivalContext();                      // the personal card never inherits a rival action
         setHeroExpanded(false, true);             // every entry lands on the compact summary
         paintProfile();                           // the equipped row is only laid out once it is showing
-        paintBadges();                            // the shelf mounts on first entry, not at boot
-        reloadFailedBadgeArt(document);           // re-warm any crest that fell back to its vector
+        paintBadges();                            // the shelf memoizes, so a revisit reuses its tree
+        /* Scoped to the panel, never the document: the shelf and the drawer are the only homes a
+           badge crest has, and walking the whole tree on every entry is pure cost. */
+        reloadFailedBadgeArt(pfScreen);           // re-warm any crest that fell back to its vector
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
         paintVault();                             // the Stars Vault reads the room, never the save
         void refreshVault();

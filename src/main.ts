@@ -1156,9 +1156,10 @@ const router = createRouter($('screens'), (id, prev, phase) => {
      opened it, never to the screen the player just moved to. */
   resetSeizeContext();
   /* The Profile tab is always the personal, pristine card. A rival inspection that was open on
-     Ranks — and any challenge key it mounted — is torn down before the tab paints. */
+     Ranks — and any challenge key it mounted — is torn down before the tab paints.
+     `menu.setRoute()` above already dropped the menu's own rival context for this navigation
+     (same screen, same tick), so only the compete side is asked here. */
   if (id === 'profile') {
-    menu.clearRivalContext();
     compete?.clearRivalContext();
   }
   // the light finish is a race-stage skin: it comes and goes with the board, never with the shell

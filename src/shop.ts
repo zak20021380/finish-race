@@ -141,12 +141,41 @@ export function createShop(api: ShopApi): Shop {
       document.documentElement.classList.contains('reduced-motion')
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    /* Glide and drag used to share one accumulator: the glide `step` wrote `scrollLeft` on every
+       frame, while a drag wrote it on every raw `pointermove`. Both paths now feed the same
+       one-write-per-frame commit, and the write reads `scrollLeft` exactly once. */
+    let dragRaf = 0;
+    let pendingDx = 0;
+
+    const commitScroll = (): void => {
+      dragRaf = 0;
+      const dx = pendingDx;
+      pendingDx = 0;
+      if (!dx) return;
+      /* One read, one write. The old order read, wrote, then read again to test for an edge —
+         each read after the write forced a synchronous layout flush. */
+      const before = shelf.scrollLeft;
+      shelf.scrollLeft = before + dx;
+    };
+
+    const queueDrag = (dx: number): void => {
+      pendingDx += dx;
+      if (!dragRaf) dragRaf = requestAnimationFrame(commitScroll);
+    };
+
+    const cancelDrag = (): void => {
+      if (dragRaf) cancelAnimationFrame(dragRaf);
+      dragRaf = 0;
+      pendingDx = 0;
+    };
+
     const stopGlide = (): void => {
       if (glide) cancelAnimationFrame(glide);
       glide = 0;
     };
 
     const settle = (): void => {
+      cancelDrag();
       shelf.style.scrollSnapType = snapBefore;
       shelf.style.scrollBehavior = behaviorBefore;
     };
@@ -161,18 +190,14 @@ export function createShop(api: ShopApi): Shop {
         return;
       }
       const before = shelf.scrollLeft;
-      shelf.scrollLeft += velocity * frame;
-      if (shelf.scrollLeft === before) {
-        glide = 0;
-        settle();
-        return;
-      }
+      shelf.scrollLeft = before + velocity * frame;
       glide = requestAnimationFrame(step);
     };
 
     shelf.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'touch' || ev.button !== 0) return;
       stopGlide();
+      cancelDrag();
       pointerId = ev.pointerId;
       startX = lastX = ev.clientX;
       lastAt = ev.timeStamp;
@@ -196,7 +221,9 @@ export function createShop(api: ShopApi): Shop {
       ev.preventDefault();
       const dx = ev.clientX - lastX;
       const dt = Math.max(1, ev.timeStamp - lastAt);
-      shelf.scrollLeft -= dx;
+      /* The scroll itself is coalesced to one write per frame; the velocity keeps its per-event
+         resolution so a fling still reads the true release speed. */
+      queueDrag(-dx);
       velocity = velocity * 0.35 + (-dx / dt) * 0.65;
       velocity = Math.max(-3, Math.min(3, velocity));
       lastX = ev.clientX;
@@ -209,6 +236,9 @@ export function createShop(api: ShopApi): Shop {
       shelf.classList.remove('is-dragging');
       if (captured && shelf.hasPointerCapture(ev.pointerId)) shelf.releasePointerCapture(ev.pointerId);
       captured = false;
+      /* the trailing frame lands before the tap gate opens, so a suppressed click cannot be
+         followed by a stray scroll step */
+      cancelDrag();
       if (!moved) {
         settle();
         return;
@@ -234,8 +264,16 @@ export function createShop(api: ShopApi): Shop {
     }, true);
   }
 
+  /** One serialization of what the tier row is built from, so an unchanged plan snapshot never
+   *  rebuilds its buttons. `paintTiers` records the key it painted; `syncPlans` compares. */
+  const tierSignature = (): string =>
+    tiers.map((tier) => `${tier.id}:${tier.days}:${tier.stars}`).join('|');
+  let tiersKey = '';
+  let perksKey = '';
+
   function paintTiers(): void {
     if (!tierRow) return;
+    tiersKey = tierSignature();
     tierRow.setAttribute('aria-label', t('vipPlansLabel'));
     tierRow.replaceChildren(...tiers.map((tier) => {
       const button = el('button', 'vip-flag-tier');
@@ -264,6 +302,11 @@ export function createShop(api: ShopApi): Shop {
 
   function paintPerks(): void {
     if (!perks) return;
+    /* The four promises are pure translated copy: a language that has not moved, and a plan
+       snapshot that has not moved, owe the list no rebuild. */
+    const key = PERKS.map((perk) => `${t(perk.label)}\u0001${t(perk.value)}`).join('|');
+    if (key === perksKey) return;
+    perksKey = key;
     perks.replaceChildren(...PERKS.map((perk) => {
       const row = el('li', 'vip-flag-perk');
       const mark = el('span', 'vip-flag-perk-ico');
@@ -315,13 +358,19 @@ export function createShop(api: ShopApi): Shop {
     }
   }
 
-  /** Re-read the admin's tiers; a failed read keeps the sheet already on screen. */
+  /** Re-read the admin's tiers; a failed read keeps the sheet already on screen. The read itself
+   *  is TTL-cached in premium.ts, and an unchanged snapshot skips both DOM rebuilds below. */
   function syncPlans(): void {
-    void refreshShopVipTiers().then((ok) => {
-      if (!ok) return;
+    void refreshShopVipTiers().then((changed) => {
       tiers = shopVipTiers();
       if (!tiers.some((tier) => tier.id === selected)) {
         selected = tiers.some((tier) => tier.id === VIP_HERO_PLAN) ? VIP_HERO_PLAN : tiers[0]?.id ?? selected;
+      }
+      /* `changed` is the prices moving under us; the local signature also catches a rebuild the
+         first mount still owes, and a selection that had to move to a live card. */
+      if (!changed && tiersKey === tierSignature()) {
+        paint();
+        return;
       }
       paintTiers();
       paint();

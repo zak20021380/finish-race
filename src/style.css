@@ -28544,22 +28544,35 @@ html.reduced-motion .toast.toast-royal { transition: none; }
   border-radius: 50%;
   pointer-events: none;
   opacity: 0;
+  /* One static gradient, swept by a composited transform. Animating `background-position`
+     repainted the layer on the main thread on every frame; `translate3d` is handed to the
+     compositor, so a shelf full of still-loading crests costs the main thread nothing. */
   background: linear-gradient(110deg,
     rgba(255, 255, 255, 0) 30%,
     rgba(255, 255, 255, .28) 50%,
     rgba(255, 255, 255, 0) 70%);
-  background-size: 220% 100%;
+  will-change: transform;
+  transform: translate3d(-120%, 0, 0);
   animation: badge-art-shimmer 1.25s linear infinite;
   transition: opacity .18s ease;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .badge-art-frame.is-loading .badge-art-shimmer { opacity: .9; }
 .badge-art-frame.is-loaded .badge-art-shimmer,
 .badge-art-frame.is-fallback .badge-art-shimmer { opacity: 0; animation: none; }
 @keyframes badge-art-shimmer {
-  from { background-position: 180% 0; }
-  to   { background-position: -80% 0; }
+  from { transform: translate3d(-120%, 0, 0); }
+  to   { transform: translate3d(120%, 0, 0); }
 }
-html.reduced-motion .badge-art-shimmer { animation: none; background-position: 50% 0; }
+html.reduced-motion .badge-art-shimmer {
+  animation: none;
+  transform: translate3d(0, 0, 0);
+}
+/* Only a crest that is still loading animates, so only that one earns its own compositor layer:
+   a loaded or fallen-back shimmer keeps `will-change: auto` and stays unpromoted. */
+html.reduced-motion .badge-art-shimmer,
+.badge-art-frame:not(.is-loading) .badge-art-shimmer { will-change: auto; }
 
 /* ---- Genius medallion finish: one alpha-true shine overlay shared by the
    profile shelf and the detail sheet. The halo is the honor's own metal, the

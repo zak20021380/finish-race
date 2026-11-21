@@ -182,7 +182,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const DOTS_H = 20;
   const DOTS_GAP = 8;
   let dotsTop = -1;
-  const syncDots = (): void => {
+  let dotsRaf = 0;
+
+  const commitDots = (): void => {
+    dotsRaf = 0;
     if (!dotsBox) return;
     const host = dotsBox.parentElement;
     const card = slides[activeSlide()];
@@ -196,6 +199,16 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       dotsBox.style.top = `${top}px`;
       dotsBox.style.bottom = 'auto';
     }
+  };
+
+  /* `paintDots` flips the dot/slide classes and then measures; measuring in that same tick forces
+     the browser to flush the style/layout work those writes just invalidated. The read is deferred
+     to the next frame instead (and coalesced, so a burst of entries costs one measurement), by
+     which point the writes are already laid out. The ResizeObserver and `resize` paths still
+     measure directly — they sit outside a write batch, so they read a clean layout. */
+  const syncDots = (): void => {
+    if (dotsRaf) return;
+    dotsRaf = requestAnimationFrame(commitDots);
   };
 
   /* One eased step to the settled neighbour. The dots paint on release, before the
@@ -228,7 +241,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   });
 
   // Keep the inside-dots glued to the card bottom across resizes/rotations.
-  const remeasure = (): void => { syncDots(); };
+  /* A resize is not a write batch: nothing has been mutated this tick, so the layout the browser
+     already holds is clean and measuring here is free. The deferred path is for the paint-driven
+     writers (`paintDots`, `setRoute`). The observer stays live to re-place the dots once the
+     deferred measurement has settled. */
+  const remeasure = (): void => { commitDots(); syncDots(); };
   try {
     /* All three slides are locked to the same height, so the pager never moves on a
        swipe; observing keeps it exact through font swaps and language switches. */
