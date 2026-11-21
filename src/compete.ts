@@ -34,7 +34,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, onArena, seasonLabel } from './arenaState';
-import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
+import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, myRosterId, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
@@ -43,7 +43,7 @@ import { isSelfPlayerId } from './players';
    boot chunk either way — a dynamic import here would only add a hop */
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 
-import { showToast, showRoyalToast } from './toast';
+import { showMarkupToast, showToast, showRoyalToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 
@@ -60,6 +60,10 @@ const skel = (rows: number): string =>
   Array.from({ length: rows }, () => '<div class="skel-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></div>').join('');
 
 const empty = (msg: string): string => `<div class="empty" role="status">${msg}</div>`;
+
+/** Escape a dynamic squad name before it rides inside the welcome toast's <bdi> markup. */
+const esc = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 
 function pickEl(id: string, legacy: string): HTMLElement {
   return (document.getElementById(id) ?? document.getElementById(legacy)) as HTMLElement;
@@ -1532,7 +1536,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     msEls.sheet?.classList.add('is-guild');
     const rank = msEls.rank;
     if (rank) {
-      rank.textContent = `#${s.rank}`;
+      rank.innerHTML = `<bdi dir="ltr">#${s.rank}</bdi>`;
       rank.dataset.rank = s.rank === 1 ? 'gold' : s.rank === 2 ? 'silver' : s.rank === 3 ? 'bronze' : 'num';
       rank.hidden = false;
     }
@@ -1565,7 +1569,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     iq.className = 'ms-iq';
     iq.append(svgIcon('#i-brain', 'tiq'));
     const num = document.createElement('b');
-    num.textContent = points;
+    num.innerHTML = `<bdi dir="ltr">${points}</bdi>`;
     iq.append(num);
     const line = document.createElement('small');
     line.className = 'ms-hero-sub';
@@ -1817,18 +1821,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     grid.className = 'ms-squad-grid';
     grid.setAttribute('role', 'list');
     const total = squadTiqSum(s.roster);
-    const cards: { icon: string; label: string; value: string; title: string; empty?: boolean; share?: boolean }[] = [
+    const cards: { icon: string; label: string; value: string; title: string; empty?: boolean; share?: boolean; ltr?: boolean }[] = [
       {
         icon: '#i-users',
         label: t('members'),
         value: s.members.toLocaleString('en-US'),
         title: `${s.members.toLocaleString('en-US')} ${t('members')}`,
+        ltr: true,
       },
       {
         icon: '#i-target',
         label: t('squadTotalTiq'),
         value: total.toLocaleString('en-US'),
         title: `${total.toLocaleString('en-US')} ${t('squadTotalTiq')} · ${s.members.toLocaleString('en-US')} members`,
+        ltr: true,
       },
       {
         icon: '#i-brain',
@@ -1837,6 +1843,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
         title: mine ? `${contrib.toLocaleString('en-US')} TIQ ${t('squadYourShare')}` : t('squadNotEnlisted'),
         empty: !mine,
         share: true,
+        ltr: mine,
       },
     ];
     for (const cell of cards) {
@@ -1853,7 +1860,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       top.append(label);
       const value = document.createElement('b');
       value.className = 'ms-squad-v';
-      value.textContent = cell.value;
+      if (cell.ltr) value.innerHTML = `<bdi dir="ltr">${cell.value}</bdi>`;
+      else value.textContent = cell.value;
       card.append(top, value);
       grid.append(card);
     }
@@ -2001,11 +2009,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     api.sheets.open(el);
   }
 
+  /** True when this player really holds a row on the squad, not just a stale bound id. */
+  function isEnlisted(s: RankedSquad): boolean {
+    if (getMySquad()?.id !== s.id) return false;
+    const me = myRosterId();
+    return !!me && s.roster.some((m) => m.id === me);
+  }
+
   function openGuild(s: RankedSquad): void {
     const el = msEls.sheet;
     const body = msEls.body;
     if (!el || !body) return;
-    const mine = getMySquad()?.id === s.id;
+    const mine = isEnlisted(s);
     const field = guildField.length || getSquadRanking().length;
     const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((s.rank / (field + 1)) * 100))) : 100;
     const kindLabel = squadKind(s) === 'group' ? t('squadTgGroup') : t('squadTgChannel');
@@ -2022,8 +2037,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     );
     msActions(
       'guild',
-      mine ? t('invite') : t('squadJoinCta'),
-      mine ? `${t('invite')} · ${s.handle}` : `${t('squadJoinCta')} · ${s.handle}`,
+      mine ? t('squadEnlistedInvite') : t('squadJoinCta'),
+      mine ? `${t('squadEnlistedInvite')} · ${s.handle}` : `${t('squadJoinCta')} · ${s.handle}`,
     );
     msKeyIcon(msEls.challenge, mine ? '#i-link' : '#i-swords');
     msKeyIcon(msEls.guild, '#i-ext');
@@ -2357,13 +2372,36 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       openSeize(seizeTargetOf(p.seize.def, p.seize.serial, p.name, p.id));
       return;
     }
-    const wasMine = getMySquad()?.id === p.squad.id;
-    squadAction(p.squad, wasMine).run();
-    if (!wasMine) {
-      /* the key just turned into Invite and the share became yours — repaint the open sheet */
-      const next = getSquadRanking().find((s) => s.id === p.squad.id);
-      if (next && getMySquad()?.id === next.id) openGuild(next);
+    const s = p.squad;
+    /* One key, two intents: enlist while you are out, share once you are in. The old handler
+       trusted a cached bound id here and copied the invite while the sheet still said NOT
+       ENLISTED, so the intent is read from the live roster instead. */
+    if (isEnlisted(s)) {
+      inviteSquad(s);
+      return;
     }
+    impact('light');
+    /* The roster is the registry's, so enlistment is too: wait for the Worker's answer, then
+       repaint the open drawer and the board from the roster it just confirmed. */
+    void joinSquadOnServer(s.id).then((result) => {
+      if (!result.ok) {
+        notify('warning');
+        showToast(result.message || t('enlistErrOffline'), 'warning');
+        return;
+      }
+      notify('success');
+      impact('medium');
+      loadSquads();
+      if (result.pending) {
+        /* An approval-gated squad files a request instead of adding a roster row. */
+        showToast(t('squadRequestSent'), 'success');
+        return;
+      }
+      const fresh = getSquadRanking().find((row) => row.id === s.id) ?? result.squad ?? s;
+      openGuild(fresh);
+      const name = fresh.name || fresh.handle.replace(/^@/, '');
+      showMarkupToast(t('squadWelcomeToast').replace('{squad}', esc(name)), 'success', 4800);
+    });
   });
 
   msEls.guild?.addEventListener('click', () => {
@@ -2977,6 +3015,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     loadedBoard.guilds = false;
     if (isRanksVisible() && board === 'guilds') {
       loadSquads();
+    }
+    /* An enlistment confirmed from another sheet or a server refresh must never leave a stale
+       "Join Squad" key and a NOT ENLISTED share sitting in an already-open drawer. */
+    const pending = msPending;
+    if (pending?.kind === 'guild' && msEls.sheet && !msEls.sheet.hidden) {
+      const fresh = getSquadRanking().find((s) => s.id === pending.squad.id);
+      if (fresh) openGuild(fresh);
     }
   });
 
