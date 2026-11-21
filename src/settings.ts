@@ -1036,6 +1036,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipGateTitle: 'VIP Pass required',
     vipGateSub: 'Unlock to broadcast your line.',
     vipFeatChat: 'Custom Chat',
+    shopTitle: 'Shop',
     shopVipKicker: 'OBSIDIAN VIP',
     shopVipTitle: 'Obsidian VIP',
     shopVipSub: 'Every VIP perk, live the moment your Stars land.',
@@ -2164,6 +2165,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipGateTitle: 'اشتراک VIP لازم است',
     vipGateSub: 'برای ارسال پیام دلخواه ارتقا بده.',
     vipFeatChat: 'چت اختصاصی',
+    shopTitle: 'فروشگاه',
     shopVipKicker: 'اشتراک ویژه',
     shopVipTitle: 'آبسیدین VIP',
     shopVipSub: 'همه‌ی امکانات ویژه، همون لحظه‌ای که استارزت واریز می‌شه.',
@@ -2532,6 +2534,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     searching: 'ПОИСК',
     /* ---- Obsidian VIP: четыре привилегии и награды без рекламы ---- */
     vipFeatChat: 'Свой чат',
+    shopTitle: 'Магазин',
     shopVipKicker: 'OBSIDIAN VIP',
     shopVipTitle: 'Obsidian VIP',
     shopVipSub: 'Все привилегии VIP включаются сразу, как только придут Stars.',
@@ -3064,6 +3067,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     searching: 'جارٍ البحث',
     /* ---- Obsidian VIP: أربع مزايا ومكافآت بدون إعلانات ---- */
     vipFeatChat: 'دردشة مخصصة',
+    shopTitle: 'المتجر',
     shopVipKicker: 'OBSIDIAN VIP',
     shopVipTitle: 'أوبسيديان VIP',
     shopVipSub: 'كل مزايا VIP تُفتح لحظة وصول النجوم.',
@@ -3596,6 +3600,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     searching: 'BUSCANDO',
     /* ---- Obsidian VIP: cuatro ventajas y recompensas sin anuncios ---- */
     vipFeatChat: 'Chat personalizado',
+    shopTitle: 'Tienda',
     shopVipKicker: 'OBSIDIAN VIP',
     shopVipTitle: 'Obsidian VIP',
     shopVipSub: 'Todas las ventajas VIP se activan en cuanto llegan tus Stars.',

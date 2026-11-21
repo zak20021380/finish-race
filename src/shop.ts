@@ -114,15 +114,10 @@ export function createShop(api: ShopApi): Shop {
       const days = el('span', 'vip-flag-tier-days');
       days.append(bdi(String(tier.days)), el('span', 'vip-flag-tier-unit', t('vipPlanUnitDays')));
       const price = el('span', 'vip-flag-tier-price');
-      price.append(bdi(String(tier.stars)), svg('#i-star', 'vip-flag-tier-star'));
+      /* #i-star-3d is a filled gold silhouette: crisp at price-row size in every locale. */
+      price.append(bdi(String(tier.stars)), svg('#i-star-3d', 'vip-flag-tier-star'));
 
       button.append(days, price);
-      button.addEventListener('click', () => {
-        if (busy || selected === tier.id) return;
-        selected = tier.id;
-        impact('light');
-        paint();
-      });
       return button;
     }));
   }
@@ -222,13 +217,35 @@ export function createShop(api: ShopApi): Shop {
     paintTiers();
     paintPerks();
     paint();
-    cta?.addEventListener('click', buy);
-    for (const card of document.querySelectorAll<HTMLElement>('[data-soon]')) {
-      card.addEventListener('click', () => {
+    /* One delegated listener on the stable Shop root. Tiers and shelves are re-rendered on
+       language and plan refreshes, so direct bindings would go stale; delegation keeps every
+       tap live. The closest() walk also survives clicks landing on an inner icon or <bdi>. */
+    const root = $<HTMLElement>('s-shop');
+    root?.addEventListener('click', (ev) => {
+      const target = ev.target;
+      if (!(target instanceof Element)) return;
+
+      const tier = target.closest<HTMLElement>('.vip-flag-tier');
+      if (tier && tierRow?.contains(tier)) {
+        const id = tier.dataset.plan as VipPlanId | undefined;
+        if (id && id !== selected && !busy) {
+          selected = id;
+          impact('light');
+          paint();
+        }
+        return;
+      }
+
+      if (target.closest('#shop-vip-cta')) {
+        buy();
+        return;
+      }
+
+      if (target.closest('[data-soon]')) {
         impact('light');
         showToast(t('shopSoonTap'), 'warning', 2600);
-      });
-    }
+      }
+    });
     onVipChange(() => paint());
     onLang(() => {
       paintTiers();

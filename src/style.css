@@ -43482,6 +43482,25 @@ bdi { unicode-bidi: isolate; }
    Every figure sits in its own <bdi dir="ltr"> island, so 7 / 12 / 30, 4/4,
    +50% and ×2 read the same in every language.
    ========================================================================== */
+
+/* Every glow, shimmer and pseudo-element in the Shop is decorative and inert, so it
+   can never swallow a tap. The four controls stay explicit, real hit targets. */
+#s-shop::before,
+#s-shop::after,
+#s-shop *::before,
+#s-shop *::after,
+.vip-flag-glow { pointer-events: none; }
+
+#shop-vip,
+.vip-flag-tier,
+#shop-vip-cta,
+.soon-card {
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
 .shop-pane {
   flex: 1 1 auto;
   min-height: 0;
@@ -43490,7 +43509,7 @@ bdi { unicode-bidi: isolate; }
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-bottom: 18px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
 }
@@ -43498,7 +43517,9 @@ bdi { unicode-bidi: isolate; }
 .vip-flag {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  /* No fixed height, no max-height, no clipping: the flagship grows to fit the
+     crest, all three tiers, the full 2x2 perk grid and the gold checkout CTA. */
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 13px;
@@ -43593,7 +43614,13 @@ bdi { unicode-bidi: isolate; }
   box-shadow: 0 0 0 3px rgba(245, 196, 81, 0.16);
 }
 
-.vip-flag-tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vip-flag-tiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  /* room for the floating POPULAR / -45% pills above their own cards */
+  margin-top: 12px;
+}
 .vip-flag-tier {
   position: relative;
   display: flex;
@@ -43621,7 +43648,8 @@ bdi { unicode-bidi: isolate; }
 .vip-flag-tier-price {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 4px;
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-numeric);
@@ -43629,29 +43657,30 @@ bdi { unicode-bidi: isolate; }
   font-weight: 700;
   color: #e8c477;
 }
-.vip-flag-tier-star { width: 9px; height: 9px; color: #f5c451; }
+.vip-flag-tier-star { width: 11px; height: 11px; color: #f5c451; flex: none; pointer-events: none; }
 .vip-flag-tier-badge,
 .vip-flag-tier-tag {
   position: absolute;
-  top: -7px;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 3;
   padding: 1px 6px;
   border-radius: 999px;
   font-size: 7.5px;
   font-weight: 800;
   line-height: 1.5;
   letter-spacing: 0.02em;
-  white-space: nowrap;
+  pointer-events: none;
 }
 .vip-flag-tier-badge {
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
   background: linear-gradient(180deg, #ffe9a8, #e0b25c);
   color: #241a05;
   border: 1px solid rgba(255, 246, 220, 0.6);
   box-shadow: 0 4px 10px -6px rgba(245, 196, 81, 0.9);
 }
 .vip-flag-tier-tag {
-  inset-inline-end: 5px;
   background: rgba(245, 196, 81, 0.12);
   border: 1px solid rgba(245, 196, 81, 0.34);
   color: #f0d494;
@@ -43703,7 +43732,7 @@ bdi { unicode-bidi: isolate; }
   gap: 6px;
   width: 100%;
   min-height: 47px;
-  padding: 0 14px;
+  padding: 16px;
   border-radius: 14px;
   border: 1px solid rgba(255, 240, 185, 0.5);
   background: linear-gradient(180deg, #ffeeb8 0%, #f5c451 44%, #c99a2f 100%);
