@@ -20,6 +20,7 @@
 import { workerUrl } from './adminApi';
 import { activeTgId } from './storage';
 import { onLang, t } from './settings';
+import { showToast } from './toast';
 import {
   impact, notify, openInvoice, tgInitData, tgUser, type InvoiceStatus,
 } from './telegram';
@@ -233,17 +234,29 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
     const opened = openInvoice(invoiceUrl, (status: InvoiceStatus) => {
       if (status === 'paid') {
         notify('success');
-        void refreshVip().then((synced) => {
+        void (async (): Promise<void> => {
+          /* The webhook that writes the term can land a few hundred milliseconds after the sheet
+             closes, so the first reading may still be the pre-payment entitlement. Retry briefly
+             to catch the room's write, which unlocks every perk live in this session. */
+          let synced = false;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            synced = await refreshVip();
+            if (synced && vipUntil > Date.now()) break;
+            if (attempt < 3) {
+              await new Promise<void>((done) => { window.setTimeout(done, 400 * (attempt + 1)); });
+            }
+          }
           if (!synced || vipUntil <= Date.now()) {
-            /* The receipt may land a beat after the sheet closes (or the reading may have reached
-               the room before the webhook did). Keep the pass live on this device; the next
-               refresh replaces this reading with the room's. */
+            /* The receipt still has not landed (or the reading reached the room before the
+               webhook did). Keep the pass live on this device; the next refresh replaces this
+               reading with the room's. */
             vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
             writeCachedUntil(vipUntil);
             emitVip();
           }
+          showToast(t('vipActivatedToast'), 'success', 4600);
           resolve('paid');
-        });
+        })();
         return;
       }
       if (status === 'cancelled') resolve('cancelled');

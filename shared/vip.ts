@@ -26,9 +26,9 @@ export const VIP_DAY_MS = 86_400_000;
 export const VIP_HERO_PLAN: VipPlanId = '30d';
 
 export const VIP_PLANS: readonly VipPlan[] = [
-  { id: '7d', days: 7, stars: 75, name: 'Tactical Pass' },
-  { id: '30d', days: 30, stars: 199, name: 'Pro Elite' },
-  { id: '90d', days: 90, stars: 499, name: 'Grand Master' },
+  { id: '7d', days: 7, stars: 7, name: 'Tactical Pass' },
+  { id: '30d', days: 30, stars: 12, name: 'Pro Elite' },
+  { id: '90d', days: 90, stars: 30, name: 'Grand Master' },
 ];
 
 export const VIP_PLAN_IDS: readonly VipPlanId[] = VIP_PLANS.map((plan) => plan.id);
@@ -54,9 +54,9 @@ export const VIP_STARS_MAX = 1_000_000;
 
 /** The canonical storefront, used until the room holds an admin's configuration. */
 export const VIP_DEFAULT_CONFIG: VipPlanConfig = {
-  '7d': { stars: 75, enabled: true },
-  '30d': { stars: 199, enabled: true },
-  '90d': { stars: 499, enabled: true },
+  '7d': { stars: 7, enabled: true },
+  '30d': { stars: 12, enabled: true },
+  '90d': { stars: 30, enabled: true },
 };
 
 export function defaultVipPlanConfig(): VipPlanConfig {

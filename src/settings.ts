@@ -1073,6 +1073,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipStatusUnavailable: 'Stars checkout is unavailable right now. Try again shortly.',
     vipPlansEmpty: 'VIP plans are being updated. Check back shortly.',
     vipActiveDays: '{days} days remaining',
+    vipActivatedToast: 'Obsidian VIP is active! All VIP perks are unlocked.',
     vipActiveTelegram: 'Active with your Telegram Premium',
     vipActivePreview: 'Preview pass on this device until reload',
     vipClose: 'Close VIP',
@@ -2178,6 +2179,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     vipStatusUnavailable: 'خرید با استارز الان در دسترس نیست. کمی بعد تلاش کن.',
     vipPlansEmpty: 'پلن‌های ویژه در حال به‌روزرسانی هستند. کمی بعد سر بزن.',
     vipActiveDays: '{days} روز باقی‌مانده',
+    vipActivatedToast: 'اشتراک ویژه آبسیدین فعال شد! همه امکانات VIP برای شما باز شد.',
     vipActiveTelegram: 'با تلگرام پریمیوم فعال است',
     vipActivePreview: 'پیش‌نمایش روی این دستگاه تا بارگذاری بعدی',
     vipClose: 'بستن پنجره ویژه',
@@ -2516,6 +2518,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     banterSendLabel: 'Отправить сообщение',
     banterCustomLocked: 'Своё сообщение',
     banterCustomLockedAria: 'Своё сообщение заблокировано. Откройте VIP, чтобы разблокировать.',
+    vipActivatedToast: 'Obsidian VIP активирован! Все привилегии VIP открыты.',
     /* ---- Stars Vault: оба условия обязательны (15 матчей и 5 побед) ---- */
     quest_banner_title: 'Квест дружбы: 15 матчей + 5 побед над Hard AI',
     quest_banner_cta: 'Играть с Hard AI',
@@ -3025,6 +3028,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     banterSendLabel: 'إرسال الرسالة',
     banterCustomLocked: 'رسالة مخصصة',
     banterCustomLockedAria: 'الرسالة المخصصة مقفلة. افتح اشتراك VIP لفتحها.',
+    vipActivatedToast: 'تم تفعيل Obsidian VIP! جميع مزايا VIP مفتوحة الآن.',
     /* ---- Stars Vault: الشرطان مطلوبان معًا (15 مباراة و5 انتصارات) ---- */
     quest_banner_title: 'مهمة الصداقة: 15 مباراة + 5 انتصارات على Hard AI',
     quest_banner_cta: 'العب ضد Hard AI',
@@ -3534,6 +3538,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     banterSendLabel: 'Enviar mensaje',
     banterCustomLocked: 'Mensaje personalizado',
     banterCustomLockedAria: 'El mensaje personalizado está bloqueado. Abre el pase VIP para desbloquearlo.',
+    vipActivatedToast: '¡Obsidian VIP está activo! Todos los beneficios VIP están desbloqueados.',
     /* ---- Stars Vault: ambos objetivos son obligatorios (15 partidas y 5 victorias) ---- */
     quest_banner_title: 'Misión de amistad: 15 partidas + 5 victorias vs Hard AI',
     quest_banner_cta: 'Juega contra Hard AI',
