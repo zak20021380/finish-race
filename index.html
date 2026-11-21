@@ -1831,10 +1831,12 @@
           </div>
         </section>
 
-        <!-- ---------------- shop · OBSIDIAN VIP FLAGSHIP ----------------
-             Obsidian VIP is the one live storefront at the top of the Shop; the shelves under it
-             are locked previews that only announce themselves. The head (back key + wallet) and
-             the flagship stay live; the preview cards never touch coins, Stars or inventory. -->
+        <!-- ---------------- shop · ONE HORIZONTAL CAROUSEL ----------------
+             The Shop is a single snap track, not a stack: Obsidian VIP is card 1 and the four
+             locked previews are cards 2-5, every card the same size. The head (back key + wallet)
+             and the flagship stay live; the preview cards never touch coins, Stars or inventory.
+             The pane carries no [data-scroll]: the Shop has nothing to scroll vertically, and
+             that attribute's touch-action: pan-y would veto the track's horizontal pan. -->
         <section class="screen menu is-sealed" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
           <div class="m-head">
             <button class="icon-btn" type="button" data-back aria-label="Back to home">
@@ -1846,114 +1848,79 @@
             </p>
           </div>
 
-          <div class="pane shop-pane" data-scroll>
+          <div class="pane shop-pane">
 
-            <!-- the flagship: matte obsidian, a 1px gold hairline, an ambient crest glow.
-                 The head is a centred crest stack — crown, name, one promise — so no empty
-                 gutter is left beside it in any script, RTL included. -->
-            <section class="vip-flag" id="shop-vip" aria-labelledby="shop-vip-title">
-              <div class="vip-flag-head">
-                <span class="vip-flag-crest" aria-hidden="true">
-                  <svg class="vip-flag-crest-svg" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
-                </span>
-                <div class="vip-flag-copy">
-                  <h2 class="vip-flag-title" id="shop-vip-title" data-i18n="shopVipTitle">Obsidian VIP</h2>
-                  <p class="vip-flag-sub" data-i18n="shopVipSub">Every VIP perk, live the moment your Stars land.</p>
+            <!-- ONE track, five equal cards. Card 1 is the live flagship; cards 2-5 are matte
+                 disabled previews with a single monochrome lock emblem and no purchase path. -->
+            <div class="shop-carousel" id="shop-carousel" role="group" aria-label="Shop cards">
+
+              <!-- the flagship: matte obsidian, a 1px gold hairline, an ambient crest glow.
+                   The head is a centred crest stack — crown, name, one promise — so no empty
+                   gutter is left beside it in any script, RTL included. The card is a
+                   space-between column, so crest, tiers, perks and the gold CTA share the
+                   height evenly instead of pooling a gap at the foot. -->
+              <section class="vip-flag" id="shop-vip" aria-labelledby="shop-vip-title">
+                <div class="vip-flag-head">
+                  <span class="vip-flag-crest" aria-hidden="true">
+                    <svg class="vip-flag-crest-svg" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
+                  </span>
+                  <div class="vip-flag-copy">
+                    <h2 class="vip-flag-title" id="shop-vip-title" data-i18n="shopVipTitle">Obsidian VIP</h2>
+                    <p class="vip-flag-sub" data-i18n="shopVipSub">Every VIP perk, live the moment your Stars land.</p>
+                  </div>
                 </div>
-              </div>
 
-              <p class="vip-flag-active" id="shop-vip-active" hidden>
-                <span class="vip-flag-active-dot" aria-hidden="true"></span>
-                <span id="shop-vip-active-t"></span>
-              </p>
+                <p class="vip-flag-active" id="shop-vip-active" hidden>
+                  <span class="vip-flag-active-dot" aria-hidden="true"></span>
+                  <span id="shop-vip-active-t"></span>
+                </p>
 
-              <div class="vip-flag-tiers" id="shop-vip-tiers" role="radiogroup" aria-label="Obsidian VIP plans"></div>
+                <div class="vip-flag-tiers" id="shop-vip-tiers" role="radiogroup" aria-label="Obsidian VIP plans"></div>
 
-              <ul class="vip-flag-perks" id="shop-vip-perks"></ul>
+                <ul class="vip-flag-perks" id="shop-vip-perks"></ul>
 
-              <button class="vip-flag-cta" id="shop-vip-cta" type="button">
-                <span class="vip-flag-cta-t" id="shop-vip-cta-t"></span>
+                <button class="vip-flag-cta" id="shop-vip-cta" type="button">
+                  <span class="vip-flag-cta-t" id="shop-vip-cta-t"></span>
+                </button>
+                <p class="vip-flag-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
+              </section>
+
+              <!-- cards 2-5: the same plate, muted and inert. No colour, no artwork, no glow —
+                   one lock, one name, one neutral pill. A tap only announces itself. -->
+              <button class="soon-card" type="button" data-soon>
+                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                <span class="soon-name" data-i18n="shopSoonPawns">Neon Pawns</span>
+                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
               </button>
-              <p class="vip-flag-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
-            </section>
 
-            <!-- the locked shelves: previews only, no prices and no purchase path -->
-            <section class="shop-sec" aria-labelledby="shop-items-title">
-              <div class="shop-sec-head">
-                <h2 class="shop-sec-title" id="shop-items-title" data-i18n="shopItemsTitle">Items &amp; personalization</h2>
-                <span class="shop-sec-badge" data-i18n="shopSoon">Coming soon</span>
-              </div>
-              <div class="soon-grid shop-soon" id="shop-soon">
-                <button class="soon-card" type="button" data-soon data-art="pawns">
-                  <span class="soon-art" aria-hidden="true">
-                    <svg class="soon-art-svg" viewBox="0 0 46 46" aria-hidden="true">
-                      <defs><radialGradient id="soon-pawn-core" cx="50%" cy="32%" r="68%"><stop offset="0" stop-color="#a5f3fc" /><stop offset="0.48" stop-color="#38bdf8" /><stop offset="1" stop-color="#4338ca" /></radialGradient></defs>
-                      <circle cx="23" cy="23" r="19" fill="none" stroke="#38bdf8" stroke-opacity="0.28" />
-                      <circle cx="23" cy="23" r="14.5" fill="none" stroke="#818cf8" stroke-opacity="0.45" stroke-dasharray="3 3" />
-                      <path d="M23 8.5c4 0 6.4 2.8 6.4 6.2 0 3-1.6 5.4-3.6 6.8l5.4 12.2c0.5 1.2-0.4 2.3-1.7 2.3H16.5c-1.3 0-2.2-1.1-1.7-2.3l5.4-12.2c-2-1.4-3.6-3.8-3.6-6.8 0-3.4 2.4-6.2 6.4-6.2Z" fill="url(#soon-pawn-core)" stroke="#bae6fd" stroke-opacity="0.85" stroke-width="0.9" />
-                      <ellipse cx="23" cy="35.2" rx="9.5" ry="2.4" fill="#38bdf8" fill-opacity="0.16" stroke="#7dd3fc" stroke-opacity="0.5" stroke-width="0.8" />
-                      <circle cx="23" cy="14.7" r="3.2" fill="#e0f2fe" fill-opacity="0.82" />
-                    </svg>
-                  </span>
-                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                  <span class="soon-name" data-i18n="shopSoonPawns">Neon Pawns</span>
-                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-                </button>
-                <button class="soon-card" type="button" data-soon data-art="board">
-                  <span class="soon-art" aria-hidden="true">
-                    <svg class="soon-art-svg" viewBox="0 0 46 46" aria-hidden="true">
-                      <defs><radialGradient id="soon-board-node" cx="45%" cy="35%" r="65%"><stop offset="0" stop-color="#a7f3d0" /><stop offset="0.55" stop-color="#10b981" /><stop offset="1" stop-color="#065f46" /></radialGradient></defs>
-                      <g transform="translate(23 23) rotate(45) scale(1 0.6)">
-                        <rect x="-16" y="-16" width="32" height="32" rx="2" fill="#0b1c18" fill-opacity="0.9" stroke="#10b981" stroke-opacity="0.6" />
-                        <path d="M-5.33-16V16M5.33-16V16M-16-5.33H16M-16 5.33H16" fill="none" stroke="#10b981" stroke-opacity="0.42" />
-                      </g>
-                      <circle cx="23" cy="13.4" r="3.1" fill="url(#soon-board-node)" />
-                      <circle cx="32.6" cy="23" r="3.1" fill="url(#soon-board-node)" />
-                      <circle cx="23" cy="32.6" r="2.5" fill="url(#soon-board-node)" fill-opacity="0.8" />
-                      <circle cx="13.4" cy="23" r="2.5" fill="url(#soon-board-node)" fill-opacity="0.8" />
-                      <circle cx="23" cy="23" r="3.4" fill="url(#soon-board-node)" stroke="#fbbf24" stroke-opacity="0.7" stroke-width="0.8" />
-                      <path d="M23 5.8v3.8M21.1 7.7h3.8M23 36.4v3.8M21.1 38.3h3.8M5.9 23h3.8M7.8 21.1v3.8M36.3 23h3.8M38.2 21.1v3.8" fill="none" stroke="#f5c451" stroke-opacity="0.68" stroke-linecap="round" />
-                    </svg>
-                  </span>
-                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                  <span class="soon-name" data-i18n="shopSoonBoards">Obsidian Board</span>
-                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-                </button>
-                <button class="soon-card" type="button" data-soon data-art="frame">
-                  <span class="soon-art" aria-hidden="true">
-                    <svg class="soon-art-svg" viewBox="0 0 46 46" aria-hidden="true">
-                      <defs><linearGradient id="soon-frame-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c4" /><stop offset="0.42" stop-color="#f5c451" /><stop offset="1" stop-color="#b0721e" /></linearGradient></defs>
-                      <circle cx="23" cy="24.5" r="16.5" fill="#17120a" fill-opacity="0.92" stroke="url(#soon-frame-gold)" stroke-width="2.2" />
-                      <circle cx="23" cy="24.5" r="11.8" fill="#0c0a08" stroke="#f5c451" stroke-opacity="0.5" />
-                      <path d="M23 16.8 29.5 24.5 23 32.2 16.5 24.5Z" fill="#f5c451" fill-opacity="0.1" stroke="#e8b955" stroke-opacity="0.7" />
-                      <path d="M16.6 11.8 18 7.2l3 3.2 2-4.4 2 4.4 3-3.2 1.4 4.6" fill="#f5c451" fill-opacity="0.16" stroke="url(#soon-frame-gold)" stroke-width="1.2" stroke-linejoin="round" />
-                      <circle cx="23" cy="24.5" r="2.6" fill="#fbbf24" fill-opacity="0.85" />
-                      <path d="M23 16.8v5.1M16.5 24.5h5.9M23 27.1v5.1M20.6 24.5h4.8" fill="none" stroke="#fff0b8" stroke-opacity="0.45" />
-                    </svg>
-                  </span>
-                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                  <span class="soon-name" data-i18n="shopSoonFrames">Royal Avatar Frame</span>
-                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-                </button>
-                <button class="soon-card" type="button" data-soon data-art="effects">
-                  <span class="soon-art" aria-hidden="true">
-                    <svg class="soon-art-svg" viewBox="0 0 46 46" aria-hidden="true">
-                      <defs><radialGradient id="soon-burst-core" cx="42%" cy="30%" r="70%"><stop offset="0" stop-color="#f5d0fe" /><stop offset="0.5" stop-color="#c084fc" /><stop offset="1" stop-color="#7e22ce" /></radialGradient></defs>
-                      <circle cx="23" cy="23" r="19" fill="none" stroke="#c084fc" stroke-opacity="0.28" />
-                      <circle cx="23" cy="23" r="14.2" fill="none" stroke="#f472b6" stroke-opacity="0.34" stroke-dasharray="2 3" />
-                      <path d="M23 3.8v4.4M23 37.8v4.4M3.8 23h4.4M37.8 23h4.4M9.2 9.2l3.1 3.1M33.7 33.7l3.1 3.1M36.8 9.2l-3.1 3.1M12.3 33.7l-3.1 3.1" fill="none" stroke="#e9d5ff" stroke-opacity="0.55" stroke-linecap="round" />
-                      <circle cx="23" cy="23" r="10" fill="url(#soon-burst-core)" stroke="#f0abfc" stroke-opacity="0.6" />
-                      <path d="M19 17.5h8v4.2c0 2.2-1.8 4-4 4s-4-1.8-4-4v-4.2Z" fill="#fdf4ff" fill-opacity="0.9" />
-                      <path d="M19 18.6h-2.2c0 2.2 1 3.4 2.6 3.4M27 18.6h2.2c0 2.2-1 3.4-2.6 3.4M23 25.7v3.2M20.4 29.4h5.2" fill="none" stroke="#fdf4ff" stroke-opacity="0.9" stroke-linecap="round" />
-                      <path d="m23 7.5 1.2 1.8-1.2 1.8-1.2-1.8ZM38.5 23l1.2 1.8-1.2 1.8-1.2-1.8Z" fill="#fbcfe8" fill-opacity="0.8" />
-                    </svg>
-                  </span>
-                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                  <span class="soon-name" data-i18n="shopSoonEffects">Victory Effects</span>
-                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-                </button>
-              </div>
-            </section>
+              <button class="soon-card" type="button" data-soon>
+                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                <span class="soon-name" data-i18n="shopSoonBoards">Obsidian Board</span>
+                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+              </button>
+
+              <button class="soon-card" type="button" data-soon>
+                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                <span class="soon-name" data-i18n="shopSoonFrames">Royal Avatar Frame</span>
+                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+              </button>
+
+              <button class="soon-card" type="button" data-soon>
+                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                <span class="soon-name" data-i18n="shopSoonEffects">Victory Effects</span>
+                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+              </button>
+            </div>
+
+            <!-- five dots: a gold pill for the card on screen, muted dots for the rest. Painted
+                 from the scroll position, never the other way round — the rail is a readout. -->
+            <div class="shop-dots" id="shop-dots" aria-hidden="true">
+              <span class="shop-dot is-active"></span>
+              <span class="shop-dot"></span>
+              <span class="shop-dot"></span>
+              <span class="shop-dot"></span>
+              <span class="shop-dot"></span>
+            </div>
           </div>
         </section>
 

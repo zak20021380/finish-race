@@ -1,10 +1,11 @@
 /**
- * shop.ts — the Shop: the Obsidian VIP flagship on top, then the locked preview shelves.
+ * shop.ts — the Shop: ONE horizontal carousel of five equal cards.
  *
- * The flagship is a storefront, not a second till. Every price comes from the VIP tiers the
- * Worker serves (via premium.ts), and the one checkout is `purchaseVip()` — the same verified
- * Telegram Stars flow the VIP sheet uses. The shelves below it are previews only: a tap opens a
- * short toast and never touches coins, Stars or inventory.
+ * Card 1 is the flagship and a storefront, not a second till. Every price comes from the VIP
+ * tiers the Worker serves (via premium.ts), and the one checkout is `purchaseVip()` — the same
+ * verified Telegram Stars flow the VIP sheet uses. Cards 2-5 are previews only: a tap opens a
+ * short toast and never touches coins, Stars or inventory. This module also owns the track's
+ * pointer-drag layer and the five-dot rail under it.
  */
 import { profile } from './storage';
 import { setBalance } from './coin';
@@ -96,7 +97,8 @@ export function createShop(api: ShopApi): Shop {
   const cta = $<HTMLButtonElement>('shop-vip-cta');
   const ctaText = $<HTMLElement>('shop-vip-cta-t');
   const status = $<HTMLElement>('shop-vip-status');
-  const shelf = $<HTMLElement>('shop-soon');
+  const track = $<HTMLElement>('shop-carousel');
+  const dots = $<HTMLElement>('shop-dots');
 
   let tiers: ShopVipTier[] = shopVipTiers();
   let selected: VipPlanId = tiers.some((tier) => tier.id === VIP_HERO_PLAN)
@@ -116,13 +118,53 @@ export function createShop(api: ShopApi): Shop {
     status.hidden = true;
   }
 
-  /** Desktop fling layer for the locked shelf. Touch keeps its native pan-and-snap; a mouse
-   *  or pen drag follows the pointer with easing, and anything past 6px cancels the tap toast.
-   *  Capture is claimed only after the threshold so a plain tap still reaches its button. */
-  function mountShelfDrag(): void {
-    if (!shelf || shelf.dataset.dragReady === '1') return;
-    shelf.dataset.dragReady = '1';
+  /** The carousel's motion layer. Touch keeps its native pan-and-snap; a mouse or pen drag
+   *  follows the pointer with easing, and anything past 6px cancels the tap toast. Capture is
+   *  claimed only after the threshold, so a plain tap still reaches its button. The five-dot
+   *  rail is a readout of the same scroll, never a second source of truth. */
+  function mountCarousel(): void {
+    if (!track || track.dataset.dragReady === '1') return;
+    track.dataset.dragReady = '1';
+    const rail = track;
 
+    /* ---- the dots: one passive read per frame, one write only when the index moves ---- */
+    const marks: HTMLElement[] = [];
+    for (const node of Array.from(dots?.children ?? [])) {
+      if (node instanceof HTMLElement) marks.push(node);
+    }
+    let dotRaf = 0;
+    let activeDot = 0;
+
+    /** The card nearest the scrollport's centre is the one on screen. Measured in viewport
+     *  space, so RTL's negative scrollLeft (and any future change to it) cannot skew it. */
+    const paintDot = (): void => {
+      dotRaf = 0;
+      const box = rail.getBoundingClientRect();
+      const mid = box.left + box.width / 2;
+      let best = 0;
+      let closest = Infinity;
+      for (let i = 0; i < rail.children.length; i += 1) {
+        const card = rail.children[i];
+        if (!(card instanceof HTMLElement)) continue;
+        const rect = card.getBoundingClientRect();
+        const gap = Math.abs(rect.left + rect.width / 2 - mid);
+        if (gap < closest) {
+          closest = gap;
+          best = i;
+        }
+      }
+      if (best === activeDot) return;
+      activeDot = best;
+      for (let i = 0; i < marks.length; i += 1) marks[i].classList.toggle('is-active', i === best);
+    };
+
+    if (marks.length) {
+      rail.addEventListener('scroll', () => {
+        if (!dotRaf) dotRaf = requestAnimationFrame(paintDot);
+      }, { passive: true });
+    }
+
+    /* ---- the drag: touch keeps the native gesture, mouse and pen follow the pointer ---- */
     const DRAG_SLOP = 6;
     let pointerId: number | null = null;
     let captured = false;
@@ -136,6 +178,9 @@ export function createShop(api: ShopApi): Shop {
     let glideAt = 0;
     let snapBefore = '';
     let behaviorBefore = '';
+    /* Pixels of pointer travel per pixel of scrollLeft: -1 in LTR, +1 in RTL, where the
+       scroll origin is the right edge and scrollLeft runs negative as you advance. */
+    let axis = -1;
 
     const reducedMotion = (): boolean =>
       document.documentElement.classList.contains('reduced-motion')
@@ -154,8 +199,8 @@ export function createShop(api: ShopApi): Shop {
       if (!dx) return;
       /* One read, one write. The old order read, wrote, then read again to test for an edge —
          each read after the write forced a synchronous layout flush. */
-      const before = shelf.scrollLeft;
-      shelf.scrollLeft = before + dx;
+      const before = rail.scrollLeft;
+      rail.scrollLeft = before + dx;
     };
 
     const queueDrag = (dx: number): void => {
@@ -176,8 +221,8 @@ export function createShop(api: ShopApi): Shop {
 
     const settle = (): void => {
       cancelDrag();
-      shelf.style.scrollSnapType = snapBefore;
-      shelf.style.scrollBehavior = behaviorBefore;
+      rail.style.scrollSnapType = snapBefore;
+      rail.style.scrollBehavior = behaviorBefore;
     };
 
     const step = (now: number): void => {
@@ -189,12 +234,12 @@ export function createShop(api: ShopApi): Shop {
         settle();
         return;
       }
-      const before = shelf.scrollLeft;
-      shelf.scrollLeft = before + velocity * frame;
+      const before = rail.scrollLeft;
+      rail.scrollLeft = before + velocity * frame;
       glide = requestAnimationFrame(step);
     };
 
-    shelf.addEventListener('pointerdown', (ev) => {
+    rail.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'touch' || ev.button !== 0) return;
       stopGlide();
       cancelDrag();
@@ -203,28 +248,29 @@ export function createShop(api: ShopApi): Shop {
       lastAt = ev.timeStamp;
       velocity = 0;
       moved = false;
+      axis = getComputedStyle(rail).direction === 'rtl' ? 1 : -1;
     });
 
-    shelf.addEventListener('pointermove', (ev) => {
+    rail.addEventListener('pointermove', (ev) => {
       if (pointerId !== ev.pointerId) return;
       if (!moved && Math.abs(ev.clientX - startX) > DRAG_SLOP) {
         moved = true;
         captured = true;
-        snapBefore = shelf.style.scrollSnapType;
-        behaviorBefore = shelf.style.scrollBehavior;
-        shelf.style.scrollSnapType = 'none';
-        shelf.style.scrollBehavior = 'auto';
-        shelf.setPointerCapture(ev.pointerId);
-        shelf.classList.add('is-dragging');
+        snapBefore = rail.style.scrollSnapType;
+        behaviorBefore = rail.style.scrollBehavior;
+        rail.style.scrollSnapType = 'none';
+        rail.style.scrollBehavior = 'auto';
+        rail.setPointerCapture(ev.pointerId);
+        rail.classList.add('is-dragging');
       }
       if (!moved) return;
       ev.preventDefault();
-      const dx = ev.clientX - lastX;
+      const dx = (ev.clientX - lastX) * axis;
       const dt = Math.max(1, ev.timeStamp - lastAt);
       /* The scroll itself is coalesced to one write per frame; the velocity keeps its per-event
          resolution so a fling still reads the true release speed. */
-      queueDrag(-dx);
-      velocity = velocity * 0.35 + (-dx / dt) * 0.65;
+      queueDrag(dx);
+      velocity = velocity * 0.35 + (dx / dt) * 0.65;
       velocity = Math.max(-3, Math.min(3, velocity));
       lastX = ev.clientX;
       lastAt = ev.timeStamp;
@@ -233,8 +279,8 @@ export function createShop(api: ShopApi): Shop {
     const release = (ev: PointerEvent): void => {
       if (pointerId !== ev.pointerId) return;
       pointerId = null;
-      shelf.classList.remove('is-dragging');
-      if (captured && shelf.hasPointerCapture(ev.pointerId)) shelf.releasePointerCapture(ev.pointerId);
+      rail.classList.remove('is-dragging');
+      if (captured && rail.hasPointerCapture(ev.pointerId)) rail.releasePointerCapture(ev.pointerId);
       captured = false;
       /* the trailing frame lands before the tap gate opens, so a suppressed click cannot be
          followed by a stray scroll step */
@@ -253,10 +299,10 @@ export function createShop(api: ShopApi): Shop {
       }
       settle();
     };
-    shelf.addEventListener('pointerup', release);
-    shelf.addEventListener('pointercancel', release);
+    rail.addEventListener('pointerup', release);
+    rail.addEventListener('pointercancel', release);
 
-    shelf.addEventListener('click', (ev) => {
+    rail.addEventListener('click', (ev) => {
       if (performance.now() >= suppressUntil) return;
       ev.preventDefault();
       ev.stopPropagation();
@@ -407,9 +453,9 @@ export function createShop(api: ShopApi): Shop {
     paintTiers();
     paintPerks();
     paint();
-    /* One delegated listener on the stable Shop root. Tiers and shelves are re-rendered on
-       language and plan refreshes, so direct bindings would go stale; delegation keeps every
-       tap live. The closest() walk also survives clicks landing on an inner icon or <bdi>. */
+    /* One delegated listener on the stable Shop root. The tier row is re-rendered on language
+       and plan refreshes, so direct bindings would go stale; delegation keeps every tap live.
+       The closest() walk also survives clicks landing on an inner icon or <bdi>. */
     const root = $<HTMLElement>('s-shop');
     root?.addEventListener('click', (ev) => {
       const target = ev.target;
@@ -438,7 +484,7 @@ export function createShop(api: ShopApi): Shop {
         showToast(t('shopSoonTap'), 'warning', 2600);
       }
     });
-    mountShelfDrag();
+    mountCarousel();
     onVipChange(() => paint());
     onLang(() => {
       paintTiers();

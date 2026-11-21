@@ -43482,14 +43482,15 @@ bdi { unicode-bidi: isolate; }
 }
 
 /* =========================================================================
-   Shop · Obsidian VIP flagship + locked preview shelves
-   A matte obsidian plate with a 1px gold hairline and an ambient crest glow.
-   Every figure sits in its own <bdi dir="ltr"> island, so 7 / 12 / 30, 4/4,
-   +50% and ×2 read the same in every language.
+   Shop · ONE horizontal carousel — the VIP flagship + four locked previews
+   Five cards, one track, one height. Card 1 is the live Obsidian VIP plate;
+   cards 2-5 are matte disabled plates with a single monochrome lock. Every
+   figure sits in its own <bdi dir="ltr"> island, so 7 / 12 / 30, 4/4, +50%
+   and x2 read the same in every language.
    ========================================================================== */
 
-/* Every glow, shimmer and pseudo-element in the Shop is decorative and inert, so it
-   can never swallow a tap. The four controls stay explicit, real hit targets. */
+/* Every glow and pseudo-element in the Shop is decorative and inert, so it can
+   never swallow a tap. The five cards stay explicit, real hit targets. */
 #s-shop::before,
 #s-shop::after,
 #s-shop *::before,
@@ -43505,49 +43506,108 @@ bdi { unicode-bidi: isolate; }
   z-index: 2;
 }
 
-/* Chrome-free scrolling on the Shop: the pane and the screen lose the native bar
-   entirely. `scrollbar-width: thin` here used to override the global
-   `[data-scroll] { scrollbar-width: none }` on specificity, which is exactly what
-   painted the white edge bar over the obsidian card. Gestures stay intact:
-   [data-scroll] already carries touch-action: pan-y, overscroll-behavior: contain
-   and -webkit-overflow-scrolling: touch, and wheel scrolling is never gated. */
-#s-shop,
-.shop-pane {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* THE HEIGHT CONTRACT: a fixed head, a track that owns every remaining pixel, and
+   no vertical scroll anywhere. The bottom dock is a flex sibling of .screens, not
+   a floating overlay, so the pane already stops above it — reserving a dock-sized
+   bottom pad here would be exactly the dead band this screen exists to lose. */
+#s-shop {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 0;
 }
-#s-shop::-webkit-scrollbar,
-.shop-pane::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
 .shop-pane {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: clip;
   display: flex;
   flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ---- the one track: native snap on touch, pointer drag on desktop ---- */
+.shop-carousel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 14px;
-  /* generous clearance: the four locked preview cards clear the floating bottom nav
-     with breathing room, plus the home-indicator inset on notched phones */
-  padding: 10px 16px calc(116px + env(safe-area-inset-bottom));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  /* symmetric side padding frames card 1 and leaves a sliver of card 2 on the edge */
+  padding: 6px 18px 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.shop-carousel::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.shop-carousel.is-dragging { cursor: grabbing; }
+.shop-carousel.is-dragging :is(#shop-vip, .soon-card) {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 100% EQUAL CARDS: one sizing rule, written once, shared by the flagship and all
+   four previews. Nothing inside a card may change the card's outer box. */
+#shop-vip,
+.soon-card {
+  flex: 0 0 calc(100vw - 56px);
+  max-width: 360px;
+  height: 100%;
+  border-radius: 22px;
+  scroll-snap-align: center;
+  box-sizing: border-box;
+}
+
+/* ---- the five-dot rail: a readout, never a control ---- */
+.shop-dots {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 16px;
+  padding: 0 18px;
+}
+.shop-dot {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+.shop-dot.is-active {
+  width: 16px;
+  background: rgba(245, 196, 81, 0.88);
+  box-shadow: 0 0 10px -3px rgba(245, 196, 81, 0.8);
 }
 
 .vip-flag {
   position: relative;
   isolation: isolate;
-  /* No fixed height, no max-height, no clipping: the flagship grows to fit the
-     crest, all three tiers, the full 2x2 perk grid and the gold checkout CTA. */
-  overflow: visible;
+  /* The carousel owns the height, so the card distributes instead of growing: crest at
+     the top, gold CTA at the foot, tiers and perks sharing the middle. `overflow: hidden`
+     keeps a wrapped Persian perk label inside the plate instead of bleeding past it. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   /* one uniform vertical rhythm: header -> tier cards -> perk pills -> gold CTA */
-  gap: 12px;
-  padding: 16px 16px;
+  gap: 10px;
+  padding: 16px;
   border-radius: 22px;
   border: 1px solid rgba(245, 196, 81, 0.34);
   /* ONE surface only: a tight 24K spotlight behind the crown over pure carbon obsidian.
@@ -43555,7 +43615,8 @@ bdi { unicode-bidi: isolate; }
   background:
     radial-gradient(circle 150px at 50% 44px, rgba(255, 206, 84, 0.20) 0%, rgba(245, 184, 61, 0.06) 48%, rgba(9, 10, 15, 0) 100%),
     linear-gradient(180deg, #11131b 0%, #08090d 100%);
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 224, 138, 0.22);
+  /* one contact shadow, no bloom: the tab opens in a single frame */
+  box-shadow: 0 10px 22px -14px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 224, 138, 0.22);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -43805,165 +43866,112 @@ bdi { unicode-bidi: isolate; }
 /* an idle card keeps its footer tight: an empty note collapses to nothing at all */
 .vip-flag-status:empty { display: none; }
 
-.shop-sec { display: flex; flex-direction: column; gap: 9px; }
-.shop-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.shop-sec-title { margin: 0; font-size: 12.5px; font-weight: 800; line-height: 1.3; color: #e6eaf2; }
-.shop-sec-badge {
-  flex: none;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(245, 196, 81, 0.26);
-  background: rgba(245, 196, 81, 0.07);
-  color: #e6c887;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.soon-grid {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  /* keep card borders and glows off the clip edge */
-  padding: 2px 2px 6px;
-}
-.soon-grid::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.soon-grid.is-dragging { cursor: grabbing; }
-.soon-grid.is-dragging .soon-card {
-  cursor: grabbing;
-  user-select: none;
-  -webkit-user-select: none;
-}
-/* four opaque collectible plates: one ambient spotlight each, one specular hairline,
-   one static SVG centrepiece. No blur and no loop, so switching tabs stays instant. */
+/* ---- cards 2-5: one matte disabled plate, four times ----
+   No colour, no artwork, no glow. The same muted obsidian, the same 48px lock, the
+   same neutral pill; the only thing that changes between the four is the name. */
 .soon-card {
-  position: relative;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  flex: 0 0 152px;
-  min-width: 152px;
-  min-height: 138px;
-  scroll-snap-align: start;
-  padding: 14px 12px 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, #101624 0%, #090c14 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -16px rgba(0, 0, 0, 0.9);
-  color: #e8edf6;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, #0d0f15 0%, #08090d 100%);
+  color: rgba(255, 255, 255, 0.72);
   font: inherit;
-  text-align: start;
+  opacity: 0.65;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  transition: transform 0.18s ease;
+  transition: opacity 0.18s ease, border-color 0.18s ease;
 }
-.soon-card:hover { transform: translateY(-1px); }
-.soon-card[data-art="pawns"] {
-  background: radial-gradient(circle at 50% 28%, rgba(56, 189, 248, 0.22) 0%, rgba(99, 102, 241, 0.06) 55%, transparent 100%), linear-gradient(180deg, #101624 0%, #090c14 100%);
-  border: 1px solid rgba(56, 189, 248, 0.30);
-}
-.soon-card[data-art="board"] {
-  background: radial-gradient(circle at 50% 28%, rgba(16, 185, 129, 0.20) 0%, rgba(245, 196, 81, 0.05) 55%, transparent 100%), linear-gradient(180deg, #0e1918 0%, #090d0e 100%);
-  border: 1px solid rgba(16, 185, 129, 0.28);
-}
-.soon-card[data-art="frame"] {
-  background: radial-gradient(circle at 50% 28%, rgba(245, 196, 81, 0.22) 0%, rgba(251, 146, 60, 0.06) 55%, transparent 100%), linear-gradient(180deg, #19150e 0%, #0c0a08 100%);
-  border: 1px solid rgba(245, 196, 81, 0.30);
-}
-.soon-card[data-art="effects"] {
-  background: radial-gradient(circle at 50% 28%, rgba(192, 132, 252, 0.22) 0%, rgba(244, 114, 182, 0.06) 55%, transparent 100%), linear-gradient(180deg, #171022 0%, #0b0912 100%);
-  border: 1px solid rgba(192, 132, 252, 0.30);
-}
-.soon-art {
+.soon-card:hover { opacity: 0.78; border-color: rgba(255, 255, 255, 0.1); }
+.soon-card:active { opacity: 0.86; }
+
+/* the single emblem: a monochrome lock in a faint well, never a disc of colour */
+.soon-lock {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: none;
-  width: 46px;
-  height: 46px;
-  margin: 0 auto 2px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.32);
 }
-.soon-art-svg { display: block; width: 46px; height: 46px; }
-.soon-lock {
-  position: absolute;
-  top: 11px;
-  inset-inline-end: 10px;
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  color: #98a2b3;
-  opacity: 0.82;
-}
-.soon-lock-svg { width: 14px; height: 14px; }
+.soon-lock-svg { width: 24px; height: 24px; }
 .soon-name {
-  font-size: 10.5px;
-  font-weight: 800;
-  line-height: 1.3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
   letter-spacing: 0;
-  color: #eef2f9;
+  color: rgba(255, 255, 255, 0.72);
   overflow-wrap: anywhere;
 }
 .soon-tag {
-  padding: 2px 7px;
+  padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 8px;
-  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 9.5px;
+  font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0;
   white-space: nowrap;
 }
-.soon-card[data-art="pawns"] .soon-tag { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.32); color: #7dd3fc; }
-.soon-card[data-art="board"] .soon-tag { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.32); color: #6ee7b7; }
-.soon-card[data-art="frame"] .soon-tag { background: rgba(245, 196, 81, 0.12); border-color: rgba(245, 196, 81, 0.32); color: #f0d494; }
-.soon-card[data-art="effects"] .soon-tag { background: rgba(192, 132, 252, 0.12); border-color: rgba(192, 132, 252, 0.32); color: #d8b4fe; }
 
-/* ---- joined scripts: Vazirmatn, real RTL, no Latin tracking ---- */
+/* ---- joined scripts: Vazirmatn, real RTL, no Latin tracking ----
+   The track flips with the pane: card 1 sits on the right, and the dots rail mirrors
+   with it. Drag and dot maths read the computed direction, so both stay correct. */
 html[data-lang="fa"] .shop-pane,
 html[data-lang="ar"] .shop-pane { direction: rtl; }
-html[data-lang="fa"] :is(.vip-flag, .shop-sec),
-html[data-lang="ar"] :is(.vip-flag, .shop-sec) {
+html[data-lang="fa"] :is(.vip-flag, .soon-card),
+html[data-lang="ar"] :is(.vip-flag, .soon-card) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
-html[data-lang="fa"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag),
-html[data-lang="ar"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag) {
+html[data-lang="fa"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .soon-tag),
+html[data-lang="ar"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .soon-tag) {
   letter-spacing: 0;
 }
 html[data-lang="fa"] .vip-flag-title,
 html[data-lang="ar"] .vip-flag-title { line-height: 1.5; }
 html[data-lang="fa"] .vip-flag-sub,
 html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
+html[data-lang="fa"] .soon-name,
+html[data-lang="ar"] .soon-name { line-height: 1.6; }
 
 @media (max-width: 360px) {
   /* same centred crest stack and 22px plate, only the rhythm tightens to fit 320px,
-     while the 12px gap still clears the floating POPULAR / -45% pills above their cards */
-  .vip-flag { padding: 16px 12px; gap: 12px; }
+     while the 10px gap still clears the floating POPULAR / -45% pills above their cards */
+  .vip-flag { padding: 16px 12px; gap: 10px; }
   .vip-flag-title { font-size: 14.5px; }
-  .vip-flag-perk { padding: 8px 7px; gap: 6px; }
+  .vip-flag-perk { padding: 7px 7px; gap: 6px; }
   .vip-flag-perk-label { font-size: 9.5px; }
   .vip-flag-tier-days { font-size: 12px; }
   .vip-flag-cta { font-size: 11.5px; }
   .tg-star-icon { width: 16px; height: 16px; }
+  .soon-name { font-size: 12px; }
+}
+/* short phones: the card is a fixed height now, so the flagship buys back headroom
+   instead of pushing the CTA past the plate's foot */
+@media (max-height: 700px) {
+  .vip-flag { gap: 8px; padding: 14px 16px; }
+  .vip-flag-crest { width: 42px; height: 42px; }
+  .vip-flag-crest-svg { width: 26px; height: 26px; }
+  .vip-flag-perk { padding: 6px 9px; }
+  .shop-carousel { padding: 4px 18px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vip-flag-tier, .soon-card { transition: none; }
-  .soon-grid { scroll-behavior: auto; }
+  .vip-flag-tier, .soon-card, .shop-dot { transition: none; }
+  .shop-carousel { scroll-behavior: auto; }
 }
-html.reduced-motion .soon-grid { scroll-behavior: auto; }
+html.reduced-motion .shop-carousel { scroll-behavior: auto; }
 
 /* ==========================================================================
    SQUAD VERIFICATION — the strict badge gate and its dual-mode block.
