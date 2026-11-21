@@ -96,6 +96,7 @@ export function createShop(api: ShopApi): Shop {
   const cta = $<HTMLButtonElement>('shop-vip-cta');
   const ctaText = $<HTMLElement>('shop-vip-cta-t');
   const status = $<HTMLElement>('shop-vip-status');
+  const shelf = $<HTMLElement>('shop-soon');
 
   let tiers: ShopVipTier[] = shopVipTiers();
   let selected: VipPlanId = tiers.some((tier) => tier.id === VIP_HERO_PLAN)
@@ -113,6 +114,124 @@ export function createShop(api: ShopApi): Shop {
     if (!status) return;
     status.textContent = '';
     status.hidden = true;
+  }
+
+  /** Desktop fling layer for the locked shelf. Touch keeps its native pan-and-snap; a mouse
+   *  or pen drag follows the pointer with easing, and anything past 6px cancels the tap toast.
+   *  Capture is claimed only after the threshold so a plain tap still reaches its button. */
+  function mountShelfDrag(): void {
+    if (!shelf || shelf.dataset.dragReady === '1') return;
+    shelf.dataset.dragReady = '1';
+
+    const DRAG_SLOP = 6;
+    let pointerId: number | null = null;
+    let captured = false;
+    let startX = 0;
+    let lastX = 0;
+    let lastAt = 0;
+    let velocity = 0;
+    let moved = false;
+    let suppressUntil = 0;
+    let glide = 0;
+    let glideAt = 0;
+    let snapBefore = '';
+    let behaviorBefore = '';
+
+    const reducedMotion = (): boolean =>
+      document.documentElement.classList.contains('reduced-motion')
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const stopGlide = (): void => {
+      if (glide) cancelAnimationFrame(glide);
+      glide = 0;
+    };
+
+    const settle = (): void => {
+      shelf.style.scrollSnapType = snapBefore;
+      shelf.style.scrollBehavior = behaviorBefore;
+    };
+
+    const step = (now: number): void => {
+      const frame = Math.min(33, Math.max(8, now - glideAt || 16));
+      glideAt = now;
+      velocity *= Math.pow(0.9, frame / 16);
+      if (Math.abs(velocity) < 0.02) {
+        glide = 0;
+        settle();
+        return;
+      }
+      const before = shelf.scrollLeft;
+      shelf.scrollLeft += velocity * frame;
+      if (shelf.scrollLeft === before) {
+        glide = 0;
+        settle();
+        return;
+      }
+      glide = requestAnimationFrame(step);
+    };
+
+    shelf.addEventListener('pointerdown', (ev) => {
+      if (ev.pointerType === 'touch' || ev.button !== 0) return;
+      stopGlide();
+      pointerId = ev.pointerId;
+      startX = lastX = ev.clientX;
+      lastAt = ev.timeStamp;
+      velocity = 0;
+      moved = false;
+    });
+
+    shelf.addEventListener('pointermove', (ev) => {
+      if (pointerId !== ev.pointerId) return;
+      if (!moved && Math.abs(ev.clientX - startX) > DRAG_SLOP) {
+        moved = true;
+        captured = true;
+        snapBefore = shelf.style.scrollSnapType;
+        behaviorBefore = shelf.style.scrollBehavior;
+        shelf.style.scrollSnapType = 'none';
+        shelf.style.scrollBehavior = 'auto';
+        shelf.setPointerCapture(ev.pointerId);
+        shelf.classList.add('is-dragging');
+      }
+      if (!moved) return;
+      ev.preventDefault();
+      const dx = ev.clientX - lastX;
+      const dt = Math.max(1, ev.timeStamp - lastAt);
+      shelf.scrollLeft -= dx;
+      velocity = velocity * 0.35 + (-dx / dt) * 0.65;
+      velocity = Math.max(-3, Math.min(3, velocity));
+      lastX = ev.clientX;
+      lastAt = ev.timeStamp;
+    });
+
+    const release = (ev: PointerEvent): void => {
+      if (pointerId !== ev.pointerId) return;
+      pointerId = null;
+      shelf.classList.remove('is-dragging');
+      if (captured && shelf.hasPointerCapture(ev.pointerId)) shelf.releasePointerCapture(ev.pointerId);
+      captured = false;
+      if (!moved) {
+        settle();
+        return;
+      }
+      suppressUntil = performance.now() + 300;
+      /* a pause before release is a placement, not a fling */
+      if (performance.now() - lastAt > 120) velocity = 0;
+      if (!reducedMotion() && Math.abs(velocity) > 0.15) {
+        glideAt = performance.now();
+        glide = requestAnimationFrame(step);
+        return;
+      }
+      settle();
+    };
+    shelf.addEventListener('pointerup', release);
+    shelf.addEventListener('pointercancel', release);
+
+    shelf.addEventListener('click', (ev) => {
+      if (performance.now() >= suppressUntil) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      suppressUntil = 0;
+    }, true);
   }
 
   function paintTiers(): void {
@@ -270,6 +389,7 @@ export function createShop(api: ShopApi): Shop {
         showToast(t('shopSoonTap'), 'warning', 2600);
       }
     });
+    mountShelfDrag();
     onVipChange(() => paint());
     onLang(() => {
       paintTiers();

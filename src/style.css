@@ -43542,12 +43542,12 @@ bdi { unicode-bidi: isolate; }
   display: flex;
   flex-direction: column;
   /* one uniform vertical rhythm: header -> tier cards -> perk pills -> gold CTA */
-  gap: 14px;
-  padding: 18px 16px;
+  gap: 12px;
+  padding: 16px 16px;
   border-radius: 22px;
   border: 1px solid rgba(245, 196, 81, 0.32);
-  /* deep matte obsidian: a whisper of gold at the crest, then near-black at the base */
-  background: linear-gradient(180deg, rgba(245, 196, 81, 0.08) 0%, #0d1017 34%, #090b10 100%);
+  /* one continuous field: warm gold haze fading into deep obsidian, no hard stop */
+  background: radial-gradient(ellipse 90% 55% at 50% 0%, rgba(245, 196, 81, 0.14) 0%, rgba(245, 196, 81, 0.04) 50%, rgba(11, 13, 19, 0) 100%), linear-gradient(180deg, #131722 0%, #0a0c12 100%);
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 224, 138, 0.16);
@@ -43572,7 +43572,7 @@ bdi { unicode-bidi: isolate; }
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .vip-flag-crest {
@@ -43580,23 +43580,15 @@ bdi { unicode-bidi: isolate; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(245, 196, 81, 0.26);
-  background: radial-gradient(circle at 50% 18%, rgba(245, 196, 81, 0.16), rgba(9, 11, 16, 0.9) 72%);
-  box-shadow: inset 0 1px 0 rgba(255, 246, 220, 0.12), 0 8px 20px -14px rgba(245, 177, 59, 0.9);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(245, 196, 81, 0.28);
+  background: radial-gradient(circle, rgba(245, 196, 81, 0.20) 0%, rgba(245, 196, 81, 0.04) 70%, transparent 100%);
+  box-shadow: 0 0 22px rgba(245, 196, 81, 0.16);
 }
 .vip-flag-crest-svg { width: 30px; height: 30px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)); }
-.vip-flag-copy { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
-.vip-flag-kicker {
-  margin: 0;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  line-height: 1.2;
-  color: #c9a96a;
-}
+.vip-flag-copy { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .vip-flag-title {
   margin: 0;
   font-size: 16px;
@@ -43655,7 +43647,7 @@ bdi { unicode-bidi: isolate; }
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 12px 6px 10px;
+  padding: 10px 6px 8px;
   border-radius: 14px;
   border: 1px solid rgba(245, 196, 81, 0.16);
   background: linear-gradient(180deg, rgba(24, 28, 39, 0.92), rgba(10, 12, 18, 0.94));
@@ -43740,7 +43732,7 @@ bdi { unicode-bidi: isolate; }
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: 9px;
+  padding: 7px 9px;
   border-radius: 12px;
   border: 1px solid rgba(245, 196, 81, 0.1);
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
@@ -43772,8 +43764,8 @@ bdi { unicode-bidi: isolate; }
   justify-content: center;
   gap: 6px;
   width: 100%;
-  min-height: 47px;
-  padding: 16px;
+  min-height: 44px;
+  padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid rgba(255, 240, 185, 0.5);
   background: linear-gradient(180deg, #ffeeb8 0%, #f5c451 44%, #c99a2f 100%);
@@ -43834,15 +43826,41 @@ bdi { unicode-bidi: isolate; }
   letter-spacing: 0.04em;
 }
 
-.shop-soon { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.soon-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* keep card borders and glows off the clip edge */
+  padding: 2px 2px 6px;
+}
+.soon-grid::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.soon-grid.is-dragging { cursor: grabbing; }
+.soon-grid.is-dragging .soon-card {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
 .soon-card {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 7px;
-  min-width: 0;
-  padding: 13px 12px 11px;
+  gap: 4px;
+  flex: 0 0 144px;
+  min-width: 144px;
+  min-height: 84px;
+  scroll-snap-align: start;
+  padding: 9px 10px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: linear-gradient(165deg, rgba(23, 27, 37, 0.74), rgba(9, 11, 17, 0.88));
@@ -43851,6 +43869,8 @@ bdi { unicode-bidi: isolate; }
   text-align: start;
   opacity: 0.72;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   transition: opacity 0.18s ease, border-color 0.18s ease;
@@ -43860,33 +43880,33 @@ bdi { unicode-bidi: isolate; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 33px;
-  height: 33px;
-  border-radius: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(255, 255, 255, 0.03);
   color: #93a0b4;
 }
-.soon-svg { width: 18px; height: 18px; }
+.soon-svg { width: 15px; height: 15px; }
 .soon-lock {
   position: absolute;
-  top: 11px;
-  inset-inline-end: 11px;
+  top: 9px;
+  inset-inline-end: 9px;
   display: inline-flex;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   color: #727e91;
 }
-.soon-lock-svg { width: 14px; height: 14px; }
-.soon-name { font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #dde3ee; overflow-wrap: anywhere; }
+.soon-lock-svg { width: 12px; height: 12px; }
+.soon-name { font-size: 10px; font-weight: 700; line-height: 1.25; color: #dde3ee; overflow-wrap: anywhere; }
 .soon-tag {
-  padding: 1px 7px;
+  padding: 1px 6px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.025);
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.35;
   color: #98a3b5;
 }
 
@@ -43898,8 +43918,8 @@ html[data-lang="ar"] :is(.vip-flag, .shop-sec) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
-html[data-lang="fa"] :is(.vip-flag-kicker, .vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag),
-html[data-lang="ar"] :is(.vip-flag-kicker, .vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag) {
+html[data-lang="fa"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag),
+html[data-lang="ar"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .shop-sec-badge, .soon-tag) {
   letter-spacing: 0;
 }
 html[data-lang="fa"] .vip-flag-title,
@@ -43921,8 +43941,10 @@ html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
 @media (prefers-reduced-motion: reduce) {
   .vip-flag-cta::after { animation: none; }
   .vip-flag-tier, .soon-card { transition: none; }
+  .soon-grid { scroll-behavior: auto; }
 }
 html.reduced-motion .vip-flag-cta::after { animation: none; }
+html.reduced-motion .soon-grid { scroll-behavior: auto; }
 
 /* ==========================================================================
    SQUAD VERIFICATION — the strict badge gate and its dual-mode block.
