@@ -1279,8 +1279,6 @@ export interface PlayerRecord {
   best: number;
   coins: number;
   stars: number;
-  /** Lifetime Stars a seat has actually paid for VIP terms. Written only by a verified receipt. */
-  starsPaid: number;
   referrals: number;
   /** The squad / channel handle the client reported, or ''. */
   squad: string;
@@ -1438,7 +1436,6 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     best: 0,
     coins: identity.coins,
     stars: identity.stars,
-    starsPaid: 0,
     referrals: identity.referrals,
     squad: identity.squad,
     vipUntil: 0,
@@ -1487,7 +1484,6 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     best: whole(r.best),
     coins: whole(r.coins),
     stars: whole(r.stars),
-    starsPaid: whole(r.starsPaid),
     referrals: whole(r.referrals),
     squad: text(r.squad, 24),
     vipUntil: whole(r.vipUntil),
@@ -5479,7 +5475,6 @@ export class MatchmakerDO {
         best: 0,
         coins: 0,
         stars: 0,
-        starsPaid: 0,
         referrals: 0,
         squad: '',
         vipUntil: 0,
@@ -5503,7 +5498,6 @@ export class MatchmakerDO {
     }
     record.vipUntil = extendVipUntil(record.vipUntil, plan, now);
     record.vipPlan = plan.id;
-    record.starsPaid = Math.min(Number.MAX_SAFE_INTEGER, record.starsPaid + stars);
     record.vipCharges = [...record.vipCharges, chargeId].slice(-20);
     record.lastSeen = now;
     this.recordVipSale({

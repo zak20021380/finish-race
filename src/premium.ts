@@ -154,6 +154,19 @@ export function refreshVip(): Promise<boolean> {
 
 export type VipPurchaseResult = 'paid' | 'preview' | 'cancelled' | 'failed' | 'unavailable';
 
+/**
+ * Wait for the room to write the receipt. Telegram's webhook can land a few hundred milliseconds
+ * after the payment sheet closes, so a single reading may still be the pre-payment entitlement.
+ * Returns true only when the room itself confirms a running term.
+ */
+async function awaitVipReceipt(): Promise<boolean> {
+  for (const delay of [0, 400, 800, 1200]) {
+    if (delay > 0) await new Promise<void>((done) => { window.setTimeout(done, delay); });
+    if (await refreshVip() && vipUntil > Date.now()) return true;
+  }
+  return false;
+}
+
 /** Local work: a loopback host or Vite's own dev server. A deployed Mini App is never one. */
 function localWork(): boolean {
   try {
@@ -235,26 +248,18 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
       if (status === 'paid') {
         notify('success');
         void (async (): Promise<void> => {
-          /* The webhook that writes the term can land a few hundred milliseconds after the sheet
-             closes, so the first reading may still be the pre-payment entitlement. Retry briefly
-             to catch the room's write, which unlocks every perk live in this session. */
-          let synced = false;
-          for (let attempt = 0; attempt < 4; attempt++) {
-            synced = await refreshVip();
-            if (synced && vipUntil > Date.now()) break;
-            if (attempt < 3) {
-              await new Promise<void>((done) => { window.setTimeout(done, 400 * (attempt + 1)); });
-            }
-          }
-          if (!synced || vipUntil <= Date.now()) {
-            /* The receipt still has not landed (or the reading reached the room before the
-               webhook did). Keep the pass live on this device; the next refresh replaces this
-               reading with the room's. */
+          if (await awaitVipReceipt()) {
+            /* Only the room's own confirmation earns the celebration, and every perk repaints on
+               the change signal it just emitted. */
+            showToast(t('vipActivatedToast'), 'success', 4600);
+          } else {
+            /* The receipt has still not landed. Keep the pass live on this device so the player
+               is not left looking locked out; the next refresh replaces this reading with the
+               room's. Nothing is announced until the room has written the term. */
             vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
             writeCachedUntil(vipUntil);
             emitVip();
           }
-          showToast(t('vipActivatedToast'), 'success', 4600);
           resolve('paid');
         })();
         return;
