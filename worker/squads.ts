@@ -669,10 +669,39 @@ export interface SquadFighterView {
 }
 
 /**
- * The public shape a client reads: identity, the real roster (leader first, then by TIQ), the
- * derived counts, and the audience as a clearly separate stat. No chat token, no audit notes, and
- * no Telegram @username — the roster names a player by their display name, which is all the board
- * ever paints.
+ * One row of the roster sheet: the fighter's identity and balance, plus the two flags a member row
+ * decorates itself with. The *complete* roster is published in this shape — never a capped head of
+ * it — so a drawer can always reach the last member of a large squad.
+ */
+export interface SquadMemberView extends SquadMemberRow {
+  /** The portrait under the name every consumer already reads it by. Detail door only. */
+  avatar?: string;
+  /** True for the squad's founder, and for the one row the registry stamped `leader`. */
+  isLeader: boolean;
+  /** The room's VIP reading, when the caller had one to offer. */
+  isVip?: boolean;
+}
+
+/**
+ * How a view is read: the single-squad detail door and a board read do not publish the same
+ * fields. A board answers for every squad at once, so it stays the lighter shape.
+ */
+export interface SquadViewOptions {
+  /**
+   * Publish the per-member detail a roster sheet needs — the @username and the portrait under its
+   * inspector name. Only the single-squad detail door asks for it; a board read keeps the handle
+   * private and the payload lean, exactly as it always has.
+   */
+  detail?: boolean;
+  /** The room's VIP reading, keyed by a member's bare Telegram id. Omitted = not published. */
+  isVip?: (memberId: string) => boolean;
+}
+
+/**
+ * The public shape a client reads: identity, the real roster (ranked by the TIQ each member
+ * banked), the derived counts, and the audience as a clearly separate stat. No chat token and no
+ * audit notes — a board read carries no Telegram @username either; the roster names a player by
+ * their display name, which is all the board ever paints.
  */
 export interface SquadView {
   id: string;
@@ -706,20 +735,31 @@ export interface SquadView {
   verified: boolean;
   /** The cup this squad registered for — the eligibility key its players are filtered on. */
   cupId: string;
-  roster: SquadMemberRow[];
+  /** Every member, ranked by the TIQ each one banked: highest first, ties broken by join order. */
+  roster: SquadMemberView[];
+  /** The Telegram id of the player who enlisted the squad — the row that wears the crown. */
+  founderId: string;
   /** Public: an invitee needs to know the squad is locked before they tap Join. */
   requireApproval: boolean;
 }
 
-export function squadViewOf(squad: RegisteredSquad): SquadView {
-  const roster = [...squad.roster]
-    .sort((a, b) =>
-      Number(b.role === 'leader') - Number(a.role === 'leader')
-      || b.tiq - a.tiq
-      || a.joinedAt - b.joinedAt)
-    /* The @username is stored for the audit trail, never published on a board. The portrait it
-       could derive is published as `photo` instead, which is the one thing a face needs. */
-    .map((member) => ({ ...member, username: '' }));
+export function squadViewOf(squad: RegisteredSquad, options: SquadViewOptions = {}): SquadView {
+  const founderId = squad.creatorId || squad.ownerId;
+  const isVip = options.isVip;
+  const detail = options.detail === true;
+  /* The roster sheet ranks every member by the TIQ they actually banked: highest first, ties
+     broken by join order and then by id, so two devices never paint one roster two ways. */
+  const roster: SquadMemberView[] = [...squad.roster]
+    .sort((a, b) => b.tiq - a.tiq || a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))
+    .map((member) => ({
+      ...member,
+      /* The @username is stored for the audit trail. The single-squad detail door publishes it —
+         the roster names a player beside their handle — while a board read keeps it private. */
+      username: detail ? member.username : '',
+      ...(detail ? { avatar: member.photo } : {}),
+      isLeader: member.role === 'leader' || (!!founderId && member.id === founderId),
+      ...(isVip ? { isVip: isVip(member.id) === true } : {}),
+    }));
   /* The inspector's own order: the roster ranked by real TIQ balance, ties broken by id so two
      devices never paint the same roster two ways. */
   const fighters: SquadFighterView[] = roster
@@ -757,6 +797,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     verified: squad.verified === true && squad.verification === 'verified' && !squad.banned,
     cupId: squad.cupId || ACTIVE_CUP_ID,
     roster,
+    founderId,
     requireApproval: squad.requireApproval === true,
   };
 }

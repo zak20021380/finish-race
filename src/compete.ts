@@ -34,7 +34,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, onArena, seasonLabel } from './arenaState';
-import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, myPlayerId, myRosterId, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
+import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, myPlayerId, myRosterId, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad, type SquadMember } from './squads';
 import { impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
@@ -42,7 +42,7 @@ import { isSelfPlayerId } from './players';
 /* static on purpose: `menu.ts` reads the same desk from its squad sheets, so the module is in the
    boot chunk either way — a dynamic import here would only add a hop */
 import {
-  buildSquadVerifyPanel, joinSquadOnServer, registerSquadWithTelegram,
+  buildSquadVerifyPanel, fetchSquad, joinSquadOnServer, registerSquadWithTelegram,
   type SquadVerifyPanel,
 } from './squadRegister';
 
@@ -1528,6 +1528,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   let guildField: RankedSquad[] = [];
   /** Guards the guild photo against a late load from a sheet that has since changed face. */
   let msPhotoSeq = 0;
+  /** How long a squad's detail answer is trusted before the roster sheet asks again. */
+  const GUILD_ROSTER_TTL = 60_000;
+  /** Squad id → the moment its detail door was last knocked on. The local store's change event
+      repaints this drawer from the answer, so an unguarded second call would chase its own tail. */
+  const guildRosterAsked = new Map<string, number>();
   /** The medallion a rival stands on that is not under its shield — the dossier's one live offer. */
   interface SeizeOffer { def: BadgeDef; serial: number }
 
@@ -1954,6 +1959,220 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     return grid;
   }
 
+  /* ---------- the squad roster: every member, ranked by what they banked ----------
+     The sheet under the three stat cards. It is deliberately NOT its own scroll surface: the
+     drawer's body already owns the gesture, so a large squad reads as one continuous sheet
+     instead of a nested scroll trap that swallows the thumb. */
+
+  /** The rank a member holds: the TIQ they banked, highest first, join order next. */
+  function squadRosterRows(s: RankedSquad): SquadMember[] {
+    return [...s.roster].sort((a, b) =>
+      b.tiq - a.tiq
+      || a.joinedAt - b.joinedAt
+      || a.id.localeCompare(b.id));
+  }
+
+  /** The one row that wears the crown: the registry's founder, else the row stamped leader. */
+  function squadLeaderId(s: RankedSquad): string {
+    const owner = (s.ownerId ?? '').trim();
+    return owner || s.roster.find((m) => m.role === 'leader')?.id || '';
+  }
+
+  /** One member: rank index, face, name with its badges, and the TIQ they banked. */
+  function squadMemberRow(m: SquadMember, rank: number, leader: boolean, self: boolean): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'sqm-row';
+    row.setAttribute('role', 'listitem');
+
+    /* The rank is a numeral, never a word: LRI…PDI keeps `#4` reading as a rank in an RTL row. */
+    const idx = document.createElement('bdi');
+    idx.className = 'sqm-rank';
+    idx.dir = 'ltr';
+    idx.textContent = `#${rank}`;
+    if (rank <= 3) idx.dataset.rank = rank === 1 ? 'gold' : rank === 2 ? 'silver' : 'bronze';
+
+    const name = (m.name || m.username || '').trim();
+    const face = document.createElement('span');
+    face.className = 'sqm-av';
+    if (leader) face.dataset.leader = 'true';
+    const mono = document.createElement('span');
+    mono.className = 'sqm-av-mono';
+    mono.setAttribute('aria-hidden', 'true');
+    mono.textContent = name ? name.slice(0, 1).toUpperCase() : '—';
+    face.append(mono);
+    const src = photoSrc(m.photo);
+    if (src) {
+      /* The monogram holds the seat until the real portrait lands; a CDN placeholder or a broken
+         link leaves it in place instead of painting an empty square. */
+      const img = document.createElement('img');
+      img.className = 'sqm-av-img';
+      img.alt = '';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.hidden = true;
+      img.onload = () => { img.hidden = img.naturalWidth <= 2 || img.naturalHeight <= 2; };
+      img.onerror = () => { img.hidden = true; };
+      img.src = src;
+      face.append(img);
+    }
+
+    const who = document.createElement('span');
+    who.className = 'sqm-id';
+    const nm = document.createElement('bdi');
+    nm.className = 'sqm-name';
+    nm.dir = 'auto';
+    nm.textContent = name || '—';
+    nm.title = name;
+    who.append(nm);
+    const badges = document.createElement('span');
+    badges.className = 'sqm-badges';
+    if (leader) {
+      const pill = document.createElement('span');
+      pill.className = 'sqm-leader';
+      pill.append(svgIcon('#i-crown', 'sqm-crown'));
+      const word = document.createElement('bdi');
+      word.dir = 'auto';
+      word.textContent = t('squadLeaderBadge');
+      pill.append(word);
+      badges.append(pill);
+    }
+    if (self) {
+      const pill = document.createElement('span');
+      pill.className = 'sqm-you';
+      const word = document.createElement('bdi');
+      word.dir = 'auto';
+      word.textContent = t('squadYouBadge');
+      pill.append(word);
+      badges.append(pill);
+    }
+    if (badges.childElementCount) who.append(badges);
+
+    const score = document.createElement('span');
+    score.className = 'sqm-tiq';
+    score.append(svgIcon('#i-brain', 'sqm-tiq-ic'));
+    const num = document.createElement('bdi');
+    num.dir = 'ltr';
+    num.textContent = Math.max(0, Math.floor(m.tiq || 0)).toLocaleString('en-US');
+    score.append(num);
+
+    row.append(idx, face, who, score);
+    row.title = `${name || '—'} · ${num.textContent} TIQ`;
+    row.setAttribute('aria-label', [
+      `${rank}. ${name || '—'}`,
+      leader ? t('squadLeaderBadge') : '',
+      self ? t('squadYouBadge') : '',
+      `${num.textContent} TIQ`,
+    ].filter(Boolean).join(' · '));
+    return row;
+  }
+
+  /** Paint the rows a squad holds right now; an empty roster is a state, never a blank. */
+  function paintSquadRoster(list: HTMLElement, s: RankedSquad, selfId: string): void {
+    const rows = squadRosterRows(s);
+    list.textContent = '';
+    list.removeAttribute('aria-busy');
+    list.removeAttribute('aria-label');
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'sqm-empty';
+      empty.textContent = t('squadMembersEmpty');
+      list.append(empty);
+      return;
+    }
+    const leaderId = squadLeaderId(s);
+    rows.forEach((m, i) => {
+      list.append(squadMemberRow(m, i + 1, !!leaderId && m.id === leaderId, !!selfId && m.id === selfId));
+    });
+  }
+
+  /** A summary that arrived without its roster: quiet plates until the detail answer lands. */
+  function paintSquadRosterSkeleton(list: HTMLElement, count: number): void {
+    list.textContent = '';
+    list.setAttribute('aria-busy', 'true');
+    list.setAttribute('aria-label', t('squadMembersLoading'));
+    const rows = Math.min(Math.max(count, 1), 5);
+    for (let i = 0; i < rows; i++) {
+      const row = document.createElement('div');
+      row.className = 'sqm-row is-load';
+      row.setAttribute('aria-hidden', 'true');
+      for (const cls of ['sqm-sk sqm-sk-rank', 'sqm-sk sqm-sk-av', 'sqm-sk sqm-sk-name', 'sqm-sk sqm-sk-tiq']) {
+        const cell = document.createElement('span');
+        cell.className = cls;
+        row.append(cell);
+      }
+      list.append(row);
+    }
+  }
+
+  /** The head-count pill always agrees with the server's own `members` reading. */
+  function paintSquadRosterCount(list: HTMLElement, s: RankedSquad): void {
+    const pill = list.closest('.sqm-block')?.querySelector<HTMLElement>('.sqm-count bdi');
+    if (!pill) return;
+    const total = Math.max(s.members, s.roster.length);
+    pill.textContent = total.toLocaleString('en-US');
+    pill.parentElement?.setAttribute('title', `${total.toLocaleString('en-US')} ${t('squadMembersTitle')}`);
+  }
+
+  /**
+   * Ask the registry for a squad's full roster when the cached summary carried none. The answer
+   * is folded into the local store, whose change event repaints this same drawer; the guard keeps
+   * that repaint from knocking on the door a second time, and the id check keeps a late answer
+   * from painting one squad's members into another squad's sheet.
+   */
+  function hydrateSquadRoster(s: RankedSquad, selfId: string): void {
+    const asked = guildRosterAsked.get(s.id) ?? 0;
+    if (Date.now() - asked < GUILD_ROSTER_TTL) return;
+    guildRosterAsked.set(s.id, Date.now());
+    void fetchSquad(s.id).then((fresh) => {
+      const pending = msPending;
+      if (pending?.kind !== 'guild' || pending.squad.id !== s.id) return;
+      const list = document.getElementById('ms-roster-list');
+      if (!list) return;
+      const squad = fresh ?? getSquadRanking().find((x) => x.id === s.id) ?? null;
+      if (!squad) return;
+      paintSquadRoster(list, squad, selfId);
+      paintSquadRosterCount(list, squad);
+    }).catch(() => {
+      /* The cached rows stay: a detail door that never answers is not a reason to empty a sheet. */
+    });
+  }
+
+  /**
+   * The roster sheet: every member the squad actually has, ranked by the TIQ they banked. It sits
+   * between the three stat cards and the foot keys, so the head-count, the total and the faces
+   * read as one statement about the same squad.
+   */
+  function msSquadRoster(s: RankedSquad, selfId: string): HTMLElement {
+    const wrap = document.createElement('section');
+    wrap.className = 'ms-block sqm-block';
+    const head = document.createElement('div');
+    head.className = 'sqm-head';
+    const h = document.createElement('h3');
+    h.className = 'ms-h';
+    h.textContent = t('squadMembersTitle');
+    const count = document.createElement('span');
+    count.className = 'sqm-count';
+    const num = document.createElement('bdi');
+    num.dir = 'ltr';
+    count.append(num);
+    head.append(h, count);
+
+    const list = document.createElement('div');
+    list.className = 'sqm-list';
+    list.id = 'ms-roster-list';
+    list.setAttribute('role', 'list');
+    wrap.append(head, list);
+    /* A summary with no roster at all is the only case the sheet cannot answer from cache: paint
+       the plates, then let the detail door fill them. Everything else paints immediately. */
+    if (s.roster.length) paintSquadRoster(list, s, selfId);
+    else {
+      paintSquadRosterSkeleton(list, s.members);
+      hydrateSquadRoster(s, selfId);
+    }
+    paintSquadRosterCount(list, s);
+    return wrap;
+  }
+
   /** The sprite glyph inside a foot key — join swaps the swords for a copied invite link. */
   function msKeyIcon(btn: HTMLButtonElement | null, href: string): void {
     btn?.querySelector('use')?.setAttribute('href', href);
@@ -2106,6 +2325,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const el = msEls.sheet;
     const body = msEls.body;
     if (!el || !body) return;
+    /* A repaint of the squad already on screen keeps the reader where they were: the roster can
+       be a long sheet, and a detail answer landing under a scrolling thumb must not jump to top. */
+    const prior = msPending?.kind === 'guild' ? msPending.squad.id : '';
+    const keepScroll = prior === s.id && !el.hidden ? body.scrollTop : 0;
     /* Reveal the drawer FIRST. Nothing optional below — least of all the founder's
        verification block — may strand the profile behind a hidden sheet. A squad
        already showing in this same panel is repainted in place without a slide. */
@@ -2129,6 +2352,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     body.append(
       msHero(tiq, pct, t('squadLeague').replace('{n}', field.toLocaleString('en-US')), true),
       msSection(t('squadRead'), msSquadMetrics(s, mine, contrib)),
+      msSquadRoster(s, myRosterId()),
     );
     /* A founder looking at their own unverified squad gets the one door that fixes it; a
        verified squad, or anybody else's, gets no verification controls at all. The block is
@@ -2175,6 +2399,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     msKeyIcon(msEls.challenge, mine ? '#i-link' : '#i-swords');
     msKeyIcon(msEls.guild, '#i-ext');
     msEls.challenge?.classList.add('is-squad');
+    if (keepScroll > 0) body.scrollTop = keepScroll;
   }
 
   /* ---------- the nation sheet: prestige medallion + national top players ----------

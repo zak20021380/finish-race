@@ -4017,6 +4017,10 @@ export class MatchmakerDO {
    * channel, so it is the one place a fresh `getChatMemberCount` is worth a Telegram round trip.
    * A row that has never answered is retried too — that is how a chat whose bot was only just
    * added stops printing `—`.
+   *
+   * This is also the one read that publishes the roster in full detail: every member with their
+   * handle, their portrait, their own TIQ and the two flags the sheet paints (leader, VIP). A
+   * board answers for every squad at once and stays the lighter shape.
    */
   private async squadRead(url: URL): Promise<Response> {
     const id = (url.searchParams.get('id') ?? '').trim().slice(0, 48);
@@ -4028,7 +4032,22 @@ export class MatchmakerDO {
       this.squadsDirty = true;
       await this.persistSquads();
     }
-    return json({ ok: true, squad: squadViewOf(squad) });
+    return json({
+      ok: true,
+      squad: squadViewOf(squad, {
+        detail: true,
+        isVip: (memberId) => this.squadVipOf(memberId),
+      }),
+    });
+  }
+
+  /**
+   * A roster row keys a player by their bare Telegram id; the room keys the same player
+   * `tg-<id>`. One translation, so a member's VIP reading is the seat's own.
+   */
+  private squadVipOf(memberId: string): boolean {
+    const id = memberId.trim();
+    return !!id && this.vipActive(id.startsWith('tg-') ? id : `tg-${id}`);
   }
 
   /**

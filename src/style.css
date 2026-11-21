@@ -17622,6 +17622,229 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
 }
 
+/* ---------- the roster sheet: every member, ranked by the TIQ they banked ----------
+   One recessed plate per member under the three stat cards. The list is deliberately NOT
+   its own scroll surface: the drawer's body already owns the gesture, so a large squad
+   reads as one continuous sheet instead of a nested scroll trap under the thumb. */
+.sqm-block { gap: 8px; }
+.sqm-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sqm-head .ms-h {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the head-count rides the caption as one quiet pill, never a second headline */
+.sqm-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #CBD8E8;
+  background: rgba(148, 163, 184, .12);
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.sqm-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+/* ---- one member: rank · face · name and badges · the TIQ they banked ---- */
+.sqm-row {
+  display: grid;
+  grid-template-columns: 24px 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding-block: 5px;
+  padding-inline: 8px 11px;
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, .008) 58%),
+    #0C1321;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .045),
+    0 2px 0 #080D16;
+}
+/* the rank is a numeral on a fixed pitch, so #9 and #10 never shift the faces */
+.sqm-rank {
+  justify-self: center;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  line-height: 1;
+  color: #6B7D95;
+  unicode-bidi: isolate;
+}
+.sqm-rank[data-rank="gold"] { color: #F5C451; text-shadow: 0 0 9px rgba(245, 196, 81, .45); }
+.sqm-rank[data-rank="silver"] { color: #CFDBE8; text-shadow: 0 0 8px rgba(207, 219, 232, .26); }
+.sqm-rank[data-rank="bronze"] { color: #D08A54; text-shadow: 0 0 8px rgba(208, 138, 84, .3); }
+
+.sqm-av {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 34% 26%, #22314C 0%, #0B1322 74%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
+}
+/* the founder's face wears the squad's own metal */
+.sqm-av[data-leader="true"] {
+  box-shadow:
+    0 0 0 1.5px rgba(245, 196, 81, .65),
+    0 0 14px -3px rgba(245, 196, 81, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.sqm-av-mono { font-size: 13px; font-weight: 900; line-height: 1; color: #D8E5F5; }
+.sqm-av-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.sqm-av-img[hidden] { display: none; }
+
+.sqm-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sqm-name {
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 800;
+  line-height: 1.25;
+  color: #EAF1FA;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sqm-badges { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+/* the leader's crown: metallic gold on dark gold ink — the one honor in the sheet */
+.sqm-leader {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-block: 1px;
+  padding-inline: 4px 6px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.5;
+  color: #3A2704;
+  background: linear-gradient(180deg, #FFE9AE 0%, #F5C451 54%, #D99B22 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .75),
+    inset 0 -1px 0 rgba(120, 76, 6, .35),
+    0 1px 0 rgba(0, 0, 0, .45),
+    0 0 10px -3px rgba(245, 196, 81, .6);
+}
+.sqm-crown { flex: none; width: 9px; height: 9px; color: #3A2704; }
+/* "you" is a quiet slate-cyan tag, never a second gold — gold is the leader's alone */
+.sqm-you {
+  display: inline-flex;
+  align-items: center;
+  padding-block: 1px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.5;
+  color: #9FE8FF;
+  background: rgba(56, 189, 248, .14);
+  box-shadow:
+    inset 0 0 0 1px rgba(56, 189, 248, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+
+.sqm-tiq {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--t-3);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--tiq);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+.sqm-tiq-ic {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--honey);
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45));
+}
+
+/* ---- a squad with nobody on it: a state, never a blank ---- */
+.sqm-empty {
+  margin: 0;
+  padding: 16px 12px;
+  border-radius: 13px;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  color: #8CA0B8;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .12);
+}
+
+/* ---- a summary that arrived without its roster: quiet plates until the detail lands ---- */
+.sqm-sk {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, .105) 48%, rgba(255, 255, 255, .045) 100%);
+  background-size: 220% 100%;
+  animation: sqm-shimmer 1.2s linear infinite;
+}
+.sqm-sk-rank { justify-self: center; width: 16px; height: 9px; }
+.sqm-sk-av { width: 36px; height: 36px; border-radius: 50%; }
+.sqm-sk-name { width: 62%; height: 10px; }
+.sqm-sk-tiq { justify-self: end; width: 34px; height: 10px; }
+@keyframes sqm-shimmer {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+html.reduced-motion .sqm-sk { animation: none; }
+/* Persian and Arabic are joined scripts: tracking is a rendering fault, never a style */
+html[data-lang="fa"] .sqm-block .ms-h,
+html[data-lang="ar"] .sqm-block .ms-h {
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* The roster reads from the right in those tongues — the rank leads, the score lands at the
+   end — while every figure inside keeps its own direction, so `#1` and `5,530` never reorder. */
+html[data-lang="fa"] :is(.sqm-head, .sqm-row),
+html[data-lang="ar"] :is(.sqm-head, .sqm-row) { direction: rtl; }
+
+/* ---- the foot keys: the roster scrolls under them, so the bar carries its own fade ----
+   Deliberately shallow: it reads as the sheet's own bottom shadow, so a two-member squad
+   is never dimmed the way a full scrim would dim it. */
+#sheet-mind.is-guild .ms-acts { position: relative; }
+#sheet-mind.is-guild .ms-acts::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  height: 14px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(28, 36, 51, 0) 0%, rgba(28, 36, 51, .9) 100%);
+}
+
 /* the guild door trades coral for a claymorphic emerald-cyan, matching the arena */
 .ms-challenge.is-squad {
   background: linear-gradient(180deg, #5EEAD4 0%, #2DD4BF 46%, #0E92A8 100%);
