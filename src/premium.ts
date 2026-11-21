@@ -193,31 +193,19 @@ function previewCheckout(): boolean {
 }
 
 /**
- * Buy one plan with Telegram Stars.
- *
- * The invoice link comes from the Worker (which prices the plan from the admin's live sheet), then
- * Telegram's own payment sheet takes over. `paid` re-reads the entitlement before resolving, so
- * every surface that repaints on the change signal is showing the room's number, not an
- * optimistic one. Outside Telegram only the explicit `?vip=preview` door grants a local pass; a
- * deployed Mini App with a broken checkout gets `unavailable`, never a free entitlement.
+ * Outside Telegram only the explicit preview door may hand out a local pass; every other answer is
+ * `unavailable`, so a deployed Mini App with a broken checkout never gets a free entitlement.
  */
-export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult> {
-  const plan = vipPlanOf(planId);
-  if (!plan) return 'failed';
+function unavailableOrPreview(): VipPurchaseResult {
+  if (!previewCheckout()) return 'unavailable';
+  grantVipPreview();
+  return 'preview';
+}
 
-  const initData = tgInitData();
-  if (!insideTelegram() || !initData) {
-    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
-    return 'unavailable';
-  }
-
+/** Ask the Worker for a priced invoice link; null when it cannot price this plan. */
+async function requestInvoice(initData: string, planId: VipPlanId): Promise<string | null> {
   const url = workerUrl('/api/vip/invoice');
-  if (!url) {
-    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
-    return 'unavailable';
-  }
-
-  let invoiceUrl = '';
+  if (!url) return null;
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -230,51 +218,67 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
       cache: 'no-store',
     });
     const data = (await response.json().catch(() => null)) as
-      { ok?: unknown; invoiceUrl?: unknown; code?: unknown } | null;
-    if (response.ok && data?.ok === true && typeof data.invoiceUrl === 'string') {
-      invoiceUrl = data.invoiceUrl;
-    } else if (previewCheckout()) {
-      grantVipPreview();
-      return 'preview';
-    } else {
-      return 'unavailable';
-    }
+      { ok?: unknown; invoiceUrl?: unknown } | null;
+    return response.ok && data?.ok === true && typeof data.invoiceUrl === 'string'
+      ? data.invoiceUrl
+      : null;
   } catch {
-    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
-    return 'unavailable';
+    return null;
   }
+}
+
+/**
+ * Reconcile a paid sheet with the room. The webhook can lag the sheet, so poll for a term longer
+ * than the one the room reported before checkout: only that earns the toast. Without it, a locally
+ * reported baseline earns a device-only extension so the payer is not left looking locked out —
+ * and a failed pre-purchase read earns nothing, because it has no real term to extend.
+ */
+async function settleVipPurchase(
+  plan: VipPlan,
+  baselineUntil: number,
+  baselineSynced: boolean,
+): Promise<void> {
+  if (await awaitVipReceipt(baselineUntil)) {
+    showToast(t('vipActivatedToast'), 'success', 4600);
+    return;
+  }
+  if (!baselineSynced) return;
+  vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
+  writeCachedUntil(vipUntil);
+  emitVip();
+}
+
+/**
+ * Buy one plan with Telegram Stars.
+ *
+ * The invoice link comes from the Worker (which prices the plan from the admin's live sheet), then
+ * Telegram's own payment sheet takes over. `paid` settles against the room's reading before
+ * resolving, so every surface that repaints on the change signal shows the room's number.
+ */
+export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult> {
+  const plan = vipPlanOf(planId);
+  if (!plan) return 'failed';
+
+  const initData = tgInitData();
+  if (!insideTelegram() || !initData) return unavailableOrPreview();
+
+  const invoiceUrl = await requestInvoice(initData, planId);
+  if (!invoiceUrl) return unavailableOrPreview();
 
   /* The term this seat already held, read from the room rather than this device's cache: a cold
-     cache on an existing VIP holds 0 and would make any live pass look like a fresh receipt. When
-     the room cannot answer, `Infinity` deliberately makes confirmation impossible — the local
-     fallback below then grants nothing either, because it has no real term to extend. */
+     cache on an existing VIP holds 0 and would make any live pass look like a fresh receipt. An
+     unanswered read leaves no baseline, which forbids both confirmation and a local extension. */
   const baselineSynced = await refreshVip();
   const baselineUntil = baselineSynced ? vipUntil : Number.POSITIVE_INFINITY;
+
   return new Promise<VipPurchaseResult>((resolve) => {
     const opened = openInvoice(invoiceUrl, (status: InvoiceStatus) => {
-      if (status === 'paid') {
-        notify('success');
-        void (async (): Promise<void> => {
-          if (await awaitVipReceipt(baselineUntil)) {
-            /* Only the room's own confirmation earns the celebration, and every perk repaints on
-               the change signal it just emitted. */
-            showToast(t('vipActivatedToast'), 'success', 4600);
-          } else {
-            /* The receipt has still not landed. Only an extension of a term the room actually
-               reported may be granted locally, and nothing is announced until the room writes it;
-               a failed pre-purchase read leaves the pass to the next refresh. */
-            if (baselineSynced) {
-              vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
-              writeCachedUntil(vipUntil);
-              emitVip();
-            }
-          }
-          resolve('paid');
-        })();
+      if (status !== 'paid') {
+        resolve(status === 'cancelled' ? 'cancelled' : 'failed');
         return;
       }
-      if (status === 'cancelled') resolve('cancelled');
-      else resolve('failed');
+      notify('success');
+      void settleVipPurchase(plan, baselineUntil, baselineSynced).then(() => resolve('paid'));
     });
     if (!opened) resolve('unavailable');
   });
