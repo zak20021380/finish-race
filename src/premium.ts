@@ -299,6 +299,22 @@ let plansRefreshing: Promise<boolean> | null = null;
 
 const storePlans = (): VipPlan[] => activeVipPlans(planConfig);
 
+export interface ShopVipTier {
+  id: VipPlanId;
+  days: number;
+  stars: number;
+}
+
+/** The tiers on sale, for the Shop's flagship card. The admin's sheet is the only price source. */
+export function shopVipTiers(): ShopVipTier[] {
+  return storePlans().map((plan) => ({ id: plan.id, days: plan.days, stars: plan.stars }));
+}
+
+/** Re-read the admin's sheet before the Shop paints a price. Never throws. */
+export function refreshShopVipTiers(): Promise<boolean> {
+  return refreshPlans();
+}
+
 /** The tier on screen, moved to the first live card when the admin removed the selected one. */
 function selectedPlan(): VipPlan | null {
   const plans = storePlans();

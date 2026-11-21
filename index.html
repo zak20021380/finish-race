@@ -1831,9 +1831,10 @@
           </div>
         </section>
 
-        <!-- ---------------- shop · SEALED ROYAL VAULT ----------------
-             The catalogue is a still-life showcase. The head (back key + wallet) is the only
-             live chrome; every tab, card and button beneath it is frozen behind the veil. -->
+        <!-- ---------------- shop · OBSIDIAN VIP FLAGSHIP ----------------
+             Obsidian VIP is the one live storefront at the top of the Shop; the shelves under it
+             are locked previews that only announce themselves. The head (back key + wallet) and
+             the flagship stay live; the preview cards never touch coins, Stars or inventory. -->
         <section class="screen menu is-sealed" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
           <div class="m-head">
             <button class="icon-btn" type="button" data-back aria-label="Back to home">
@@ -1845,38 +1846,71 @@
             </p>
           </div>
 
-          <!-- Category pills: kept for context, inert by policy. `aria-disabled` announces them
-               as unavailable without leaving a dead tap that has to explain itself. -->
-          <div class="seg shop-seg" role="tablist" aria-label="Cosmetic type" aria-disabled="true">
-            <button class="seg-b" type="button" role="tab" id="tab-ball" data-shop="ball" aria-selected="true" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Balls</button>
-            <button class="seg-b" type="button" role="tab" id="tab-wall" data-shop="wall" aria-selected="false" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Walls</button>
-            <button class="seg-b" type="button" role="tab" id="tab-board" data-shop="board" aria-selected="false" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Boards</button>
-          </div>
+          <div class="pane shop-pane" data-scroll>
 
-          <!-- The seal: a recessed obsidian plate with a 1px gold hairline, a frosted circular
-               medallion struck with the gold vault lock, and an ambient amber back-glow. -->
-          <div class="vault-seal">
-            <span class="vault-medallion" aria-hidden="true">
-              <svg class="vault-emblem" aria-hidden="true"><use href="#i-vault-seal" /></svg>
-            </span>
-            <p class="vault-kicker" data-i18n="shopVaultKicker">ROYAL DECREE</p>
-            <h2 class="vault-title" data-i18n="shopVaultTitle">ROYAL VAULT TEMPORARILY SEALED</h2>
-            <p class="vault-sub" data-i18n="shopVaultSub">Exclusive skins and legendary relics are being forged. Grand reopening soon.</p>
-            <span class="vault-rule" aria-hidden="true"><i></i><b></b><i></i></span>
-          </div>
+            <!-- the flagship: matte obsidian, a 1px gold hairline, an ambient crest glow -->
+            <section class="vip-flag" id="shop-vip" aria-labelledby="shop-vip-title">
+              <span class="vip-flag-glow" aria-hidden="true"></span>
+              <div class="vip-flag-head">
+                <span class="vip-flag-crest" aria-hidden="true">
+                  <svg class="vip-flag-crest-svg" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
+                </span>
+                <div class="vip-flag-copy">
+                  <p class="vip-flag-kicker" data-i18n="shopVipKicker">OBSIDIAN VIP</p>
+                  <h2 class="vip-flag-title" id="shop-vip-title" data-i18n="shopVipTitle">Obsidian VIP</h2>
+                  <p class="vip-flag-sub" data-i18n="shopVipSub">Every VIP perk, live the moment your Stars land.</p>
+                </div>
+              </div>
 
-          <!-- The grid still scrolls (it is a showcase), but a frosted-obsidian veil sits over
-               it: blurred, darkened and desaturated, with a faint SEALED stamp. The veil and
-               every card are pointer-transparent, so no tap can reach the old till. -->
-          <div class="shop-catalog">
-            <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball" data-scroll></div>
-            <div class="shop-veil" aria-hidden="true">
-              <span class="shop-veil-mark" data-i18n="shopVaultStatus">SEALED</span>
-            </div>
-          </div>
+              <p class="vip-flag-active" id="shop-vip-active" hidden>
+                <span class="vip-flag-active-dot" aria-hidden="true"></span>
+                <span id="shop-vip-active-t"></span>
+              </p>
 
-          <!-- the same toast the board uses; the sealed vault never fires it -->
-          <p class="note" role="status" aria-live="polite"></p>
+              <div class="vip-flag-tiers" id="shop-vip-tiers" role="radiogroup" aria-label="Obsidian VIP plans"></div>
+
+              <ul class="vip-flag-perks" id="shop-vip-perks"></ul>
+
+              <button class="vip-flag-cta" id="shop-vip-cta" type="button">
+                <span class="vip-flag-cta-t" id="shop-vip-cta-t"></span>
+              </button>
+              <p class="vip-flag-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
+            </section>
+
+            <!-- the locked shelves: previews only, no prices and no purchase path -->
+            <section class="shop-sec" aria-labelledby="shop-items-title">
+              <div class="shop-sec-head">
+                <h2 class="shop-sec-title" id="shop-items-title" data-i18n="shopItemsTitle">Items &amp; personalization</h2>
+                <span class="shop-sec-badge" data-i18n="shopSoon">Coming soon</span>
+              </div>
+              <div class="shop-soon" id="shop-soon">
+                <button class="soon-card" type="button" data-soon>
+                  <span class="soon-ico" aria-hidden="true"><svg class="soon-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chess-king" /></svg></span>
+                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                  <span class="soon-name" data-i18n="shopSoonPawns">Neon Pawns</span>
+                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+                </button>
+                <button class="soon-card" type="button" data-soon>
+                  <span class="soon-ico" aria-hidden="true"><svg class="soon-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arena" /></svg></span>
+                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                  <span class="soon-name" data-i18n="shopSoonBoards">Obsidian Board</span>
+                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+                </button>
+                <button class="soon-card" type="button" data-soon>
+                  <span class="soon-ico" aria-hidden="true"><svg class="soon-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user" /></svg></span>
+                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                  <span class="soon-name" data-i18n="shopSoonFrames">Royal Avatar Frame</span>
+                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+                </button>
+                <button class="soon-card" type="button" data-soon>
+                  <span class="soon-ico" aria-hidden="true"><svg class="soon-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cup" /></svg></span>
+                  <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
+                  <span class="soon-name" data-i18n="shopSoonEffects">Victory Effects</span>
+                  <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
+                </button>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="screen menu" id="s-profile" data-screen="profile" tabindex="-1" hidden aria-labelledby="profile-title">
