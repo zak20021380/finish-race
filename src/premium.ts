@@ -244,9 +244,12 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
     return 'unavailable';
   }
 
-  /* The term this seat already held: a renewal must be confirmed by an extension of THIS number,
-     never by the pre-purchase entitlement still being live. */
-  const baselineUntil = vipUntil;
+  /* The term this seat already held, read from the room rather than this device's cache: a cold
+     cache on an existing VIP holds 0 and would make any live pass look like a fresh receipt. When
+     the room cannot answer, `Infinity` deliberately makes confirmation impossible — the local
+     fallback below then grants nothing either, because it has no real term to extend. */
+  const baselineSynced = await refreshVip();
+  const baselineUntil = baselineSynced ? vipUntil : Number.POSITIVE_INFINITY;
   return new Promise<VipPurchaseResult>((resolve) => {
     const opened = openInvoice(invoiceUrl, (status: InvoiceStatus) => {
       if (status === 'paid') {
@@ -257,12 +260,14 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
                the change signal it just emitted. */
             showToast(t('vipActivatedToast'), 'success', 4600);
           } else {
-            /* The receipt has still not landed. Keep the pass live on this device so the player
-               is not left looking locked out; the next refresh replaces this reading with the
-               room's. Nothing is announced until the room has written the term. */
-            vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
-            writeCachedUntil(vipUntil);
-            emitVip();
+            /* The receipt has still not landed. Only an extension of a term the room actually
+               reported may be granted locally, and nothing is announced until the room writes it;
+               a failed pre-purchase read leaves the pass to the next refresh. */
+            if (baselineSynced) {
+              vipUntil = Math.max(vipUntil, Date.now()) + plan.days * VIP_DAY_MS;
+              writeCachedUntil(vipUntil);
+              emitVip();
+            }
           }
           resolve('paid');
         })();
