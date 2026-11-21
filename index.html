@@ -5944,9 +5944,11 @@
       </section>
     </div>
 
-    <!-- mandatory channel gate: raised only when the Worker's force-join row is armed and this
-         signed Telegram session is not yet a member. It covers the app until a re-check passes;
-         an unanswered check fails open, so a backend fault never locks the arena out. -->
+    <!-- mandatory channel gate: armed AFTER the first settled match, never in front of it. It is
+         raised only when the Worker's force-join row is armed, this signed Telegram session is not
+         yet a member, and the profile has at least one match on the board. It covers the app until
+         a re-check passes; an unanswered check fails open, so a backend fault never locks the
+         arena out. -->
     <section class="fj-gate" id="force-join-modal" hidden role="dialog" aria-modal="true"
       aria-labelledby="force-join-title" aria-describedby="force-join-body">
       <div class="fj-card">
@@ -5955,9 +5957,9 @@
           <span class="fj-crest-lock"><svg class="ico"><use href="#i-lock" /></svg></span>
         </span>
         <p class="fj-kicker" id="force-join-kicker">Tactix · Official Channel</p>
-        <h2 class="fj-title" id="force-join-title">Official Channel Required</h2>
-        <p class="fj-body" id="force-join-body">To keep the game fair and receive live rewards &amp;
-          updates, join our official channel to continue.</p>
+        <h2 class="fj-title" id="force-join-title">Join to Keep Racing</h2>
+        <p class="fj-body" id="force-join-body">Your first race is on the board. To keep playing,
+          defend your rank and collect every reward, join the official Tactix channel.</p>
         <span class="fj-hair" aria-hidden="true"></span>
         <button class="fj-cta" type="button" id="force-join-open">
           <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
@@ -5966,7 +5968,7 @@
         <button class="fj-verify" type="button" id="force-join-verify">
           <span class="fj-spin" aria-hidden="true"></span>
           <svg class="ico fj-verify-ico" aria-hidden="true"><use href="#i-check" /></svg>
-          <span class="fj-verify-t" id="force-join-verify-t">I Joined · Verify</span>
+          <span class="fj-verify-t" id="force-join-verify-t">I Joined · Continue</span>
         </button>
         <p class="fj-status" id="force-join-status" role="status" aria-live="polite"></p>
       </div>

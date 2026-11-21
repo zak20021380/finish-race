@@ -33247,9 +33247,10 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 }
 
 /* ---- mandatory channel gate: obsidian & gold -------------------------------------------------
-   A full-viewport sheet between a signed Telegram session and the arena. It sits over every app
-   surface, so on a cold launch the gate is what the player meets first — there is no boot screen
-   in front of it. An unanswered check never raises it. */
+   A full-viewport sheet between a settled first match and the arena. It sits over every app
+   surface, so it lands on the Home screen the moment a result is dismissed — never on a cold
+   launch, where the first race is the one thing it must not cost. An unanswered check never
+   raises it. */
 .fj-gate {
   position: fixed;
   inset: 0;

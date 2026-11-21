@@ -1,5 +1,5 @@
 /**
- * joinGate.ts — the mandatory Telegram-channel gate.
+ * joinGate.ts — the mandatory Telegram-channel gate, armed AFTER the first match.
  *
  * The Worker owns the switch (`POST /api/admin/force-join`) and answers each launch with one
  * reading from `GET /api/user/check-subscription`: is the gate armed, where does it point, and is
@@ -7,11 +7,18 @@
  * overlay. A disabled gate, an unreachable Worker, or a check Telegram could not answer all fail
  * open, so a configuration fault never locks a player out of the arena.
  *
+ * WHEN the wall stands is the whole point of this file: a brand-new profile (`0` settled matches)
+ * is never interrupted — its first race is the one thing the gate must not cost. The reading is
+ * taken at boot anyway, so the moment the first match settles the wall is already decided and
+ * `raiseChannelGate()` can put it up without waiting on a network round trip. `channelGateBlocks()`
+ * is the same verdict as a synchronous predicate, which is what the match doors ask before they
+ * open a board.
+ *
  * The overlay has no close key on purpose. Join opens the configured channel through Telegram's
- * own link handler; Verify re-reads the same endpoint and, the instant it passes, dismisses the
+ * own link handler; Continue re-reads the same endpoint and, the instant it passes, dismisses the
  * gate with a fade and settles any pending referral before the reward toast is painted.
  */
-import { claimReferralRewards } from './storage';
+import { claimReferralRewards, totalMatchesPlayed } from './storage';
 import { playReward } from './sound';
 import { gateReferral, refreshReferral } from './referral';
 import { impact, notify, openLink, tgInitData, tgUser } from './telegram';
@@ -26,6 +33,15 @@ const coins = (n: number): string => n.toLocaleString('en-US');
 
 let started = false;
 let toastTimer = 0;
+
+/* ---------- the Worker's last answer ----------
+   Held at module scope so the match doors can read it without a round trip. The defaults are the
+   fail-open ones: until a reading actually lands, nothing may stand in front of a board. */
+let reading = false;
+let armed = false;
+let member = true;
+let unavailable = false;
+let channelUrl = CHANNEL_URL;
 
 /** The one reading the gate needs; every extra field is decoration for the panel. */
 interface SubscriptionReading {
@@ -66,6 +82,32 @@ async function readSubscription(): Promise<SubscriptionReading | null> {
   }
 }
 
+/**
+ * Fold one answer into the module's reading. Only an explicit `false` is a verdict; a malformed
+ * or missing field keeps the previous, fail-open one.
+ */
+function adopt(data: SubscriptionReading): void {
+  reading = true;
+  armed = data.forceJoinEnabled === true;
+  unavailable = data.unavailable === true;
+  member = data.isMember !== false;
+  channelUrl = data.channelUrl || CHANNEL_URL;
+}
+
+/**
+ * THE VERDICT. The wall stands only for a player who has already settled a match and whose
+ * signed session Telegram says is outside the channel. A new profile (`0` matches) never meets it,
+ * which is what lets the very first race run from launch to verdict with no interruption.
+ */
+function stands(): boolean {
+  return reading && armed && !member && !unavailable && totalMatchesPlayed() >= 1;
+}
+
+/** True when the post-first-match channel wall must stand in front of a new board. */
+export function channelGateBlocks(): boolean {
+  return stands();
+}
+
 /** Boot entry. Safe to call once; every later call is a no-op. */
 export function initJoinGate(): void {
   if (started) return;
@@ -92,7 +134,6 @@ export function initJoinGate(): void {
   const toastEl = $('force-join-toast');
 
   let busy = false;
-  let channelUrl = CHANNEL_URL;
   let hideTimer = 0;
   /** The status line is stored by key, so a language switch repaints it too. */
   let statusKey = '';
@@ -142,6 +183,7 @@ export function initJoinGate(): void {
 
   function show(): void {
     window.clearTimeout(hideTimer);
+    if (gate.dataset.state === 'open' && !gate.hidden) return;
     gate.hidden = false;
     gate.dataset.state = 'open';
     setStatus('');
@@ -149,6 +191,7 @@ export function initJoinGate(): void {
   }
 
   function hide(): void {
+    if (gate.hidden) return;
     gate.dataset.state = 'closing';
     window.clearTimeout(hideTimer);
     hideTimer = window.setTimeout(() => {
@@ -181,57 +224,69 @@ export function initJoinGate(): void {
     void refreshReferral();
   }
 
-  async function check(initial: boolean): Promise<void> {
+  /**
+   * One read, then the verdict. `manual` is the Continue key: it owns the spinner and the inline
+   * status line. The boot read is silent — a first-time player must never see a spinner for a gate
+   * that is not allowed to stand in front of them anyway.
+   */
+  async function check(manual: boolean): Promise<void> {
     if (busy) return;
-    if (!initial) {
+    if (manual) {
       setBusy(true);
       setStatus('forceJoinChecking');
     }
 
-    const reading = await readSubscription();
-    if (!initial) setBusy(false);
+    const data = await readSubscription();
+    if (manual) setBusy(false);
 
-    if (!reading) {
+    if (!data) {
       /* No answer is not a refusal: open the arena and say the check could not run. */
-      hide();
-      if (!initial) toast(t('forceJoinUnavailable'));
-      return;
-    }
-
-    channelUrl = reading.channelUrl || CHANNEL_URL;
-
-    if (reading.forceJoinEnabled !== true) {
-      hide();
-      void settle(false);
-      return;
-    }
-    if (reading.unavailable === true) {
-      hide();
-      if (!initial) toast(t('forceJoinUnavailable'));
-      return;
-    }
-    /* Only an explicit false closes the gate; a malformed answer must fail open. */
-    if (reading.isMember !== false) {
-      hide();
-      if (!initial) {
-        impact('medium');
-        notify('success');
-        await settle(true);
-      } else {
-        void settle(false);
+      if (manual) {
+        hide();
+        toast(t('forceJoinUnavailable'));
       }
       return;
     }
 
-    /* An explicit "not a member": this is the only answer that raises the gate. */
-    if (initial) {
+    adopt(data);
+
+    if (stands()) {
       show();
       /* Bind a pending invite while the player is on the way to the channel. */
       void settle(false);
       return;
     }
-    setStatus('forceJoinNotYet', true);
-    notify('warning');
+
+    hide();
+    if (manual) {
+      impact('medium');
+      notify('success');
+      await settle(true);
+    } else {
+      void settle(false);
+    }
+  }
+
+  /**
+   * Re-read in the background without touching the status line. Membership can change while a
+   * board is up — a player who joined from elsewhere must never meet a wall — so the raise is
+   * confirmed against the Worker right after it goes up. An unanswerable check moves nothing.
+   */
+  async function revalidate(): Promise<void> {
+    if (busy) return;
+    const data = await readSubscription();
+    if (!data) return;
+    adopt(data);
+    if (stands()) return;
+    hide();
+    void settle(false);
+  }
+
+  /** Raise the wall if — and only if — the post-first-match verdict says it must stand. */
+  function raise(): void {
+    if (!stands()) return;
+    show();
+    void revalidate();
   }
 
   join?.addEventListener('click', () => {
@@ -239,7 +294,7 @@ export function initJoinGate(): void {
     openLink(channelUrl);
     setStatus('forceJoinJoinedHint');
   });
-  verify?.addEventListener('click', () => { void check(false); });
+  verify?.addEventListener('click', () => { void check(true); });
 
   /* The gate holds focus until it is dismissed; Tab cannot wander into the app beneath it, and
      Escape has no meaning here because the overlay deliberately has no close key. */
@@ -265,5 +320,21 @@ export function initJoinGate(): void {
   applyCopy();
   window.addEventListener('detour:lang', applyCopy);
 
-  void check(true);
+  /* The controller is bound, so `raiseChannelGate()` from the match doors now works. */
+  raiseBound = raise;
+
+  void check(false);
+}
+
+/* The one binding the match doors call. It is a no-op until `initJoinGate()` has bound the
+   overlay — an invited launch holds that binding back on purpose, and the router arms it the
+   moment the player is back on Home. */
+let raiseBound: () => void = () => {};
+
+/**
+ * Put the wall up if the post-first-match verdict says it stands. Called where a player leaves a
+ * settled result for the menu, and again by every match door that is about to open a new board.
+ */
+export function raiseChannelGate(): void {
+  raiseBound();
 }

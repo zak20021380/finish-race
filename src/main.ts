@@ -92,7 +92,7 @@ import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, hasHumanRival, isAutomated, isHuman,
   lobbyLine, rewardEligible, seatBadge, seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
-import { initJoinGate } from './joinGate';
+import { channelGateBlocks, initJoinGate, raiseChannelGate } from './joinGate';
 import type { VsRival, VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
 import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
@@ -195,9 +195,11 @@ if (INVITE_FTUE) rememberPendingDuelRoom(INVITE_ROOM_CODE);
 let inviteGateDeferred = INVITE_DUEL_LAUNCH || INVITE_FTUE;
 
 /* The mandatory channel check runs in the background and never blocks the first frame; a gate
-   that cannot be answered fails open. On an invited launch it is deliberately NOT started: a join
-   sheet in front of a waiting friend is the whole drop-off this flow exists to remove.
-   `initJoinGate()` is called from the router the moment the player exits back to #s-home instead. */
+   that cannot be answered fails open. It can never stand in front of a first race either — the
+   verdict is `0 matches` for a new profile, so only a returning, unverified player meets the wall
+   at boot. On an invited launch it is deliberately NOT started: a join sheet in front of a waiting
+   friend is the whole drop-off this flow exists to remove. `initJoinGate()` is called from the
+   router the moment the player exits back to #s-home instead. */
 if (!inviteGateDeferred) afterPaint(initJoinGate);
 
 /* ---------- no zoom / no scroll ---------- */
@@ -1112,6 +1114,10 @@ let warPaid = false;
  * `matchmaking.open()` is never called directly.
  */
 function queueMatch(mode: 'pvp' | 'arena' | 'channel_war' = 'pvp') {
+  /* THE POST-FIRST-MATCH WALL. A queue that would open a second board for an unverified player
+     is refused here, before the searching stage exists: the gate is the only thing that can
+     answer this tap, and it never stood in front of the first race. */
+  if (channelGateBlocks()) { raiseChannelGate(); return; }
   /* A war match is an ordinary ranked pairing that also pays the fighter's channel. The flag is
      held here rather than read off the seat, because the debut override and a bot backfill both
      produce a board with no online mode — and a war match still owes its channel its points. */
@@ -1174,14 +1180,19 @@ const router = createRouter($('screens'), (id, prev, phase) => {
   /* off the board, a room that was waiting in the background may finally show itself */
   if (id !== 'game') resumeRoom();
   /* `prev === null` is the cold boot's OWN Home render, not an exit back to it. A genuine return
-     to Home re-arms the channel gate that an invite launch held back, and is the one moment the
-     optional tactical-training upsell belongs: the friend has been played and nobody is waiting. */
+     to Home re-arms the channel gate that an invite launch held back, raises the post-first-match
+     wall when it stands, and is the one moment the optional tactical-training upsell belongs: the
+     friend has been played and nobody is waiting. */
   if (id === 'home' && prev !== null) {
     if (inviteGateDeferred && !peekPendingDuelRoom()) {
       inviteGateDeferred = false;
       initJoinGate();
     }
-    if (!peekPendingDuelRoom()) maybeOfferTraining();
+    /* Every road back to the menu ends here — the result card's Menu key, the dock, the back
+       button — so the wall is raised on the arrival rather than on one particular exit. */
+    raiseChannelGate();
+    /* A training sheet has no business opening behind a wall the player has to answer first. */
+    if (!peekPendingDuelRoom() && !channelGateBlocks()) maybeOfferTraining();
   }
   phase.after(() => {
     menu.refresh(id);
@@ -4250,6 +4261,15 @@ function clashRivals(): VsRival[] {
 }
 
 function startGame(setup: StartSetup) {
+  /* THE SAME WALL, AT THE SINGLE DOOR. Every board — Play, the Arena queue, a custom room, a
+     server push — comes through here, so a second board is never dealt to an unverified player
+     even when the tap came from a surface that does not ask the question itself. The first race
+     is exempt by the verdict (`0` matches), which is what keeps cold boot uninterrupted. */
+  if (channelGateBlocks()) {
+    matchmaking.abandon();
+    raiseChannelGate();
+    return;
+  }
   /* The queue's war identity lands on the board it opened, and on no other. */
   warMatch = warPending;
   warPending = false;
@@ -6178,6 +6198,10 @@ $('pause-tutorial').addEventListener('click', () => {
 again.addEventListener('click', () => {
   /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
   impact(localWon() ? 'medium' : 'heavy');
+  /* PLAY AGAIN IS THE SECOND MATCH. The capsule closes into the wall instead of a fresh board —
+     and before a friends rematch vote is cast, so a room is never asked to count down for a seat
+     that cannot take it. */
+  if (channelGateBlocks()) { raiseChannelGate(); return; }
   /* NEVER ROUTE A FRIENDS REMATCH TO THE QUEUE. A private room's next board is a vote on the room
      the player is already seated in; queueing here would drop the friends they just raced and put
      them in front of strangers. This branch is the only thing a friends capsule can do. */
