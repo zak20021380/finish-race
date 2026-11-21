@@ -2459,13 +2459,17 @@
                    LTR bdi run, so `+12` / `-14` / `+5` never mirror. -->
               <div class="result-bank" id="result-bank">
                 <div class="result-reward is-coins" id="result-coin-chip">
-                  <span class="result-bank-ico is-coin" aria-hidden="true">
-                    <span class="coin" data-coin></span>
+                  <span class="result-bank-head">
+                    <span class="result-bank-ico is-coin" aria-hidden="true">
+                      <span class="coin" data-coin></span>
+                    </span>
+                    <span class="result-bank-stack">
+                      <span class="result-bank-value">
+                        <bdi dir="ltr"><span class="result-sign">+</span><b id="result-coins-n">0</b></bdi>
+                      </span>
+                      <span class="result-reward-label" data-i18n="resultCoinsUnit">COINS</span>
+                    </span>
                   </span>
-                  <span class="result-bank-value">
-                    <bdi dir="ltr"><span class="result-sign">+</span><b id="result-coins-n">0</b></bdi>
-                  </span>
-                  <span class="result-reward-label" data-i18n="resultCoinsUnit">COINS</span>
                   <button class="ad-chip ad-chip--mini" id="btn-double-coins" type="button" hidden>
                     <svg class="ad-chip-ico" width="12" height="12" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
@@ -2479,13 +2483,17 @@
                   </button>
                 </div>
                 <div class="result-reward is-tiq" id="result-tiq-chip" hidden>
-                  <span class="result-bank-ico is-tiq" aria-hidden="true">
-                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-tiq" /></svg>
+                  <span class="result-bank-head">
+                    <span class="result-bank-ico is-tiq" aria-hidden="true">
+                      <svg class="ico" viewBox="0 0 24 24"><use href="#i-tiq" /></svg>
+                    </span>
+                    <span class="result-bank-stack">
+                      <span class="result-bank-value">
+                        <bdi dir="ltr"><span class="result-sign" id="result-tiq-sign">+</span><b id="result-tiq-n">0</b></bdi>
+                      </span>
+                      <span class="result-reward-label" id="result-tiq-label">TIQ</span>
+                    </span>
                   </span>
-                  <span class="result-bank-value">
-                    <bdi dir="ltr"><span class="result-sign" id="result-tiq-sign">+</span><b id="result-tiq-n">0</b></bdi>
-                  </span>
-                  <span class="result-reward-label" id="result-tiq-label">TIQ</span>
                   <button class="ad-chip ad-chip--shield" id="btn-recover-tiq" type="button" hidden>
                     <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
@@ -2504,16 +2512,20 @@
                   </button>
                 </div>
                 <div class="result-reward is-xp" id="result-xp-chip" hidden>
-                  <span class="result-bank-ico is-xp" aria-hidden="true">
-                    <!-- the geometric XP badge, not the old faceted star: one hex plate, two chevrons -->
-                    <svg class="xp-emblem" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <use href="#i-xp-emblem" />
-                    </svg>
+                  <span class="result-bank-head">
+                    <span class="result-bank-ico is-xp" aria-hidden="true">
+                      <!-- the geometric XP badge, not the old faceted star: one hex plate, two chevrons -->
+                      <svg class="xp-emblem" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <use href="#i-xp-emblem" />
+                      </svg>
+                    </span>
+                    <span class="result-bank-stack">
+                      <span class="result-bank-value">
+                        <bdi dir="ltr"><span class="result-sign">+</span><b id="result-xp-n">0</b></bdi>
+                      </span>
+                      <span class="result-reward-label" data-i18n="resultXpUnit">XP</span>
+                    </span>
                   </span>
-                  <span class="result-bank-value">
-                    <bdi dir="ltr"><span class="result-sign">+</span><b id="result-xp-n">0</b></bdi>
-                  </span>
-                  <span class="result-reward-label" data-i18n="resultXpUnit">XP</span>
                 </div>
               </div>
 
@@ -3191,36 +3203,27 @@
               </div>
             </section>
 
-            <!-- B1. Stars revenue: what invoices collected, what the vault unlocked, what is
-                 waiting to be paid and what already was — all from the Worker's own ledgers. -->
+            <!-- B1. Stars revenue: one executive row for the invoice income the Worker's own
+                 ledger settled. The payout queue keeps its own cards on the Controls tab. -->
             <section class="adm-block" data-accent="gold" aria-labelledby="stat-stars-title">
               <div class="adm-block-h">
                 <h3 class="adm-block-t" id="stat-stars-title" data-i18n="admStarsRevenue">Stars Revenue</h3>
               </div>
-              <div class="adm-grid">
-                <div class="adm-card">
-                  <span class="adm-card-l" data-i18n="admStarsIncome">Stars Income</span>
-                  <span class="adm-card-vrow">
-                    <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
-                    <b class="adm-card-v" id="stat-stars-income">—</b>
+              <div class="adm-grid adm-grid-stars">
+                <div class="adm-card adm-revenue">
+                  <span class="adm-revenue-copy">
+                    <span class="adm-revenue-badge" aria-hidden="true">
+                      <svg class="ico" aria-hidden="true"><use href="#i-star" /></svg>
+                    </span>
+                    <span class="adm-revenue-text">
+                      <span class="adm-card-l adm-revenue-t" data-i18n="admStarsIncome">Total Stars Revenue</span>
+                      <span class="adm-card-s" data-i18n="admStarsCollected">Total received from Stars purchases</span>
+                    </span>
                   </span>
-                  <span class="adm-card-s" data-i18n="admStarsCollected">Total collected</span>
-                </div>
-                <div class="adm-card">
-                  <span class="adm-card-l" data-i18n="admPendingPayouts">Pending Payouts</span>
-                  <span class="adm-card-vrow">
+                  <span class="adm-card-vrow adm-revenue-v">
                     <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
-                    <b class="adm-card-v" id="stat-stars-pending">—</b>
+                    <b class="adm-card-v"><bdi dir="ltr" id="stat-stars-income">—</bdi></b>
                   </span>
-                  <span class="adm-card-s" id="stat-stars-pending-req">— requests</span>
-                </div>
-                <div class="adm-card">
-                  <span class="adm-card-l" data-i18n="admPaidOut">Paid Out</span>
-                  <span class="adm-card-vrow">
-                    <svg class="ico adm-card-star" aria-hidden="true"><use href="#i-star" /></svg>
-                    <b class="adm-card-v" id="stat-stars-paid">—</b>
-                  </span>
-                  <span class="adm-card-s" data-i18n="admCompleted">Completed</span>
                 </div>
               </div>
             </section>

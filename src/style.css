@@ -19144,6 +19144,78 @@ html.reduced-motion .adm-live-dot { animation: none; }
 }
 .adm-card-s b { color: var(--mint-ink); }
 
+/* ---- Stars revenue: one full-width executive row, figure on the end side ----
+   The payout queue is not repeated here; Controls owns those two cards. */
+.adm-grid-stars { grid-template-columns: minmax(0, 1fr); }
+.adm-card.adm-revenue {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  text-align: start;
+}
+.adm-revenue-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.adm-revenue-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, .14);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .28);
+  color: var(--gold-ink);
+}
+.adm-revenue-badge .ico {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .45));
+}
+.adm-revenue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.adm-revenue .adm-revenue-t {
+  overflow: visible;
+  font-size: 10.5px;
+  letter-spacing: .02em;
+  text-transform: none;
+  white-space: normal;
+  color: var(--brand-ink);
+}
+.adm-revenue .adm-card-s {
+  overflow: visible;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  color: var(--ink-soft);
+}
+.adm-revenue-v {
+  flex: none;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.adm-revenue-v .adm-card-v { font-size: 20px; }
+
+/* the RTL sentence keeps its colon beside its label instead of drifting onto the figure */
+html[data-lang="fa"] #stat-active-meta,
+html[data-lang="ar"] #stat-active-meta {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
 /* ---- one clay slab under each executive section: title row, content beneath ---- */
 .adm-slab {
   display: flex;

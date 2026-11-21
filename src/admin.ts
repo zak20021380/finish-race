@@ -1852,11 +1852,9 @@ export function createAdmin(api: AdminApi): Admin {
   const statNewToday = $<HTMLElement>('stat-new-today');
   const statNewWeek = $<HTMLElement>('stat-new-week');
   const statNewMonth = $<HTMLElement>('stat-new-month');
-  /* the Stars economy: invoice revenue, vault unlocks, the payout queue and what was settled */
+  /* the Stars economy on this tab is one reading: the invoice revenue the Worker settled.
+     The payout queue is painted by the Controls tab, from its own cards. */
   const statStarsIncome = $<HTMLElement>('stat-stars-income');
-  const statStarsPending = $<HTMLElement>('stat-stars-pending');
-  const statStarsPendingReq = $<HTMLElement>('stat-stars-pending-req');
-  const statStarsPaid = $<HTMLElement>('stat-stars-paid');
   const statReturning = $<HTMLElement>('stat-returning');
   const statReturningPct = $<HTMLElement>('stat-returning-pct');
   const statD1 = $<HTMLElement>('stat-d1');
@@ -2992,11 +2990,8 @@ export function createAdmin(api: AdminApi): Admin {
     if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
     if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
 
-    /* ---- Stars revenue: invoice income, the waiting payout queue and what was settled ---- */
+    /* ---- Stars revenue: the one invoice figure this tab carries ---- */
     if (statStarsIncome) statStarsIncome.textContent = metric(m?.starsRevenueTotal);
-    if (statStarsPending) statStarsPending.textContent = metric(m?.vaultPendingPayoutsStars);
-    paintPhrase(statStarsPendingReq, 'admPayoutRequests', m?.vaultPendingPayoutsCount, '— requests');
-    if (statStarsPaid) statStarsPaid.textContent = metric(m?.vaultPaidOutStars);
 
     /* ---- engagement: today's returners, next-day return, hooked share ---- */
     if (statReturning) statReturning.textContent = metric(m?.returningUsersToday);
