@@ -7345,6 +7345,15 @@ html.reduced-motion .hex-photo { transition: none; }
     0 12px 22px -16px var(--shadow);
 }
 .gh[hidden] { display: none; }
+/* All three squad doors into the profile sheet — own-squad strip, podium pillar and
+   ladder row — keep their own hit area. Decorative children and pseudo art never
+   need to swallow the tap: bubbles reach the card that carries the squad id. */
+.gh,
+.squad-row,
+.pod-card.is-tappable {
+  pointer-events: auto;
+}
+.gh { cursor: pointer; }
 .gh-crest { width: 36px; height: 32px; }
 .gh-crest .hex-face b { font-size: 14px; }
 .gh-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }

@@ -1023,6 +1023,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     rank: number;
     name: string;
     score: string;
+    /** Squad entries carry the registry id so every pillar can open the same profile. */
+    squadId?: string;
     /** Nation entry: the flag photo, with the ISO chip as its own fallback. */
     code?: string;
     /** Player entry: the crest is their own face, with the nation pinned to its corner. */
@@ -1074,6 +1076,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const card = document.createElement('div');
     card.className = `pod-card ${podiumOf(e.rank)}`;
     card.dataset.rank = String(e.rank);
+    if (e.squadId) card.dataset.squadId = e.squadId;
     if (e.medal) card.dataset.medal = e.medal.def.accent;
     card.setAttribute('role', 'listitem');
     const honor = e.medal
@@ -1259,9 +1262,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       rank: s.rank,
       name: s.name || s.handle.replace(/^@/, ''),
       score: s.trophies.toLocaleString('en-US'),
+      squadId: s.id,
       letter: squadMark(s),
       photo: squadAvatarUrl(s),
       members: s.members,
+      onTap: () => {
+        const fresh = getSquadRanking().find((row) => row.id === s.id) ?? s;
+        openGuild(fresh);
+      },
+      tapHint: 'open the squad profile',
     }));
   }
 
@@ -2097,6 +2106,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const el = msEls.sheet;
     const body = msEls.body;
     if (!el || !body) return;
+    /* Reveal the drawer FIRST. Nothing optional below — least of all the founder's
+       verification block — may strand the profile behind a hidden sheet. A squad
+       already showing in this same panel is repainted in place without a slide. */
+    msPending = { kind: 'guild', squad: s };
+    if (el.hidden) {
+      impact('light');
+      api.sheets.open(el);
+    }
     const mine = isEnlisted(s);
     const field = guildField.length || getSquadRanking().length;
     const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((s.rank / (field + 1)) * 100))) : 100;
@@ -2106,7 +2123,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const tiq = s.trophies.toLocaleString('en-US');
     const viewerId = myPlayerId();
     const isFounder = !!viewerId && (s.ownerId ?? '') === viewerId;
-    msPending = { kind: 'guild', squad: s };
     msGuildHead(s, label);
     el.setAttribute('aria-label', `${label} · ${kindLabel} ${s.handle} · #${s.rank} · ${tiq} TIQ`);
     body.textContent = '';
@@ -2115,33 +2131,41 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       msSection(t('squadRead'), msSquadMetrics(s, mine, contrib)),
     );
     /* A founder looking at their own unverified squad gets the one door that fixes it; a
-       verified squad, or anybody else's, gets no verification controls at all. */
+       verified squad, or anybody else's, gets no verification controls at all. The block is
+       optional chrome: if its builder or host is unavailable, the profile still stays open. */
     if (s.verified !== true && isFounder) {
-      const host = document.createElement('section');
-      host.className = 'ms-block sqv-founder';
-      const panel = buildSquadVerifyPanel({
-        mode: 'verify',
-        handle: () => s.handle,
-        squadId: s.id,
-        onVerified: (fresh) => {
-          notify('success');
-          impact('medium');
-          showToast(t('squadVerifyDone'), 'success');
-          loadedBoard.guilds = false;
-          loadSquads();
-          openGuild(fresh);
-        },
-        onError: (message) => {
-          notify('warning');
-          showToast(message, 'warning');
-        },
-        onNotice: (message) => {
-          notify('success');
-          showToast(message, 'success');
-        },
-      });
-      host.append(panel.el);
-      body.append(host);
+      try {
+        const host = document.createElement('section');
+        host.className = 'ms-block sqv-founder';
+        const panel = buildSquadVerifyPanel({
+          mode: 'verify',
+          handle: () => s.handle,
+          squadId: s.id,
+          onVerified: (fresh) => {
+            notify('success');
+            impact('medium');
+            showToast(t('squadVerifyDone'), 'success');
+            loadedBoard.guilds = false;
+            loadSquads();
+            openGuild(fresh);
+          },
+          onError: (message) => {
+            notify('warning');
+            showToast(message, 'warning');
+          },
+          onNotice: (message) => {
+            notify('success');
+            showToast(message, 'success');
+          },
+        });
+        if (panel?.el) {
+          host.append(panel.el);
+          body.append(host);
+        }
+      } catch {
+        /* The squad profile is already visible; a missing verification door is not a reason
+           to take it away. */
+      }
     }
     msActions(
       'guild',
@@ -2151,11 +2175,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     msKeyIcon(msEls.challenge, mine ? '#i-link' : '#i-swords');
     msKeyIcon(msEls.guild, '#i-ext');
     msEls.challenge?.classList.add('is-squad');
-    /* a join repaints this same open sheet in place — never replay the slide-in or its tap */
-    if (el.hidden) {
-      impact('light');
-      api.sheets.open(el);
-    }
   }
 
   /* ---------- the nation sheet: prestige medallion + national top players ----------
@@ -2859,6 +2878,21 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     el.id = 'guild-hero';
     el.className = 'gh';
     el.hidden = true;
+    /* One banner, one pair of listeners: the strip is rebuilt in place on every squad
+       change, so binding here avoids stacking handlers and still opens the live squad. */
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    const openMine = (): void => {
+      const me = getMySquad();
+      if (me) openGuild(me);
+    };
+    el.addEventListener('click', openMine);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openMine();
+      }
+    });
     parent.insertBefore(el, sc);
     return el;
   };
@@ -2872,10 +2906,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const host = guildHeroEl();
     if (!host) return;
     const me = isRanksVisible() && board === 'guilds' ? getMySquad() : null;
-    if (!me) { host.hidden = true; return; }
+    if (!me) {
+      host.hidden = true;
+      delete host.dataset.squadId;
+      return;
+    }
     const dock = squadDock();
     if (dock) dock.hidden = true;
     host.hidden = false;
+    host.dataset.squadId = me.id;
     host.textContent = '';
 
     host.append(hexCrest(squadMark(me), 'gh-crest', squadAvatarUrl(me)));
@@ -2920,7 +2959,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     score.title = `${me.trophies.toLocaleString('en-US')} ${t('squadTotalTiq')} · ${me.members.toLocaleString('en-US')} minds`;
 
     host.append(txt, score);
-    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} total Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
+    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} total Tactical IQ, ${me.members.toLocaleString('en-US')} minds. Activate to open the squad profile.`);
   }
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
@@ -2928,6 +2967,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     li.className = `squad-row lb-row${mine ? ' is-you' : ''}`;
     li.tabIndex = 0;
     li.dataset.id = s.id;
+    li.dataset.squadId = s.id;
     const label = s.name || s.handle.replace(/^@/, '');
     const members = membersLine(s.members);
     li.title = `${label} · ${s.handle}`;
@@ -2977,12 +3017,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     li.append(rankCrest(s.rank), id, cell, act);
 
     // The whole row opens the guild's profile sheet, which carries the real keys.
-    li.addEventListener('click', () => { openGuild(s); });
+    // Resolve by id on tap so a refreshed ladder can never open a stale snapshot.
+    const openRow = (): void => {
+      const fresh = getSquadRanking().find((row) => row.id === s.id) ?? s;
+      openGuild(fresh);
+    };
+    li.addEventListener('click', openRow);
     li.addEventListener('keydown', (e) => {
       if (e.target !== li) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        openGuild(s);
+        openRow();
       }
     });
     return li;
