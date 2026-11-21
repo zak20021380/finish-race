@@ -123,6 +123,11 @@ export interface Squad {
   /** The Telegram id of the player who enlisted the squad: its leader and only admin. */
   ownerId?: string;
   /**
+   * The registry's public badge gate. Only the Worker sets it, and only after Method 1 or
+   * Method 2 proved the founder's admin ownership of the chat; absent means unverified.
+   */
+  verified?: boolean;
+  /**
    * Registry flag: an invite link files a join request instead of adding the player to the
    * roster. The leader's own device keeps the authoritative switch in `SquadSave.admin`; this
    * field is the Worker's copy, used to seed a device that has never flipped the switch.
@@ -205,6 +210,7 @@ function squadOk(s: unknown): s is Squad {
       || (typeof x.telegramMembers === 'number' && Number.isFinite(x.telegramMembers) && x.telegramMembers >= 0))
     && (x.botFightersCount === undefined || (typeof x.botFightersCount === 'number' && Number.isFinite(x.botFightersCount) && x.botFightersCount >= 0))
     && (x.ownerId === undefined || (typeof x.ownerId === 'string' && x.ownerId.length <= 24))
+    && (x.verified === undefined || typeof x.verified === 'boolean')
     && (x.requireApproval === undefined || typeof x.requireApproval === 'boolean')
     && (x.cupId === undefined || (typeof x.cupId === 'string' && x.cupId.length <= 48))
     && (x.warPoints === undefined || (typeof x.warPoints === 'number' && Number.isFinite(x.warPoints) && x.warPoints >= 0))
@@ -585,7 +591,10 @@ function myRow(role: SquadRole, country: string): SquadMember {
 export function applySquadRoster(
   id: string,
   roster: SquadMember[],
-  extra: { subscribers?: number; telegramMembers?: number | null; ownerId?: string; members?: number; tiq?: number } = {},
+  extra: {
+    subscribers?: number; telegramMembers?: number | null; ownerId?: string; members?: number;
+    tiq?: number; verified?: boolean;
+  } = {},
 ): RankedSquad | null {
   const at = save.custom.findIndex((s) => s.id === id);
   if (at < 0) return null;
@@ -596,6 +605,7 @@ export function applySquadRoster(
     ...(typeof extra.subscribers === 'number' ? { subscribers: extra.subscribers } : {}),
     ...(extra.telegramMembers !== undefined ? { telegramMembers: extra.telegramMembers } : {}),
     ...(ownerId ? { ownerId } : {}),
+    ...(typeof extra.verified === 'boolean' ? { verified: extra.verified } : {}),
   }, ownerId), save.custom[at]);
   flush();
   return getSquadById(id);
@@ -605,7 +615,10 @@ export function applySquadRoster(
 export function joinSquadLocally(
   id: string,
   roster?: SquadMember[],
-  extra: { subscribers?: number; telegramMembers?: number | null; ownerId?: string; role?: SquadRole } = {},
+  extra: {
+    subscribers?: number; telegramMembers?: number | null; ownerId?: string; role?: SquadRole;
+    verified?: boolean;
+  } = {},
 ): BindResult {
   const at = save.custom.findIndex((s) => s.id === id);
   if (at < 0) return 'bad-handle';
@@ -627,6 +640,7 @@ export function joinSquadLocally(
     ...(typeof extra.subscribers === 'number' ? { subscribers: extra.subscribers } : {}),
     ...(extra.telegramMembers !== undefined ? { telegramMembers: extra.telegramMembers } : {}),
     ...(extra.ownerId ? { ownerId: extra.ownerId } : {}),
+    ...(typeof extra.verified === 'boolean' ? { verified: extra.verified } : {}),
   }, extra.ownerId ?? squad.ownerId);
   const was = save.boundId && save.boundId !== id ? 'switched' : save.boundId === id ? 'already' : 'bound';
   save.boundId = id;
@@ -757,6 +771,8 @@ export interface RegisteredSquadInput {
   cupId?: string;
   /** Registry copy of the leader's join-approval gate. */
   requireApproval?: boolean;
+  /** The registry's badge gate, exactly as the enlistment answer reported it. */
+  verified?: boolean;
   /** `false` files the squad in the list without moving this device's binding (an invite look). */
   bind?: boolean;
 }
@@ -802,6 +818,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     enlistedAt: Date.now(),
     cupId: (input.cupId ?? '').trim().slice(0, 48) || ACTIVE_CUP_ID,
     ...(typeof input.requireApproval === 'boolean' ? { requireApproval: input.requireApproval } : {}),
+    ...(typeof input.verified === 'boolean' ? { verified: input.verified } : {}),
   }, ownerId);
   save.custom = [...save.custom, created].slice(-40);
   if (input.bind !== false) save.boundId = id;

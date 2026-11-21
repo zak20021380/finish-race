@@ -76,10 +76,13 @@ import {
 } from '../shared/vip';
 import {
   ACTIVE_CUP_ID, MEMBER_TIQ_CAP, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard,
-  cupSquadIds, isSquadAdmin, normalizeChatHandle, readRegisteredSquad, refreshTelegramMembers,
-  removeSquadMember, roleOf, SQUAD_ALREADY_ENLISTED, squadTotalTiq, squadViewOf, squadWarTiq,
-  telegramPhotoUrl, upsertSquadMember, verifyAndBuildSquad, verifyChannelMembership, verifySquadChat,
-  type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow, type SquadVerification,
+  cupSquadIds, isSquadAdmin, markSquadVerified, normalizeChatHandle, readPublicChat,
+  readRegisteredSquad, refreshTelegramMembers, removeSquadMember, roleOf, SQUAD_ALREADY_ENLISTED,
+  squadTotalTiq, squadViewOf, squadWarTiq, syncSquadChatDetails, telegramPhotoUrl, upsertSquadMember,
+  verifyAndBuildSquad, verifyChannelMembership, verifyPostedCode, verifySquadAdminOwnership,
+  verifySquadChat,
+  type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow,
+  type SquadVerification, type SquadVerifyMethod,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
 import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralConfig';
@@ -1574,6 +1577,13 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
+/** `#TX-` plus five random Latin digits, leading zeroes intact: the one-time post token. */
+function randomVerifyCode(): string {
+  const draw = new Uint32Array(1);
+  crypto.getRandomValues(draw);
+  return `#TX-${String(draw[0] % 100_000).padStart(5, '0')}`;
+}
+
 /* ---------- the arena board: defaults, validation and the prize bands ---------- */
 
 const ARENA_TIER_IDS: readonly ArenaTierId[] = [
@@ -2112,6 +2122,21 @@ export interface AdminUser {
  */
 const SQUADS_KEY = 'squads';
 
+/**
+ * The Method 2 one-time codes, in this room's durable key-value storage, keyed by
+ * `<telegram user id>:<handle>` and swept after thirty minutes. A code is a proof, not a secret
+ * people need to keep: it only ever unlocks the channel the poster already controls.
+ */
+const SQUAD_VERIFY_CODES_KEY = 'squad-verify-codes.v1';
+const VERIFY_CODE_TTL_MS = 30 * 60_000;
+
+interface StoredVerifyCode {
+  code: string;
+  expiresAt: number;
+}
+
+type VerifyCodeMap = Record<string, StoredVerifyCode>;
+
 /** The one state an admin filters on: the three audit states, with a purge collapsed into `banned`. */
 export type SquadStatus = SquadVerification | 'banned';
 
@@ -2138,6 +2163,8 @@ export interface SquadWarRow {
   ownerUsername: string;
   createdAt: number;
   verification: SquadVerification;
+  /** The strict public badge gate, mirrored here so every squad list carries the same boolean. */
+  verified: boolean;
   verifiedAt: number;
   verifiedBy: string;
   revokedAt: number;
@@ -2956,6 +2983,12 @@ export class MatchmakerDO {
     if (url.pathname === '/internal/force-join' && request.method === 'GET') {
       return json({ ok: true, config: this.forceJoin }, 200, { 'cache-control': 'no-store' });
     }
+    /* Method 1's webhook half: the bot was just made an administrator of a chat, so the squad
+       registered for that chat can be verified without the founder pressing anything. Also
+       internal-only — the worker entry never forwards `/internal/*`. */
+    if (url.pathname === '/internal/squad-bot-admin' && request.method === 'POST') {
+      return this.squadBotAdminDetected(request);
+    }
     /* The player's own gate reading: the signed initData (or the marked dev door) names the
        caller; a query-string id may never speak for somebody else. */
     if (url.pathname === '/api/user/check-subscription') {
@@ -2969,6 +3002,10 @@ export class MatchmakerDO {
       } catch (err) {
         return json({ ok: false, error: 'telemetry_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
       }
+    }
+    if (url.pathname === '/api/squads/verify-code') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadVerifyCodeDoor(request, url);
     }
     if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
@@ -3230,6 +3267,10 @@ export class MatchmakerDO {
    */
   private async verifySquad(request: Request, url: URL): Promise<Response> {
     const body = await readBody(request);
+    /* One path, two intents: a body naming `method: 'bot' | 'post'` is a founder completing
+       verification on an existing squad; anything else is the original blur/tap preview. */
+    const method: 'bot' | 'post' | '' = body.method === 'bot' || body.method === 'post' ? body.method : '';
+    if (method) return this.squadVerifyOwnership(request, url, body, method);
     const requestedKind = body.kind === 'channel' || body.kind === 'group' ? body.kind : '';
     if (!requestedKind) {
       return json({ ok: false, error: 'invalid_kind', message: 'Choose Channel or Group.' }, 400);
@@ -3300,10 +3341,32 @@ export class MatchmakerDO {
     this.enlisting.add(reservation);
     try {
       const requestedKind = body.kind === 'channel' || body.kind === 'group' ? body.kind : undefined;
+      const method: SquadVerifyMethod = body.method === 'bot' || body.method === 'post'
+        || body.method === 'none'
+        ? body.method
+        : '';
+      /* A posted-code registration is bound to the founder+handle pair the code was issued for;
+         scanning the channel for *some* `#TX-XXXXX` would otherwise let any old token through. */
+      if (method === 'post') {
+        const issued = await this.readVerifyCode(`${requester}:${handle.toLowerCase()}`);
+        if (!issued) {
+          return json({ ok: false, error: 'verify_code_expired', message: 'That code expired. Generate a fresh one.' }, 400);
+        }
+        const posted = typeof body.verifyCode === 'string' ? body.verifyCode.trim().toUpperCase() : '';
+        if (posted !== issued) {
+          return json({
+            ok: false,
+            error: 'POST_CODE_NOT_FOUND',
+            message: 'That code is not the one issued for this channel. Post it again and verify.',
+          }, 400);
+        }
+      }
       const result = await verifyAndBuildSquad(rawHandle, requester, this.env, {
         name: typeof body.squadName === 'string' ? body.squadName : '',
         tag: typeof body.squadTag === 'string' ? body.squadTag : '',
         kind: requestedKind,
+        method,
+        verifyCode: typeof body.verifyCode === 'string' ? body.verifyCode : '',
         /* An enlistment is filed under the cup it names; a client that names none is filing for
            the championship that is running. */
         cupId: typeof body.cupId === 'string' ? body.cupId : ACTIVE_CUP_ID,
@@ -3336,6 +3399,171 @@ export class MatchmakerDO {
       return json({ ok: true, squad: squadViewOf(result.squad) });
     } finally {
       this.enlisting.delete(reservation);
+    }
+  }
+
+  /* ---------- dual-mode verification ---------- */
+
+  /**
+   * Method 2's first half: mint a one-time `#TX-XXXXX` code for this founder+handle pair and keep
+   * it for thirty minutes in this room's durable key-value storage. Possessing the code proves
+   * nothing by itself — only finding it posted in the public channel does.
+   */
+  private async squadVerifyCodeDoor(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const handle = normalizeChatHandle(typeof body.handle === 'string' ? body.handle : '');
+    if (!handle) {
+      return json({ ok: false, error: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' }, 400);
+    }
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const code = randomVerifyCode();
+    await this.writeVerifyCode(`${requester}:${handle.toLowerCase()}`, code);
+    return json({ ok: true, code, username: handle });
+  }
+
+  /**
+   * The founder's completion door for an existing squad. Method 1 proves both the caller's admin
+   * rank and the bot's own; Method 2 proves control by finding the one-time code in the channel's
+   * public posts. Either proof flips `verification` and the badge flag together.
+   */
+  private async squadVerifyOwnership(
+    request: Request,
+    url: URL,
+    body: Record<string, unknown>,
+    method: 'bot' | 'post',
+  ): Promise<Response> {
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const handle = normalizeChatHandle(typeof body.handle === 'string' ? body.handle : '');
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    if (!handle && !id) {
+      return json({ ok: false, error: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' }, 400);
+    }
+    await this.syncSquadsFromStorage();
+    const squad = id
+      ? this.squads.get(id)
+      : [...this.squads.values()].find((row) => row.handle.toLowerCase() === handle.toLowerCase());
+    if (!squad) {
+      return json({ ok: false, error: 'no_such_squad', message: 'That squad is not on the registry.' }, 404);
+    }
+    if (squad.banned) {
+      return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
+    }
+    if (squad.creatorId !== requester && squad.ownerId !== requester) {
+      return json({ ok: false, error: 'not_founder', message: 'Only the squad founder can verify this community.' }, 403);
+    }
+    if (squad.verified && squad.verification === 'verified') {
+      return json({ ok: true, squad: squadViewOf(squad) });
+    }
+
+    if (method === 'bot') {
+      const proof = await verifySquadAdminOwnership(squad.handle, requester, this.env);
+      if (!proof.ok) {
+        return json({
+          ok: false,
+          error: proof.code,
+          message: proof.message,
+          ...(proof.kind ? { kind: proof.kind } : {}),
+        }, proof.status);
+      }
+      syncSquadChatDetails(squad, proof.chat);
+      markSquadVerified(squad, 'telegram');
+    } else {
+      const code = await this.readVerifyCode(`${requester}:${squad.handle.toLowerCase()}`);
+      if (!code) {
+        return json({ ok: false, error: 'verify_code_expired', message: 'That code expired. Generate a fresh one.' }, 400);
+      }
+      if (!(await verifyPostedCode(squad.handle, code))) {
+        return json({
+          ok: false,
+          error: 'POST_CODE_NOT_FOUND',
+          message: 'That code is not in the channel posts yet. Post it again and verify.',
+        }, 400);
+      }
+      /* Method 2 never asks for bot rights, so the title/photo/audience sync is best-effort:
+         a chat getChat cannot read keeps the founder's own title. */
+      const details = await readPublicChat(squad.handle, this.env);
+      if (details) syncSquadChatDetails(squad, details);
+      markSquadVerified(squad, 'post');
+    }
+
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Method 1's webhook half. Telegram already told the edge that this bot became an administrator
+   * of a chat; the edge forwarded the update here. The actor is re-proven against Telegram — an
+   * update alone is not a founder's consent — and only then does the matching squad get its badge.
+   */
+  private async squadBotAdminDetected(request: Request): Promise<Response> {
+    const body = await readBody(request);
+    const chatId = String(body.chatId ?? '').replace(/[^0-9-]/g, '').slice(0, 32);
+    const handle = normalizeChatHandle(typeof body.handle === 'string' ? body.handle : '');
+    const actorId = String(body.actorId ?? '').replace(/[^0-9]/g, '').slice(0, 24);
+    if ((!chatId && !handle) || !actorId) {
+      return json({ ok: false, error: 'invalid_update' }, 400);
+    }
+    await this.syncSquadsFromStorage();
+    const squad = [...this.squads.values()].find((row) =>
+      (!!chatId && row.chatId === chatId)
+      || (!!handle && row.handle.toLowerCase() === handle.toLowerCase()));
+    if (!squad) return json({ ok: true, matched: false, verified: false });
+    if (squad.banned) return json({ ok: true, matched: true, verified: false });
+    if (squad.verified && squad.verification === 'verified') {
+      return json({ ok: true, matched: true, verified: true });
+    }
+    const proof = await verifySquadAdminOwnership(squad.handle, actorId, this.env);
+    if (!proof.ok) {
+      return json({ ok: true, matched: true, verified: false, hint: proof.code });
+    }
+    syncSquadChatDetails(squad, proof.chat);
+    markSquadVerified(squad, 'telegram-webhook');
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, matched: true, verified: true });
+  }
+
+  /** Read one unexpired code, or '' when it was never issued or has timed out. */
+  private async readVerifyCode(key: string): Promise<string> {
+    const storage = this.state?.storage;
+    if (!storage) return '';
+    try {
+      const all = await storage.get<VerifyCodeMap>(SQUAD_VERIFY_CODES_KEY);
+      const hit = all && typeof all === 'object' ? all[key] : undefined;
+      if (!hit || typeof hit.code !== 'string' || !(hit.expiresAt > Date.now())) return '';
+      return hit.code;
+    } catch {
+      return '';
+    }
+  }
+
+  /** Store a fresh code under its founder+handle key, pruning every expired row in the same write. */
+  private async writeVerifyCode(key: string, code: string): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    const now = Date.now();
+    let all: VerifyCodeMap = {};
+    try {
+      const held = await storage.get<VerifyCodeMap>(SQUAD_VERIFY_CODES_KEY);
+      if (held && typeof held === 'object') all = held;
+    } catch {
+      all = {};
+    }
+    for (const [entry, value] of Object.entries(all)) {
+      if (!value || !(value.expiresAt > now)) delete all[entry];
+    }
+    all[key] = { code, expiresAt: now + VERIFY_CODE_TTL_MS };
+    try {
+      await storage.put(SQUAD_VERIFY_CODES_KEY, all);
+    } catch {
+      /* A refused write leaves the caller with a code nobody can verify: it will say so. */
     }
   }
 
@@ -3868,6 +4096,11 @@ export class MatchmakerDO {
     this.squadsDirty = false;
     try {
       await this.syncSquadsFromStorage();
+      /* The audit state is the source of truth; the persisted badge flag follows it on every
+         write, so the two can never drift apart in storage. */
+      for (const squad of this.squads.values()) {
+        squad.verified = squad.verification === 'verified' && !squad.banned;
+      }
       /* The live map is read after the merge and after every await, so two enlistments that
          overlap on storage still land in one list holding both rows. */
       await storage.put(SQUADS_KEY, [...this.squads.values()]);
@@ -3936,6 +4169,7 @@ export class MatchmakerDO {
       ownerUsername: owner?.username ?? '',
       createdAt: squad.createdAt,
       verification: squad.verification,
+      verified: squad.verified === true && squad.verification === 'verified' && !squad.banned,
       verifiedAt: squad.verifiedAt,
       verifiedBy: squad.verifiedBy,
       revokedAt: squad.revokedAt,
@@ -3993,23 +4227,23 @@ export class MatchmakerDO {
     if (!squad) return { ok: false, error: 'no_such_squad' };
     const now = Date.now();
     if (action === 'VERIFY') {
-      squad.verification = 'verified';
-      squad.verifiedAt = now;
-      squad.verifiedBy = me.userId;
-      squad.revokedAt = 0;
+      markSquadVerified(squad, me.userId);
     } else if (action === 'REVOKE') {
       squad.verification = 'revoked';
+      squad.verified = false;
       squad.revokedAt = now;
     } else if (action === 'BAN') {
       squad.banned = true;
       squad.bannedAt = now;
       squad.verification = 'revoked';
+      squad.verified = false;
       squad.revokedAt = now;
     } else if (action === 'UNBAN') {
       squad.banned = false;
       squad.bannedAt = 0;
       /* A restored squad is not automatically trusted again: it re-enters the review queue. */
       squad.verification = 'pending';
+      squad.verified = false;
       squad.revokedAt = 0;
     } else {
       return { ok: false, error: 'invalid_action' };

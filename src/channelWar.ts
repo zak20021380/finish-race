@@ -22,12 +22,12 @@ import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
 import {
   cleanHandle, displayNameOf, getMySquad, getSquadRanking, getWarRanking, handleIssue,
-  hasWarEarnings, onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
+  hasWarEarnings, myPlayerId, onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
   type RankedSquad, type SquadMember,
 } from './squads';
 import {
-  checkChannelMembership, joinSquadOnServer, refreshSquadBoard, registerSquadWithTelegram,
-  syncChannelTiq,
+  buildSquadVerifyPanel, checkChannelMembership, joinSquadOnServer, refreshSquadBoard,
+  registerSquadWithTelegram, syncChannelTiq, type SquadVerifyPanel,
 } from './squadRegister';
 import { channelWarAppLink, telegramShareLink } from '../shared/config';
 
@@ -88,6 +88,25 @@ function icon(id: string, cls = 'ico'): SVGSVGElement {
   use.setAttribute('href', id);
   svg.append(use);
   return svg;
+}
+
+/** The gold check, rendered only for `verified === true` — never for a pending claim. */
+function verifiedBadge(cls = 'squad-vbadge'): HTMLElement {
+  const badge = document.createElement('span');
+  badge.className = cls;
+  badge.setAttribute('role', 'img');
+  badge.setAttribute('aria-label', t('squadVerifyBadge'));
+  badge.title = t('squadVerifyBadge');
+  badge.append(icon('#i-check', 'ico'));
+  return badge;
+}
+
+/** The neutral `Unverified` pill: present on an unproven squad, never a checkmark. */
+function unverifiedPill(cls = 'squad-unverified'): HTMLElement {
+  const pill = document.createElement('span');
+  pill.className = cls;
+  pill.textContent = t('squadVerifyUnverifiedPill');
+  return pill;
 }
 
 /**
@@ -200,6 +219,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const regDone = document.getElementById('cw-reg-done');
   const regLink = document.getElementById('cw-reg-link');
   const regCopy = document.getElementById('cw-reg-copy');
+  const regVerifyHost = document.getElementById('cw-reg-verify');
+  const regSkip = document.getElementById('cw-reg-skip') as HTMLButtonElement | null;
+  /** The dual-mode verification block mounted in the register view. */
+  let regVerifyPanel: SquadVerifyPanel | null = null;
 
   const pick = document.getElementById('cw-pick');
   const pickList = document.getElementById('cw-pick-list');
@@ -330,13 +353,17 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     title.className = 'cw-row-title';
     title.setAttribute('dir', 'auto');
     title.textContent = s.name || displayNameOf(s.handle);
+    const nameLine = document.createElement('span');
+    nameLine.className = 'cw-row-nameline';
+    nameLine.append(title);
+    if (s.verified === true) nameLine.append(verifiedBadge('squad-vbadge cw-vbadge'));
 
     /* Line 2 — the quiet metadata: handle · count, then the team pill as a compact inline tag. */
     const meta = document.createElement('span');
     meta.className = 'cw-row-meta';
     const handle = document.createElement('bdi');
     handle.className = 'cw-row-handle';
-    handle.setAttribute('dir', 'auto');
+    handle.setAttribute('dir', 'ltr');
     handle.textContent = s.handle;
     const dot = document.createElement('span');
     dot.className = 'cw-dot';
@@ -354,7 +381,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       pill.textContent = t('cwYourTeam');
       meta.append(pill);
     }
-    id.append(title, meta);
+    id.append(nameLine, meta);
 
     const side = document.createElement('span');
     side.className = 'cw-row-side';
@@ -609,6 +636,15 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     paintAvatar(detailImg, detailMark, detailAv, s);
     if (detailName) detailName.textContent = s.name || displayNameOf(s.handle);
     if (detailHandle) detailHandle.textContent = s.handle;
+    /* The strict gate lives beside the handle: a check only for a proven squad, and a quiet
+       unverified pill otherwise. Rebuilt on every paint so it can never outlive a revoke. */
+    const heroSub = detailHandle?.parentElement;
+    if (heroSub) {
+      heroSub.querySelectorAll('.squad-vbadge, .squad-unverified').forEach((node) => node.remove());
+      heroSub.append(s.verified === true
+        ? verifiedBadge('squad-vbadge cw-vbadge')
+        : unverifiedPill('squad-unverified cw-unverified'));
+    }
     const tiq = warPointsOf(s);
     if (detailRank) {
       const scored = tiq > 0;
@@ -635,6 +671,38 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     }
     paintDetailFighters(s);
     paintDetailActions(s);
+
+    /* The founder of an unverified channel gets the same dual-mode door as the drawer. Any
+       other viewer, and every verified squad, sees no verification controls at all. */
+    document.getElementById('cw-detail-verify')?.remove();
+    const viewerId = myPlayerId();
+    const isFounder = !!viewerId && (s.ownerId ?? '') === viewerId;
+    if (s.verified !== true && isFounder && detailBody) {
+      const host = document.createElement('section');
+      host.id = 'cw-detail-verify';
+      host.className = 'cw-verifybox';
+      const fighters = detailBody.querySelector('.cw-fighters');
+      detailBody.insertBefore(host, fighters ?? null);
+      const panel = buildSquadVerifyPanel({
+        mode: 'verify',
+        handle: () => s.handle,
+        squadId: s.id,
+        onVerified: () => {
+          notify('success');
+          showToast(t('squadVerifyDone'), 'success');
+          void refreshSquadBoard().then(() => { if (isOpen()) paint(); });
+        },
+        onError: (message) => {
+          notify('warning');
+          showToast(message, 'warning');
+        },
+        onNotice: (message) => {
+          notify('success');
+          showToast(message, 'success');
+        },
+      });
+      host.append(panel.el);
+    }
   }
 
   function openDetail(id: string): void {
@@ -809,10 +877,31 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       regGo.setAttribute('aria-busy', String(on));
       regGo.setAttribute('aria-disabled', String(on));
       const label = regGo.querySelector('b');
-      if (label) label.textContent = t(on ? 'cwRegisterBusy' : 'cwRegisterGo');
+      if (label) label.textContent = t(on ? 'squadVerifyBusy' : 'squadVerifyBotCta');
+    }
+    if (regSkip) {
+      regSkip.disabled = on;
+      regSkip.setAttribute('aria-busy', String(on));
     }
     if (regHandle) regHandle.disabled = on;
     if (regName) regName.disabled = on;
+  }
+
+  /** Mount the shared dual-mode verification block inside the admin door. */
+  function mountRegVerifyPanel(): void {
+    if (!regVerifyHost) return;
+    regVerifyHost.textContent = '';
+    regVerifyPanel = buildSquadVerifyPanel({
+      mode: 'register',
+      handle: () => cleanHandle(regHandle?.value ?? ''),
+      onPostRegister: (code) => { void submitRegister('post', code); },
+      onError: (message) => setRegErrorText(message),
+      onNotice: (message) => {
+        notify('success');
+        showToast(message, 'success');
+      },
+    });
+    regVerifyHost.append(regVerifyPanel.el);
   }
 
   function showInviteCard(handle: string): void {
@@ -829,6 +918,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     if (regHandle) regHandle.value = prefill;
     if (regName) regName.value = '';
     setRegBusy(false);
+    mountRegVerifyPanel();
     paintView();
     requestAnimationFrame(() => regHandle?.focus({ preventScroll: true }));
   }
@@ -854,7 +944,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     showInviteCard(handle);
   }
 
-  async function submitRegister(): Promise<void> {
+  async function submitRegister(method: 'bot' | 'none' | 'post' = 'bot', code = ''): Promise<void> {
     if (registering) return;
     const issue = handleIssue(regHandle?.value ?? '');
     if (issue) {
@@ -871,21 +961,29 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     const result = await registerSquadWithTelegram(handle, {
       name: (regName?.value ?? '').trim().slice(0, 32),
       tag: '',
+    }, undefined, {
+      method,
+      ...(method === 'post' ? { verifyCode: code } : {}),
     });
     registering = false;
     setRegBusy(false);
     if (!result.ok) {
       if (result.error === 'already_registered') { await adoptRegistered(handle); return; }
+      /* A verification refusal keeps the admin on this pane: the handle, the identity and the
+         Method 1 / Method 2 cards are all still there to finish the job. */
+      if (result.error === 'verify_code_expired') regVerifyPanel?.resetCode();
       setRegErrorText(result.message || t('cwJoinFailed'));
       notify('warning');
       return;
     }
     if (!result.squad) { setRegError('enlistErrAlready'); notify('warning'); return; }
-    /* The Worker proved this player is an administrator of the chat, so the membership gate is
-       already answered: the enlistment lands and the invite card takes the stage. */
+    /* A verified enlistment already proved the player's admin seat, so the membership gate is
+       answered; an unverified one is a normal registration that earns its badge later. */
+    const verified = result.squad.verified === true;
     welcome(result.squad);
     showInviteCard(result.squad.handle);
     notify('success');
+    if (verified) showToast(t('squadVerifyDone'), 'success');
   }
 
   /* ---------- the invite link ---------- */
@@ -979,13 +1077,17 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   regOpen?.addEventListener('click', () => { impact('light'); openRegister(); });
   regBack?.addEventListener('click', () => { impact('light'); closeRegister(); });
-  regGo?.addEventListener('click', () => { void submitRegister(); });
+  regGo?.addEventListener('click', () => { void submitRegister('bot'); });
+  regSkip?.addEventListener('click', () => { void submitRegister('none'); });
   regHandle?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
-    void submitRegister();
+    void submitRegister('bot');
   });
-  regHandle?.addEventListener('input', () => { if (regErr && !regErr.hidden) setRegError(''); });
+  regHandle?.addEventListener('input', () => {
+    if (regErr && !regErr.hidden) setRegError('');
+    regVerifyPanel?.handleChanged();
+  });
   regCopy?.addEventListener('click', () => {
     const link = regLink?.textContent ?? '';
     if (!link) return;
@@ -1044,8 +1146,13 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   onSquadChange(() => { if (isOpen()) paint(); });
   /* One repaint covers every pane: `paint()` re-reads the ladder and, when the inspector is the
-     pane on screen, its hero, plates and roster too. */
-  onLang(() => { if (isOpen()) paint(); });
+     pane on screen, its hero, plates and roster too. The register view's verification cards are
+     built from the dictionary, so a language flip remounts them. */
+  onLang(() => {
+    if (!isOpen()) return;
+    if (view === 'register') mountRegVerifyPanel();
+    paint();
+  });
 
   return hub;
 }

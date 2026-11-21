@@ -11,6 +11,15 @@ export type SquadKind = 'channel' | 'group';
 /** The audit state the Command Center shows: confirmed admin, awaiting review, or pulled. */
 export type SquadVerification = 'verified' | 'pending' | 'revoked';
 
+/**
+ * How a registration asked for its badge:
+ *   - `bot`  — Method 1: the founder added the bot as an admin; Telegram is asked directly.
+ *   - `post` — Method 2: the founder posted a one-time `#TX-XXXXX` code in a public channel.
+ *   - `none` — register first, verify later from the squad drawer.
+ * A request that names no method keeps the legacy enlistment flow (bot-admin proof).
+ */
+export type SquadVerifyMethod = 'bot' | 'post' | 'none' | '';
+
 /** Who a roster row is: the player who enlisted the squad, a promoted officer, or a member. */
 export type SquadMemberRole = 'leader' | 'admin' | 'member';
 
@@ -109,6 +118,12 @@ export interface RegisteredSquad {
   createdAt: number;
   /** `verified` — the bot proved the submitter is an admin; `pending` — awaits an audit. */
   verification: SquadVerification;
+  /**
+   * The public badge gate, persisted as a boolean beside the audit state. A squad only ever
+   * holds `true` after Method 1 (bot admin) or Method 2 (posted code) proved ownership; a
+   * registration that stops before that proof is stored with `false` and carries no badge.
+   */
+  verified: boolean;
   verifiedAt: number;
   verifiedBy: string;
   revokedAt: number;
@@ -449,6 +464,10 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     : Number.isFinite(Number(rawMembers)) && Number(rawMembers) >= 0
       ? Math.floor(Number(rawMembers))
       : (Number.isFinite(subscribers) && subscribers >= 0 ? Math.floor(subscribers) : null);
+  /* The audit string is the source of truth; the persisted boolean follows it. A row written
+     before the flag existed was verified by the old bot-admin enlistment, so it keeps the badge
+     only while its audit state is `verified`. */
+  const verification = verificationOf(row.verification);
   return {
     id,
     chatId: text(row.chatId, 32),
@@ -467,7 +486,8 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
        running, so it keeps its place in that field instead of being orphaned by the upgrade. */
     cupId: text(row.cupId, 48) || ACTIVE_CUP_ID,
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
-    verification: verificationOf(row.verification),
+    verification,
+    verified: verification === 'verified',
     verifiedAt: stampOf(row.verifiedAt),
     verifiedBy: text(row.verifiedBy, 40),
     revokedAt: stampOf(row.revokedAt),
@@ -734,7 +754,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     fighters,
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
-    verified: squad.verification === 'verified' && !squad.banned,
+    verified: squad.verified === true && squad.verification === 'verified' && !squad.banned,
     cupId: squad.cupId || ACTIVE_CUP_ID,
     roster,
     requireApproval: squad.requireApproval === true,
@@ -1049,7 +1069,7 @@ export type SquadChatCheck =
   | { ok: true; chat: SquadChatPreview }
   | { ok: false; status: number; code: string; message: string; kind?: SquadKind };
 
-interface ResolvedChat {
+export interface ResolvedChat {
   chatId: string;
   handle: string;
   title: string;
@@ -1140,6 +1160,17 @@ const kindMismatch = (actual: SquadKind): ChatFailure => ({
   message: actual === 'group' ? KIND_MISMATCH_GROUP : KIND_MISMATCH_CHANNEL,
 });
 
+/**
+ * A best-effort public read for a door that proved ownership another way (Method 2). Null is an
+ * honest "Telegram did not answer": the caller keeps the title it already has.
+ */
+export async function readPublicChat(rawHandle: string, env: Env): Promise<ResolvedChat | null> {
+  const { token } = botToken(env);
+  if (!token) return null;
+  const resolved = await resolveChat(rawHandle, token);
+  return resolved.ok ? resolved.chat : null;
+}
+
 /** The refusal a deployment without a token gives: named, logged, and impossible to misread. */
 const noToken = (): ChatFailure => ({
   ok: false,
@@ -1148,79 +1179,25 @@ const noToken = (): ChatFailure => ({
   message: TOKEN_MISSING_MESSAGE,
 });
 
-/** The preview door: getChat, the chosen tab's type check, and nothing written to the registry. */
-export async function verifySquadChat(
-  rawHandle: string,
-  requestedKind: SquadKind,
-  env: Env,
-): Promise<SquadChatCheck> {
-  const { token, binding } = botToken(env);
-  if (!token) return noToken();
-  console.log(
-    `[squad-verify] verifying "${normalizeChatHandle(rawHandle) || rawHandle}" with binding "${binding}"`,
-  );
-  const resolved = await resolveChat(rawHandle, token);
-  if (!resolved.ok) {
-    console.warn(`[squad-verify] getChat refused: ${resolved.code} (HTTP ${resolved.status}) — ${resolved.message}`);
-    return resolved;
-  }
-  if (resolved.chat.kind !== requestedKind) return kindMismatch(resolved.chat.kind);
-  return {
-    ok: true,
-    chat: {
-      chatId: resolved.chat.chatId,
-      handle: resolved.chat.handle,
-      name: resolved.chat.title,
-      kind: resolved.chat.kind,
-      avatar: resolved.chat.avatar,
-      members: resolved.chat.members ?? 0,
-    },
-  };
-}
-
-export async function verifyAndBuildSquad(
+/**
+ * Method 1: prove, through Telegram itself, that `userId` is the chat's creator/administrator
+ * and that this bot is already an administrator beside them. Resolves the chat at the same time,
+ * so a successful proof can sync its authentic title, photo and audience in one turn.
+ */
+export async function verifySquadAdminOwnership(
   rawHandle: string,
   userId: string,
   env: Env,
-  identity?: {
-    name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string;
-    /** The enlisting leader's own Telegram portrait. */
-    photo?: string;
-    /** The enlisting leader's current real TIQ balance; the roster's first row starts here. */
-    playerTiq?: number;
-    /** The cup this enlistment is filed under; the running championship when omitted. */
-    cupId?: string;
-  },
-): Promise<SquadRegistration> {
-  const handle = normalizeChatHandle(rawHandle);
-  if (!handle) {
-    return { ok: false, status: 400, code: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' };
-  }
-  const wantedTag = typeof identity?.tag === 'string' ? identity.tag : '';
-  const tag = normalizeSquadTag(wantedTag);
-  if (wantedTag.trim() && !tag) {
-    return { ok: false, status: 400, code: 'invalid_tag', message: 'Tag must be 2–3 letters or numbers.' };
-  }
+): Promise<{ ok: true; chat: ResolvedChat } | ChatFailure> {
   const requester = text(userId, 24).replace(/[^0-9-]/g, '');
   if (!requester) {
     return { ok: false, status: 401, code: 'unauthorized', message: 'Telegram verification required.' };
   }
   const { token } = botToken(env);
-  if (!token) {
-    return {
-      ok: false,
-      status: 503,
-      code: 'bot_token_missing',
-      message: TOKEN_MISSING_MESSAGE,
-    };
-  }
-
-  const resolved = await resolveChat(handle, token);
+  if (!token) return noToken();
+  const resolved = await resolveChat(rawHandle, token);
   if (!resolved.ok) return resolved;
   const chat = resolved.chat;
-
-  const expectedKind = identity?.kind === 'channel' ? 'channel' : identity?.kind === 'group' ? 'group' : '';
-  if (expectedKind && chat.kind !== expectedKind) return kindMismatch(chat.kind);
 
   let requesterStatus: string;
   try {
@@ -1265,6 +1242,188 @@ export async function verifyAndBuildSquad(
       message: 'Bot is not added as an administrator to this chat.',
     };
   }
+  return { ok: true, chat };
+}
+
+/**
+ * Method 2: the one-time post code.
+ *
+ * A founder who will not hand the bot admin rights posts `#TX-XXXXX` in a public channel; the
+ * public preview at `t.me/s/<username>` already renders that message server-side, so reading it
+ * proves channel control without a Bot API right. The page is requested with a normal browser
+ * user-agent because the preview endpoint can answer differently to an unknown client.
+ */
+const POST_CODE_SHAPE = /^#TX-[0-9]{5}$/;
+const POST_PAGE_TIMEOUT_MS = 8_000;
+const POST_PAGE_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+  + '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+export async function verifyPostedCode(rawHandle: string, rawCode: string): Promise<boolean> {
+  const handle = normalizeChatHandle(rawHandle);
+  const code = text(rawCode, 16).toUpperCase();
+  if (!handle || !POST_CODE_SHAPE.test(code)) return false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), POST_PAGE_TIMEOUT_MS);
+  let html = '';
+  try {
+    const response = await fetch(`https://t.me/s/${handle.slice(1)}`, {
+      method: 'GET',
+      headers: { 'user-agent': POST_PAGE_USER_AGENT, accept: 'text/html' },
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    html = await response.text();
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  /* Every rendered bubble carries `tgme_widget_message_text`; scan only those blocks so a code
+     echoed anywhere else on the page (a title, a meta tag) can never stand in for a real post. */
+  const plain = (chunk: string): string => chunk
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&(?:amp|lt|gt|quot|apos|#0?39|nbsp);/gi, ' ')
+    .replace(/\s+/g, ' ');
+  const marker = /tgme_widget_message_text[^>]*>/gi;
+  let hit: RegExpExecArray | null;
+  while ((hit = marker.exec(html)) !== null) {
+    if (plain(html.slice(hit.index, hit.index + 4_000)).includes(code)) return true;
+  }
+  return false;
+}
+
+/** Copy Telegram's authentic reading of a chat onto a stored squad. */
+export function syncSquadChatDetails(squad: RegisteredSquad, chat: ResolvedChat): void {
+  if (chat.chatId) squad.chatId = chat.chatId;
+  if (chat.title) squad.name = chat.title;
+  squad.kind = chat.kind;
+  squad.avatar = chat.avatar;
+  if (chat.members !== null) {
+    squad.telegramMembers = chat.members;
+    squad.subscribers = chat.members;
+  }
+}
+
+/** Flip the audit state and the public badge flag together, so they can never disagree. */
+export function markSquadVerified(squad: RegisteredSquad, by: string, at = Date.now()): void {
+  squad.verification = 'verified';
+  squad.verified = true;
+  squad.verifiedAt = at;
+  squad.verifiedBy = text(by, 40);
+  squad.revokedAt = 0;
+}
+
+/** The preview door: getChat, the chosen tab's type check, and nothing written to the registry. */
+export async function verifySquadChat(
+  rawHandle: string,
+  requestedKind: SquadKind,
+  env: Env,
+): Promise<SquadChatCheck> {
+  const { token, binding } = botToken(env);
+  if (!token) return noToken();
+  console.log(
+    `[squad-verify] verifying "${normalizeChatHandle(rawHandle) || rawHandle}" with binding "${binding}"`,
+  );
+  const resolved = await resolveChat(rawHandle, token);
+  if (!resolved.ok) {
+    console.warn(`[squad-verify] getChat refused: ${resolved.code} (HTTP ${resolved.status}) — ${resolved.message}`);
+    return resolved;
+  }
+  if (resolved.chat.kind !== requestedKind) return kindMismatch(resolved.chat.kind);
+  return {
+    ok: true,
+    chat: {
+      chatId: resolved.chat.chatId,
+      handle: resolved.chat.handle,
+      name: resolved.chat.title,
+      kind: resolved.chat.kind,
+      avatar: resolved.chat.avatar,
+      members: resolved.chat.members ?? 0,
+    },
+  };
+}
+
+export async function verifyAndBuildSquad(
+  rawHandle: string,
+  userId: string,
+  env: Env,
+  identity?: {
+    name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string;
+    /** The enlisting leader's own Telegram portrait. */
+    photo?: string;
+    /** The enlisting leader's current real TIQ balance; the roster's first row starts here. */
+    playerTiq?: number;
+    /** The cup this enlistment is filed under; the running championship when omitted. */
+    cupId?: string;
+    /** Which proof this registration carries; omitted keeps the legacy bot-admin enlistment. */
+    method?: SquadVerifyMethod;
+    /** The `#TX-XXXXX` code the founder posted, for `method: 'post'`. */
+    verifyCode?: string;
+  },
+): Promise<SquadRegistration> {
+  const handle = normalizeChatHandle(rawHandle);
+  if (!handle) {
+    return { ok: false, status: 400, code: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' };
+  }
+  const wantedTag = typeof identity?.tag === 'string' ? identity.tag : '';
+  const tag = normalizeSquadTag(wantedTag);
+  if (wantedTag.trim() && !tag) {
+    return { ok: false, status: 400, code: 'invalid_tag', message: 'Tag must be 2–3 letters or numbers.' };
+  }
+  const requester = text(userId, 24).replace(/[^0-9-]/g, '');
+  if (!requester) {
+    return { ok: false, status: 401, code: 'unauthorized', message: 'Telegram verification required.' };
+  }
+  const method: SquadVerifyMethod = identity?.method === 'bot' || identity?.method === 'post'
+    || identity?.method === 'none'
+    ? identity.method
+    : '';
+  const { token } = botToken(env);
+  if (!token) {
+    return {
+      ok: false,
+      status: 503,
+      code: 'bot_token_missing',
+      message: TOKEN_MISSING_MESSAGE,
+    };
+  }
+
+  /* Method 1 (and the legacy enlistment) asks Telegram who owns the chat and whether the bot
+     stands beside them. The other two doors only resolve the public chat: an unverified squad is
+     allowed to exist, and the code door proves control from the channel's own public page. */
+  let chat: ResolvedChat;
+  let verified = false;
+  let verifiedBy = '';
+  if (method === '' || method === 'bot') {
+    const proof = await verifySquadAdminOwnership(handle, requester, env);
+    if (!proof.ok) return proof;
+    chat = proof.chat;
+    verified = true;
+    verifiedBy = 'telegram';
+  } else {
+    const resolved = await resolveChat(handle, token);
+    if (!resolved.ok) return resolved;
+    chat = resolved.chat;
+    if (method === 'post') {
+      const posted = await verifyPostedCode(handle, identity?.verifyCode ?? '');
+      if (!posted) {
+        return {
+          ok: false,
+          status: 400,
+          code: 'POST_CODE_NOT_FOUND',
+          message: 'That code is not in the channel posts yet. Post it again and verify.',
+        };
+      }
+      verified = true;
+      verifiedBy = 'post';
+    }
+  }
+
+  const expectedKind = identity?.kind === 'channel' ? 'channel' : identity?.kind === 'group' ? 'group' : '';
+  if (expectedKind && chat.kind !== expectedKind) return kindMismatch(chat.kind);
 
   return {
     ok: true,
@@ -1298,10 +1457,11 @@ export async function verifyAndBuildSquad(
       ownerId: requester,
       cupId: text(identity?.cupId, 48) || ACTIVE_CUP_ID,
       createdAt: Date.now(),
-      /* The bot just proved both sides against Telegram, so a fresh registration starts verified. */
-      verification: 'verified',
-      verifiedAt: Date.now(),
-      verifiedBy: 'telegram',
+      /* Only a proof that actually ran earns the badge; a plain registration is pending. */
+      verification: verified ? 'verified' : 'pending',
+      verified,
+      verifiedAt: verified ? Date.now() : 0,
+      verifiedBy,
       revokedAt: 0,
       banned: false,
       bannedAt: 0,

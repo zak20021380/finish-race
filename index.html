@@ -4600,7 +4600,7 @@
             <div class="cw-verify" id="cw-verify" hidden>
               <p class="cw-verify-t">
                 <span data-i18n="cwVerifyLead">Join</span>
-                <bdi dir="auto" id="cw-verify-h">@channel</bdi>
+                <bdi dir="ltr" id="cw-verify-h">@channel</bdi>
                 <span data-i18n="cwVerifyTail">first to represent this channel in the war</span>
               </p>
               <div class="cw-verify-row">
@@ -4734,11 +4734,17 @@
                      data-i18n-ph="cwRegisterNamePh" placeholder="Channel name" />
             </div>
 
+            <!-- Dual-mode verification, the same block the Ranks sheet mounts. -->
+            <div class="cw-verifybox" id="cw-reg-verify"></div>
+
             <p class="cw-err" id="cw-reg-err" role="alert" hidden></p>
 
             <button class="cw-cta" id="cw-reg-go" type="button">
-              <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-plus" /></svg></span>
-              <span class="cw-cta-t"><b data-i18n="cwRegisterGo">Register &amp; Get Invite Link</b></span>
+              <span class="cw-cta-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-check" /></svg></span>
+              <span class="cw-cta-t"><b data-i18n="squadVerifyBotCta">Verify admin &amp; register</b></span>
+            </button>
+            <button class="cw-reg-skip" id="cw-reg-skip" type="button" data-i18n="squadVerifyUnverifiedCta">
+              Register without badge
             </button>
 
             <div class="cw-linkcard" id="cw-reg-done" hidden>
@@ -5145,7 +5151,7 @@
             <h2 class="sheet-t left sqr-title" id="squad-reg-title">Register Your Squad</h2>
             <p class="sqr-sub">Claim a Telegram community and lead it up the ladder.</p>
           </div>
-          <span class="sqr-step" id="squad-reg-step" aria-label="Step 1 of 2">1 / 2</span>
+          <bdi class="sqr-step" id="squad-reg-step" dir="ltr" aria-label="Step 1 of 2">1 / 2</bdi>
         </header>
         <div class="sqr-track" aria-hidden="true"><i class="is-on"></i><i></i></div>
         <div class="sheet-body" data-scroll>
@@ -5159,14 +5165,14 @@
             </label>
             <p class="sqr-detect" id="squad-reg-detect" role="status" hidden>
               <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
-              <span id="squad-reg-detect-t">@channel</span>
+              <bdi id="squad-reg-detect-t" dir="ltr">@channel</bdi>
               <small>detected</small>
             </p>
             <div class="sqr-reqs" role="note">
               <b class="sqr-reqs-t">Before you register</b>
               <ol class="sqr-req-list">
-                <li><span class="sqr-num">1</span><span>Add <b id="squad-reg-bot"></b> as an admin to your chat.</span></li>
-                <li><span class="sqr-num">2</span><span>You must be an Owner or Administrator of the chat.</span></li>
+                <li><span class="sqr-num">1</span><span>Register now — the verified badge is optional and can be earned later.</span></li>
+                <li><span class="sqr-num">2</span><span>The badge needs one quick admin check, here or from your squad drawer.</span></li>
               </ol>
             </div>
           </div>
@@ -5193,6 +5199,9 @@
               </label>
             </div>
             <p class="sqr-taghint" id="squad-reg-tag-hint">2–3 letters on the crest.</p>
+            <!-- Dual-mode verification: bot-admin (recommended) or a one-time posted code.
+                 src/squadRegister.ts builds both cards here, localized and RTL-safe. -->
+            <div class="sqr-verify" id="squad-reg-verify"></div>
             <section class="sqr-preview" aria-label="Live leaderboard preview">
               <header class="sqr-preview-head">
                 <b>Leaderboard preview</b>
@@ -5222,6 +5231,8 @@
             <span class="squad-reg-spinner" id="squad-reg-spinner" aria-hidden="true" hidden></span>
             <span class="squad-reg-label" id="squad-reg-label">Continue</span>
           </button>
+          <button class="btn btn-ghost sqr-skip" id="squad-reg-unverified" type="button" hidden
+            data-i18n="squadVerifyUnverifiedCta">Register without badge</button>
           <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
         </div>
       </section>

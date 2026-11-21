@@ -85,10 +85,19 @@ interface TgInlineQueryLike {
   from?: TgUserLike;
 }
 
+/** Telegram's notice that this bot's own seat in a chat changed — Method 1's auto-detection. */
+interface TgChatMemberUpdatedLike {
+  chat?: TgChatLike & { username?: string; title?: string };
+  from?: TgUserLike;
+  new_chat_member?: { status?: string };
+}
+
 interface TgUpdate {
   message?: TgMessageLike;
   callback_query?: TgCallbackLike;
   inline_query?: TgInlineQueryLike;
+  /** The bot was added to, promoted in, or removed from a chat. */
+  my_chat_member?: TgChatMemberUpdatedLike;
   /** A Stars invoice sheet waiting for the bot's yes/no. */
   pre_checkout_query?: PreCheckoutQueryLike;
 }
@@ -290,6 +299,9 @@ async function dispatch(update: TgUpdate, token: string, origin: string, env: En
   /* The Stars lane opens before any conversation branch: a donation or invoice update is not a
      chat message, and it must be answered on the same delivery Telegram is waiting on. */
   if (update.pre_checkout_query) return answerPreCheckout(update.pre_checkout_query, token);
+  /* Method 1's auto-detection: the bot just became an administrator of a chat, so a squad that
+     registered for it can be verified without the founder tapping anything in the Mini App. */
+  if (update.my_chat_member) return handleMyChatMember(update.my_chat_member, env);
   if (update.callback_query) return handleCallback(update.callback_query, token, origin, env);
   if (update.inline_query) return handleInlineQuery(update.inline_query, token, origin, env);
   if (update.message) {
@@ -306,6 +318,32 @@ async function dispatch(update: TgUpdate, token: string, origin: string, env: En
     return handleMessage(update.message, token, origin, env);
   }
   /* Channel posts, new-chat-member notices, poll answers: none is a conversation with a player. */
+}
+
+/**
+ * Forward the bot's own membership change to the one room that owns the squad registry. The
+ * update names the person who added the bot; the room re-proves that actor with `getChatMember`
+ * before any badge moves, so a Telegram notice alone never verifies a community.
+ */
+async function handleMyChatMember(update: TgChatMemberUpdatedLike, env: Env): Promise<void> {
+  const status = (update.new_chat_member?.status ?? '').toLowerCase();
+  if (status !== 'administrator' && status !== 'creator') return;
+  const chatId = idOf(update.chat?.id);
+  const actorId = idOf(update.from?.id);
+  if (!chatId || !actorId || !env.MATCHMAKER) return;
+  const handle = (update.chat?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
+  /* `global` is the singleton lobby `worker/index.ts` binds every squad route to. `/internal/*`
+     has no public door: the edge never forwards it. */
+  const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName('global'));
+  try {
+    await lobby.fetch(new Request('https://room/internal/squad-bot-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chatId, handle, actorId }),
+    }));
+  } catch {
+    /* The badge will still be earned the moment the founder presses Verify in the drawer. */
+  }
 }
 
 async function handleMessage(message: TgMessageLike, token: string, origin: string, env: Env): Promise<void> {
@@ -482,7 +520,13 @@ export async function telegramSetup(request: Request, env: Env): Promise<Respons
   const app = appUrl(env, origin);
   const secret = (env.TELEGRAM_WEBHOOK_SECRET ?? '').trim();
 
-  const webhookParams: Record<string, unknown> = { url: webhook, drop_pending_updates: false };
+  /* `my_chat_member` is what tells squad verification the bot was just made an administrator;
+     naming the set explicitly keeps that update coming even where defaults change. */
+  const webhookParams: Record<string, unknown> = {
+    url: webhook,
+    drop_pending_updates: false,
+    allowed_updates: ['message', 'callback_query', 'inline_query', 'pre_checkout_query', 'my_chat_member'],
+  };
   /* An empty secret_token is a rejected one, so the field goes only when the operator set it. */
   if (secret) webhookParams.secret_token = secret;
 

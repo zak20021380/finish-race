@@ -12,7 +12,8 @@ import {
 import { addNotification } from './notifications';
 import { myTiq } from './matchmaking';
 import { guestId, profile } from './storage';
-import { tgInitData, tgUser } from './telegram';
+import { openLink, tgInitData, tgUser } from './telegram';
+import { BOT_HANDLE } from '../shared/config';
 
 export interface SquadRegistrationResult {
   ok: boolean;
@@ -102,6 +103,8 @@ interface SquadPayload {
   telegramMembers?: number | null;
   /** Players of our bot representing this channel. */
   botFightersCount?: number;
+  /** The registry's badge gate: true only after an ownership proof (Method 1 or 2). */
+  verified?: boolean;
 }
 
 interface ApplicantPayload {
@@ -179,6 +182,10 @@ const messageFor = (code: string, kind?: SquadKind): string => {
     case 'invalid_message': return t('squadBroadcastEmpty');
     case 'broadcast_failed': return t('squadBroadcastFailed');
     case 'bot_not_admin': return t('enlistErrBot');
+    case 'POST_CODE_NOT_FOUND': return t('squadVerifyPostMissing');
+    case 'verify_code_expired':
+    case 'verify_code_missing': return t('squadVerifyCodeExpired');
+    case 'not_founder': return t('squadVerifyNotOwner');
     case 'no_such_squad': return t('squadErrGone');
     case 'telegram_required': return t('squadErrTelegram');
     case 'squad_banned': return t('squadErrBanned');
@@ -363,6 +370,8 @@ export function toSquad(payload: SquadPayload): Squad | null {
       ? { cupId: payload.cupId.trim().slice(0, 48) }
       : {}),
     ...(typeof payload.requireApproval === 'boolean' ? { requireApproval: payload.requireApproval } : {}),
+    /* Only the Worker's explicit `true` earns the badge; a missing or false flag stays unverified. */
+    verified: payload.verified === true,
     ...(Number.isFinite(Number(payload.warPoints ?? payload.totalTiq))
       && Number(payload.warPoints ?? payload.totalTiq) >= 0
       ? { warPoints: Math.floor(Number(payload.warPoints ?? payload.totalTiq)) }
@@ -460,16 +469,28 @@ export async function verifySquadChat(handle: string, kind: SquadKind): Promise<
   };
 }
 
+/** How a registration asks for its badge; omitted keeps the legacy bot-admin enlistment. */
+export type SquadRegisterMethod = 'bot' | 'post' | 'none';
+
+export interface SquadRegisterOptions {
+  method?: SquadRegisterMethod;
+  /** The `#TX-XXXXX` code the founder posted, required for `method: 'post'`. */
+  verifyCode?: string;
+}
+
 export async function registerSquadWithTelegram(
   handle: string,
   identity: SquadIdentity,
   kind?: SquadKind,
+  options?: SquadRegisterOptions,
 ): Promise<SquadRegistrationResult> {
   const sent = await postJson<RegisterResponse>('/api/squads/register', {
     chatUsername: handle,
     squadName: identity.name,
     squadTag: identity.tag,
     ...(kind ? { kind } : {}),
+    ...(options?.method ? { method: options.method } : {}),
+    ...(options?.verifyCode ? { verifyCode: options.verifyCode } : {}),
     /* An enlistment is filed under the running championship, never under "any cup": the
        registry has to be able to say which field this squad is actually in. */
     cupId: ACTIVE_CUP_ID,
@@ -498,6 +519,7 @@ export async function registerSquadWithTelegram(
     ownerId: remote.creatorId ?? remote.ownerId,
     cupId: remote.cupId ?? ACTIVE_CUP_ID,
     requireApproval: remote.requireApproval,
+    verified: remote.verified === true,
   });
   if (claimed.ok) return { ok: true, squad: claimed.squad, message: t('enlistToast') };
 
@@ -513,6 +535,7 @@ export async function registerSquadWithTelegram(
         subscribers: remote.subscribers,
         telegramMembers: remote.telegramMembers,
         ownerId: remote.creatorId ?? remote.ownerId,
+        verified: remote.verified === true,
       });
       return { ok: true, squad: getMySquad() ?? existing, message: t('enlistToast') };
     }
@@ -585,6 +608,7 @@ function absorb(payload: SquadPayload | undefined): RankedSquad | null {
     subscribers: squad.subscribers,
     telegramMembers: squad.telegramMembers,
     ownerId: squad.ownerId,
+    verified: squad.verified === true,
   });
   return bound === 'bad-handle' ? null : getMySquad() ?? local;
 }
@@ -737,6 +761,7 @@ export async function leaveSquadOnServer(id: string): Promise<SquadActionResult>
         subscribers: squad.subscribers,
         telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
+        verified: squad.verified === true,
       });
     }
   }
@@ -764,6 +789,7 @@ export async function kickSquadMember(id: string, memberId: string): Promise<Squ
         subscribers: squad.subscribers,
         telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
+        verified: squad.verified === true,
       });
     }
   }
@@ -789,12 +815,14 @@ export async function fetchSquad(id: string): Promise<RankedSquad | null> {
         subscribers: squad.subscribers,
         telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
+        verified: squad.verified === true,
       });
     } else {
       applySquadRoster(squad.id, squad.roster, {
         subscribers: squad.subscribers,
         telegramMembers: squad.telegramMembers,
         ownerId: squad.ownerId,
+        verified: squad.verified === true,
       });
     }
   } else {
@@ -811,6 +839,7 @@ export async function fetchSquad(id: string): Promise<RankedSquad | null> {
       tag: squad.tag,
       ownerId: squad.ownerId,
       requireApproval: squad.requireApproval,
+      verified: squad.verified === true,
       bind: false,
     });
   }
@@ -915,10 +944,401 @@ export async function decideSquadRequest(
         subscribers: remote.subscribers,
         telegramMembers: remote.telegramMembers,
         ownerId: remote.ownerId,
+        verified: remote.verified === true,
       });
     }
   }
   return { ok: true, squad: getSquadById(id) ?? undefined, offline: !sent };
+}
+
+/* ---------- dual-mode verification: bot admin (Method 1) or a posted code (Method 2) ---------- */
+
+/** The Telegram deep link that asks the player to add the game's bot as an administrator. */
+export function botAdminInviteUrl(kind: SquadKind): string {
+  const route = kind === 'group' ? 'startgroup' : 'startchannel';
+  return `https://t.me/${BOT_HANDLE}?${route}&admin=manage_chat`;
+}
+
+interface VerifyCodeResponse {
+  ok?: boolean;
+  code?: string;
+  username?: string;
+  error?: string;
+  message?: string;
+}
+
+interface VerifyOwnershipResponse {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  kind?: SquadKind;
+  squad?: SquadPayload;
+}
+
+export type SquadVerifyCodeResult =
+  | { ok: true; code: string; username: string }
+  | { ok: false; error: string; message: string };
+
+/** Ask the Worker for a one-time `#TX-XXXXX` code bound to this player and this handle. */
+export async function requestSquadVerifyCode(handle: string): Promise<SquadVerifyCodeResult> {
+  const sent = await postJson<VerifyCodeResponse>('/api/squads/verify-code', {
+    handle,
+    userId: telegramUserId(),
+    userTelegramId: telegramUserId(),
+  });
+  if (!sent) return { ok: false, error: OFFLINE, message: t('enlistErrOffline') };
+  const { data, ok } = sent;
+  if (!ok || !data || data.ok !== true || typeof data.code !== 'string') {
+    const code = typeof data?.error === 'string' ? data.error : 'failed';
+    return { ok: false, error: code, message: squadErrorMessage(code, undefined, data?.message ?? '') };
+  }
+  return { ok: true, code: data.code, username: data.username ?? handle };
+}
+
+/**
+ * Complete verification on a squad that is already on the registry. The server proves the
+ * caller is its founder and re-checks Telegram (or the public post) before it flips the badge.
+ */
+export async function verifySquadOwnership(input: {
+  squadId?: string;
+  handle: string;
+  method: 'bot' | 'post';
+}): Promise<SquadActionResult> {
+  const sent = await postJson<VerifyOwnershipResponse>('/api/squads/verify', {
+    ...(input.squadId ? { squadId: input.squadId } : {}),
+    handle: input.handle,
+    method: input.method,
+    userId: telegramUserId(),
+    userTelegramId: telegramUserId(),
+  });
+  if (!sent) return actionFailure(OFFLINE);
+  const { data, ok } = sent;
+  if (!ok || !data || data.ok !== true) {
+    const code = typeof data?.error === 'string' ? data.error : 'failed';
+    return actionFailure(code, data?.message);
+  }
+  const fresh = data.squad ? toSquad(data.squad) : null;
+  if (fresh) {
+    /* The verification answer carries the synced title, photo and counts; folding it into the
+       board is what makes the badge appear on every painted row in the same frame. */
+    mergeSquadBoard([fresh]);
+    return { ok: true, squad: getSquadById(fresh.id) ?? undefined };
+  }
+  return { ok: true, squad: input.squadId ? getSquadById(input.squadId) ?? undefined : undefined };
+}
+
+async function copyPlainText(value: string): Promise<boolean> {
+  const attempt = (async (): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch { /* fall through to the legacy path */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', 'true');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  })();
+  return Promise.race([attempt, new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1200))]);
+}
+
+export interface SquadVerifyPanelOptions {
+  /** `register` renders the inline block for a new squad; `verify` adds a founder banner. */
+  mode: 'register' | 'verify';
+  /** Read the handle at tap time, so a field edited after mount is always the one verified. */
+  handle: () => string;
+  /** Present when the squad already exists and only its badge is missing. */
+  squadId?: string;
+  /** Called with the freshly verified squad (server view, folded into the local board). */
+  onVerified?: (squad: RankedSquad) => void;
+  /** Registration mode: submit the registration with the code once the founder has posted it. */
+  onPostRegister?: (code: string) => void;
+  onError?: (message: string) => void;
+  onNotice?: (message: string) => void;
+}
+
+export interface SquadVerifyPanel {
+  el: HTMLElement;
+  /** A field change must invalidate a code minted for the old handle. */
+  handleChanged(): void;
+  /** Drop an expired code so the next tap mints a fresh one instead of retrying the old one. */
+  resetCode(): void;
+}
+
+/**
+ * The one dual-mode verification block, shared by the Ranks register sheet, the Channel Wars
+ * register view and both founder drawers. Method 1 (bot admin) is first because it verifies and
+ * syncs in the same tap; Method 2 stays folded away for founders who will not grant admin rights.
+ */
+export function buildSquadVerifyPanel(opts: SquadVerifyPanelOptions): SquadVerifyPanel {
+  const root = document.createElement('section');
+  root.className = `sqv is-${opts.mode}`;
+  const body = document.createElement('div');
+  body.className = 'sqv-body';
+  let code = '';
+  let codeHandle = '';
+  let codeSeq = 0;
+  let busy = false;
+  let generating = false;
+  let altOpen = false;
+  const buttons: HTMLButtonElement[] = [];
+
+  const svg = (id: string, cls: string): SVGSVGElement => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    node.setAttribute('class', cls);
+    node.setAttribute('aria-hidden', 'true');
+    node.setAttribute('focusable', 'false');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', id);
+    node.append(use);
+    return node;
+  };
+
+  const button = (cls: string, label: string, run: () => void, withCheck = false): HTMLButtonElement => {
+    const node = document.createElement('button');
+    node.type = 'button';
+    node.className = cls;
+    if (withCheck) node.append(svg('#i-check', 'ico'));
+    const text = document.createElement('span');
+    text.textContent = label;
+    node.append(text);
+    node.addEventListener('click', run);
+    buttons.push(node);
+    return node;
+  };
+
+  const error = document.createElement('p');
+  error.className = 'sqv-err';
+  error.hidden = true;
+  error.setAttribute('role', 'alert');
+
+  const clearError = (): void => {
+    error.hidden = true;
+    error.textContent = '';
+  };
+  const showError = (message: string): void => {
+    error.textContent = message;
+    error.hidden = false;
+    opts.onError?.(message);
+  };
+
+  const refreshDisabled = (): void => {
+    const off = busy || generating;
+    for (const node of buttons) {
+      node.disabled = off;
+      node.setAttribute('aria-busy', String(off));
+    }
+  };
+
+  /* Method 1 — the recommended card. Two one-tap add doors, and (for an existing squad) the
+     one button that asks Telegram to confirm the admin seat before the badge is granted. */
+  const card = document.createElement('div');
+  card.className = 'sqv-card';
+  const cardTitle = document.createElement('b');
+  cardTitle.className = 'sqv-title';
+  cardTitle.textContent = t('squadVerifyMethod1Title');
+  const cardSub = document.createElement('p');
+  cardSub.className = 'sqv-sub';
+  cardSub.textContent = t('squadVerifyMethod1Sub');
+  const addRow = document.createElement('div');
+  addRow.className = 'sqv-row';
+  addRow.append(
+    button('sqv-add', t('squadVerifyAddChannel'), () => openLink(botAdminInviteUrl('channel'))),
+    button('sqv-add', t('squadVerifyAddGroup'), () => openLink(botAdminInviteUrl('group'))),
+  );
+  card.append(cardTitle, cardSub, addRow);
+  if (opts.mode === 'verify') {
+    const bot = button('sqv-go is-primary', t('squadVerifyBotVerify'), () => { void verifyBot(); }, true);
+    card.append(bot);
+  }
+
+  /* Method 2 — the folded alternative. The code is minted on demand, never pre-issued. */
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'sqv-toggle';
+  toggle.textContent = t('squadVerifyMethod2Toggle');
+  toggle.setAttribute('aria-expanded', 'false');
+  const alt = document.createElement('div');
+  alt.className = 'sqv-alt';
+  alt.hidden = true;
+  const hint = document.createElement('p');
+  hint.className = 'sqv-hint';
+  hint.textContent = t('squadVerifyCodeHint');
+  const codeRow = document.createElement('div');
+  codeRow.className = 'sqv-code-row';
+  const codeBox = document.createElement('bdi');
+  codeBox.className = 'sqv-code';
+  codeBox.setAttribute('dir', 'ltr');
+  codeBox.textContent = '—';
+  const copy = button('sqv-copy', t('squadVerifyCopyCode'), () => { void copyCode(); });
+  codeRow.append(codeBox, copy);
+  const post = button('sqv-go', t('squadVerifyPostCta'), () => { void verifyPost(); }, true);
+  alt.append(hint, codeRow, post);
+
+  async function ensureCode(): Promise<string> {
+    const handle = opts.handle().trim();
+    if (!handle) {
+      showError(t('enlistErrHandle'));
+      return '';
+    }
+    if (code && codeHandle === handle.toLowerCase()) return code;
+    const seq = ++codeSeq;
+    clearError();
+    generating = true;
+    refreshDisabled();
+    /* While the stale code is gone, the box reads as prose (not an LTR token); only the real
+       `#TX-XXXXX` wears the forced-LTR treatment. */
+    codeBox.removeAttribute('dir');
+    codeBox.textContent = t('squadVerifyCodeLoading');
+    const result = await requestSquadVerifyCode(handle);
+    if (seq !== codeSeq) return '';
+    generating = false;
+    refreshDisabled();
+    if (!result.ok) {
+      code = '';
+      codeHandle = '';
+      codeBox.setAttribute('dir', 'ltr');
+      codeBox.textContent = '—';
+      showError(result.message);
+      return '';
+    }
+    code = result.code;
+    codeHandle = handle.toLowerCase();
+    codeBox.setAttribute('dir', 'ltr');
+    codeBox.textContent = code;
+    return code;
+  }
+
+  async function copyCode(): Promise<void> {
+    const value = await ensureCode();
+    if (!value) return;
+    const copied = await copyPlainText(value);
+    if (copied) opts.onNotice?.(t('squadVerifyCopied'));
+    else showError(t('linkCopyFailed'));
+  }
+
+  function resetCode(): void {
+    codeSeq++;
+    generating = false;
+    code = '';
+    codeHandle = '';
+    codeBox.setAttribute('dir', 'ltr');
+    codeBox.textContent = '—';
+    refreshDisabled();
+    if (altOpen && !body.hidden) void ensureCode();
+  }
+
+  async function verifyPost(): Promise<void> {
+    if (busy) return;
+    const handle = opts.handle().trim();
+    if (!handle) {
+      showError(t('enlistErrHandle'));
+      return;
+    }
+    const value = await ensureCode();
+    if (!value) return;
+    if (opts.mode === 'register') {
+      opts.onPostRegister?.(value);
+      return;
+    }
+    busy = true;
+    refreshDisabled();
+    const result = await verifySquadOwnership({ squadId: opts.squadId, handle, method: 'post' });
+    busy = false;
+    refreshDisabled();
+    if (!result.ok) {
+      /* An expired token is worth replacing on the spot; "not found yet" keeps the same code,
+         because the founder may simply not have posted it. */
+      if (result.code === 'verify_code_expired') resetCode();
+      showError(result.message || t('squadVerifyPostMissing'));
+      return;
+    }
+    opts.onNotice?.(t('squadVerifyDonePost'));
+    if (result.squad) opts.onVerified?.(result.squad);
+  }
+
+  async function verifyBot(): Promise<void> {
+    if (busy) return;
+    const handle = opts.handle().trim();
+    if (!handle) {
+      showError(t('enlistErrHandle'));
+      return;
+    }
+    busy = true;
+    clearError();
+    refreshDisabled();
+    const result = await verifySquadOwnership({ squadId: opts.squadId, handle, method: 'bot' });
+    busy = false;
+    refreshDisabled();
+    if (!result.ok) {
+      showError(result.message || t('enlistErrBot'));
+      return;
+    }
+    opts.onNotice?.(t('squadVerifyDone'));
+    if (result.squad) opts.onVerified?.(result.squad);
+  }
+
+  toggle.addEventListener('click', () => {
+    altOpen = alt.hidden;
+    alt.hidden = !altOpen;
+    toggle.setAttribute('aria-expanded', String(altOpen));
+    clearError();
+    if (altOpen) void ensureCode();
+  });
+
+  /* In `verify` mode the block starts folded behind its founder banner; in `register` mode the
+     form itself is the stage, so both methods are already visible. */
+  if (opts.mode === 'verify') {
+    const banner = document.createElement('button');
+    banner.type = 'button';
+    banner.className = 'sqv-banner';
+    banner.append(svg('#i-check', 'ico'));
+    const label = document.createElement('span');
+    label.textContent = t('squadVerifyFounderCta');
+    banner.append(label);
+    banner.setAttribute('aria-expanded', 'false');
+    body.hidden = true;
+    banner.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      banner.setAttribute('aria-expanded', String(!body.hidden));
+      if (!body.hidden && altOpen) void ensureCode();
+    });
+    root.append(banner);
+  }
+
+  body.append(card, toggle, alt, error);
+  root.append(body);
+  refreshDisabled();
+
+  return {
+    el: root,
+    handleChanged(): void {
+      /* Any code in flight for the old handle is superseded, never painted. */
+      codeSeq++;
+      generating = false;
+      refreshDisabled();
+      const handle = opts.handle().trim().toLowerCase();
+      if (handle !== codeHandle) {
+        code = '';
+        codeHandle = '';
+        codeBox.setAttribute('dir', 'ltr');
+        codeBox.textContent = '—';
+      }
+      clearError();
+    },
+    resetCode,
+  };
 }
 
 /** The one message that goes to every member, through the bot and the in-app inbox. */

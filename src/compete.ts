@@ -34,14 +34,17 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, onArena, seasonLabel } from './arenaState';
-import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, myRosterId, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
-import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
+import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, myPlayerId, myRosterId, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
+import { impact, notify, openLink, tgUser } from './telegram';
 import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
 import { isSelfPlayerId } from './players';
 /* static on purpose: `menu.ts` reads the same desk from its squad sheets, so the module is in the
    boot chunk either way — a dynamic import here would only add a hop */
-import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
+import {
+  buildSquadVerifyPanel, joinSquadOnServer, registerSquadWithTelegram,
+  type SquadVerifyPanel,
+} from './squadRegister';
 
 import { showMarkupToast, showToast, showRoyalToast } from './toast';
 import type { Router } from './router';
@@ -365,12 +368,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     submit: document.getElementById('squad-reg-submit') as HTMLButtonElement | null,
     spinner: document.getElementById('squad-reg-spinner'),
     label: document.getElementById('squad-reg-label'),
-    bot: document.getElementById('squad-reg-bot'),
+    unverified: document.getElementById('squad-reg-unverified') as HTMLButtonElement | null,
+    verifyHost: document.getElementById('squad-reg-verify'),
   };
-  if (regEls.bot) regEls.bot.textContent = `@${BOT_HANDLE}`;
   let registering = false;
   let regStep: 1 | 2 = 1;
   let tagTouched = false;
+  /** The dual-mode verification block mounted inside step 2. */
+  let verifyPanel: SquadVerifyPanel | null = null;
 
   const registerHandle = (): string => cleanChatReference(regEls.input?.value ?? '');
 
@@ -385,6 +390,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (regEls.error) regEls.error.hidden = true;
   }
 
+  /** Mount the dual-mode verification block fresh, localized for the active language. */
+  function mountRegisterVerifyPanel(): void {
+    if (!regEls.verifyHost) return;
+    regEls.verifyHost.textContent = '';
+    verifyPanel = buildSquadVerifyPanel({
+      mode: 'register',
+      handle: () => registerHandle(),
+      onPostRegister: (code) => { void submitSquadRegistration('post', code); },
+      onError: (message) => showRegisterError(message),
+      onNotice: (message) => showToast(message, 'success'),
+    });
+    regEls.verifyHost.append(verifyPanel.el);
+  }
+
   function setRegisterStep(step: 1 | 2, focus = false): void {
     regStep = step;
     if (regEls.step1) regEls.step1.hidden = step !== 1;
@@ -395,7 +414,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     }
     for (const [i, seg] of regEls.track.entries()) seg.classList.toggle('is-on', i < step);
     if (regEls.back) regEls.back.hidden = step !== 2;
-    if (regEls.label && !registering) regEls.label.textContent = step === 1 ? 'Continue' : 'Launch Squad';
+    if (regEls.unverified) regEls.unverified.hidden = step !== 2;
+    if (regEls.label && !registering) {
+      regEls.label.textContent = step === 1 ? t('squadRegContinue') : t('squadVerifyBotCta');
+    }
+    if (step === 2) mountRegisterVerifyPanel();
     if (focus) (step === 1 ? regEls.input : regEls.name)?.focus({ preventScroll: true });
   }
 
@@ -406,8 +429,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       regEls.submit.toggleAttribute('aria-busy', busy);
     }
     if (regEls.back) regEls.back.disabled = busy;
+    if (regEls.unverified) regEls.unverified.disabled = busy;
     if (regEls.spinner) regEls.spinner.hidden = !busy;
-    if (regEls.label) regEls.label.textContent = busy ? 'Launching…' : regStep === 1 ? 'Continue' : 'Launch Squad';
+    if (regEls.label) {
+      regEls.label.textContent = busy
+        ? t('squadVerifyBusy')
+        : regStep === 1 ? t('squadRegContinue') : t('squadVerifyBotCta');
+    }
   }
 
   function updateRegisterDetection(): void {
@@ -488,7 +516,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (regEls.body) regEls.body.scrollTop = 0;
   }
 
-  async function submitSquadRegistration(): Promise<void> {
+  async function submitSquadRegistration(method: 'bot' | 'none' | 'post' = 'bot', code = ''): Promise<void> {
     if (registering) return;
     if (regStep === 1) { goToRegisterIdentity(); return; }
 
@@ -513,12 +541,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     if (regEls.tag) regEls.tag.value = tag;
     clearRegisterError();
     setRegisterBusy(true);
-    const result = await registerSquadWithTelegram(handle, { name, tag });
+    const result = await registerSquadWithTelegram(handle, { name, tag }, undefined, {
+      method,
+      ...(method === 'post' ? { verifyCode: code } : {}),
+    });
     setRegisterBusy(false);
     if (result.ok) {
+      const verified = result.squad?.verified === true;
       notify('success');
       impact('medium');
-      showToast('Squad successfully registered!', 'success');
+      showToast(t(verified ? 'squadVerifyDone' : 'enlistToast'), 'success');
       api.sheets.close();
       loadedBoard.guilds = false;
       selectBoard('guilds');
@@ -527,9 +559,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     notify('error');
     impact('light');
     showToast(result.message, 'error');
+    if (result.error === 'verify_code_expired') verifyPanel?.resetCode();
     if (result.error === 'invalid_tag') {
       showRegisterError(result.message);
       regEls.tag?.focus({ preventScroll: true });
+      return;
+    }
+    /* An ownership refusal is not a reason to throw the identity away: the founder can read the
+       sentence, fix the admin seat, or take the no-badge door without retyping anything. */
+    if (regStep === 2) {
+      showRegisterError(result.message);
       return;
     }
     setRegisterStep(1, true);
@@ -538,7 +577,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
 
   document.getElementById('squad-reg-open')?.addEventListener('click', () => openSquadRegister());
   window.addEventListener('detour:squad-register', () => openSquadRegister());
-  regEls.submit?.addEventListener('click', () => { void submitSquadRegistration(); });
+  regEls.submit?.addEventListener('click', () => { void submitSquadRegistration('bot'); });
+  regEls.unverified?.addEventListener('click', () => { void submitSquadRegistration('none'); });
   regEls.back?.addEventListener('click', () => {
     clearRegisterError();
     setRegisterStep(1, true);
@@ -563,6 +603,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     clearRegisterError();
     updateRegisterDetection();
     syncRegisterPreview();
+    verifyPanel?.handleChanged();
   });
   regEls.name?.addEventListener('input', () => {
     if (!tagTouched && regEls.tag) regEls.tag.value = suggestTag(regEls.name?.value ?? '', registerHandle());
@@ -575,6 +616,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     tagTouched = true;
     clearRegisterError();
     syncRegisterPreview();
+  });
+  /* A language flip while the sheet is open rebuilds the verification block and relabels the
+     action key, so the drawer never mixes two dictionaries. */
+  onLang(() => {
+    if (!regEls.sheet || regEls.sheet.hidden) return;
+    if (regStep === 2) mountRegisterVerifyPanel();
+    if (!registering && regEls.label) {
+      regEls.label.textContent = regStep === 1 ? t('squadRegContinue') : t('squadVerifyBotCta');
+    }
   });
 
   /**
@@ -800,6 +850,28 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
   };
   const kindWord = (s: RankedSquad): string => (squadKind(s) === 'channel' ? 'channel' : 'group');
   const kindLabel = (s: RankedSquad): string => `Telegram ${kindWord(s)}`;
+
+  /**
+   * The verified checkmark. Called only behind `squad.verified === true`: a claim that never
+   * proved admin ownership stays a plain title in every view.
+   */
+  function squadVerifiedBadge(cls = 'squad-vbadge'): HTMLElement {
+    const badge = document.createElement('span');
+    badge.className = cls;
+    badge.setAttribute('role', 'img');
+    badge.setAttribute('aria-label', t('squadVerifyBadge'));
+    badge.title = t('squadVerifyBadge');
+    badge.append(svgIcon('#i-check', 'ico'));
+    return badge;
+  }
+
+  /** The quiet counter-pill on an unverified squad: present, but never a checkmark. */
+  function squadUnverifiedPill(cls = 'squad-unverified'): HTMLElement {
+    const pill = document.createElement('span');
+    pill.className = cls;
+    pill.textContent = t('squadVerifyUnverifiedPill');
+    return pill;
+  }
 
   function startTick(): void {
     if (tick) return;
@@ -1529,7 +1601,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       handle.className = 'ms-handle';
       handle.textContent = s.handle;
       handle.dir = 'ltr';
-      tr.replaceChildren(tag, dot, handle);
+      /* The strict gate: a check for a proven squad, a neutral pill for an unproven one. */
+      if (s.verified === true) {
+        tr.replaceChildren(tag, dot, handle, squadVerifiedBadge('squad-vbadge ms-vbadge'));
+      } else {
+        tr.replaceChildren(tag, dot, handle, squadUnverifiedPill('squad-unverified ms-unverified'));
+      }
       tr.title = `${tag.textContent} · ${s.handle}`;
     }
     msEls.marks?.classList.add('is-guild');
@@ -2027,6 +2104,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const label = s.name || s.handle.replace(/^@/, '');
     const contrib = mine ? getMyContribution() : 0;
     const tiq = s.trophies.toLocaleString('en-US');
+    const viewerId = myPlayerId();
+    const isFounder = !!viewerId && (s.ownerId ?? '') === viewerId;
     msPending = { kind: 'guild', squad: s };
     msGuildHead(s, label);
     el.setAttribute('aria-label', `${label} · ${kindLabel} ${s.handle} · #${s.rank} · ${tiq} TIQ`);
@@ -2035,6 +2114,35 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
       msHero(tiq, pct, t('squadLeague').replace('{n}', field.toLocaleString('en-US')), true),
       msSection(t('squadRead'), msSquadMetrics(s, mine, contrib)),
     );
+    /* A founder looking at their own unverified squad gets the one door that fixes it; a
+       verified squad, or anybody else's, gets no verification controls at all. */
+    if (s.verified !== true && isFounder) {
+      const host = document.createElement('section');
+      host.className = 'ms-block sqv-founder';
+      const panel = buildSquadVerifyPanel({
+        mode: 'verify',
+        handle: () => s.handle,
+        squadId: s.id,
+        onVerified: (fresh) => {
+          notify('success');
+          impact('medium');
+          showToast(t('squadVerifyDone'), 'success');
+          loadedBoard.guilds = false;
+          loadSquads();
+          openGuild(fresh);
+        },
+        onError: (message) => {
+          notify('warning');
+          showToast(message, 'warning');
+        },
+        onNotice: (message) => {
+          notify('success');
+          showToast(message, 'success');
+        },
+      });
+      host.append(panel.el);
+      body.append(host);
+    }
     msActions(
       'guild',
       mine ? t('squadEnlistedInvite') : t('squadJoinCta'),
@@ -2795,6 +2903,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     nm.textContent = me.name || me.handle.replace(/^@/, '');
     nm.title = `${me.name} · ${me.handle}`;
     sub.append(nm);
+    if (me.verified === true) sub.append(squadVerifiedBadge('squad-vbadge gh-vbadge'));
     txt.append(top, sub);
 
     const score = document.createElement('span');
@@ -2838,11 +2947,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     nm.dir = 'auto';
     nm.textContent = label;
     nm.title = `${label} · ${s.handle}`;
+    const nameLine = document.createElement('span');
+    nameLine.className = 'lb-nmline';
+    nameLine.append(nm);
+    if (s.verified === true) nameLine.append(squadVerifiedBadge('squad-vbadge lb-vbadge'));
     const sub = document.createElement('span');
     sub.className = 'lb-sub nd-count';
     sub.textContent = members;
     sub.title = `${s.members.toLocaleString('en-US')} members · ${s.handle}`;
-    txt.append(nm, sub);
+    txt.append(nameLine, sub);
     id.append(av, txt);
 
     /* Action column: Joined is a quiet stamp on your own row, never a second key;
@@ -2943,6 +3056,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     top.append(kick, rank);
     const nm = document.createElement('b');
     nm.className = 'dock-name';
+    nm.dir = 'ltr';
     nm.textContent = me.handle;
     nm.title = `${me.name} · ${me.handle}`;
     txt.append(top, nm);
@@ -2966,7 +3080,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void; cl
     const rows = getSquadRanking();
     const me = getMySquad();
     const key = `${lang}|${isPremiumUser() ? 1 : 0}|${me?.id ?? ''}|${me?.rank ?? ''}|${me?.trophies ?? ''}|`
-      + boardSignature(rows.flatMap((s) => [s.id, s.rank, s.name, s.handle, s.members, s.trophies]));
+      + boardSignature(rows.flatMap((s) => [
+        s.id, s.rank, s.name, s.handle, s.members, s.trophies, s.verified === true ? 1 : 0,
+      ]));
     if (key === guildsKey) {
       loadedBoard.guilds = true;
       paintSquadDock();

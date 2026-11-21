@@ -1234,12 +1234,14 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadCrestPhoto(me.handle);
     squadTotalEl.textContent = en(squadView.totalTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
-    /* A channel gets the compact check beside its handle; a group simply omits it. */
-    const isChannel = squadKind(me) === 'channel';
-    squadKindBadge.hidden = !isChannel;
-    if (isChannel) {
-      squadKindBadge.title = t('officialChannel');
-      squadKindBadge.setAttribute('aria-label', t('officialChannel'));
+    /* The strict badge gate reaches this hub too: the gold check marks a squad that proved
+       admin ownership (Method 1 or 2), never a claim that merely happens to be a channel. */
+    const showVerified = me.verified === true;
+    squadKindBadge.hidden = !showVerified;
+    if (showVerified) {
+      const label = t(squadKind(me) === 'channel' ? 'officialChannel' : 'officialGroup');
+      squadKindBadge.title = label;
+      squadKindBadge.setAttribute('aria-label', label);
     }
     /* The Telegram audience is a separate, clearly-labelled chip: it never counts as members.
        An unreported audience stays a quiet dash rather than collapsing the 3-up grid. */
