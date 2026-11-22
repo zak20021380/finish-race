@@ -412,6 +412,11 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the trend chart's Monthly window. */
   series30d: SeriesPoint[];
+  /**
+   * Verified rewarded-ad completions. Absent on a Worker that predates the ledger; the card then
+   * reads its own exact zeroes rather than inventing a figure.
+   */
+  ads?: AdsMetrics;
   /** Stars received from paid invoices. */
   starsRevenueTotal: number;
   /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
@@ -437,6 +442,45 @@ export interface SeriesPoint {
   signups: number;
   active: number;
   matches: number;
+}
+
+/** One window of the ad reading: how many verified views, and how many distinct seats behind them. */
+export interface AdsWindow {
+  views: number;
+  uniqueUsers: number;
+}
+
+/**
+ * The `ads` block of the telemetry reading: the room's own count of rewarded videos that were
+ * actually completed. An impression, an early close, a no-fill and a failure never appear here —
+ * only a view the SDK settled as complete is reported, and each report carries a receipt the room
+ * folds in exactly once.
+ */
+export interface AdsMetrics {
+  /** Every verified completion since the ledger was first written. */
+  totalAllTime: number;
+  /** Rolling last 24 hours. */
+  day: AdsWindow;
+  /** Rolling last 7 days. */
+  week: AdsWindow;
+  /** Rolling last 30 days. */
+  month: AdsWindow;
+  /** Lifetime views per placement. */
+  byPlacement: Record<string, number>;
+  series: {
+    /** Views per hour, oldest first. */
+    daily24h: number[];
+    /** Views per day, oldest first. */
+    weekly7d: number[];
+    /** Views per day, oldest first. */
+    monthly30d: number[];
+    /** The Tehran wall clock each hourly bucket opens on. */
+    labels24h: string[];
+    /** The Tehran date each daily bucket opens on. */
+    labels7d: string[];
+    /** The same date labels for the 30-day window. */
+    labels30d: string[];
+  };
 }
 
 /** The answers the operator's telemetry door can give this panel, and how it failed when it did. */
@@ -477,6 +521,54 @@ const metricPlayerCounts = (value: unknown): Record<'2' | '3' | '4', number> => 
   const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return { '2': metricCount(row['2']), '3': metricCount(row['3']), '4': metricCount(row['4']) };
 };
+
+/** A plotted count array: a non-array is an empty ring, and a bad entry is a measured zero. */
+const metricNumbers = (value: unknown): number[] =>
+  Array.isArray(value) ? value.map((n) => metricCount(n)) : [];
+
+/** A bucket-label array: anything that is not a string is dropped rather than printed. */
+const metricLabels = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((s) => (typeof s === 'string' ? s : '')) : [];
+
+/** One ad window, reconciled field by field. */
+const metricAdWindow = (value: unknown): AdsWindow => {
+  const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return { views: metricCount(row.views), uniqueUsers: metricCount(row.uniqueUsers) };
+};
+
+/** The placement split, clamped key by key: a placement this panel does not know still counts. */
+const metricPlacements = (value: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [key, count] of Object.entries(value as Record<string, unknown>)) {
+    const id = key.slice(0, 40);
+    if (id) out[id] = metricCount(count);
+  }
+  return out;
+};
+
+/** The `ads` block, reconciled against `AdsMetrics`: a Worker without it answers exact zeroes. */
+function normalizeAds(value: unknown): AdsMetrics {
+  const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const series = row.series && typeof row.series === 'object'
+    ? row.series as Record<string, unknown>
+    : {};
+  return {
+    totalAllTime: metricCount(row.totalAllTime),
+    day: metricAdWindow(row.day),
+    week: metricAdWindow(row.week),
+    month: metricAdWindow(row.month),
+    byPlacement: metricPlacements(row.byPlacement),
+    series: {
+      daily24h: metricNumbers(series.daily24h),
+      weekly7d: metricNumbers(series.weekly7d),
+      monthly30d: metricNumbers(series.monthly30d),
+      labels24h: metricLabels(series.labels24h),
+      labels7d: metricLabels(series.labels7d),
+      labels30d: metricLabels(series.labels30d),
+    },
+  };
+}
 
 /** The fields a genuine reading always carries; at least one must be present to accept a body. */
 const METRIC_FIELDS = ['timestamp', 'activeRooms', 'totalUsers', 'matchesCompleted', 'series24h'] as const;
@@ -529,6 +621,7 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     series24h: metricSeries(row.series24h),
     series7d: metricSeries(row.series7d),
     series30d: metricSeries(row.series30d),
+    ads: normalizeAds(row.ads),
     starsRevenueTotal: metricCount(row.starsRevenueTotal),
     vaultUnlockedTotal: metricCount(row.vaultUnlockedTotal),
     vaultPendingPayoutsCount: metricCount(row.vaultPendingPayoutsCount),
@@ -1876,6 +1969,19 @@ export function createAdmin(api: AdminApi): Admin {
   const statTrendSlab = statTrendRead?.closest<HTMLElement>('.adm-trend') ?? null;
   const statTrendTs = $<HTMLElement>('stat-trend-ts');
   const statTrendTok = $<HTMLElement>('stat-trend-tok');
+  /* the watched-ads card: the room's verified completion count, its ring and its placement split */
+  const statAdsTotal = $<HTMLElement>('stat-ads-total');
+  const statAdsDay = $<HTMLElement>('stat-ads-day');
+  const statAdsDayU = $<HTMLElement>('stat-ads-day-u');
+  const statAdsWeek = $<HTMLElement>('stat-ads-week');
+  const statAdsWeekU = $<HTMLElement>('stat-ads-week-u');
+  const statAdsMonth = $<HTMLElement>('stat-ads-month');
+  const statAdsMonthU = $<HTMLElement>('stat-ads-month-u');
+  const statAdsAvg = $<HTMLElement>('stat-ads-avg');
+  const statAdsKeys = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-adrange]') ?? [])];
+  const statAdsSvg = document.getElementById('stat-ads-svg') as unknown as SVGSVGElement | null;
+  const statAdsEmpty = $<HTMLElement>('stat-ads-empty');
+  const statAdsSplit = $<HTMLElement>('stat-ads-split');
   const statCore = $<HTMLElement>('stat-core');
   const statCoreBar = $<HTMLElement>('stat-core-bar');
   const statCoreFill = $<HTMLElement>('stat-core-fill');
@@ -2939,6 +3045,267 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshMetrics();
   }
 
+  /* ---------- the watched-ads card: one window, one bar per bucket, no modelled figure ---------- */
+
+  /** The three windows the ad switch selects; each maps to its own ready-to-plot ring. */
+  type AdsRange = '24h' | '7d' | '30d';
+
+  const ADS_W = 320;
+  const ADS_H = 132;
+  const ADS_PAD = { l: 8, r: 8, t: 16, b: 20 };
+  const ADS_IW = ADS_W - ADS_PAD.l - ADS_PAD.r;
+  const ADS_IH = ADS_H - ADS_PAD.t - ADS_PAD.b;
+  const ADS_BASE = ADS_PAD.t + ADS_IH;
+
+  /** The window on screen. The three KPI cards above never move with it: they are fixed windows. */
+  let adsRange: AdsRange = '24h';
+
+  /** The name each placement shows: the two the app actually serves, then the raw key. */
+  const ADS_PLACEMENT_LABEL: Record<string, string> = {
+    recover_tiq: 'Recovery',
+    double_coins: 'Match x2',
+  };
+
+  /** The order the split lists: the two real placements first, then anything the room adds. */
+  const ADS_PLACEMENT_ORDER = ['recover_tiq', 'double_coins'];
+
+  /** A label out of the Worker's payload is text, never markup: it is escaped before it is drawn. */
+  const adsText = (raw: string): string => raw.replace(/[&<>"]/g, (ch) => (
+    ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&quot;'
+  ));
+
+  /**
+   * The active window's own ring and labels, straight off the reading. A Worker that predates the
+   * ledger answers empty arrays, which plot an empty stretch rather than a modelled curve.
+   */
+  function adsRing(m: ServerMetrics | null): {
+    views: number[]; labels: string[]; total: number; uniques: number;
+  } {
+    const ads = m?.ads;
+    if (!ads) return { views: [], labels: [], total: 0, uniques: 0 };
+    const ring = adsRange === '24h' ? ads.series.daily24h
+      : adsRange === '7d' ? ads.series.weekly7d : ads.series.monthly30d;
+    const labels = adsRange === '24h' ? ads.series.labels24h
+      : adsRange === '7d' ? ads.series.labels7d : ads.series.labels30d;
+    const win = adsRange === '24h' ? ads.day : adsRange === '7d' ? ads.week : ads.month;
+    return {
+      views: Array.isArray(ring) ? ring.map((n) => metricCount(n)) : [],
+      labels: Array.isArray(labels) ? labels : [],
+      total: metricCount(win?.views),
+      uniques: metricCount(win?.uniqueUsers),
+    };
+  }
+
+  /** What the empty plot says instead of bars: the reason there is nothing to draw. */
+  function adsEmptyText(m: ServerMetrics | null): string {
+    if (metricsPhase === 'unauthorized') {
+      return 'The metrics door refused this session — no ad trend to plot.';
+    }
+    if (!m) {
+      if (metricsPhase === 'error') {
+        return metricsReason === 'offline' || metricsReason === 'no-origin'
+          ? 'The Worker never answered — no ad trend to plot.'
+          : metricsReason === 'timeout'
+            ? 'The Worker did not answer in time — no ad trend to plot.'
+            : 'The Worker answered without a reading — no ad trend to plot.';
+      }
+      return metricsBusy ? 'Reading the ad ledger…' : "Awaiting the Worker's first ad reading.";
+    }
+    if (!m.ads) return 'The Worker answered without an ad ledger.';
+    return 'No verified ad views in this window yet.';
+  }
+
+  /**
+   * Paint the whole card: the header total, the three KPI windows, the active window's bars and
+   * the placement split. Everything comes from the one reading on screen — nothing is carried over
+   * from a previous window or a previous reply.
+   */
+  function renderAds(): void {
+    const m = lastMetrics;
+    const ads = m?.ads;
+    const pending = metricsBusy && !m;
+
+    for (const key of statAdsKeys) {
+      key.setAttribute('aria-pressed', String(key.dataset.adrange === adsRange));
+    }
+
+    /* the section header's total badge */
+    if (statAdsTotal) {
+      statAdsTotal.textContent = 'TOTAL: ';
+      const num = document.createElement('bdi');
+      num.dir = 'ltr';
+      num.textContent = ads ? figure(ads.totalAllTime) : pending ? '…' : '—';
+      statAdsTotal.append(num);
+    }
+
+    /* the three KPI cards: the same three windows NEW SIGNUPS prints, one section below it */
+    const paintCard = (
+      value: HTMLElement | null,
+      viewers: HTMLElement | null,
+      win: AdsWindow | undefined,
+    ): void => {
+      if (value) value.textContent = win ? figure(win.views) : pending ? '…' : '—';
+      if (!viewers) return;
+      viewers.textContent = '';
+      if (!win) {
+        viewers.textContent = pending ? '… viewers' : '— viewers';
+        return;
+      }
+      const num = document.createElement('bdi');
+      num.dir = 'ltr';
+      num.textContent = figure(win.uniqueUsers);
+      viewers.append(num, ' viewers');
+    };
+    paintCard(statAdsDay, statAdsDayU, ads?.day);
+    paintCard(statAdsWeek, statAdsWeekU, ads?.week);
+    paintCard(statAdsMonth, statAdsMonthU, ads?.month);
+
+    const ring = adsRing(m);
+
+    /* the subtitle: the active window's views per viewer, one decimal, never a rounded guess */
+    if (statAdsAvg) {
+      statAdsAvg.textContent = 'AVG ';
+      const num = document.createElement('bdi');
+      num.dir = 'ltr';
+      num.textContent = ring.uniques > 0
+        ? (Math.round((ring.total / ring.uniques) * 10) / 10).toFixed(1)
+        : pending ? '…' : '—';
+      statAdsAvg.append(num, ' / USER');
+    }
+
+    /* the placement split: one pill per placement, the two the app serves always present */
+    if (statAdsSplit) {
+      statAdsSplit.textContent = '';
+      if (!ads) {
+        const none = document.createElement('p');
+        none.className = 'adm-ads-none';
+        none.textContent = pending ? 'Reading the ad ledger…' : 'No verified views yet';
+        statAdsSplit.append(none);
+      } else {
+        const extra = Object.keys(ads.byPlacement)
+          .filter((key) => !ADS_PLACEMENT_ORDER.includes(key))
+          .sort();
+        for (const key of [...ADS_PLACEMENT_ORDER, ...extra]) {
+          const pill = document.createElement('span');
+          pill.className = 'adm-ads-pill';
+          pill.dataset.placement = key;
+          pill.setAttribute('role', 'listitem');
+          const dot = document.createElement('span');
+          dot.className = 'adm-ads-pill-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          const label = document.createElement('span');
+          label.className = 'adm-ads-pill-l';
+          label.textContent = ADS_PLACEMENT_LABEL[key] ?? key.replace(/_/g, ' ');
+          const value = document.createElement('b');
+          value.className = 'adm-ads-pill-v';
+          value.textContent = figure(metricCount(ads.byPlacement[key]));
+          pill.append(dot, label, value);
+          statAdsSplit.append(pill);
+        }
+      }
+    }
+
+    if (!statAdsSvg) return;
+    const views = ring.views;
+    const n = views.length;
+    let peak = 0;
+    for (const value of views) peak = Math.max(peak, value);
+    const ceiling = peak > 0 ? peak : 1;
+
+    const slotW = n > 0 ? ADS_IW / n : ADS_IW;
+    const barW = Math.max(2, Math.min(20, slotW * 0.62));
+    const xOf = (i: number): number => ADS_PAD.l + slotW * i + (slotW - barW) / 2;
+    const yOf = (value: number): number =>
+      ADS_BASE - (Math.max(0, Math.min(value, ceiling)) / ceiling) * ADS_IH;
+
+    const drawn = peak > 0;
+    if (statAdsEmpty) {
+      statAdsEmpty.hidden = drawn;
+      if (!drawn) statAdsEmpty.textContent = adsEmptyText(m);
+    }
+    statAdsSvg.setAttribute('aria-label', drawn
+      ? `${adsRange.toUpperCase()} window: ${figure(ring.total)} verified views`
+        + ` from ${figure(ring.uniques)} viewers.`
+      : adsEmptyText(m));
+
+    const parts: string[] = [];
+    parts.push('<g class="adm-ads-grid">'
+      + `<line x1="${ADS_PAD.l}" y1="${fx(ADS_BASE)}"`
+      + ` x2="${fx(ADS_PAD.l + ADS_IW)}" y2="${fx(ADS_BASE)}" />`
+      + (drawn
+        ? `<line x1="${ADS_PAD.l}" y1="${fx(yOf(peak))}"`
+          + ` x2="${fx(ADS_PAD.l + ADS_IW)}" y2="${fx(yOf(peak))}" />`
+        : '')
+      + '</g>');
+
+    /* a bucket the room never saw is a measured zero drawn as a stub on the baseline, never a gap
+       that could be mistaken for missing data; the peak is the only bar in amber */
+    const bars: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const value = views[i];
+      const height = Math.max(1.5, ADS_BASE - yOf(value));
+      bars.push(`<rect class="adm-ads-bar" x="${fx(xOf(i))}" y="${fx(ADS_BASE - height)}"`
+        + ` width="${fx(barW)}" height="${fx(height)}" rx="${fx(Math.min(2.5, barW / 2))}"`
+        + ` data-peak="${drawn && value === peak ? 'true' : 'false'}"`
+        + ` data-empty="${value > 0 ? 'false' : 'true'}" />`);
+    }
+    parts.push(`<g class="adm-ads-bars">${bars.join('')}</g>`);
+
+    if (drawn) {
+      const at = views.indexOf(peak);
+      parts.push(`<text class="adm-ads-peakv" x="${fx(xOf(at) + barW / 2)}"`
+        + ` y="${fx(Math.max(9, yOf(peak) - 4))}" text-anchor="middle">${figure(peak)}</text>`);
+    }
+
+    const tickIdx = adsRange === '24h' ? [0, 8, 16, 23]
+      : adsRange === '7d' ? [0, 1, 2, 3, 4, 5, 6] : [0, 7, 14, 21, 29];
+    const ticks: string[] = [];
+    for (const i of tickIdx) {
+      if (i >= n) continue;
+      const text = ring.labels[i] ?? '';
+      if (!text) continue;
+      const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+      ticks.push(`<text class="adm-ads-x" x="${fx(xOf(i) + barW / 2)}" y="${ADS_H - 6}"`
+        + ` text-anchor="${anchor}">${adsText(text)}</text>`);
+    }
+    parts.push(`<g class="adm-ads-axis">${ticks.join('')}</g>`);
+
+    statAdsSvg.innerHTML = parts.join('');
+  }
+
+  /**
+   * The card's guarded door. A malformed reading, a missing node or any unexpected DOM error must
+   * never escape into the Stats refresh and leave the whole tab locked on its loading state.
+   */
+  function paintAds(): void {
+    try {
+      renderAds();
+    } catch {
+      try {
+        if (statAdsSvg) {
+          statAdsSvg.innerHTML = '<g class="adm-ads-grid">'
+            + `<line x1="${ADS_PAD.l}" y1="${fx(ADS_BASE)}"`
+            + ` x2="${fx(ADS_PAD.l + ADS_IW)}" y2="${fx(ADS_BASE)}" /></g>`;
+          statAdsSvg.setAttribute('aria-label', 'No ad data available.');
+        }
+        if (statAdsEmpty) {
+          statAdsEmpty.hidden = false;
+          statAdsEmpty.textContent = 'No ad data available.';
+        }
+      } catch {
+        /* a card that cannot be drawn still must not lock the rest of the panel */
+      }
+    }
+  }
+
+  /** The ad timeframe switch. It repaints the card only: the reading already carries all three. */
+  function setAdsRange(range: AdsRange): void {
+    if (range === adsRange) return;
+    adsRange = range;
+    impact('light');
+    paintAds();
+  }
+
   /**
    * The live bar, the alert card and every counter, from the last completed reading. A Worker
    * that refused the credential clears the board; one that is slow, broken or gone keeps the last
@@ -3110,6 +3477,7 @@ export function createAdmin(api: AdminApi): Admin {
     }
 
     paintTrend();
+    paintAds();
   }
 
   /**
@@ -6972,6 +7340,14 @@ export function createAdmin(api: AdminApi): Admin {
     if (e.pointerType === 'mouse') setTrendFocus(-1);
   });
   statTrendSvg?.addEventListener('pointercancel', () => setTrendFocus(-1));
+
+  /* the watched-ads card: the timeframe switch is its only control — the bars themselves are read-only */
+  for (const key of statAdsKeys) {
+    key.addEventListener('click', () => {
+      const range = key.dataset.adrange;
+      if (range === '24h' || range === '7d' || range === '30d') setAdsRange(range);
+    });
+  }
 
   /* one delegated listener: the list is rebuilt on every paint, so no handler outlives its card */
   inboxList?.addEventListener('click', (e) => {

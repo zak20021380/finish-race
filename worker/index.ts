@@ -294,8 +294,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname.startsWith('/api/vip/')) return vipRoutes(request, env, url);
 
   /* Player telemetry: the heartbeat that keeps ACTIVE honest, and the match report that carries a
-     bot race into the growth rings. The room proves the caller's identity itself. */
-  if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match') {
+     bot race into the growth rings. The room proves the caller's identity itself. The ad report
+     rides the same door: one verified rewarded-video completion, keyed by the client's own
+     idempotency receipt, so a retried call is folded in once. */
+  if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match'
+    || url.pathname === '/api/client/ads/watched') {
     if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);

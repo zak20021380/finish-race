@@ -12,7 +12,9 @@
  * grants TIQ or coins itself, so a reward can be granted exactly once by whoever asked for it.
  */
 import { isPremiumUser } from './premium';
-import { adoptUserStorageKey } from './storage';
+import { adoptUserStorageKey, guestId } from './storage';
+import { tgInitData } from './telegram';
+import { workerUrl } from './adminApi';
 
 /* ---------- the vendor surface (AdsGram V1) ---------- */
 
@@ -187,6 +189,75 @@ const readsAsNoFill = (result: AdsgramShowResult | null): boolean => {
   return NO_FILL_RE.test(`${result.description ?? ''} ${result.state ?? ''} ${result.reason ?? ''}`);
 };
 
+/* ---------- reporting the view: one receipt, however many retries ---------- */
+
+/** Where a completed view is reported. The room verifies the seat and dedupes on `eventId`. */
+const AD_REPORT_PATH = '/api/client/ads/watched';
+/** A retry budget for a dropped response: the view already happened, so the count must land. */
+const AD_REPORT_ATTEMPTS = 3;
+/** The beat between attempts: long enough for a tunnel, short enough to finish before the app closes. */
+const AD_REPORT_RETRY_MS = 1400;
+
+/**
+ * A fresh idempotency key for one completed view. Every retry of that view re-sends this same id,
+ * which is exactly what lets the room fold a duplicated report into the single count it already
+ * made. The fallback is not cryptographic — it only has to be unique per view on this device.
+ */
+function adEventId(): string {
+  try {
+    const crypto = globalThis.crypto;
+    if (crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { /* an older webview: fall through to the stamped key */ }
+  return `ad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** The same identity headers the telemetry door uses: signed initData, plus the device's seat. */
+function adReportHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    accept: 'application/json',
+  };
+  const init = tgInitData();
+  if (init) headers['x-telegram-init-data'] = init;
+  headers['x-guest-id'] = guestId;
+  return headers;
+}
+
+/**
+ * Tell the room that one rewarded video was completed.
+ *
+ * Fire-and-forget by design: the reward is already the caller's, so analytics may never delay the
+ * result card or throw into it. A retry carries the SAME event id, so a response lost on the way
+ * back cannot become a second count — the room answers it as a duplicate and the total stands.
+ */
+function reportAdWatched(placement: Placement, eventId: string): void {
+  const url = workerUrl(AD_REPORT_PATH);
+  if (!url) return;
+  const body = JSON.stringify({ placement, eventId, timestamp: new Date().toISOString() });
+  let headers: Record<string, string>;
+  try {
+    headers = adReportHeaders();
+  } catch {
+    return;
+  }
+  const attempt = (left: number): void => {
+    try {
+      void fetch(url, { method: 'POST', headers, body, keepalive: true })
+        .then((res) => {
+          /* A refusal is final: a 4xx means this view will never be accepted, so stop asking. */
+          if (res.ok || (res.status >= 400 && res.status < 500)) return;
+          if (left > 0) window.setTimeout(() => attempt(left - 1), AD_REPORT_RETRY_MS);
+        })
+        .catch(() => {
+          if (left > 0) window.setTimeout(() => attempt(left - 1), AD_REPORT_RETRY_MS);
+        });
+    } catch {
+      /* no fetch in this webview: the game plays on without analytics */
+    }
+  };
+  attempt(AD_REPORT_ATTEMPTS - 1);
+}
+
 /* ---------- the door ---------- */
 
 /**
@@ -258,7 +329,13 @@ export async function playRewardedAd(
     if (errored || (result !== null && result.error === true)) {
       return { rewarded: false, reason: 'error' };
     }
-    if (result !== null && result.done === true) return { rewarded: true };
+    if (result !== null && result.done === true) {
+      /* The ONE claimable outcome, and the only place a view is ever reported: the SDK settled
+         this one as complete, so it is a real watch — not an impression, a skip or a no-fill. The
+         receipt rides along so a retried report can never count it twice. */
+      reportAdWatched(placement, adEventId());
+      return { rewarded: true };
+    }
     /* a clean `done: false` is the SDK's own word for an incomplete view */
     if (result !== null && result.done === false) return { rewarded: false, reason: 'skipped' };
     /* no authoritative completion ever arrived */

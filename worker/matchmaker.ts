@@ -836,6 +836,13 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the chart's Monthly window. */
   series30d: SeriesPoint[];
+  /**
+   * Verified rewarded-ad completions. A view is counted only when the SDK settled it as complete
+   * AND the client's report carried a fresh idempotency receipt — never an impression, an open, a
+   * skip, a no-fill or a failure. The rings, the windows and the labels are the same shape the
+   * growth chart plots, so the Stats tab reads both cards the same way.
+   */
+  ads: AdMetricsReading;
   /** Stars received from paid invoices (the lifetime VIP/storefront ledger). */
   starsRevenueTotal: number;
   /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
@@ -890,6 +897,25 @@ const NO_SERIES: Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> = {
   series24h: [],
   series7d: [],
   series30d: [],
+};
+
+/** The ad ledger, unread: exact zeroes, an empty breakdown and three empty rings. */
+const NO_ADS: Pick<ServerMetrics, 'ads'> = {
+  ads: {
+    totalAllTime: 0,
+    day: { views: 0, uniqueUsers: 0 },
+    week: { views: 0, uniqueUsers: 0 },
+    month: { views: 0, uniqueUsers: 0 },
+    byPlacement: {},
+    series: {
+      daily24h: [],
+      weekly7d: [],
+      monthly30d: [],
+      labels24h: [],
+      labels7d: [],
+      labels30d: [],
+    },
+  },
 };
 
 /** The Stars economy, unread: exact zeroes, never a modelled payout. */
@@ -1270,6 +1296,314 @@ function pruneGrowth(growth: GrowthSeries, now: number): void {
     trimRing(ring.hourly, Number, oldestHour, hour, HOURLY_KEEP);
     trimRing(ring.daily, dayKeyIndex, oldestDay, day, DAILY_KEEP);
   }
+}
+
+/* ---------- the rewarded-ad ledger: verified completions, never impressions ---------- */
+
+/**
+ * The placements the client may report. A view is recorded only under one of these keys, so a
+ * client that invents a placement cannot grow an unbounded map inside this object's storage.
+ * They are the two placements `src/ads.ts` actually serves: the defeat shield and the doubled
+ * result coins. Everything else on this surface is a refusal, not a silent "rewarded".
+ */
+const AD_PLACEMENTS = ['recover_tiq', 'double_coins'] as const;
+export type AdPlacement = (typeof AD_PLACEMENTS)[number];
+
+/** The placement a report names, or null when the body carried something this room never served. */
+const adPlacementOf = (raw: unknown): AdPlacement | null =>
+  typeof raw === 'string' && (AD_PLACEMENTS as readonly string[]).includes(raw)
+    ? (raw as AdPlacement)
+    : null;
+
+/**
+ * The idempotency key one completed view carries. It is the client's own random draw, so a retry
+ * after a dropped response re-arrives with the same id and is folded in exactly once. Only the
+ * shape is checked here: the room keeps the receipt, not the id's provenance.
+ */
+const adEventIdOf = (raw: unknown): string => {
+  if (typeof raw !== 'string') return '';
+  const id = raw.trim();
+  return /^[A-Za-z0-9._:-]{8,80}$/.test(id) ? id : '';
+};
+
+/** One time bucket of verified views: the count, plus the seats that completed them. */
+interface AdBucket {
+  /** Verified completions that landed in this bucket. */
+  v: number;
+  /** The seats that completed one, as a 32-bit-word bitmap over `AdLedger.seats`. */
+  b: number[];
+}
+
+/**
+ * The room's whole ad history, bounded by construction: two rings (one day of hours, one month of
+ * days), a seat table that only holds seats seen inside the retention window, and a receipt ring
+ * that is pruned and capped on every write. It cannot grow with the playerbase, and a bucket
+ * nothing happened in is simply absent — an exact zero when read back.
+ *
+ * The seat table exists so `uniqueUsers` is a real distinct count rather than an estimate: a view
+ * sets that seat's bit in its hour and its day, and a window's uniques are the popcount of the
+ * union of its buckets' bitmaps.
+ */
+interface AdLedger {
+  /** Every verified completion the room has ever counted. */
+  totalAllTime: number;
+  /** The same total, cut by placement. */
+  byPlacement: Record<string, number>;
+  /** Seat id → bit index in every bucket's bitmap; `''` marks a slot that aged out. */
+  seats: string[];
+  /** Parallel to `seats`: when that seat last completed a view, in ms. */
+  seen: number[];
+  /** Keyed by UTC hour index, exactly like the growth rings. */
+  hourly: Record<string, AdBucket>;
+  /** Keyed by UTC calendar day (`YYYY-MM-DD`), exactly like the growth rings. */
+  daily: Record<string, AdBucket>;
+  /** `[eventId, at]`: the receipts that make a retried report idempotent. */
+  receipts: [string, number][];
+}
+
+/** One window of the ads payload: how many views, and how many distinct seats behind them. */
+export interface AdWindowReading {
+  views: number;
+  uniqueUsers: number;
+}
+
+/**
+ * The `ads` block of `/api/admin/metrics`. Every figure is a measurement: the counts come from the
+ * buckets this room stamped when a report arrived, and the series/labels are the same three
+ * windows the growth chart plots, cut on the same UTC buckets and labelled on Tehran's clock.
+ */
+export interface AdMetricsReading {
+  /** Every verified completion since the ledger was first written. */
+  totalAllTime: number;
+  /** Rolling last 24 hours, from the hourly ring. */
+  day: AdWindowReading;
+  /** Rolling last 7 days, from the daily ring. */
+  week: AdWindowReading;
+  /** Rolling last 30 days, from the daily ring. */
+  month: AdWindowReading;
+  /** Lifetime views per placement. */
+  byPlacement: Record<string, number>;
+  series: {
+    /** Views per hour, oldest first: the 24-hour window. */
+    daily24h: number[];
+    /** Views per day, oldest first: the 7-day window. */
+    weekly7d: number[];
+    /** Views per day, oldest first: the 30-day window. */
+    monthly30d: number[];
+    /** The Tehran wall clock each hourly bucket opens on, e.g. `14:30`. */
+    labels24h: string[];
+    /** The Tehran date each daily bucket opens on, e.g. `Nov 22`. */
+    labels7d: string[];
+    /** The same date labels for the 30-day window. */
+    labels30d: string[];
+  };
+}
+
+const ADS_KEY = 'ads-ledger.v1';
+/** One day of hours, plus the bucket the 24-hour window opens on. */
+const AD_HOURLY_KEEP = 25;
+/** One month of days, plus a day of slack — the window the Stats tab calls "last 30 days". */
+const AD_DAILY_KEEP = 31;
+/** A receipt older than this can no longer match a live retry, so it goes with the buckets. */
+const AD_RECEIPT_KEEP_MS = 31 * DAY_MS;
+/** The receipt ring's hard cap: a retry lands seconds after its first attempt, so this is generous. */
+const AD_RECEIPT_MAX = 512;
+/** The seat table's hard cap: the player registry's own ceiling, so a real room always fits. */
+const AD_SEAT_MAX = 2048;
+
+const zeroAds = (): AdLedger => ({
+  totalAllTime: 0,
+  byPlacement: { recover_tiq: 0, double_coins: 0 },
+  seats: [],
+  seen: [],
+  hourly: {},
+  daily: {},
+  receipts: [],
+});
+
+/** A stored bitmap word, kept as the 32-bit pattern it was written as. */
+const adWord = (raw: unknown): number =>
+  typeof raw === 'number' && Number.isFinite(raw) ? raw | 0 : 0;
+
+/** A stored bucket, clamped: one whole count and whatever words the bitmap actually holds. */
+function readAdBucket(raw: unknown): AdBucket | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const words: number[] = [];
+  if (Array.isArray(row.b)) for (const word of row.b) words.push(adWord(word));
+  return { v: whole(row.v), b: words };
+}
+
+/** A stored ledger, clamped field by field and pruned to the retained window. */
+function readAdLedger(raw: unknown, now: number): AdLedger {
+  const led = zeroAds();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return led;
+  const row = raw as Record<string, unknown>;
+  led.totalAllTime = whole(row.totalAllTime);
+  if (row.byPlacement && typeof row.byPlacement === 'object' && !Array.isArray(row.byPlacement)) {
+    for (const [key, value] of Object.entries(row.byPlacement as Record<string, unknown>)) {
+      const placement = adPlacementOf(key);
+      if (placement) led.byPlacement[placement] = whole(value);
+    }
+  }
+  if (Array.isArray(row.seats)) {
+    for (const seat of row.seats) led.seats.push(typeof seat === 'string' ? seat.slice(0, 64) : '');
+  }
+  if (Array.isArray(row.seen)) for (const at of row.seen) led.seen.push(whole(at));
+  led.seats.length = Math.min(led.seats.length, AD_SEAT_MAX);
+  while (led.seen.length < led.seats.length) led.seen.push(0);
+  led.seen.length = led.seats.length;
+  const readRing = (source: unknown, into: Record<string, AdBucket>): void => {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+    for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
+      const bucket = readAdBucket(value);
+      if (bucket) into[key.slice(0, 12)] = bucket;
+    }
+  };
+  readRing(row.hourly, led.hourly);
+  readRing(row.daily, led.daily);
+  if (Array.isArray(row.receipts)) {
+    for (const entry of row.receipts) {
+      if (!Array.isArray(entry) || entry.length !== 2) continue;
+      const id = adEventIdOf(entry[0]);
+      if (id) led.receipts.push([id, whole(entry[1])]);
+    }
+  }
+  pruneAds(led, now);
+  return led;
+}
+
+/**
+ * Trim the ledger against one clock reading: the hourly ring to its day, the daily ring to its
+ * month, the receipts to the retention window and their cap, and the seat table to the seats that
+ * can still appear in a live bucket. A freed slot is safe to hand out again precisely because its
+ * newest bit lives in a bucket this call just dropped.
+ */
+function pruneAds(led: AdLedger, now: number): void {
+  const hour = Math.floor(now / HOUR_MS);
+  const oldestHour = hour - AD_HOURLY_KEEP + 1;
+  const day = dayIndexOf(now);
+  const oldestDay = day - AD_DAILY_KEEP + 1;
+  for (const key of Object.keys(led.hourly)) {
+    const index = Number(key);
+    if (!Number.isFinite(index) || index < oldestHour || index > hour) delete led.hourly[key];
+  }
+  for (const key of Object.keys(led.daily)) {
+    const index = dayKeyIndex(key);
+    if (!Number.isFinite(index) || index < oldestDay || index > day) delete led.daily[key];
+  }
+  const cutoff = now - AD_RECEIPT_KEEP_MS;
+  led.receipts = led.receipts.filter((receipt) => receipt[1] >= cutoff);
+  if (led.receipts.length > AD_RECEIPT_MAX) {
+    led.receipts = led.receipts.slice(led.receipts.length - AD_RECEIPT_MAX);
+  }
+  for (let i = 0; i < led.seats.length; i++) {
+    if (!led.seats[i] || led.seen[i] >= cutoff) continue;
+    led.seats[i] = '';
+    led.seen[i] = 0;
+  }
+}
+
+/** Set one seat's bit, growing the bitmap to the word the slot lands in. */
+function adBitSet(words: number[], slot: number): void {
+  if (slot < 0) return;
+  const word = slot >>> 5;
+  while (words.length <= word) words.push(0);
+  words[word] = words[word] | (1 << (slot & 31));
+}
+
+/** OR every bucket's bitmap into one accumulator: the window's distinct seats. */
+function adUnion(buckets: readonly AdBucket[]): number[] {
+  let words: number[] = [];
+  for (const bucket of buckets) {
+    if (bucket.b.length > words.length) {
+      const grown = new Array<number>(bucket.b.length).fill(0);
+      for (let i = 0; i < words.length; i++) grown[i] = words[i];
+      words = grown;
+    }
+    for (let i = 0; i < bucket.b.length; i++) words[i] = words[i] | bucket.b[i];
+  }
+  return words;
+}
+
+/** How many seats a window's union bitmap holds. */
+function adPopcount(words: readonly number[]): number {
+  let total = 0;
+  for (const word of words) {
+    let v = word >>> 0;
+    v = v - ((v >>> 1) & 0x55555555);
+    v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+    v = (v + (v >>> 4)) & 0x0f0f0f0f;
+    total += Math.imul(v, 0x01010101) >>> 24;
+  }
+  return total;
+}
+
+/* ---------- the Tehran clock every ad bucket is labelled against ---------- */
+
+/**
+ * The operator's own zone. The rings are keyed in UTC — the same keys the growth chart plots — and
+ * every label this payload carries is rendered in `Asia/Tehran`, so the panel never has to guess
+ * which clock a bucket edge belongs to.
+ */
+const AD_ZONE = 'Asia/Tehran';
+/** Tehran is UTC+03:30 and no longer observes daylight saving: the fallback if `Intl` refuses. */
+const AD_ZONE_OFFSET_MS = 3.5 * HOUR_MS;
+
+let adHourFmt: Intl.DateTimeFormat | null | undefined;
+let adDayFmt: Intl.DateTimeFormat | null | undefined;
+
+/** One memoised zone formatter per label kind, or null when this runtime cannot build one. */
+function adZoneFmt(kind: 'hour' | 'day'): Intl.DateTimeFormat | null {
+  const cached = kind === 'hour' ? adHourFmt : adDayFmt;
+  if (cached !== undefined) return cached;
+  let built: Intl.DateTimeFormat | null = null;
+  try {
+    built = new Intl.DateTimeFormat('en-US', kind === 'hour'
+      ? { timeZone: AD_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+      : { timeZone: AD_ZONE, month: 'short', day: 'numeric' });
+  } catch {
+    /* a runtime without zone data still gets honest labels from the fixed offset below */
+    built = null;
+  }
+  if (kind === 'hour') adHourFmt = built;
+  else adDayFmt = built;
+  return built;
+}
+
+/** `14:30` — the Tehran wall clock an hourly bucket opens on. */
+function adHourLabel(ms: number): string {
+  const fmt = adZoneFmt('hour');
+  if (!fmt) {
+    const shifted = new Date(ms + AD_ZONE_OFFSET_MS);
+    const hour = String(shifted.getUTCHours()).padStart(2, '0');
+    const minute = String(shifted.getUTCMinutes()).padStart(2, '0');
+    return `${hour}:${minute}`;
+  }
+  let hour = '';
+  let minute = '';
+  for (const part of fmt.formatToParts(new Date(ms))) {
+    if (part.type === 'hour') hour = part.value;
+    else if (part.type === 'minute') minute = part.value;
+  }
+  return `${hour || '00'}:${minute || '00'}`;
+}
+
+/** `Nov 22` — the Tehran date a daily bucket opens on. */
+function adDayLabel(ms: number): string {
+  const fmt = adZoneFmt('day');
+  if (!fmt) {
+    const shifted = new Date(ms + AD_ZONE_OFFSET_MS);
+    const month = shifted.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    return `${month} ${shifted.getUTCDate()}`;
+  }
+  let month = '';
+  let day = '';
+  for (const part of fmt.formatToParts(new Date(ms))) {
+    if (part.type === 'month') month = part.value;
+    else if (part.type === 'day') day = part.value;
+  }
+  return `${month} ${day}`.trim();
 }
 
 /* ---------- the player directory: who the room has seen ---------- */
@@ -2863,6 +3197,10 @@ export class MatchmakerDO {
   private nations: NationLedger = emptyNationLedger(0);
   /** The bounded growth rings behind the Stats tab's trend chart. */
   private growth: GrowthSeries = zeroGrowth();
+  /** The rewarded-ad ledger: verified completions, their rings and the idempotency receipts. */
+  private ads: AdLedger = zeroAds();
+  /** The receipts as a set, so a retried report is refused without scanning the ring. */
+  private adReceipts = new Set<string>();
   /** The last UTC day the rings formatted a key for, and the key itself. */
   private memoDayIndex = -1;
   private memoDayKey = '';
@@ -2918,6 +3256,15 @@ export class MatchmakerDO {
           );
           this.gameMetrics = readGameMetrics(await storage.get<unknown>(GAME_METRICS_KEY));
           this.growth = readGrowthSeries(await storage.get<unknown>(GROWTH_KEY));
+          /* The ad ledger rides its own key and its own read: a corrupt ledger must never stop
+             the growth rings, the registry or the alarm from coming up. */
+          try {
+            this.ads = readAdLedger(await storage.get<unknown>(ADS_KEY), Date.now());
+            for (const receipt of this.ads.receipts) this.adReceipts.add(receipt[0]);
+          } catch {
+            this.ads = zeroAds();
+            this.adReceipts.clear();
+          }
           this.vipConfig = readVipPlanConfig(await storage.get<unknown>(VIP_CONFIG_KEY));
           this.vipSales = readVipSales(await storage.get<unknown>(VIP_SALES_KEY));
           this.forceJoin = readForceJoinConfig(
@@ -3032,6 +3379,16 @@ export class MatchmakerDO {
         return await this.telemetry(request, url);
       } catch (err) {
         return json({ ok: false, error: 'telemetry_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
+      }
+    }
+    /* A completed rewarded video. The player door is proven inside; the body is a placement, an
+       idempotency key and a clock, and the answer is only ever a count — the reward itself is
+       granted on the device, so this route can never mint anything. */
+    if (url.pathname === '/api/client/ads/watched') {
+      try {
+        return await this.adsWatched(request);
+      } catch (err) {
+        return json({ ok: false, error: 'ads_report_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
       }
     }
     if (url.pathname === '/api/squads/verify-code') {
@@ -4442,6 +4799,7 @@ export class MatchmakerDO {
     });
     const population = guarded('population', () => this.populationReading(now), NO_POPULATION);
     const series = guarded('series', () => this.growthWindows(now, mode), NO_SERIES);
+    const ads = guarded('ads', () => this.adsReading(now), NO_ADS);
     const stars = guarded('stars', () => this.starsReading(), NO_STARS);
     const environment = guarded('environment', () => this.envLabel(hostname), 'unknown');
     return {
@@ -4454,6 +4812,7 @@ export class MatchmakerDO {
       ...counters,
       logsSpawned: 0,
       ...series,
+      ...ads,
       ...stars,
       degraded,
     };
@@ -4533,6 +4892,7 @@ export class MatchmakerDO {
       minesPlaced: 0,
       logsSpawned: 0,
       ...NO_SERIES,
+      ...NO_ADS,
       ...NO_STARS,
       degraded: ['telemetry', reasonOf(err)],
     };
@@ -4713,6 +5073,197 @@ export class MatchmakerDO {
     this.creditActive(0, now);
     this.persist();
     return record;
+  }
+
+  /* ---------- the rewarded-ad door: one verified view, one receipt ---------- */
+
+  /**
+   * Record ONE completed rewarded video.
+   *
+   * The client only calls this after `playRewardedAd` settled `done === true` with no skip, no
+   * error and no no-fill — so an impression, a closed early video and an unfilled block never
+   * reach this door at all. What arrives here is the placement, the client's own idempotency key
+   * and nothing that could be mistaken for a reward: this route counts, it never pays.
+   *
+   * The receipt is the accuracy guarantee. A response lost in a tunnel makes the device retry with
+   * the same id; the second arrival answers `duplicate: true` and leaves every counter untouched.
+   * The write is awaited before the `ok` leaves, so a count this room acknowledged survives an
+   * eviction, a redeploy and a restart.
+   */
+  private async adsWatched(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: TELEMETRY_CORS });
+    if (request.method !== 'POST') {
+      return json({ ok: false, error: 'method_not_allowed' }, 405, TELEMETRY_CORS);
+    }
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, TELEMETRY_CORS);
+    if (this.restricted(who.playerId)) {
+      return json({ ok: false, error: 'banned' }, 403, TELEMETRY_CORS);
+    }
+
+    const body = await readBody(request);
+    const placement = adPlacementOf(body.placement);
+    if (!placement) return json({ ok: false, error: 'invalid_placement' }, 400, TELEMETRY_CORS);
+    const eventId = adEventIdOf(body.eventId);
+    if (!eventId) return json({ ok: false, error: 'invalid_event_id' }, 400, TELEMETRY_CORS);
+
+    if (this.adReceipts.has(eventId)) {
+      return json({
+        ok: true,
+        counted: false,
+        duplicate: true,
+        totalAllTime: this.ads.totalAllTime,
+      }, 200, TELEMETRY_CORS);
+    }
+
+    this.creditAdView(who.playerId, placement, eventId);
+    /* Await the write: an `ok` a restart could forget is not a count. */
+    await this.persistAds();
+    return json({
+      ok: true,
+      counted: true,
+      duplicate: false,
+      placement,
+      totalAllTime: this.ads.totalAllTime,
+    }, 200, TELEMETRY_CORS);
+  }
+
+  /**
+   * Fold one verified view into the ledger. It moves three things and only these: the lifetime
+   * total, the placement's own counter, and the hour and day buckets it landed in. The seat's bit
+   * is set in both buckets, so a window counts the person once however many videos they watched.
+   *
+   * The ledger reads the clock itself and prunes against that same reading: a bucket can only ever
+   * be opened by a view that is happening now, so the two can never disagree about "now".
+   */
+  private creditAdView(seat: string, placement: AdPlacement, eventId: string): void {
+    const led = this.ads;
+    const at = Date.now();
+    led.totalAllTime += 1;
+    led.byPlacement[placement] = whole(led.byPlacement[placement]) + 1;
+    const slot = this.adSlotOf(seat, at);
+    this.adStamp(led.hourly, String(Math.floor(at / HOUR_MS)), slot);
+    this.adStamp(led.daily, this.growthDayKey(dayIndexOf(at)), slot);
+    led.receipts.push([eventId, at]);
+    this.adReceipts.add(eventId);
+    pruneAds(led, at);
+    /* The receipt set follows the ring exactly: a receipt the prune dropped must not keep
+       shadowing a future id in memory for the lifetime of this object. */
+    if (this.adReceipts.size > led.receipts.length) {
+      this.adReceipts.clear();
+      for (const receipt of led.receipts) this.adReceipts.add(receipt[0]);
+    }
+  }
+
+  /**
+   * The bit this seat occupies, or -1 when the table is full. A seat keeps its slot for as long as
+   * it keeps watching; a slot whose last view has aged past the retention window is handed out
+   * again, which is safe because its newest bit lives in a bucket `pruneAds` has already dropped.
+   */
+  private adSlotOf(seat: string, at: number): number {
+    const led = this.ads;
+    const known = led.seats.indexOf(seat);
+    if (known !== -1) {
+      led.seen[known] = at;
+      return known;
+    }
+    const free = led.seats.indexOf('');
+    if (free !== -1) {
+      led.seats[free] = seat;
+      led.seen[free] = at;
+      return free;
+    }
+    if (led.seats.length >= AD_SEAT_MAX) return -1;
+    led.seats.push(seat);
+    led.seen.push(at);
+    return led.seats.length - 1;
+  }
+
+  /** One bucket, one more view, and this seat's bit in it. */
+  private adStamp(map: Record<string, AdBucket>, key: string, slot: number): void {
+    const bucket = map[key] ?? { v: 0, b: [] };
+    bucket.v = whole(bucket.v) + 1;
+    adBitSet(bucket.b, slot);
+    map[key] = bucket;
+  }
+
+  /** Flush the ledger under its own key; the caller awaits it so an `ok` is durable. */
+  private async persistAds(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      await storage.put(ADS_KEY, this.ads);
+    } catch {
+      /* a store that refuses the write leaves the ledger live for this object's lifetime */
+    }
+  }
+
+  /**
+   * The `ads` block of the Stats reading: the two rolling windows the KPI cards print, the
+   * lifetime total, the placement split and the three rings the trend card plots.
+   *
+   * The windows are read off the same buckets the growth chart uses — the last 24 hourly rows and
+   * the last 30 daily rows — so the ad card and the growth card can never disagree about which
+   * hour or day a view belongs to. `uniqueUsers` is the popcount of the union of those buckets'
+   * seat bitmaps, never a sum of per-bucket uniques.
+   */
+  private adsReading(now: number): Pick<ServerMetrics, 'ads'> {
+    const hour = Math.floor(now / HOUR_MS);
+    const day = dayIndexOf(now);
+
+    const hourly: AdBucket[] = [];
+    const daily24h: number[] = [];
+    const labels24h: string[] = [];
+    for (let back = 23; back >= 0; back--) {
+      const index = hour - back;
+      const bucket = this.ads.hourly[String(index)] ?? { v: 0, b: [] };
+      hourly.push(bucket);
+      daily24h.push(bucket.v);
+      labels24h.push(adHourLabel(index * HOUR_MS));
+    }
+
+    const daily: AdBucket[] = [];
+    const monthly30d: number[] = [];
+    const labels30d: string[] = [];
+    for (let back = 29; back >= 0; back--) {
+      const index = day - back;
+      const bucket = this.ads.daily[dayKeyOf(index)] ?? { v: 0, b: [] };
+      daily.push(bucket);
+      monthly30d.push(bucket.v);
+      labels30d.push(adDayLabel(index * DAY_MS));
+    }
+
+    const weekly = daily.slice(-7);
+    const windowOf = (rows: readonly AdBucket[]): AdWindowReading => ({
+      views: rows.reduce((sum, bucket) => sum + bucket.v, 0),
+      uniqueUsers: adPopcount(adUnion(rows)),
+    });
+
+    const byPlacement: Record<string, number> = {};
+    for (const placement of AD_PLACEMENTS) {
+      byPlacement[placement] = whole(this.ads.byPlacement[placement]);
+    }
+    for (const [key, value] of Object.entries(this.ads.byPlacement)) {
+      if (!(key in byPlacement)) byPlacement[key] = whole(value);
+    }
+
+    return {
+      ads: {
+        totalAllTime: this.ads.totalAllTime,
+        day: windowOf(hourly),
+        week: windowOf(weekly),
+        month: windowOf(daily),
+        byPlacement,
+        series: {
+          daily24h,
+          weekly7d: weekly.map((bucket) => bucket.v),
+          monthly30d,
+          labels24h,
+          labels7d: labels30d.slice(-7),
+          labels30d,
+        },
+      },
+    };
   }
 
   /** Every Command Center route: the public feed first, then the registry decides who is in. */

@@ -3361,6 +3361,60 @@
               </div>
             </section>
 
+            <!-- B3. watched ads: the room's own count of rewarded videos that were actually
+                 completed. An impression, an early close, a no-fill and a failure never reach this
+                 card — the client reports one completion, with an idempotency receipt, and the
+                 room folds each receipt in exactly once. -->
+            <section class="adm-block" data-accent="gold" aria-labelledby="stat-ads-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-ads-title">Watched Ads</h3>
+                <span class="adm-block-s adm-ads-total" id="stat-ads-total">TOTAL: <bdi dir="ltr">—</bdi></span>
+              </div>
+              <div class="adm-grid">
+                <div class="adm-card" aria-label="Watched ads today, last 24 hours">
+                  <span class="adm-card-l">Today</span>
+                  <b class="adm-card-v" id="stat-ads-day">—</b>
+                  <span class="adm-card-s" id="stat-ads-day-u"><bdi dir="ltr">—</bdi> viewers</span>
+                </div>
+                <div class="adm-card" aria-label="Watched ads this week, last 7 days">
+                  <span class="adm-card-l">This Week</span>
+                  <b class="adm-card-v" id="stat-ads-week">—</b>
+                  <span class="adm-card-s" id="stat-ads-week-u"><bdi dir="ltr">—</bdi> viewers</span>
+                </div>
+                <div class="adm-card" aria-label="Watched ads this month, last 30 days">
+                  <span class="adm-card-l">This Month</span>
+                  <b class="adm-card-v" id="stat-ads-month">—</b>
+                  <span class="adm-card-s" id="stat-ads-month-u"><bdi dir="ltr">—</bdi> viewers</span>
+                </div>
+              </div>
+
+              <div class="adm-slab adm-ads">
+                <div class="adm-ads-h">
+                  <span class="adm-ads-copy">
+                    <span class="adm-ads-t">Ad Views · Tehran Time</span>
+                    <span class="adm-ads-s" id="stat-ads-avg">AVG <bdi dir="ltr">—</bdi> / USER</span>
+                  </span>
+                  <div class="adm-ads-keys" role="group" aria-label="Ad trend timeframe">
+                    <button class="adm-ads-key" type="button" data-adrange="24h" aria-pressed="true">
+                      <b>24H</b><span>Daily</span>
+                    </button>
+                    <button class="adm-ads-key" type="button" data-adrange="7d" aria-pressed="false">
+                      <b>7D</b><span>Weekly</span>
+                    </button>
+                    <button class="adm-ads-key" type="button" data-adrange="30d" aria-pressed="false">
+                      <b>30D</b><span>Monthly</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="adm-ads-plot">
+                  <svg class="adm-ads-svg" id="stat-ads-svg" viewBox="0 0 320 132" role="img"
+                    aria-label="Awaiting the Worker's first ad reading."></svg>
+                  <p class="adm-ads-empty" id="stat-ads-empty" hidden>Awaiting the Worker's first ad reading.</p>
+                </div>
+                <div class="adm-ads-split" id="stat-ads-split" role="list" aria-label="Watched ads by placement"></div>
+              </div>
+            </section>
+
             <!-- C. engagement: today's returners, next-day return and the hooked share, one tile each -->
             <section class="adm-block" data-accent="violet" aria-labelledby="stat-retain-title">
               <div class="adm-block-h">
