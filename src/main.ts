@@ -7062,3 +7062,30 @@ if (ralliedChannel) {
    Read on the first frame so the sheet slides over a laid-out shell, and again on focus/visibility
    by the module itself, which is what catches a warm `start_param`. */
 requestAnimationFrame(() => { void acceptFriendInvite(); });
+
+/* ---------- the rank door: `?startapp=ranks` opens the Top Minds ladder ----------
+   The overtake push lands a player in this app with one promise: the board that just changed under
+   them. A notification that opens on Home makes the reader go hunting for the ladder they were
+   told about, so this door is a plain tab move — no sheet, no prompt, nothing to confirm — and it
+   opens on the first frame, over a shell that is already laid out.
+
+   `rankDoorConsumed` is what keeps a warm launch honest: `start_param` outlives the navigation
+   that read it, so without it every focus would replay the payload and yank a player off the board
+   they had since moved to. With it the payload is spent exactly once. The focus/visibility re-read
+   covers the client that fills `start_param` in after the first frame (a deferred SDK, a slow
+   CDN); the same value is never applied twice either way.
+
+   The locale gate outranks it — a player who has never chosen a language meets the picker first,
+   and a first-boot player has no rank to look at. Every payload but `ranks` leaves this launch
+   exactly as it was. */
+let rankDoorConsumed = false;
+const openRankDoor = (): void => {
+  if (rankDoorConsumed || !hasChosenLanguage() || startParam() !== 'ranks') return;
+  rankDoorConsumed = true;
+  router.go('ranks');
+};
+requestAnimationFrame(openRankDoor);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') openRankDoor();
+});
+window.addEventListener('focus', openRankDoor);

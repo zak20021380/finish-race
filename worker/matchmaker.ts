@@ -7037,7 +7037,15 @@ export class MatchmakerDO {
     p.country = normalizeCountry(identity.flag) || p.country;
     p.avatar = storedAvatar(identity.player.avatar) || p.avatar;
     if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
-    p.tiq = Math.max(0, Math.floor(identity.tiq));
+    /* The socket's own TIQ reading is the one climb no board settles: a player who won on another
+       device arrives here already higher, and the rivals it moves down are exactly as real as a
+       room win's. The ladder is read before the assignment, and only when the reading actually
+       climbs for a seat that owns a chat — a deployment with no bot has nobody to tell. */
+    const beforeTiq = p.tiq;
+    const nextTiq = Math.max(0, Math.floor(identity.tiq));
+    const climbs = nextTiq > beforeTiq && chatIdOf(p.id) !== '' && botTokenOf(this.env) !== '';
+    const ladderBefore = climbs ? this.ladderOrder() : null;
+    p.tiq = nextTiq;
     /* A first sighting is a signup and an active player at once, and `freshPlayer` has already
        stamped its clock; every later one just moves the seat forward through the rings. */
     if (isNew) {
@@ -7062,6 +7070,9 @@ export class MatchmakerDO {
       this.players.set(p.id, p);
     }
     this.persist();
+    /* The same push a settled board sends, under the same guardrails: `rankOvertakes` decides for
+       itself whether the rival this climb passed is offline, cooled down, or unreachable. */
+    if (ladderBefore) this.rankOvertakes(ladderBefore, { [p.id]: nextTiq - beforeTiq });
   }
 
   /**
