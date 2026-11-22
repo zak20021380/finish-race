@@ -44939,6 +44939,46 @@ html[data-lang="ar"] :is(.sqv-title, .sqv-sub, .sqv-toggle, .sqv-hint, .sqv-err)
 .frm-add-btn:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 .frm-add-btn:disabled { opacity: .65; cursor: default; }
 .frm-add-plus { font-size: 14px; font-weight: 900; line-height: 1; }
+/* ---- the Telegram picker: the sheet's second, strictly separate add door ----
+   A full-width obsidian-cyan pill under the manual bar. It never looks like `+ Add`, because the
+   two doors answer different taps: this one only ever opens Telegram's own contact list. No
+   backdrop-filter, no keyframes — one hover lift and one press. */
+.frm-tg-pick {
+  flex: none;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  appearance: none;
+  border-radius: 13px;
+  background: rgba(56, 189, 248, .10);
+  border: 1px solid rgba(56, 189, 248, .28);
+  color: #7dd3fc;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
+}
+.frm-tg-pick:hover:not(:active) {
+  background: rgba(56, 189, 248, .16);
+  border-color: rgba(56, 189, 248, .42);
+  transform: translateY(-1px);
+}
+.frm-tg-pick:active { transform: translateY(1px); background: rgba(56, 189, 248, .22); }
+.frm-tg-pick:focus-visible { outline: 2px solid rgba(56, 189, 248, .55); outline-offset: 2px; }
+.frm-tg-pick-ic { flex: none; width: 16px; height: 16px; }
+.frm-tg-pick-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: .01em;
+}
 .frm-status {
   flex: none;
   margin: 0;
@@ -45162,8 +45202,8 @@ html:lang(fa) .frm-sheet,
 html:lang(ar) .frm-sheet,
 html:lang(fa) .fr-rivals,
 html:lang(ar) .fr-rivals { direction: rtl; }
-html:lang(fa) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag),
-html:lang(ar) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag) {
+html:lang(fa) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag, .frm-tg-pick-t),
+html:lang(ar) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag, .frm-tg-pick-t) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }

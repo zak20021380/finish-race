@@ -17,9 +17,10 @@
 import { adoptUserStorageKey, readJson, writeJson } from './storage';
 import { createModal, type ModalHandle } from './modal';
 import { onLang, t } from './settings';
-import { impact, openTelegramShare, roomShareUrl, tgInitData } from './telegram';
+import { impact, openTelegramShare, roomShareUrl, startParam, tgInitData, tgUser } from './telegram';
 import { workerUrl } from './adminApi';
-import { createRoomCode, openInviteRoom } from './gamemodes';
+import { copyText, createRoomCode, openInviteRoom } from './gamemodes';
+import { botAppLink } from '../shared/config';
 import { showToast } from './toast';
 
 /* ---------- the store ---------- */
@@ -407,17 +408,28 @@ function guestId(): string {
 }
 
 /**
+ * The player door every authenticated call in this module rides: a signed Telegram launch sends
+ * its initData, and a browser tab sends the same device seat its own socket uses. One helper, so
+ * the lookup, the invite link and the linked-friends read can never disagree about who is calling.
+ */
+function playerHeaders(json: boolean): Record<string, string> {
+  const headers: Record<string, string> = { accept: 'application/json' };
+  if (json) headers['content-type'] = 'application/json';
+  const init = tgInitData();
+  if (init) headers['x-telegram-init-data'] = init;
+  const guest = guestId();
+  if (guest) headers['x-guest-id'] = guest;
+  return headers;
+}
+
+/**
  * `GET /api/user/lookup` — the one authenticated read behind manual adding. A signed Telegram
  * launch sends its initData; a browser tab sends the same device seat its socket uses.
  */
 async function lookupPlayer(query: string): Promise<Lookup> {
   const url = workerUrl(`/api/user/lookup?q=${encodeURIComponent(query)}`);
   if (!url) return { ok: false, reason: 'failed' };
-  const headers: Record<string, string> = { accept: 'application/json' };
-  const init = tgInitData();
-  if (init) headers['x-telegram-init-data'] = init;
-  const guest = guestId();
-  if (guest) headers['x-guest-id'] = guest;
+  const headers = playerHeaders(false);
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), 8000);
   try {
@@ -448,7 +460,12 @@ let adding = false;
 async function addByQuery(raw: string): Promise<void> {
   if (adding) return;
   const needle = raw.trim().replace(/^@+/, '').trim().slice(0, 64);
-  if (!needle) return;
+  /* `+ Add` is the MANUAL door and nothing else: an empty bar focuses the field instead of
+     opening any kind of picker, so the two ways into this list never trade places. */
+  if (!needle) {
+    $<HTMLInputElement>('fr-input')?.focus();
+    return;
+  }
   const lower = needle.toLowerCase();
   const duplicate = roster().find((rec) => !rec.dismissed && (
     rec.id.toLowerCase() === lower
@@ -460,7 +477,7 @@ async function addByQuery(raw: string): Promise<void> {
     return;
   }
 
-  const button = $<HTMLButtonElement>('fr-add');
+  const button = $<HTMLButtonElement>('fr-add-btn');
   adding = true;
   if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
   const found = await lookupPlayer(needle);
@@ -547,6 +564,272 @@ function challengeFriend(id: string): void {
   showToast(t('frChallengeSent'), 'success', 2400);
 }
 
+/* ---------- the Telegram doors ----------
+ *
+ * Two doors, kept strictly apart from the manual bar:
+ *
+ *   - `#fr-tg-pick-btn` opens Telegram's OWN contact list (`switchInlineQuery` filtered to
+ *     `users`) and never touches the lookup route. Its payload is the same personal invite the
+ *     inline card carries, so a picked friend reaches the app through the pairing door below.
+ *   - `friend_<id>` on the launch payload is the pairing door: the accepter's own signed seat and
+ *     the inviter are written together on the server, the inviter is pinned into this roster, and
+ *     the room is told so it can hand the same pairing back the other way.
+ *
+ * Nothing here polls: the picker is one tap, the pairing is one POST, and the inviter's half is
+ * read once per sheet open (coalesced), never on a timer.
+ */
+
+/** One player as the two friend-link routes hand them over. */
+interface FriendCard {
+  id: string;
+  name: string;
+  username: string;
+  avatar: string;
+}
+
+/** `friend_<seat id>`: the whole grammar of a friend invite, and nothing else matches it. */
+const FRIEND_PAYLOAD = /^friend_([A-Za-z0-9_-]{1,64})$/;
+
+/** Fold one answered card, or null when it carries no usable seat. */
+function readCard(raw: unknown): FriendCard | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = cleanId(r.id);
+  if (!id) return null;
+  return {
+    id,
+    name: cleanText(r.name, 40) || 'Player',
+    username: cleanText(r.username, 40).replace(/^@+/, ''),
+    avatar: cleanText(r.avatar, 400),
+  };
+}
+
+/**
+ * The numeric Telegram id this launch is signed under, or ''.
+ *
+ * The unsafe SDK copy is read first; a client that only hands over the raw `initData` query string
+ * is parsed the same way `storage.ts` parses it, so a friend invite names the seat the room knows
+ * (`tg-<id>`) even on a client that does not expose `initDataUnsafe`.
+ */
+function telegramIdOf(): string {
+  const direct = tgUser()?.id as unknown;
+  if (typeof direct === 'number' && Number.isFinite(direct) && direct > 0) return String(Math.trunc(direct));
+  if (typeof direct === 'string' && /^[0-9]{1,20}$/.test(direct)) return direct;
+  try {
+    const raw = tgInitData();
+    const user = raw ? new URLSearchParams(raw).get('user') : '';
+    const id = user ? (JSON.parse(user) as { id?: unknown }).id : undefined;
+    if (typeof id === 'number' && Number.isFinite(id) && id > 0) return String(Math.trunc(id));
+    if (typeof id === 'string' && /^[0-9]{1,20}$/.test(id)) return id;
+  } catch { /* no SDK, or a malformed initData */ }
+  return '';
+}
+
+/**
+ * The seat this launch belongs to: the room's own spelling `tg-<id>` inside Telegram, and the
+ * device's persistent guest seat in a plain browser tab. It is what a friend invite names.
+ */
+function selfSeatId(): string {
+  const tg = telegramIdOf();
+  return tg ? `tg-${tg}` : guestId();
+}
+
+/** `friend_<myUserId>` — the payload the picker sends and the inline card carries. */
+export function friendInvitePayload(): string {
+  const id = selfSeatId();
+  return id ? `friend_${id}` : '';
+}
+
+/** `https://t.me/<bot>/play?startapp=friend_<myUserId>` — the personal friend-invite link. */
+export function friendInviteUrl(): string {
+  const payload = friendInvitePayload();
+  return payload ? botAppLink(payload) : '';
+}
+
+/** `POST /api/user/friend-link` — file the pairing and answer with the inviter's own card. */
+async function postFriendLink(inviterId: string): Promise<FriendCard | null> {
+  const url = workerUrl('/api/user/friend-link');
+  if (!url) return null;
+  const ac = new AbortController();
+  const timer = window.setTimeout(() => ac.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: playerHeaders(true),
+      body: JSON.stringify({ inviterId }),
+      signal: ac.signal,
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ok?: unknown; friend?: unknown } | null;
+    return data?.ok === true ? readCard(data.friend) : null;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/** `GET /api/user/friends-linked` — everyone who tapped this player's invite, once. */
+async function readLinkedFriends(): Promise<FriendCard[]> {
+  const url = workerUrl('/api/user/friends-linked');
+  if (!url) return [];
+  const ac = new AbortController();
+  const timer = window.setTimeout(() => ac.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: playerHeaders(false), signal: ac.signal, cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok?: unknown; friends?: unknown } | null;
+    if (!Array.isArray(data?.friends)) return [];
+    const out: FriendCard[] = [];
+    for (const raw of data.friends) {
+      const card = readCard(raw);
+      if (card) out.push(card);
+    }
+    return out;
+  } catch {
+    return [];
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/**
+ * Pin one answered player into the roster — the same row `+ Add` would have written, so a friend
+ * who arrives by link keeps the very W/L history that player already has here.
+ */
+function pinFriend(card: FriendCard): boolean {
+  const id = cleanId(card.id);
+  if (!id) return false;
+  let rec = roster().find((entry) => entry.id === id);
+  const changed = !rec || !rec.pinned || rec.dismissed;
+  if (rec) {
+    rec.pinned = true;
+    rec.dismissed = false;
+    if (card.name) rec.name = card.name;
+    if (card.username) rec.username = card.username;
+    if (card.avatar) rec.avatar = card.avatar;
+  } else {
+    roster().push({
+      id,
+      name: card.name || 'Player',
+      username: card.username,
+      avatar: card.avatar,
+      wins: 0,
+      losses: 0,
+      matches: 0,
+      pinned: true,
+      dismissed: false,
+      lastPlayedAt: Date.now(),
+    });
+  }
+  if (changed) persist();
+  return changed;
+}
+
+let linking = false;
+let linkedAt = 0;
+/** A sheet re-opened twice a second must not ask the room twice for the same rows. */
+const LINK_SYNC_MS = 20_000;
+
+/**
+ * The inviter's half of the pairing: every friend who tapped `friend_<myUserId>` is pinned into
+ * the roster. The room clears delivered rows, so this answers once per acceptance.
+ */
+export function syncLinkedFriends(): void {
+  if (linking) return;
+  const now = Date.now();
+  if (linkedAt && now - linkedAt < LINK_SYNC_MS) return;
+  linkedAt = now;
+  linking = true;
+  void readLinkedFriends().then((cards) => {
+    linking = false;
+    let changed = false;
+    for (const card of cards) if (pinFriend(card)) changed = true;
+    if (!changed) return;
+    paintEntry();
+    if (modal?.isOpen()) paintList();
+  }).catch(() => { linking = false; });
+}
+
+/** Payloads already answered this launch: a warm `start_param` never files the same pairing twice. */
+const handledInvites = new Set<string>();
+let accepting = false;
+
+/**
+ * The accepter's half: `friend_<inviterId>` on the launch payload files the pairing, pins the
+ * inviter here and opens the sheet with one line saying it landed. A payload that is not a friend
+ * invite, or a pairing the room refused, leaves the launch exactly as it was — this door is
+ * additive and never a gate.
+ */
+export async function acceptFriendInvite(): Promise<void> {
+  if (accepting) return;
+  let payload = '';
+  try {
+    payload = startParam().trim();
+  } catch {
+    return;
+  }
+  const match = FRIEND_PAYLOAD.exec(payload);
+  if (!match) return;
+  const inviterId = match[1];
+  /* A client that HAS the SDK but no signed payload (a CDN-blocked boot, a stale script) is left
+     alone rather than filing the pairing under this device's guest seat: the same payload is
+     re-read on the next focus, when the SDK has had its chance to sign the launch. */
+  if (window.Telegram?.WebApp && !tgInitData()) return;
+  if (handledInvites.has(inviterId)) return;
+  handledInvites.add(inviterId);
+  accepting = true;
+  const friend = await postFriendLink(inviterId);
+  accepting = false;
+  if (!friend) {
+    /* A pairing the room could not be asked (offline, timeout) is not remembered as answered: the
+       next focus or sheet open may still land it. Nothing is said to the player meanwhile — the
+       launch is theirs, and a failed pairing is not a failed app. */
+    handledInvites.delete(inviterId);
+    return;
+  }
+  pinFriend(friend);
+  impact('light');
+  paintEntry();
+  openFriendsRivals();
+  setStatus(t('frLinked'), 'ok');
+}
+
+/** The client-side surface `switchInlineQuery` lives on; the SDK types here do not carry it. */
+type InlineSwitcher = { switchInlineQuery?(query: string, chatTypes?: string[]): void };
+
+/**
+ * `#fr-tg-pick-btn`: hand the payload to Telegram's own contact picker, filtered to people.
+ *
+ * A client that answers `switchInlineQuery` opens the native "Select a Friend" list; one that does
+ * not (or throws) gets the native share sheet instead, with the same link copied to the clipboard
+ * so the invite still leaves the app by a door the player recognises.
+ */
+function pickFriendOnTelegram(): void {
+  const payload = friendInvitePayload();
+  const url = friendInviteUrl();
+  if (!payload || !url) {
+    setStatus(t('frTgFailed'), 'warn');
+    return;
+  }
+  impact('light');
+  const app = window.Telegram?.WebApp as unknown as InlineSwitcher | undefined;
+  const switcher = app?.switchInlineQuery;
+  if (typeof switcher === 'function') {
+    try {
+      switcher.call(app, payload, ['users']);
+      setStatus(t('frTgHint'), 'ok');
+      return;
+    } catch { /* the client declined: the share sheet below is the documented fallback */ }
+  }
+  void copyText(url);
+  openTelegramShare(
+    `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(t('frTgText'))}`,
+  );
+  setStatus(t('frTgHint'), 'ok');
+}
+
 /* ---------- wiring ---------- */
 
 /** Open the sheet over whatever is on screen. */
@@ -561,6 +844,10 @@ export function openFriendsRivals(): void {
   paintCopy();
   paintEntry();
   paintList();
+  /* The inviter's half is read whenever the sheet comes up: a friend who tapped the link while
+     this player was away is simply there, already pinned. Coalesced, so a rail-tap rhythm asks
+     the room once. */
+  syncLinkedFriends();
   modal?.open($('friends-rivals-btn'));
 }
 
@@ -614,6 +901,21 @@ export function initFriends(): void {
     void addByQuery(input?.value ?? '');
   });
 
+  /* The Telegram picker rides its own key, below the manual bar: one listener, never part of the
+     row delegation, so `+ Add` and this can never be mistaken for one another. */
+  $('fr-tg-pick-btn')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    pickFriendOnTelegram();
+  });
+
+  /* A warm launch can hand a NEW `start_param` over without reloading the app, so the friend door
+     is re-read on the moments a webview gives focus back. Already-answered payloads return on the
+     first line of `acceptFriendInvite`, so this costs one string test per focus. */
+  window.addEventListener('focus', () => { void acceptFriendInvite(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void acceptFriendInvite();
+  });
+
   onLang(() => {
     paintCopy();
     paintEntry();
@@ -623,4 +925,8 @@ export function initFriends(): void {
   paintCopy();
   paintEntry();
   paintList();
+  /* The boot-time read waits for a SIGNED launch: the SDK script is deferred, so a boot that runs
+     before it lands would ask the room as a guest and cache that empty answer for the cooldown.
+     The sheet's own open always asks, which covers every other case. */
+  if (tgInitData()) syncLinkedFriends();
 }

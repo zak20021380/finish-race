@@ -260,6 +260,53 @@ function readRelicChallenge(raw: unknown): RelicChallenge | null {
   };
 }
 
+/* ---------- Friends & Rivals: the invite-link pairing ---------- */
+
+/**
+ * One friend pairing, filed when somebody opened `friend_<inviterId>`.
+ *
+ * The row is directional on purpose: the accepter already holds the inviter's card in the answer
+ * of the POST that writes this, while the inviter has to come back and collect it — so a single
+ * row carries both halves and `delivered` says which of them still owes a read.
+ */
+interface FriendLink {
+  /** The pair, `<inviterId>|<accepterId>`: one row per friendship, however often it is tapped. */
+  id: string;
+  inviterId: string;
+  accepterId: string;
+  createdAt: number;
+  /** The inviter has been handed this row and its own client pinned the accepter. */
+  delivered: boolean;
+}
+
+/**
+ * A friend pairing is a small, self-expiring fact, so the store is bounded twice over: nothing
+ * older than this is worth keeping, and no seat may hold more than `FRIEND_LINK_MAX_PER_USER`
+ * pending/recent pairings — its oldest are trimmed first, so the ledger can never grow without
+ * bound on a busy room.
+ */
+const FRIEND_LINKS_KEY = 'friend-links.v1';
+const FRIEND_LINK_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+const FRIEND_LINK_MAX_PER_USER = 100;
+
+/** One stored pairing, folded field by field; a corrupt row is dropped rather than trusted. */
+function readFriendLink(raw: unknown): FriendLink | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<FriendLink>;
+  const inviterId = readSeatId(r.inviterId);
+  const accepterId = readSeatId(r.accepterId);
+  const createdAt = Number(r.createdAt);
+  if (!inviterId || !accepterId || inviterId === accepterId) return null;
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return null;
+  return {
+    id: `${inviterId}|${accepterId}`,
+    inviterId,
+    accepterId,
+    createdAt: Math.floor(createdAt),
+    delivered: r.delivered === true,
+  };
+}
+
 interface Waiter {
   ws: WebSocket;
   id: string;
@@ -3232,6 +3279,13 @@ export class MatchmakerDO {
   private wideRadius = WIDE_RADIUS;
   /** Every player the room has met, by seat id — the Users tab's directory. */
   private players = new Map<string, PlayerRecord>();
+  /**
+   * Friends & Rivals: the pairings filed by an accepted `friend_<inviterId>` invite link, keyed by
+   * the pair so one friendship can only ever hold one row. Bounded and swept on every write.
+   */
+  private friendLinks = new Map<string, FriendLink>();
+  /** A pairing write is already scheduled: many touches, one flush. */
+  private friendLinksDirty = false;
   /** The moderation lock: a banned seat never reaches matchmaking again. */
   private banned = new Set<string>();
   /** A registry write is already scheduled: many touches, one flush. */
@@ -3365,6 +3419,18 @@ export class MatchmakerDO {
             }
             this.vaultLoaded = true;
           } catch { /* Fail closed: never overwrite balances after a failed vault read. */ }
+          /* Friends & Rivals pairings ride their own key and their own try: a corrupt ledger must
+             never stop the vault, the roles or the alarm. */
+          try {
+            const links = await storage.get<unknown[]>(FRIEND_LINKS_KEY);
+            if (Array.isArray(links)) {
+              for (const raw of links) {
+                const row = readFriendLink(raw);
+                if (row) this.friendLinks.set(row.id, row);
+              }
+              this.trimFriendLinks(Date.now());
+            }
+          } catch { /* an unreadable ledger starts empty: the next acceptance rebuilds it */ }
           this.seedRoles();
           /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
              are forgotten and written back before the first directory or leaderboard read. */
@@ -3440,6 +3506,15 @@ export class MatchmakerDO {
        that proved a seat of its own. Read-only, no directory page, no cursor. */
     if (url.pathname === '/api/user/lookup') {
       return this.lookupPlayer(request, url);
+    }
+    /* Friends & Rivals: the invite-link pairing. The POST files the pair when a `friend_<id>`
+       link is opened; the GET hands the inviter everyone who tapped their link and clears them.
+       Both prove the caller's own seat inside, exactly like the lookup above. */
+    if (url.pathname === '/api/user/friend-link') {
+      return this.friendLink(request);
+    }
+    if (url.pathname === '/api/user/friends-linked') {
+      return this.friendsLinked(request);
     }
     /* Match and heartbeat telemetry from a player's own device. It is the only way a bot race the
        server never saw can reach the growth rings; the player door is proven inside. */
@@ -5797,6 +5872,153 @@ export class MatchmakerDO {
       username: row.username,
       avatar: row.avatar,
     });
+  }
+
+  /* ---------- Friends & Rivals: the invite-link pairing ---------- */
+
+  /**
+   * One seat id as a `friend_` payload may spell it: the room's own `tg-<id>` / `guest-<hex>`
+   * seats, or the bare numeric Telegram id a hand-made link carries. `''` when it is neither.
+   */
+  private resolveSeat(needle: string): PlayerRecord | undefined {
+    const clean = readSeatId(needle);
+    if (!clean) return undefined;
+    const direct = this.players.get(clean);
+    if (direct) return direct;
+    if (TELEGRAM_ID.test(clean)) {
+      return this.players.get(`tg-${clean}`)
+        ?? [...this.players.values()].find((p) => p.tgId === clean);
+    }
+    return undefined;
+  }
+
+  /** The card both friend-link routes answer with: the same shape `/api/user/lookup` returns. */
+  private friendCardOf(row: PlayerRecord): {
+    id: string; name: string; username: string; avatar: string;
+  } {
+    return { id: row.id, name: row.name, username: row.username, avatar: row.avatar };
+  }
+
+  /**
+   * Bound the ledger: a pairing older than the window is history, and no seat may hold more than
+   * `FRIEND_LINK_MAX_PER_USER` rows — oldest first, so the newest friendships always survive.
+   */
+  private trimFriendLinks(now: number): void {
+    for (const [id, link] of [...this.friendLinks]) {
+      if (now - link.createdAt > FRIEND_LINK_KEEP_MS) this.friendLinks.delete(id);
+    }
+    if (!this.friendLinks.size) return;
+    /* A per-seat ledger: one pass groups the rows by each seat on either side of them. */
+    const bySeat = new Map<string, FriendLink[]>();
+    for (const link of this.friendLinks.values()) {
+      for (const seat of [link.inviterId, link.accepterId]) {
+        const rows = bySeat.get(seat);
+        if (rows) rows.push(link);
+        else bySeat.set(seat, [link]);
+      }
+    }
+    for (const rows of bySeat.values()) {
+      if (rows.length <= FRIEND_LINK_MAX_PER_USER) continue;
+      rows.sort((a, b) => a.createdAt - b.createdAt);
+      for (const link of rows.slice(0, rows.length - FRIEND_LINK_MAX_PER_USER)) {
+        this.friendLinks.delete(link.id);
+      }
+    }
+  }
+
+  /** One coalesced flush: many acceptances, one write. */
+  private persistFriendLinks(): void {
+    if (this.friendLinksDirty || !this.state?.storage) return;
+    this.friendLinksDirty = true;
+    void Promise.resolve().then(() => {
+      this.friendLinksDirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        void storage.put(FRIEND_LINKS_KEY, [...this.friendLinks.values()]).catch(() => undefined);
+      } catch {
+        /* a store that refuses the write: the ledger stays live for this object's lifetime */
+      }
+    });
+  }
+
+  /**
+   * `POST /api/user/friend-link` — body `{ inviterId }`.
+   *
+   * The authenticated caller is the accepter: the server, never the client, decides who that is,
+   * so a link can only ever file a pairing for the seat that actually opened it. Both sides must
+   * exist in the registry and neither may be banned; a seat cannot friend itself. The answer is
+   * the inviter's card, which is what lets the accepter pin them without a second read.
+   */
+  private async friendLink(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401);
+    const accepterId = readSeatId(who.playerId);
+    if (!accepterId || this.restricted(accepterId)) {
+      return json({ ok: false, error: 'banned' }, 403);
+    }
+    const body = await readBody(request);
+    const asked = typeof body.inviterId === 'string' ? body.inviterId : '';
+    const inviter = this.resolveSeat(asked);
+    if (!inviter || inviter.banned) return json({ ok: false, error: 'not_found' }, 404);
+    if (inviter.id === accepterId) return json({ ok: false, error: 'self_invite' }, 400);
+
+    const accepter = this.players.get(accepterId);
+    if (!accepter || accepter.banned) return json({ ok: false, error: 'not_found' }, 404);
+
+    const now = Date.now();
+    const id = `${inviter.id}|${accepterId}`;
+    const existing = this.friendLinks.get(id);
+    if (existing) {
+      /* Already friends: the inviter keeps whatever read state the row had, so a re-opened link
+         never re-delivers a pairing the inviter has already pinned. */
+      existing.createdAt = now;
+    } else {
+      this.friendLinks.set(id, { id, inviterId: inviter.id, accepterId, createdAt: now, delivered: false });
+    }
+    this.trimFriendLinks(now);
+    this.persistFriendLinks();
+    return json({ ok: true, friend: this.friendCardOf(inviter) });
+  }
+
+  /**
+   * `GET /api/user/friends-linked` — the inviter's half.
+   *
+   * Only the caller's own pending rows, and each row is marked delivered as it is handed over, so
+   * a second open of the sheet answers nothing new. A row whose accepter has since left the
+   * registry is dropped rather than delivered as a nameless card.
+   */
+  private async friendsLinked(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401);
+    const selfId = readSeatId(who.playerId);
+    if (!selfId || this.restricted(selfId)) return json({ ok: false, error: 'banned' }, 403);
+
+    const now = Date.now();
+    const friends: Array<{ id: string; name: string; username: string; avatar: string }> = [];
+    let touched = false;
+    for (const link of [...this.friendLinks.values()]) {
+      if (link.inviterId !== selfId || link.delivered) continue;
+      const row = this.players.get(link.accepterId);
+      if (!row || row.banned) {
+        this.friendLinks.delete(link.id);
+        touched = true;
+        continue;
+      }
+      link.delivered = true;
+      touched = true;
+      /* Newest friendship first, and the readout is the roster's own card shape. */
+      friends.push(this.friendCardOf(row));
+    }
+    if (touched) {
+      this.trimFriendLinks(now);
+      this.persistFriendLinks();
+    }
+    return json({ ok: true, friends });
   }
 
   /**

@@ -81,7 +81,7 @@ import {
   setRewardSeats, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
-import { initFriends, openFriendsRivals, recordFriendsMatch, type FriendOpponent } from './friends';
+import { acceptFriendInvite, initFriends, openFriendsRivals, recordFriendsMatch, type FriendOpponent } from './friends';
 import { initSeize, resetSeizeContext } from './seize';
 import type { Lobby, LobbyRace, RematchState } from './lobby';
 import {
@@ -7054,3 +7054,11 @@ if (ralliedChannel) {
     } catch { /* a shell without CustomEvent: the hub is still one tap away on Home */ }
   });
 }
+
+/* ---------- the friend door: `?startapp=friend_<id>` pairs two rosters ----------
+   Additive, never a gate: `friends.ts` matches the payload itself, files the pairing with the room,
+   pins the inviter into the sheet and opens it on one confirmation line. A payload that is not a
+   friend invite — every other door's — answers nothing and leaves this launch exactly as it was.
+   Read on the first frame so the sheet slides over a laid-out shell, and again on focus/visibility
+   by the module itself, which is what catches a warm `start_param`. */
+requestAnimationFrame(() => { void acceptFriendInvite(); });

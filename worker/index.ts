@@ -61,7 +61,7 @@ import {
 import { telegramSetup, telegramWebhook } from './bot';
 import { vipAdminRoutes, vipRoutes } from './vip';
 import { json, reasonOf } from './http';
-import { referralAppLink } from '../shared/config';
+import { botAppLink, referralAppLink } from '../shared/config';
 import type { Env } from './env';
 
 export { MatchmakerDO, BadgeMintDO, ReferralLedgerDO };
@@ -99,6 +99,92 @@ function withForceJoinCors(response: Response): Response {
 /** The one answer that may honestly be read as an outage: a call to the room that never returned. */
 const unreachable = (err: unknown, extra: Record<string, unknown> = {}): Response =>
   json({ error: 'matchmaker_unreachable', hint: reasonOf(err), code: 'do_unreachable', ...extra }, 503);
+
+/* ---------- Friends & Rivals: the bot's inline friend card ---------- */
+
+/**
+ * `friend_<inviterId>` is the whole grammar of a friend invite, and the only inline query this
+ * file answers. Everything else — the bot's own referral card, its menus, its callbacks — is
+ * handed to `worker/bot.ts` untouched, so the friend card can never displace that surface.
+ */
+const FRIEND_INLINE = /^friend_([A-Za-z0-9_-]{1,64})$/;
+
+/** The slice of an `inline_query` update this door reads. */
+interface InlineQueryUpdate {
+  id?: string;
+  query?: string;
+  from?: { id?: number | string };
+}
+
+/**
+ * `POST /telegram/webhook` — the half that answers `switchInlineQuery`.
+ *
+ * The Mini App's picker calls `switchInlineQuery('friend_<myUserId>', ['users'])`, so Telegram
+ * opens its own contact list with this bot's results for that payload already showing. The bot
+ * answers with ONE article: a clean card whose button opens the sender's personal friend invite,
+ * which is what files the pairing when the chosen friend taps it.
+ *
+ * A blank or bare `friend_` query falls back to the sender's own seat, so the card still works
+ * when a player opens the picker without a payload. Any other query answers `null`, and the
+ * caller forwards the untouched request to `telegramWebhook`.
+ *
+ * The answer is awaited: Telegram is holding the inline sheet open on this delivery.
+ */
+async function answerFriendInlineQuery(request: Request, env: Env): Promise<Response | null> {
+  let update: { inline_query?: InlineQueryUpdate } | null = null;
+  try {
+    /* The original request still has to reach `telegramWebhook`, so the peek reads a clone. */
+    update = (await request.clone().json()) as { inline_query?: InlineQueryUpdate };
+  } catch {
+    return null;
+  }
+  const query = update?.inline_query;
+  if (!query || typeof query.id !== 'string' || !query.id) return null;
+  const text = typeof query.query === 'string' ? query.query.trim() : '';
+  const lower = text.toLowerCase();
+  const match = FRIEND_INLINE.exec(text);
+  let inviterId = match ? match[1] : '';
+  if (!inviterId) {
+    /* Only a friend-shaped query (blank, or the bare prefix) falls back to the sender's seat. */
+    if (lower !== '' && lower !== 'friend' && lower !== 'friend_') return null;
+    const from = query.from?.id;
+    const numeric = typeof from === 'number' ? String(Math.trunc(from)) : typeof from === 'string' ? from : '';
+    if (!/^[0-9]{1,20}$/.test(numeric)) return null;
+    inviterId = `tg-${numeric}`;
+  }
+
+  const token = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
+  /* No token means no Bot API: the usual webhook path owns the answer (and its own refusal). */
+  if (!token) return null;
+
+  const link = botAppLink(`friend_${inviterId}`);
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/answerInlineQuery`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        inline_query_id: query.id,
+        cache_time: 5,
+        is_personal: true,
+        results: [{
+          type: 'article',
+          id: `friend-${inviterId}`,
+          title: 'TactiX · Add Friend & Play 1v1',
+          description: 'Tap to connect on TactiX and track head-to-head stats',
+          input_message_content: {
+            message_text: 'Join me on TactiX to connect as rivals and play 1v1!',
+          },
+          reply_markup: {
+            inline_keyboard: [[{ text: 'Accept & Open TactiX', url: link }]],
+          },
+        }],
+      }),
+    });
+  } catch {
+    /* An inline answer nobody waited for is not worth a retry storm: the sheet simply closes. */
+  }
+  return json({ ok: true });
+}
 
 /**
  * The server telemetry door. Unlike `/admin/*`, this route has no development fallback.
@@ -356,6 +442,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* Friends & Rivals: the invite-link pairing. `POST` files the pair when somebody opens a
+     `friend_<inviterId>` link; `GET` hands the inviter everyone who accepted and clears them.
+     The room proves the caller's own seat inside both, exactly like the lookup above. */
+  if (url.pathname === '/api/user/friend-link' || url.pathname === '/api/user/friends-linked') {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   /* The one public announcement feed: what a client reads to raise an urgent popup. */
   if (url.pathname === '/api/client/announcements/active') {
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
@@ -396,6 +491,11 @@ async function route(request: Request, env: Env): Promise<Response> {
      operator's, and answers 403 until it carries admin credentials. */
   if (url.pathname === '/telegram/webhook') {
     if (request.method !== 'POST') return json({ error: 'method_not_allowed', hint: 'Telegram posts updates' }, 405);
+    /* Friends & Rivals' inline card is answered here, before the bot's own dispatcher: the update
+       is peeked through a clone, so a query this door does not own reaches `telegramWebhook`
+       exactly as Telegram sent it. */
+    const friendCard = await answerFriendInlineQuery(request, env);
+    if (friendCard) return friendCard;
     return telegramWebhook(request, env);
   }
   if (url.pathname === '/telegram/setup-webhook') return telegramSetup(request, env);

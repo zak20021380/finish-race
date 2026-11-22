@@ -3067,10 +3067,23 @@
                    inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
                    data-i18n-ph="frAddPlaceholder" data-i18n-aria="frAddPlaceholder"
                    placeholder="@username or Player ID" aria-label="@username or Player ID" />
-            <button class="frm-add-btn" id="fr-add" type="submit">
+            <button class="frm-add-btn" id="fr-add-btn" type="submit">
               <span class="frm-add-plus" aria-hidden="true">+</span><span data-i18n="frAdd">Add</span>
             </button>
           </form>
+          <!-- The Telegram picker is a SECOND door, never a replacement for `+ Add`: the key above
+               only ever resolves the typed handle/id, this one only ever opens Telegram's own
+               contact list. One paper-plane mark, struck inline, no emoji anywhere. -->
+          <button class="frm-tg-pick" id="fr-tg-pick-btn" type="button"
+                  data-i18n-aria="frTgPickAria" aria-label="Pick Friend from Telegram">
+            <svg class="frm-tg-pick-ic" viewBox="0 0 24 24" width="16" height="16"
+                 fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M21 3.6 10.4 14.2" />
+              <path d="M21 3.6 14.2 20.4l-3.8-6.2L4.2 10.4Z" />
+            </svg>
+            <span class="frm-tg-pick-t" data-i18n="frTgPick">Pick Friend from Telegram</span>
+          </button>
           <p class="frm-status" id="fr-status" role="status" aria-live="polite" hidden></p>
 
           <div class="frm-scroll" data-scroll>
