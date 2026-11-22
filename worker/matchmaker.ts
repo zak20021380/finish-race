@@ -586,7 +586,7 @@ const LOBBY_COUNTDOWN_MS = 3_200;
  * How long a non-host seat may sit in a lobby with its Mini App closed before the chair is handed
  * back. A player who swiped Telegram away is not blocking four friends for ten minutes.
  */
-const LOBBY_AWAY_RELEASE_MS = 20_000;
+const LOBBY_AWAY_RELEASE_MS = 90_000;
 /**
  * A live friend-room seat whose socket drops is held this long before the machine finishes it.
  * Long enough for a phone that slept, a carrier hand-off or a brief tunnel; short enough that the
@@ -6143,9 +6143,13 @@ export class MatchmakerDO {
     }
   }
 
-  /** Which chair rode the winning side: a team winner names a team, every other race a seat. */
+  /** Which chair rode the winning side: the winner is always a seat, including in a team race. */
   private onWinningSide(live: LiveRoom, seat: number, winner: number): boolean {
-    return live.mode === 'team' ? live.teams[seat] === winner : seat === winner;
+    if (live.mode === 'team') {
+      if (winner < 0 || winner >= live.teams.length) return false;
+      return live.teams[seat] === live.teams[winner];
+    }
+    return seat === winner;
   }
 
   /**
@@ -6165,12 +6169,12 @@ export class MatchmakerDO {
     return after - before;
   }
 
-  /** Pay a finished room's victory: +15 TIQ to every connected chair on the winning side. */
+  /** Pay a finished room's victory: +15 TIQ to every occupied chair on the winning side. */
   private awardRoomWin(live: LiveRoom, winner: number): Record<string, number> {
     const deltas: Record<string, number> = {};
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
-      if (!m || !m.connected) continue;
+      if (!m) continue;
       if (!this.onWinningSide(live, i, winner)) continue;
       const paid = this.adjustTiq(m.id, WIN_TIQ);
       if (paid !== 0) deltas[m.id] = paid;
@@ -7992,8 +7996,7 @@ export class MatchmakerDO {
 
   /** Why the gate is shut, in the words `START_FAILED` carries. */
   private lobbyGateReason(live: LiveRoom): string {
-    const seated = live.members.filter((m) => !!m).length;
-    if (seated < 2) return 'waiting_for_players';
+    if (live.members.some((m) => !m)) return 'waiting_players';
     if (live.members.some((m) => !!m && !m.connected)) return 'player_offline';
     return 'player_away';
   }
@@ -8120,8 +8123,8 @@ export class MatchmakerDO {
 
   /**
    * A lobby seat walked out on purpose (`LEAVE`, or a legacy `CANCEL`): let the socket go, free
-   * the chair, then settle the room. A host's exit disbands the code for everybody; a guest's
-   * only gives their own seat back.
+   * the chair, then settle the room. The crown moves to a remaining guest; only the last player
+   * out of a code lobby spends the invite and closes the room.
    */
   private leaveLobby(ref: RoomRef, disband = false): void {
     const live = ref.live;
@@ -8137,8 +8140,12 @@ export class MatchmakerDO {
       /* the room's own model has to let the chair go too, or the next arrival finds it taken */
       live.room = unseat(live.room, ref.seat);
     }
-    /* only a code lobby has a code to spend: an auto-pair room has no invite to revoke */
-    if (disband && live.code && ref.seat === live.hostSeat) { this.disbandLobby(live); return; }
+    /* A host with remaining guests hands them the room through `lobbyDepart`; nobody left disbands. */
+    if (disband && live.code && ref.seat === live.hostSeat
+      && !live.members.some((m) => m !== null)) {
+      this.disbandLobby(live);
+      return;
+    }
     this.lobbyDepart(live, ref.seat);
   }
 
@@ -9287,13 +9294,10 @@ export class MatchmakerDO {
     const humans: RoomMember[] = [];
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
-      /* a chair held for an absent socket was the machine's race, not that player's */
-      if (m && m.connected) {
-        /* The win only counts when a real person was still on the other side. A room that
-           started with two invitations but finished against a backfill is practice. */
-        this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i));
-        humans.push(m);
-      }
+      if (!m) continue;
+      /* Every occupied seat settles, including a teammate whose socket blipped on the final tick. */
+      this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i));
+      if (m.connected) humans.push(m);
     }
     /* Every human still at the capsule gets the lane: a party's reactions reach all of them. */
     if (humans.length > 1) {

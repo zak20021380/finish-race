@@ -101,7 +101,7 @@ export const isHost = (l: Lobby): boolean => l.you >= 0 && l.you === l.hostSeat;
 /** How many players a room needs before it may start: the smallest race the rules can play. */
 export const MIN_START = 2;
 
-export const canStart = (l: Lobby): boolean => occupied(l) >= MIN_START;
+export const canStart = (l: Lobby): boolean => occupied(l) >= l.capacity;
 
 /** The plain-language line under the roster: what is missing, or that the room is ready. */
 export function startHint(l: Lobby): string {
@@ -349,7 +349,7 @@ export interface LobbyOptions {
   /**
    * The host asked the room to start and it could not: fewer than two people are at their
    * sockets, or the launch frame never left. The reason is the worker's (`player_offline`,
-   * `waiting_for_players`) or `socket` when the send itself failed. The screen turns it into a
+   * `waiting_players`) or `socket` when the send itself failed. The screen turns it into a
    * toast and re-arms the countdown.
    */
   onStartFailed?: (reason: string) => void;
@@ -1513,8 +1513,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       clearPendingMove();
       outbox.length = 0;
       teardown();
-      /* `LEAVE`, not `CANCEL`: a host's exit disbands the code on the server so a stale link is
-         refused cleanly, while a guest's only gives their own seat back. */
+      /* `LEAVE`, not `CANCEL`: the server frees this seat and migrates the crown to any guest
+         still in the room, or spends the code when the last player walks out. */
       if (lobby.online) send({ type: 'LEAVE' });
       try { sock?.close(); } catch { /* gone */ }
       sock = null;

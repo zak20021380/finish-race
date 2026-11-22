@@ -648,6 +648,7 @@ const errorLine = (reason: string): string => t(LOBBY_ERROR_KEY[reason] ?? 'errJ
 
 /** What the host reads when Start could not launch: who is missing, not a dead button. */
 const START_FAILURE_KEY: Record<string, string> = {
+  waiting_players: 'hintInviteMore',
   waiting_for_players: 'hintInviteMore',
   player_offline: 'errStartOffline',
   busy: 'errStartOffline',
@@ -2295,8 +2296,18 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     const s = l.seats[seat];
     if (!s) {
       impact('light');
-      /* an online room has no machine to add: the open well is simply the invite door */
-      if (l.online) { invite(); return; }
+      if (l.online) {
+        const me = l.you >= 0 ? l.seats[l.you] : null;
+        const team = plannedTeam(l, seat);
+        const teamSize = l.seats.reduce((n, seated) => n + (seated?.team === team ? 1 : 0), 0);
+        /* An open well on the other team moves this player there; their own team's wells invite. */
+        if (l.format === '2v2' && me && me.team !== team && teamSize < 2) {
+          handle?.setTeam(l.you, team);
+          return;
+        }
+        invite();
+        return;
+      }
       pickSeat = seat;
       showPick(true);
       return;
