@@ -15,6 +15,9 @@ import {
   type Mark, type Perspective, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
+/* SIMULATED LIVE CROWD: purely cosmetic in-match atmosphere. It reads the board to decide which
+   side is ahead, but never touches the rules, the wallet or the wire. */
+import { closeCrowd, initMatchCrowd, onCrowdEvent } from './crowd';
 import { createChat, type PawnTint } from './chat';
 import { createBanter } from './banter';
 import type { PostChatLine } from './data/postchat';
@@ -2941,6 +2944,8 @@ function settleWarMatch(won: boolean, bot = false): void {
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
+  /* The simulated audience belongs to the board, not to the result capsule. */
+  closeCrowd();
   /* THE SETTLEMENT TAKES THE SOUND. The bed ducks and parks here — before the fanfare below is
      asked for — so the victory or the defeat voice is heard alone. It stays parked for as long as
      this capsule is up: `restart()`, `quitToMenu()` and the result's own keys are the only doors
@@ -3425,6 +3430,26 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
 }
 
 /**
+ * The crowd's two-camp read of the board: camp 0 is seat 0's side, camp 1 is everyone else. The
+ * nearer pawn to FINISH (row 0) leads; a level board has no leader and the simulation abstains.
+ * This is decoration, never an input: nothing here writes `state` or is read by the rules.
+ */
+function crowdLeader(): 0 | 1 | null {
+  if (state.teams.length < 2) return null;
+  const home = new Set(sideOf(state, 0));
+  let a = Infinity;
+  let b = Infinity;
+  for (const ball of state.balls) {
+    if (ball.isCheckmated) continue;
+    if (home.has(ball.team)) {
+      if (ball.pos.r < a) a = ball.pos.r;
+    } else if (ball.pos.r < b) b = ball.pos.r;
+  }
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) return null;
+  return a < b ? 0 : 1;
+}
+
+/**
  * The single door every action comes through — taps, the bot, the blitz timeout and (with
  * `remote`) the rival's moves off the wire — so a networked race animates exactly like a local one.
  */
@@ -3578,6 +3603,18 @@ function play(a: Action, remote = false): boolean {
   }
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
+  /* SIMULATED CROWD (cosmetic). Runs after the board has committed, so the leader it reads is the
+     board the players are looking at. Purely atmospheric: one pill, one rail, one reaction toast;
+     it never changes a rule, a coin, a TIQ figure or a match result. */
+  if (committed) {
+    const leader = crowdLeader();
+    if (duel || blast || combo) onCrowdEvent('mine', leader);
+    else if (a.kind === 'wall') onCrowdEvent('wall', leader);
+    else if (a.kind === 'move' && landed !== null && landed.r <= 2 && (from === null || from.r > 2)) {
+      onCrowdEvent('near_finish', leader);
+    }
+    onCrowdEvent('turn', leader);
+  }
   /* ULTIMATE FALLBACK, player side: if the debut seat has somehow boxed itself in (no route to
      FINISH, eliminated, or no legal step on its own turn), the rival resigns immediately rather
      than the board grinding to a halt with no winner. */
@@ -3834,6 +3871,9 @@ function restart() {
      uses the seed the matchmaker handed both sides. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
   state = newGame(sizes, seatTeamMap());
+  /* A fresh audience for a fresh board (14–44 simulated fans, organically split). Cosmetic only:
+     `showOverlay()` and `quitToMenu()` tear it down when this race leaves the screen. */
+  initMatchCrowd({ teamMode: sizes.length === 2 && sizes[0] === 2 && sizes[1] === 2 });
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
   renderer.setPerspective(currentPerspective());
@@ -4848,6 +4888,8 @@ function quitToMenu() {
      player who already left the board, and a later race is never a cold boot. */
   firstRunBoot = false;
   firstRunSprint = false;
+  /* The simulated audience does not follow the player home. */
+  closeCrowd();
   /* An abandoned board is not a settled match: disarm the assist without spending the flag, so the
      next `startGame()` re-arms it for a debut that has still never been won. */
   deactivateOnboarding();

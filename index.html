@@ -2314,6 +2314,19 @@
             </button>
             <!-- the round is the only thing the top bar says; whose turn is on the cards below -->
             <p class="g-round" id="round-label">Round 1</p>
+            <!-- the live crowd: a simulated audience, client-side and cosmetic. Tapping opens the
+                 fan list. Every figure inside is a Latin-digit <bdi dir="ltr"> run. -->
+            <button class="crowd-pill" id="crowd-pill" type="button" aria-haspopup="dialog"
+              aria-controls="crowd-sheet" aria-expanded="false" aria-label="Live crowd and predictions" hidden>
+              <i class="crowd-dot" aria-hidden="true"></i>
+              <svg class="crowd-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M2.6 12S6.2 6.4 12 6.4 21.4 12 21.4 12 17.8 17.6 12 17.6 2.6 12 2.6 12Z"
+                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7" />
+              </svg>
+              <bdi class="crowd-count" id="crowd-count" dir="ltr">0</bdi>
+              <span class="crowd-faces" id="crowd-faces" aria-hidden="true"></span>
+            </button>
             <!-- the finish switch: sun (pearl board) / moon (midnight board), persisted locally -->
             <button class="theme-toggle" type="button" id="theme-toggle" role="switch"
               aria-checked="false" aria-label="Light board theme" title="Switch board theme">
@@ -2324,6 +2337,32 @@
           </div>
 
           <main class="card">
+            <!-- CROWD PREDICTION & SUPPORT BAR. One ultra-slim rail above the board: the crimson
+                 share on the start edge, the cyan share on the end edge, and the stakes each camp
+                 has simulated. Tapping it opens the same fan sheet the top pill opens. -->
+            <button class="crowd-bar" id="crowd-bar" type="button" aria-haspopup="dialog"
+              aria-controls="crowd-sheet" aria-expanded="false" aria-label="Crowd predictions — open live crowd" hidden>
+              <span class="crowd-bar-side is-red">
+                <b class="crowd-bar-name" id="crowd-bar-red-name">Red</b>
+                <bdi class="crowd-bar-pct" id="crowd-pct-red" dir="ltr">50%</bdi>
+                <span class="crowd-bar-stake">
+                  <span class="coin" data-coin aria-hidden="true"></span>
+                  <bdi id="crowd-stake-red" dir="ltr">0</bdi>
+                </span>
+              </span>
+              <span class="crowd-bar-track" aria-hidden="true">
+                <i class="crowd-bar-fill is-red" id="crowd-fill-red"></i>
+                <i class="crowd-bar-fill is-blue" id="crowd-fill-blue"></i>
+              </span>
+              <span class="crowd-bar-side is-blue">
+                <span class="crowd-bar-stake">
+                  <span class="coin" data-coin aria-hidden="true"></span>
+                  <bdi id="crowd-stake-blue" dir="ltr">0</bdi>
+                </span>
+                <bdi class="crowd-bar-pct" id="crowd-pct-blue" dir="ltr">50%</bdi>
+                <b class="crowd-bar-name" id="crowd-bar-blue-name">Blue</b>
+              </span>
+            </button>
             <div class="board-slot">
               <div class="board-wrap" id="board-wrap">
                 <!-- the slab the board is set into: a clay mount with the duel's red|blue rim.
@@ -2681,6 +2720,28 @@
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
                  costs the card no height and cannot be swallowed by the veil -->
             <p class="ad-toast" id="ad-toast" role="status" aria-live="polite" dir="auto"></p>
+          </div>
+
+          <!-- ONE FLOATING FAN REACTION. Pointer-transparent, parked above the HUD dock, at most
+               one at a time (a second reaction retargets this same pill). -->
+          <p class="crowd-toast" id="crowd-toast" role="status" aria-live="polite"></p>
+
+          <!-- LIVE CROWD & PREDICTIONS. The tappable sheet behind the top pill and the support bar. -->
+          <div class="crowd-sheet" id="crowd-sheet" role="dialog" aria-modal="true"
+            aria-labelledby="crowd-sheet-title" hidden>
+            <div class="crowd-sheet-scrim" id="crowd-sheet-scrim" aria-hidden="true"></div>
+            <div class="crowd-sheet-card" role="document">
+              <header class="crowd-sheet-head">
+                <div class="crowd-sheet-copy">
+                  <h3 class="crowd-sheet-title" id="crowd-sheet-title">Live crowd &amp; predictions</h3>
+                  <p class="crowd-sheet-sub" id="crowd-sheet-sub"></p>
+                </div>
+                <button class="crowd-sheet-close" id="crowd-sheet-close" type="button" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </header>
+              <ul class="crowd-list" id="crowd-list" aria-label="Spectators"></ul>
+            </div>
           </div>
         </section>
       </div>

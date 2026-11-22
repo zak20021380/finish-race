@@ -45358,3 +45358,372 @@ html.reduced-motion .frm-scrim { transition: none; }
    is the one place that may switch the affordance off, and it must win over `vsclash.css` whatever
    order the two bundles land in. */
 .vsc-skip { display: none !important; }
+
+/* ============================================================================
+   SIMULATED LIVE CROWD — in-match atmosphere, 100% client-side and cosmetic.
+
+   Four small pieces, all scoped to the race screen:
+     · a spectator pill in the top bar (emerald dot + eye + count + mini faces),
+     · an ultra-slim prediction rail above the board (crimson vs cyan, 300ms width),
+     · one pointer-transparent reaction pill above the HUD dock,
+     · a light modal sheet listing the simulated audience.
+
+   Hard rules: no backdrop-filter, no looping keyframes, no emoji, Latin digits only (the markup
+   wraps every figure in a <bdi dir="ltr">), and logical insets so an RTL shell never mirrors a
+   score. The rail's two fills always sum to 100%, so the tug-of-war never paints a seam.
+   ============================================================================ */
+
+/* ---- 1. the top-bar spectator pill ---- */
+.crowd-pill {
+  appearance: none;
+  flex: none;
+  margin: 0;
+  padding: 0 7px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--tint-glass);
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: inset 0 1px 0 var(--hair-lit), 0 3px 8px -6px var(--shadow);
+}
+.crowd-pill:active { transform: translateY(1px); }
+.crowd-pill:focus-visible,
+.crowd-bar:focus-visible {
+  outline: 2px solid var(--brand-2);
+  outline-offset: 2px;
+}
+.crowd-pill[hidden],
+.crowd-bar[hidden],
+.crowd-sheet[hidden] { display: none !important; }
+.crowd-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .14);
+}
+.crowd-eye {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--ink-soft);
+}
+.crowd-count {
+  line-height: 1;
+  font-size: 10.5px;
+  color: var(--ink);
+}
+.crowd-faces {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding-inline-start: 2px;
+}
+.crowd-face,
+.crowd-av {
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--av-bg, #1E293B);
+  color: var(--av-ink, #E2E8F0);
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--av-ring, transparent);
+}
+.crowd-face {
+  width: 16px;
+  height: 16px;
+  font-size: 8px;
+  margin-inline-start: -5px;
+  box-shadow:
+    0 0 0 1.5px var(--tint-glass),
+    0 0 0 2.5px var(--av-ring, transparent);
+}
+.crowd-face:first-child { margin-inline-start: 0; }
+
+/* ---- 2. the prediction & support rail above the board ----
+   Lives inside the card, so its max width is exactly the board's widest box. */
+.crowd-bar {
+  appearance: none;
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+  margin: 4px auto 6px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: start;
+}
+.crowd-bar-side {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.crowd-bar-side.is-blue { justify-content: flex-end; }
+.crowd-bar-name {
+  font-weight: 800;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crowd-bar-side.is-red .crowd-bar-name { color: #e26a80; }
+.crowd-bar-side.is-blue .crowd-bar-name { color: #4aa8d8; }
+.crowd-bar-pct {
+  font-weight: 800;
+  color: var(--ink);
+}
+.crowd-bar-stake {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  color: var(--ink-soft);
+}
+.crowd-bar-stake .coin { width: 9px; height: 9px; }
+.crowd-bar-track {
+  flex: 1 1 44px;
+  min-width: 36px;
+  height: 4px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--hair);
+  box-shadow: inset 0 1px 1px var(--shadow-soft);
+}
+.crowd-bar-fill {
+  display: block;
+  height: 100%;
+  width: 50%;
+  transition: width 300ms ease;
+}
+.crowd-bar-fill.is-red { background: #fb7185; }
+.crowd-bar-fill.is-blue { background: #38bdf8; }
+
+/* ---- 3. the one floating reaction pill ----
+   Above the HUD dock, pointer-transparent, and it never owns a tap. */
+.crowd-toast {
+  position: absolute;
+  z-index: 18;
+  bottom: 86px;
+  inset-inline: 0;
+  width: fit-content;
+  max-width: min(92%, 360px);
+  margin: 0 auto;
+  padding: 6px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--tint-glass);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 10px 24px -16px var(--shadow);
+  pointer-events: none;             /* never blocks a board tap or a player card */
+  opacity: 0;
+  transform: translateY(4px);
+  visibility: hidden;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms;
+}
+.crowd-toast.is-on {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+}
+.crowd-toast-name { font-weight: 800; unicode-bidi: isolate; }
+.crowd-toast-txt { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- 4. the live crowd & predictions sheet ---- */
+.crowd-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: end center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.crowd-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 5, 9, .62);
+}
+.crowd-sheet-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 380px);
+  max-height: min(72%, 520px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hair);
+  border-radius: 22px;
+  background: var(--tint-glass);
+  color: var(--ink);
+  box-shadow: 0 22px 44px -22px var(--shadow);
+  overflow: hidden;
+}
+.crowd-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--hair);
+}
+.crowd-sheet-copy { flex: 1 1 auto; min-width: 0; text-align: start; }
+.crowd-sheet-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: var(--ink);
+}
+.crowd-sheet-sub {
+  margin: 3px 0 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.crowd-sheet-close {
+  appearance: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hair);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.crowd-sheet-close span { font-size: 16px; line-height: 1; margin-top: -2px; }
+.crowd-sheet-close:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.crowd-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 4px 6px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.crowd-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  text-align: start;
+}
+.crowd-row + .crowd-row { border-top: 1px solid var(--hair); border-radius: 0; }
+.crowd-av { width: 24px; height: 24px; font-size: 11px; }
+.crowd-nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.crowd-side {
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.crowd-side.is-red { color: #e26a80; background: rgba(251, 113, 133, .12); }
+.crowd-side.is-blue { color: #4aa8d8; background: rgba(56, 189, 248, .12); }
+.crowd-stake {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.crowd-stake .coin { width: 10px; height: 10px; }
+
+/* the sheet listens for the active UI direction, not the document's */
+html[data-lang="fa"] :is(.crowd-toast, .crowd-sheet-title, .crowd-sheet-sub, .crowd-nm, .crowd-side),
+html[data-lang="ar"] :is(.crowd-toast, .crowd-sheet-title, .crowd-sheet-sub, .crowd-nm, .crowd-side) {
+  letter-spacing: 0;
+}
+html[data-lang="fa"] .crowd-sheet-title,
+html[data-lang="ar"] .crowd-sheet-title,
+html[data-lang="fa"] .crowd-sheet-sub,
+html[data-lang="ar"] .crowd-sheet-sub { direction: rtl; }
+
+/* ---- the lesson owns the board: no audience chrome over its choreography ---- */
+body.tutorial-live :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-sheet),
+body.tut-match :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-sheet) {
+  display: none !important;
+}
+
+/* ---- light board: the same objects on porcelain ---- */
+html[data-theme="light"] .crowd-pill,
+html[data-theme="light"] .crowd-toast,
+html[data-theme="light"] .crowd-sheet-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    0 8px 18px -12px rgba(88, 73, 48, .5);
+}
+html[data-theme="light"] .crowd-sheet-scrim { background: rgba(28, 36, 48, .42); }
+html[data-theme="light"] .crowd-bar-side.is-red .crowd-bar-name,
+html[data-theme="light"] .crowd-side.is-red { color: #b01438; }
+html[data-theme="light"] .crowd-bar-side.is-blue .crowd-bar-name,
+html[data-theme="light"] .crowd-side.is-blue { color: #1f45b5; }
+
+/* ---- reduced motion: state changes stay instant ---- */
+html.reduced-motion .crowd-bar-fill,
+html.reduced-motion .crowd-toast,
+html.reduced-motion .crowd-pill { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .crowd-bar-fill,
+  .crowd-toast,
+  .crowd-pill { transition: none; }
+}
+
+/* ---- short phones: the rail stays one line, the dock keeps its room ---- */
+@media (max-height: 700px) {
+  .crowd-toast { bottom: 78px; }
+}
