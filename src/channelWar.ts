@@ -16,7 +16,7 @@
  * channel nothing: a machine that cannot lose is not an opponent, and a channel should never be
  * lifted by farming one.
  */
-import { onLang, t } from './settings';
+import { lang, onLang, t, type LangCode } from './settings';
 import { impact, notify, openLink, openTelegramShare } from './telegram';
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
@@ -52,6 +52,52 @@ export interface ChannelWarHub {
 
 const LADDER_MAX = 20;
 const PICK_MAX = 6;
+
+/* The bounty header's own micro-copy. It lives here, beside the surface that reads it, so the
+   Championship card can carry a stronger voice without reaching into the shared dictionary. */
+type CwCopyKey = 'eyebrow' | 'unit' | 'sub' | 'slotTitle' | 'slotSub' | 'inviteRival';
+const CW_COPY: Record<LangCode, Record<CwCopyKey, string>> = {
+  en: {
+    eyebrow: '1ST PLACE BOUNTY',
+    unit: 'STARS',
+    sub: 'Winner-takes-all · Top 10 squad contributors split the prize',
+    slotTitle: 'Open Contender Slot',
+    slotSub: 'Challenge a rival channel to enter the war',
+    inviteRival: 'Invite Rival',
+  },
+  fa: {
+    eyebrow: 'جایزه قهرمانی',
+    unit: 'استارز',
+    sub: 'برنده همه را می‌برد · ده مشارکت‌کننده برتر جایزه تیم را تقسیم می‌کنند',
+    slotTitle: 'جایگاه رقیب آزاد',
+    slotSub: 'برای ورود به نبرد، کانال رقیبی را به چالش بکش',
+    inviteRival: 'دعوت رقیب',
+  },
+  ru: {
+    eyebrow: 'ПРИЗОВОЙ ФОНД',
+    unit: 'ЗВЁЗД',
+    sub: 'Победитель забирает всё · Топ-10 участников отряда делят приз',
+    slotTitle: 'Свободный слот претендента',
+    slotSub: 'Брось вызов каналу-сопернику, чтобы вступить в войну',
+    inviteRival: 'Позвать соперника',
+  },
+  ar: {
+    eyebrow: 'جائزة المركز الأول',
+    unit: 'نجوم',
+    sub: 'الفائز يأخذ كل شيء · أفضل عشرة مساهمين في الفريق يتقاسمون الجائزة',
+    slotTitle: 'مقعد منافس مفتوح',
+    slotSub: 'تحدَّ قناة منافسة للدخول إلى الحرب',
+    inviteRival: 'دعوة منافس',
+  },
+  es: {
+    eyebrow: 'RECOMPENSA DEL 1.er PUESTO',
+    unit: 'ESTRELLAS',
+    sub: 'El ganador se lo lleva todo · Los 10 mejores del escuadrón reparten el premio',
+    slotTitle: 'Puesto de aspirante libre',
+    slotSub: 'Reta a un canal rival para entrar en la guerra',
+    inviteRival: 'Invitar rival',
+  },
+};
 const AVATAR_HUES = [198, 210, 232, 262, 288, 318, 24, 42, 158, 174];
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -206,7 +252,6 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const detailView = document.getElementById('cw-detail');
   const clock = document.getElementById('cw-countdown');
   const prizeRule = document.getElementById('cw-prize-rule');
-  const prizeSub = document.getElementById('cw-prize-sub');
   const boardList = document.getElementById('cw-board-list');
   const liveRegion = document.getElementById('cw-live-region');
 
@@ -307,10 +352,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   /**
    * One ladder row: rank + crest, a spacious two-line identity, Channel TIQ, and the door in.
    *
-   * The identity owns the whole middle column so a bilingual title can breathe on line one; the
-   * handle, the member count and the team pill share the quieter line beneath it. In an RTL locale
-   * the flex row lays these out right-to-left, while `<bdi dir="auto">` keeps every dynamic name,
-   * handle and title bidi-contained — no mixed-script word gets chewed up mid-clip.
+   * The identity owns the whole middle column so a bilingual title can breathe on one clean line;
+   * the member count and the one tag that matters share the quieter line beneath it. In an RTL
+   * locale the flex row lays these out right-to-left, while `<bdi dir="auto">` keeps every dynamic
+   * name and title bidi-contained — no mixed-script word gets chewed up mid-clip.
    *
    * `inspectable` makes the whole row a pointer target and gives it a real chevron key, so a
    * keyboard reaches the same place a thumb does. `selectable` turns the row into a choice in the
@@ -322,9 +367,9 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   ): HTMLLIElement {
     const tiq = warPointsOf(s);
     const li = document.createElement('li');
-    li.className = `cw-row${opts.you ? ' is-you' : ''}${picked === s.id ? ' is-selected' : ''}`;
+    li.className = `cw-row${opts.you ? ' is-you' : ''}${tiq > 0 && s.rank === 1 ? ' is-lead' : ''}${picked === s.id ? ' is-selected' : ''}`;
 
-    const rank = document.createElement('span');
+    const rank = document.createElement('bdi');
     const scored = tiq > 0;
     rank.className = `cw-rank${scored ? (s.rank <= 3 ? ` is-${s.rank}` : '') : ' is-none'}`;
     rank.setAttribute('dir', 'ltr');
@@ -358,28 +403,31 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     nameLine.append(title);
     if (s.verified === true) nameLine.append(verifiedBadge('squad-vbadge cw-vbadge'));
 
-    /* Line 2 — the quiet metadata: handle · count, then the team pill as a compact inline tag. */
+    /* Line 2 — the clean metadata: the audience count, then the one tag that matters. No handle
+       and no orphaned separator dot: the title owns line one and the inspector owns the handle. */
     const meta = document.createElement('span');
     meta.className = 'cw-row-meta';
-    const handle = document.createElement('bdi');
-    handle.className = 'cw-row-handle';
-    handle.setAttribute('dir', 'ltr');
-    handle.textContent = s.handle;
-    const dot = document.createElement('span');
-    dot.className = 'cw-dot';
-    dot.setAttribute('aria-hidden', 'true');
-    dot.textContent = '·';
     const crew = document.createElement('span');
     crew.className = 'cw-row-members';
     crew.setAttribute('dir', 'auto');
     crew.textContent = membersLabel(s.members);
-    meta.append(handle, dot, crew);
+    meta.append(crew);
 
     if (opts.you) {
       const pill = document.createElement('span');
       pill.className = 'cw-pill cw-you-pill';
       pill.textContent = t('cwYourTeam');
       meta.append(pill);
+    } else if (opts.selectable) {
+      /* The choice key rides the metadata line so the score column stays one clean row. */
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cw-sel';
+      btn.textContent = t('cwSelect');
+      btn.dataset.select = s.id;
+      btn.setAttribute('aria-pressed', String(picked === s.id));
+      btn.setAttribute('aria-label', `${t('cwSelect')} ${s.name || s.handle}`);
+      meta.append(btn);
     }
     id.append(nameLine, meta);
 
@@ -389,19 +437,6 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     ptsEl.className = `cw-row-pts${scored ? '' : ' is-zero'}`;
     ptsEl.append(tiqFigure(tiq));
     side.append(ptsEl);
-
-    if (opts.selectable) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'cw-sel';
-      btn.textContent = t('cwSelect');
-      btn.dataset.select = s.id;
-      btn.setAttribute('aria-pressed', String(picked === s.id));
-      btn.setAttribute('aria-label', `${t('cwSelect')} ${s.name || s.handle}`);
-      side.append(btn);
-    }
-
-    li.append(rank, av, id, side);
 
     if (opts.inspectable) {
       li.dataset.detail = s.id;
@@ -413,8 +448,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       /* The key names its destination, not the row's contents: a screen reader already read those. */
       go.setAttribute('aria-label', t('cwOpenChannel').replace('{h}', s.handle));
       go.append(icon('#i-chevron-right', 'ico cw-row-go-ico'));
-      li.append(go);
+      side.append(go);
     }
+
+    li.append(rank, av, id, side);
     return li;
   }
 
@@ -454,15 +491,13 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   /**
    * One quiet invitation, and only one: while the ladder holds fewer than three channels a single
-   * dashed card explains that rivals are missing. It sits directly under the rows and is read,
-   * not tapped — the register key above it is the only door into the ladder.
+   * open-slot card keeps the bracket alive. It is read and it carries one rival invite, but the
+   * register key above it is still the door into the ladder.
    */
   function paintWait(): void {
     const wait = document.getElementById('cw-wait');
     if (!wait) return;
-    const open = getWarRanking().length < 3;
-    wait.hidden = !open;
-    if (open) wait.textContent = t('cwWaitingRivals');
+    wait.hidden = getWarRanking().length >= 3;
   }
 
   /**
@@ -477,18 +512,25 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   function paintPrize(): void {
-    /* The headline names the season's crown and its clock sits at the far end of the same line.
-       The prize figure is its own `<bdi dir="ltr">` run so `200` never flips inside a Persian
-       sentence; the friends rule under it is one plain muted line, not a second boxed card. */
+    /* The header speaks in the tournament's own voice: a gold eyebrow, the crown's figure, and
+       the winner-takes-all rule. The figure is its own `<bdi dir="ltr">` run so `200` never
+       flips inside a Persian sentence, and every label follows the active language. */
+    const copy = CW_COPY[lang] ?? CW_COPY.en;
     if (prizeRule) {
-      const [lead, tail = ''] = t('cwPrizeHero').split('{n}');
+      prizeRule.textContent = '';
       const figure = document.createElement('bdi');
       figure.setAttribute('dir', 'ltr');
       figure.textContent = '200';
-      prizeRule.textContent = '';
-      prizeRule.append(lead, figure, tail);
+      const unit = document.createElement('span');
+      unit.className = 'cw-prize-unit';
+      unit.setAttribute('dir', 'auto');
+      unit.textContent = copy.unit;
+      prizeRule.append(figure, unit);
     }
-    if (prizeSub) prizeSub.textContent = t('cwPrizeSub');
+    root?.querySelectorAll<HTMLElement>('[data-cw-copy]').forEach((node) => {
+      const key = node.dataset.cwCopy as CwCopyKey | undefined;
+      if (key) node.textContent = copy[key];
+    });
   }
 
   function paintVerify(): void {
@@ -1074,6 +1116,13 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   joinBtn?.addEventListener('click', () => { void onJoin(); });
   inviteBtn?.addEventListener('click', () => { rally(); });
+  document.getElementById('cw-wait-invite')?.addEventListener('click', () => {
+    impact('light');
+    /* One rival door, two honest destinations: a fighter rallies their own channel, and a player
+       without one is handed the register pane that puts a channel in the war. */
+    if (getMySquad()) rally();
+    else openRegister();
+  });
 
   regOpen?.addEventListener('click', () => { impact('light'); openRegister(); });
   regBack?.addEventListener('click', () => { impact('light'); closeRegister(); });

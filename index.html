@@ -4674,20 +4674,23 @@
             </button>
           </header>
 
-          <!-- ZONE 1 — one gold card: the season's prize and its clock on one line, and the
-               friends rule as a single muted sentence under it. No inner box, no second surface. -->
+          <!-- ZONE 1 — the Championship Bounty card: one obsidian-gold surface that puts the
+               crown's figure, the winner-takes-all rule and the live clock in one hierarchy. -->
           <div class="cw-prize">
             <div class="cw-prize-top">
-              <span class="cw-prize-star" aria-hidden="true">
+              <span class="cw-prize-emblem" aria-hidden="true">
                 <svg class="ico" viewBox="0 0 24 24" focusable="false"><use href="#i-tg-star" /></svg>
               </span>
-              <b class="cw-prize-t" id="cw-prize-rule">1st Place Prize: 200 Stars</b>
+              <span class="cw-prize-id">
+                <span class="cw-prize-eyebrow" data-cw-copy="eyebrow">1ST PLACE BOUNTY</span>
+                <b class="cw-prize-amount" id="cw-prize-rule"><bdi dir="ltr">200</bdi><span class="cw-prize-unit">STARS</span></b>
+              </span>
               <span class="cw-prize-clock">
-                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-clock" /></svg>
+                <span class="cw-live-dot" aria-hidden="true"></span>
                 <bdi id="cw-countdown" dir="ltr">--</bdi>
               </span>
             </div>
-            <p class="cw-prize-sub" id="cw-prize-sub">Play with friends to earn TIQ for your channel</p>
+            <p class="cw-prize-sub" id="cw-prize-sub" data-cw-copy="sub">Winner-takes-all · Top 10 squad contributors split the prize</p>
           </div>
 
           <!-- ZONE 2 — the ladder, and the admins' own door into it. -->
@@ -4701,9 +4704,24 @@
             </div>
             <ol class="cw-list" id="cw-board-list" data-scroll aria-label="Channel rankings"></ol>
 
-            <!-- One quiet invitation while the ladder holds fewer than three channels: a single
-                 card directly under the rows, never two placeholder rows and never a void. -->
-            <p class="cw-wait" id="cw-wait" hidden>Waiting for rival channels! Invite friends to register theirs.</p>
+            <!-- Open challenger slots: while the ladder holds fewer than three channels, one
+                 live bracket card keeps the tournament looking open instead of empty. -->
+            <div class="cw-wait" id="cw-wait" hidden>
+              <div class="cw-slot">
+                <span class="cw-slot-ranks" aria-hidden="true">
+                  <span class="cw-slot-rank is-2">#2</span>
+                  <span class="cw-slot-rank is-3">#3</span>
+                </span>
+                <span class="cw-slot-id">
+                  <b class="cw-slot-t" data-cw-copy="slotTitle">Open Contender Slot</b>
+                  <span class="cw-slot-sub" data-cw-copy="slotSub">Challenge a rival channel to enter the war</span>
+                </span>
+                <button class="cw-slot-go" id="cw-wait-invite" type="button">
+                  <span data-cw-copy="inviteRival">Invite Rival</span>
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-chevron-right" /></svg>
+                </button>
+              </div>
+            </div>
 
             <!-- the quick pick: one tap for a player who has not chosen a channel yet -->
             <div class="cw-pick" id="cw-pick" hidden>
