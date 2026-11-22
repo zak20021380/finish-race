@@ -25,6 +25,7 @@
  * always wins.
  */
 import type { Env } from './env';
+import { overtakeLangOf, type OvertakeLang } from './overtake';
 
 /* ---------- the four bands, mirroring `tierOf` in src/matchmaking.ts ---------- */
 
@@ -95,6 +96,13 @@ export interface Identity {
   referrals: number;
   /** Squad / channel handle the client is bound to, or ''. */
   squad: string;
+  /**
+   * The language this seat reads bot copy in, taken from Telegram's own `language_code` inside the
+   * signed payload — the one language signal a socket carries before the Mini App has painted a
+   * single frame. `''` when Telegram named a locale the app does not ship, which a caller treats as
+   * "no new information" rather than as English.
+   */
+  lang: OvertakeLang | '';
 }
 
 /* ---------- what the client sends with the upgrade ---------- */
@@ -246,6 +254,12 @@ interface TgUser {
   photo_url?: string;
   /** Telegram Premium, declared inside the signed payload. The only VIP proof a real seat has. */
   is_premium?: boolean;
+  /**
+   * The account's own language, as Telegram spells it (`en`, `fa`, `pt-BR`). Signed with the rest
+   * of the user object, so it is a fact about the account rather than a claim from the client —
+   * and the only locale signal the server has before the Mini App has ever opened.
+   */
+  language_code?: string;
 }
 
 function parseUser(raw: string | null): TgUser | null {
@@ -293,6 +307,8 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
     stars: req.stars,
     referrals: req.refs,
     squad: req.squad,
+    /* a guest has no account to read a locale off, and no chat to be messaged in */
+    lang: '',
   };
 }
 
@@ -333,6 +349,9 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         stars: req.stars,
         referrals: req.refs,
         squad: req.squad,
+        /* Signed with the account, so the room can write a bot card in the language its reader
+           actually set — before that reader's Mini App has ever named a locale. */
+        lang: overtakeLangOf(user?.language_code),
       };
     }
     /* A signature that does not hold is an attack or a stale session, never a guest: a silent

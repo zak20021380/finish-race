@@ -85,6 +85,7 @@ import {
   type SquadVerification, type SquadVerifyMethod,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
+import { botTokenOf, overtakeLangOf, pushOvertake, type OvertakeLang } from './overtake';
 import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralConfig';
 import { referralBinding, type ReferralBindingPayload } from './referrals';
 import { relicShelter } from '../shared/relic';
@@ -995,6 +996,24 @@ const FORFEIT_TIQ = 15;
 const WIN_TIQ = 15;
 
 /**
+ * How deep an overtake has to land to be worth a Telegram message. The board publishes a hundred
+ * rows (`MINDS_LIMIT`), so a rival pushed below that line has no visible place to lose: a push
+ * about it would be a notification about a rank nobody can look up.
+ */
+const OVERTAKE_TOP_N = 100;
+/**
+ * How recently a seat must have spoken to still count as "in the app". The socket checks answer
+ * this exactly; this window is the backstop for a link that died without a close frame — somebody
+ * who was here a minute ago is reading the board, not their chat list.
+ */
+const OVERTAKE_ACTIVE_MS = 15 * 60 * 1000;
+/**
+ * One overtake push per seat per day. A player passed by three rivals in an evening hears about
+ * the first one: the ladder is a live thing, and a message per place lost would be a feed.
+ */
+const OVERTAKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
  * One season's national war chest, persisted under `nations_s<season>_scores`. Points are only
  * ever written by `creditNation` when the authoritative board settles with a winner, so the
  * standings can never contain a seeded, simulated or client-supplied figure. `byPlayer` keeps
@@ -1657,6 +1676,23 @@ export interface PlayerRecord {
   muted: boolean;
   /** True while the player holds a seat on a live board or sits in a room that is filling. */
   inMatch: boolean;
+  /**
+   * The language this seat reads bot copy in: Telegram's own `language_code` from the last
+   * authenticated connect, folded to the five locales the app ships. The rank-overtake push is
+   * written in it, because a player who is not in the app cannot be asked what they read.
+   */
+  lang: OvertakeLang;
+  /**
+   * When a rank-overtake push last left for this seat, or 0 when none ever has. The 24-hour
+   * cooldown reads it, and it is stamped the instant a push is dispatched — so a burst of
+   * overtakes in one settlement can only ever produce one message.
+   */
+  lastOvertakeNotifyAt: number;
+  /**
+   * True once the Bot API refused this chat for good (`403` blocked, `400` chat not found). A dead
+   * conversation is not retried: every later push for this seat is skipped without a round trip.
+   */
+  botBlocked: boolean;
   /** Seasonal honors the Command Center pushed, newest last (at most six). */
   awards?: SeasonAward[];
   /**
@@ -1780,6 +1816,25 @@ const GHOST_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const activityOf = (p: PlayerRecord): number =>
   Math.max(p.lastSeen, p.lastPlayed, p.firstSeen);
 
+/**
+ * The win figure the Mind Ladder ranks by: the verified tally, clamped to the races behind it. The
+ * board prints this number, so the order it paints and the order an overtake is judged against are
+ * read from one place rather than two.
+ */
+const ladderWinsOf = (p: PlayerRecord): number =>
+  Math.min(Math.max(0, p.matches), Math.max(0, p.wins));
+
+/**
+ * The ladder's order: the exact comparator the board sorts its rows with — score, then wins, then
+ * the displayed name, then the seat id, so two seats can never trade places between reads. A
+ * module-level function (not a method) because the rank snapshot is built from plain records.
+ */
+const ladderOrderOf = (a: PlayerRecord, b: PlayerRecord): number =>
+  b.tiq - a.tiq
+  || ladderWinsOf(b) - ladderWinsOf(a)
+  || a.name.localeCompare(b.name)
+  || a.id.localeCompare(b.id);
+
 /** A seat's first registry entry. */
 function freshPlayer(identity: Identity, now: number): PlayerRecord {
   return {
@@ -1809,6 +1864,10 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     banned: false,
     muted: false,
     inMatch: false,
+    /* Telegram's own answer when this seat authenticated; `en` when it named no locale we ship. */
+    lang: identity.lang || 'en',
+    lastOvertakeNotifyAt: 0,
+    botBlocked: false,
     awards: [],
     modeSeen: zeroModeSeen(),
   };
@@ -1860,6 +1919,11 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     muted: r.muted === true,
     /* a fresh instance has no live boards: nothing can be mid-match across an eviction */
     inMatch: false,
+    /* A stored locale is a closed set, re-folded on the way in: a hand-edited blob cannot make a
+       push render in a language this build does not carry, and an unknown one reads as English. */
+    lang: overtakeLangOf(r.lang) || 'en',
+    lastOvertakeNotifyAt: whole(r.lastOvertakeNotifyAt),
+    botBlocked: r.botBlocked === true,
     awards: readAwards(r.awards),
     modeSeen: {
       bot: whole(seen.bot),
@@ -5072,6 +5136,8 @@ export class MatchmakerDO {
       stars: 0,
       referrals: 0,
       squad: '',
+      /* A telemetry heartbeat carries no locale: the seat reads English until it next signs in. */
+      lang: '',
     }, now);
     this.players.set(record.id, record);
     this.creditSignup(now);
@@ -5921,6 +5987,122 @@ export class MatchmakerDO {
     return { ok: true, updatedAt: Date.now(), total, players, you };
   }
 
+  /* ---------- the rank-overtake push ---------- */
+
+  /**
+   * The published ladder, in rank order — the rows `mindsBoard` shows, in the order it shows them.
+   *
+   * A rank is only meaningful if it is the rank a player sees, so this repeats the board's own
+   * pipeline rather than inventing a second ranking rule: drop the banned, order by the board's
+   * comparator, fold the duplicate ghost rows, and keep only seats that hold a score. The zero-TIQ
+   * rows are dropped before the fold because the fold only ever removes rows — the survivors and
+   * their order come out identical, and the sort happens once instead of twice.
+   */
+  private ladderOrder(): PlayerRecord[] {
+    const rows = [...this.players.values()]
+      .filter((p) => !p.banned && !this.banned.has(p.id) && p.tiq > 0)
+      .sort(ladderOrderOf);
+    return this.canonicalRows(rows);
+  }
+
+  /**
+   * Is this seat in the app right now?
+   *
+   * A push is only worth sending to somebody who is away, and "away" is a fact this object can see
+   * for itself: an ambient duel socket, a queue entry, a live board, a held room chair, or a settled
+   * room's banter lane. `lastSeen` is the backstop for a socket that died without a close frame.
+   */
+  private seatOnline(id: string): boolean {
+    if (this.sessions.has(id)) return true;
+    if (this.queue.some((w) => w.id === id)) return true;
+    for (const race of this.races.values()) {
+      if (race.seats.some((seat) => seat.id === id)) return true;
+    }
+    for (const live of this.rooms.values()) {
+      if (live.members.some((m) => m !== null && m.id === id && m.connected)) return true;
+    }
+    for (const lane of this.postChat.values()) {
+      if (lane.id === id) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Tell the rival a settlement just climbed past.
+   *
+   * `before` is the ladder as it stood before the stake moved; `paid` is the TIQ each winning seat
+   * actually banked. Only the highest-ranked rival a climber passed is a candidate, and only while
+   * that place is inside the published top hundred: the board is what makes a rank real, so a
+   * player pushed from `#140` to `#141` has lost nothing they can look up. The rival immediately
+   * below the climber *is* that candidate by construction — exactly one row moved, so every seat it
+   * jumped now sits one place lower, and the passed seats are the unbroken block between the two
+   * positions.
+   *
+   * The send is fire-and-forget on the object's own ctx: the verdict is already written, and a
+   * Telegram round trip must never be part of how long a settled board takes to answer.
+   */
+  private rankOvertakes(before: PlayerRecord[], paid: Record<string, number>): void {
+    const gains = Object.keys(paid).filter((id) => paid[id] > 0);
+    if (!gains.length) return;
+    /* No bot token, no push — and no ladder sort either: a deployment without a bot has nothing to
+       say and no way to say it. */
+    if (!botTokenOf(this.env)) return;
+    const after = this.ladderOrder();
+    const wasAt = new Map(before.map((p, i) => [p.id, i] as const));
+    const now = Date.now();
+    for (const id of gains) {
+      const from = wasAt.get(id);
+      const to = after.findIndex((p) => p.id === id);
+      /* A seat that was not on the board has no previous rank to have improved on, and a seat that
+         did not actually move up passed nobody. */
+      if (from === undefined || to < 0 || to >= from) continue;
+      const climber = after[to];
+      /* The passed block runs from the climber's new neighbour down to its old place. The first
+         seat in it that owns a chat is the highest-ranked rival this push can actually reach; a
+         guest row is skipped rather than allowed to end the search, because the seat below it was
+         passed by the same climb. */
+      let target: PlayerRecord | null = null;
+      let targetChatId = '';
+      let newRank = 0;
+      for (let at = to + 1; at <= from; at++) {
+        const row = after[at];
+        if (!row) break;
+        /* Below the published board there is no place to have lost: stop looking. */
+        if (at + 1 > OVERTAKE_TOP_N) break;
+        const chatId = chatIdOf(row.id);
+        if (!chatId) continue;
+        target = row;
+        targetChatId = chatId;
+        newRank = at + 1;
+        break;
+      }
+      if (!target || !targetChatId) continue;
+      /* Somebody in the app is reading the board, not their chat list. */
+      if (this.seatOnline(target.id) || now - target.lastSeen < OVERTAKE_ACTIVE_MS) continue;
+      /* One push per seat per day, stamped before the send so a burst cannot double up. */
+      if (now - target.lastOvertakeNotifyAt < OVERTAKE_COOLDOWN_MS) continue;
+      /* A conversation the Bot API has already refused is never retried. */
+      if (target.botBlocked) continue;
+      target.lastOvertakeNotifyAt = now;
+      this.persist();
+      const call = pushOvertake(this.env, {
+        chatId: targetChatId,
+        lang: target.lang,
+        rivalName: climber.name,
+        newRank,
+        /* The place the reader just lost: the row below the climber was one place higher. */
+        oldRank: newRank - 1,
+      }).then((result) => {
+        if (!result.dead) return;
+        target.botBlocked = true;
+        this.persist();
+      }).catch(() => undefined);
+      const ctx = this.state as unknown as { waitUntil?: (p: Promise<unknown>) => void };
+      if (ctx.waitUntil) ctx.waitUntil(call);
+      else void call;
+    }
+  }
+
   /**
    * The Nations Cup: every enrolled flag, ranked by the exact sum of its members' TIQ. A flag
    * is never dropped for being young or quiet — its rated seats carry it. The season's banked
@@ -6018,6 +6200,8 @@ export class MatchmakerDO {
       stars: 0,
       referrals: 0,
       squad: '',
+      /* A board read carries no locale: the row reads English until its owner signs in. */
+      lang: '',
     }, now);
     this.players.set(p.id, p);
     this.creditSignup(now);
@@ -6389,6 +6573,10 @@ export class MatchmakerDO {
         banned: false,
         muted: false,
         inMatch: false,
+        /* a Stars receipt carries no locale: the seat reads English until it next authenticates */
+        lang: 'en',
+        lastOvertakeNotifyAt: 0,
+        botBlocked: false,
         awards: [],
         modeSeen: zeroModeSeen(),
       };
@@ -6640,6 +6828,10 @@ export class MatchmakerDO {
     p.stars = Math.max(p.stars, identity.stars);
     p.referrals = Math.max(p.referrals, identity.referrals);
     p.squad = identity.squad || p.squad;
+    /* Telegram's locale, refreshed on every authenticated connect: a player who switched their
+       app to Persian hears about the ladder in Persian from the next push on. A connect that named
+       no locale we ship leaves the stored one alone rather than resetting it to English. */
+    if (identity.lang) p.lang = identity.lang;
     p.banned = p.banned || this.banned.has(p.id);
     p.muted = p.muted || p.banned;
     if (p.banned) this.banned.add(p.id);
@@ -9879,6 +10071,13 @@ export class MatchmakerDO {
     if (live.settled) return {};
     live.settled = true;
     this.completeRoom(live);
+    /* The ladder as it stood before the stake moved. Only a win that pays a real Telegram seat can
+       climb anything — a bot backfill never holds a registry row and a guest has no chat — so the
+       snapshot is skipped entirely when nobody on the winning side can be reached. */
+    const paysLadder = live.members.some(
+      (m, i) => m !== null && this.onWinningSide(live, i, winner) && chatIdOf(m.id) !== '',
+    );
+    const ladderBefore = paysLadder ? this.ladderOrder() : null;
     const tiqDeltas = this.awardRoomWin(live, winner);
     const humans: RoomMember[] = [];
     for (let i = 0; i < live.members.length; i++) {
@@ -9888,6 +10087,10 @@ export class MatchmakerDO {
       this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i));
       if (m.connected) humans.push(m);
     }
+    /* The rivals this victory passed hear about it once the counters behind the order are final:
+       a win moves the wins tie-break as well as the score, so the snapshot is read against the
+       settled ladder, not the one the stake left behind. */
+    if (ladderBefore) this.rankOvertakes(ladderBefore, tiqDeltas);
     /* Every human still at the capsule gets the lane: a party's reactions reach all of them. */
     if (humans.length > 1) {
       this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium, id: m.id })));
@@ -10359,11 +10562,15 @@ export class MatchmakerDO {
   private endRace(race: Race, leaver: 0 | 1, why: 'RESIGN' | 'LEFT'): void {
     if (race.over) return;
     const other = race.seats[leaver === 0 ? 1 : 0];
+    /* A forfeit win is a real climb: the survivor banks the stake, so the ladder is read before it
+       moves. A guest seat has no chat to reach, and nothing to snapshot for. */
+    const ladderBefore = chatIdOf(other.id) ? this.ladderOrder() : null;
     /* The verdict pays the stake on both sides: the seat that walked pays it, the survivor banks
        it, and both records are flushed with the match counters they already ride. */
     this.adjustTiq(race.seats[leaver].id, -FORFEIT_TIQ);
     this.adjustTiq(other.id, WIN_TIQ);
     this.settle(race, leaver === 0 ? 1 : 0);
+    if (ladderBefore) this.rankOvertakes(ladderBefore, { [other.id]: WIN_TIQ });
     this.deliver(other, JSON.stringify(why === 'RESIGN'
       ? { type: 'RESIGN', side: leaver }
       : { type: 'OPPONENT_LEFT', side: leaver }));
