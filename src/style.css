@@ -45351,3 +45351,10 @@ html.reduced-motion .frm-scrim { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .frm-sheet, .frm-scrim { transition: none; }
 }
+
+/* ---- the pre-match face-off: a showcase, never a prompt ---- */
+/* The crest now plays to its own timer with the board behind it already loaded, so a "tap to
+   skip" line would be an offer the screen no longer honours. `vsclash.ts` owns the markup; this
+   is the one place that may switch the affordance off, and it must win over `vsclash.css` whatever
+   order the two bundles land in. */
+.vsc-skip { display: none !important; }

@@ -23,6 +23,18 @@
  * interval each, cleared the instant the ramp lands (or is replaced), so nothing here touches
  * `requestAnimationFrame`, the render loop or the 60 fps budget. One element, one timer handle,
  * no nodes, nothing to collect: flipping the switch a thousand times cannot leak.
+ *
+ * THE SETTLEMENT OWNS ITS OWN VOICE. When the result capsule opens the bed steps aside — a 220 ms
+ * duck, then a pause — so `01-victory-fan.ogg` or `defeat.m4a` is heard alone. It stays parked for
+ * as long as that capsule is up: no gesture, focus, visibility change or settings toggle can lift
+ * it, because the state is part of `shouldPlay()` rather than a listener's private business.
+ * `setMusicMatchOver(false)` is the only door back, and the player's own exit — Play again, a
+ * rematch, the menu, a new race — is what opens it.
+ *
+ * A CLOSED MINI APP IS SILENT. `visibilitychange` and `blur` cover a chat hop and a native sheet;
+ * `pagehide` and Telegram's own `deactivated` are the last events a WebView reliably fires on a
+ * close, so the bed is parked there too — at volume 0, with no ramp left ticking behind a dead
+ * page.
  */
 import { onSettings, settings } from './settings';
 
@@ -44,6 +56,13 @@ const TARGET_VOLUME = 0.22;
 const FADE_IN_MS = 500;
 const FADE_OUT_MS = 250;
 
+/**
+ * The settlement duck. Shorter than a switch fade on purpose: the fanfare that follows the result
+ * card is already sounding, and a long crossfade would put two melodies over each other for a
+ * quarter of a second. Just long enough to be a fade rather than a cut.
+ */
+const MATCH_OVER_FADE_MS = 220;
+
 /** One fade tick. ~30 ms is smooth to the ear and cheap enough to be irrelevant to the CPU. */
 const FADE_STEP_MS = 30;
 
@@ -62,12 +81,22 @@ let unlocked = false;
 /** The Mini App is hidden or blurred: no audience, so no playback. */
 let suspended = false;
 
+/**
+ * A settled match is on screen. The result capsule brings its own voice, so the bed is parked
+ * until the player leaves it — see `setMusicMatchOver()`. Kept in `shouldPlay()` rather than in a
+ * listener, so nothing in this module can resume the bed behind the settlement by accident.
+ */
+let matchOver = false;
+
+/** Telegram's `deactivated`/`activated` pair is registered once, and only when the SDK has landed. */
+let tgBound = false;
+
 /** The music switch as of the last change, so the tap that turns it ON is read as a gesture. */
 let lastEnabled = settings.musicEnabled;
 
 /** True when the bed should be audible right now. */
 function shouldPlay(): boolean {
-  return booted && unlocked && !suspended && settings.musicEnabled;
+  return booted && unlocked && !suspended && !matchOver && settings.musicEnabled;
 }
 
 /**
@@ -177,6 +206,39 @@ function stopBed(): void {
   });
 }
 
+/**
+ * THE SETTLEMENT DUCK. Down over 220 ms, then parked at 0 — unconditionally, because the match is
+ * over and nothing else in this module gets to decide otherwise. `audio` is read directly rather
+ * than through `element()`: a player who runs the whole app with Music off must not have a 2.8 MB
+ * track element built for a pause that has nothing to pause.
+ */
+function duckForSettlement(): void {
+  const el = audio;
+  if (!el) { clearFade(); return; }
+  if (el.paused && el.volume === 0) { clearFade(); return; }
+  fadeTo(0, MATCH_OVER_FADE_MS, () => {
+    try { el.pause(); } catch { /* never started */ }
+    try { el.volume = 0; } catch { /* refused: stay silent */ }
+  });
+}
+
+/**
+ * The one door the settlement has into the bed.
+ *
+ * `true` when the result capsule opens: the bed gets out of the fanfare's way at once and stays
+ * out. `false` when the player leaves that capsule — Play again, a rematch, the menu, any new
+ * race — and the bed comes back only if it is still wanted: the switch on, the element unlocked,
+ * the Mini App on screen. Every other door out of this module routes through `shouldPlay()`, so a
+ * tap, a focus or a settings change while the capsule is up is answered with silence.
+ */
+export function setMusicMatchOver(isOver: boolean): void {
+  if (isOver === matchOver) return;     // repeated calls are free: no second ramp, no restart
+  matchOver = isOver;
+  if (!booted) return;                  // nothing is built yet, and nothing should be
+  if (isOver) duckForSettlement();
+  else sync();
+}
+
 /** Reconcile the element with the switches, the gesture and the Mini App's lifecycle. */
 function sync(): void {
   if (!booted) return;                  // nothing is created, fetched or decoded during boot
@@ -208,6 +270,12 @@ function armUnlock(): void {
  * The Mini App lifecycle. Telegram hands the WebView to a chat, a call or the OS lock without
  * warning, and a looping bed must not play on behind it: hidden/blurred pauses immediately, and
  * becoming visible/focused again lifts it back to the ambient level when the switch is still on.
+ *
+ * `pagehide` is the close. It is the last event a WebView reliably delivers when the Mini App is
+ * dismissed or the page is frozen into the back/forward cache, and it can arrive without a
+ * `visibilitychange` — so it parks the bed at 0 with no ramp left ticking. `pageshow` is its
+ * counterpart: a restored page is silent until the bed is asked for again, and the visibility
+ * flag decides whether that is now.
  */
 function armLifecycle(): void {
   try {
@@ -228,7 +296,53 @@ function armLifecycle(): void {
       suspended = false;
       sync();
     });
+    window.addEventListener('pagehide', () => {
+      suspended = true;
+      pauseNow();
+    });
+    window.addEventListener('pageshow', () => {
+      /* a bfcache restore can report a visible page that is still in the background stack */
+      suspended = document.hidden;
+      sync();
+    });
   } catch { /* headless: no lifecycle to honour */ }
+  armTelegramLifecycle();
+}
+
+/**
+ * Telegram's own lifecycle, which fires where the DOM's does not. `deactivated` is what the client
+ * sends when the Mini App is closed or covered by another chat; `activated` is the way back. Both
+ * are 6.1 events, and an older client answers every `onEvent` with an "unsupported" warning line —
+ * so the version is checked first, exactly as `telegram.ts` does for its own two.
+ *
+ * The SDK is read live from `window` rather than imported: this module is deliberately one
+ * dependency (`settings`) and one `<audio>` element, and a Mini App without the SDK simply keeps
+ * the DOM listeners above. `telegram-web-app.js` is deferred, so a boot that beat it here retries
+ * on the script's own load and on the page's — the same two doors `telegram.ts` waits behind, and
+ * no polling. `tgBound` keeps the pair registered exactly once.
+ */
+function armTelegramLifecycle(): void {
+  try {
+    if (tgBound) return;
+    const app = window.Telegram?.WebApp;
+    if (!app || typeof app.onEvent !== 'function') {
+      const script = document.querySelector<HTMLScriptElement>('script[src*="telegram-web-app"]');
+      script?.addEventListener('load', armTelegramLifecycle, { once: true });
+      window.addEventListener('load', armTelegramLifecycle, { once: true });
+      return;
+    }
+    const check = app.isVersionAtLeast;
+    if (typeof check === 'function' && !check.call(app, '6.1')) return;
+    tgBound = true;
+    app.onEvent('deactivated', () => {
+      suspended = true;
+      pauseNow();
+    });
+    app.onEvent('activated', () => {
+      suspended = document.hidden;
+      sync();
+    });
+  } catch { /* not inside Telegram, or an SDK that refuses the listener */ }
 }
 
 /**

@@ -45,8 +45,10 @@ import {
 } from './audio';
 import { playDefeat, stopDefeat } from './sound';
 /* The ambient bed's own controller. It registers its listeners and builds its element only when
-   `initMusic()` runs below — after the first screen has mounted — so nothing here touches boot. */
-import { initMusic } from './music';
+   `initMusic()` runs below — after the first screen has mounted — so nothing here touches boot.
+   `setMusicMatchOver()` is the settlement's only door into it: the result capsule ducks the bed so
+   the victory/defeat fanfare is heard alone, and the player's exit is what brings it back. */
+import { initMusic, setMusicMatchOver } from './music';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
   resetMatchClaims, tiqRecoveryLimit,
@@ -2932,6 +2934,11 @@ function settleWarMatch(won: boolean, bot = false): void {
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
+  /* THE SETTLEMENT TAKES THE SOUND. The bed ducks and parks here — before the fanfare below is
+     asked for — so the victory or the defeat voice is heard alone. It stays parked for as long as
+     this capsule is up: `restart()`, `quitToMenu()` and the result's own keys are the only doors
+     that bring it back. */
+  setMusicMatchOver(true);
   /* The invited duel has genuinely settled. This is the flag that separates a real "return to
      Home after the duel" from a stray tab hop during an invite launch that never reached a board. */
   inviteDuelSettled = true;
@@ -3867,6 +3874,10 @@ function restart() {
   banter.close();
   overlayOpen = false;
   overlay.hidden = true;
+  /* The settlement is behind us and a board is being dealt: the bed is wanted again. This is the
+     door Play again, a rematch start and every `startGame()` walk through, so one call here covers
+     them all — and `setMusicMatchOver` is a no-op when nothing was ducked. */
+  setMusicMatchOver(false);
   overlay.classList.remove('win', 'lose', 'is-party');
   menuBtn.disabled = false;
   clearNote();
@@ -4301,6 +4312,109 @@ function clashRivals(): VsRival[] {
   return out;
 }
 
+/* ---------- the face-off: unskippable, and never ahead of the board ---------- */
+
+/**
+ * The longest a face-off will wait for a font or a portrait. A stalled request is not a reason to
+ * hold a race: past this the showcase opens on what is already there, and the board's own
+ * re-measure at the reveal covers the rest. Deliberately under the crest's own 730 ms run, so a
+ * slow load can never turn the pre-match into a two-second wait — and far above the one frame a
+ * warm cache actually costs.
+ */
+const MATCH_READY_CAP_MS = 700;
+
+/**
+ * The automated-browser path, mirrored from `vsclash.ts`'s own `bypassed()`.
+ *
+ * That module answers `onReveal` before it returns when the page is driven by a harness or carries
+ * `data-txs-skip`, and `scripts/verify-vs-clash.mjs` measures that hand-off at under 50 ms. A gate
+ * in front of the showcase would turn that synchronous start into a promise, so the test is
+ * repeated here — the one place that decides whether to wait — rather than exported and shared.
+ */
+function clashBypassed(): boolean {
+  if (typeof navigator !== 'undefined' && navigator.webdriver === true) return true;
+  return document.documentElement.hasAttribute('data-txs-skip');
+}
+
+/**
+ * ONE PORTRAIT, DECODED AND IN THE CACHE. Never rejects and never blocks for longer than the cap:
+ * a missing face is a monogram on the card, not a reason to keep a player waiting.
+ */
+function faceReady(url: string | null | undefined): Promise<void> {
+  if (!url) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (): void => { if (done) return; done = true; resolve(); };
+    try {
+      const img = new Image();
+      img.onload = finish;
+      img.onerror = finish;
+      img.src = url;
+    } catch { finish(); }
+    window.setTimeout(finish, MATCH_READY_CAP_MS);
+  });
+}
+
+/**
+ * EVERYTHING THE FIRST VISIBLE FRAME OF A RACE DEPENDS ON.
+ *
+ * `startGame()` has already drawn the board by the time this is asked for: `restart()` builds the
+ * grid, every pawn on its spawn tile, the seat names, the chips and the first turn synchronously,
+ * so there is no half-built state to wait for. What can still be in flight is the type, the
+ * portraits and the first paint — and a font swap after the board is up reflows every chip and
+ * re-measures the canvas under the player's first tap.
+ *
+ * The promise therefore settles on the fonts, on every rival's face, and on two frames (the point
+ * at which styles and container queries have landed), each with its own cap. It never rejects and
+ * never waits longer than `MATCH_READY_CAP_MS`: readiness is a gate, not a trap.
+ */
+function matchReady(rivals: readonly VsRival[]): Promise<void> {
+  const settled = new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (): void => { if (done) return; done = true; resolve(); };
+    try {
+      const fonts = document.fonts;
+      if (fonts && fonts.ready && typeof fonts.ready.then === 'function') {
+        void fonts.ready.then(finish, finish);
+      } else finish();
+    } catch { finish(); }
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    window.setTimeout(finish, MATCH_READY_CAP_MS);
+  });
+  return Promise.all([settled, ...rivals.map((r) => faceReady(r.avatarUrl))]).then(() => undefined);
+}
+
+/**
+ * THE FACE-OFF IS A SHOWCASE, NOT A PROMPT. `vsclash.ts` closes on its own timer, on a tap and on
+ * a watchdog; the tap is the one that can cut the matchup short, and it is the one this removes.
+ *
+ * The listener sits on the document in the CAPTURE phase, so it is reached before the overlay's
+ * own `pointerdown` and can stop the event there — the showcase never hears the tap, and because
+ * the overlay itself still takes the hit, nothing behind it is tapped either. `pointer-events` is
+ * deliberately left alone: a dismiss layer that lets taps through would hand them to the menu
+ * underneath, which is a worse bug than a skippable crest. The window-level capture listeners are
+ * untouched, so the first-gesture audio unlock still lands.
+ *
+ * Returns the release; the reveal calls it, so the board's first tap is never swallowed.
+ */
+function holdClash(): () => void {
+  const swallow = (event: Event): void => {
+    const node = event.target instanceof Element ? event.target : null;
+    if (!node || !node.closest('#vs-clash')) return;
+    event.stopPropagation();
+    if (event.cancelable) event.preventDefault();
+  };
+  const opts: AddEventListenerOptions = { capture: true, passive: false };
+  document.addEventListener('pointerdown', swallow, opts);
+  document.addEventListener('touchstart', swallow, opts);
+  document.addEventListener('mousedown', swallow, opts);
+  return () => {
+    document.removeEventListener('pointerdown', swallow, opts);
+    document.removeEventListener('touchstart', swallow, opts);
+    document.removeEventListener('mousedown', swallow, opts);
+  };
+}
+
 function startGame(setup: StartSetup) {
   /* THE SAME WALL, AT THE SINGLE DOOR. Every board — Play, the Arena queue, a custom room, a
      server push — comes through here, so a second board is never dealt to an unverified player
@@ -4512,9 +4626,14 @@ function startGame(setup: StartSetup) {
      clock only while the game screen is up. An automated browser and the lesson both get the
      original synchronous path: the clash answers `onReveal` before it returns. */
   let revealed = false;
+  /* The unskippable shield's release, held until the board takes over. */
+  let releaseClash: (() => void) | null = null;
   const reveal = () => {
     if (revealed) return;
     revealed = true;
+    /* First thing, before any routing: the board's own taps must never be swallowed by the
+       showcase's shield, and the overlay is already on its way out. */
+    if (releaseClash) { releaseClash(); releaseClash = null; }
     /* The face-off is asynchronous: a route event or a late sheet close during the cinematic can
        leave `paused` set. With that flag up `syncLoop()` cancels every frame and the board shows
        a grid with no pawns, so entering a race always clears it. */
@@ -4545,12 +4664,32 @@ function startGame(setup: StartSetup) {
      reveal — so it goes straight to the board rather than paying for a second cinematic. */
   if (setup.quiet || questLaunch) { reveal(); return; }
   const rivals = wantsTutorial ? [] : clashRivals();
-  /* The face-off is its own chunk, warmed right after the first frame (see the boot's `afterPaint`
-     block), so the first race's cinematic never waits on a fetch it could have made minutes ago. */
-  void import('./vsclash').then(({ showVsClash }) => showVsClash(rivals, {
+  const stakes: VsStakes = {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
     seats: sizes.length,
-  }, reveal));
+  };
+  /**
+   * THE GATE. The showcase opens only once the board behind it is genuinely ready, and it then
+   * plays its full length unskippable — so the crest can never be cut short and the board can
+   * never be entered half-built. Both waits are real work, run together: the chunk (warmed right
+   * after the first frame, see the boot's `afterPaint` block) and `matchReady()`.
+   *
+   * A harness, the `data-txs-skip` path and a lesson with no rivals keep the original synchronous
+   * hand-off — `showVsClash` answers `reveal()` before it returns on those, and a promise in front
+   * of it would change a 0 ms start into a frame or two of nothing.
+   */
+  const gated = rivals.length > 0 && !clashBypassed();
+  /* Started before the chunk is awaited, so the two waits overlap rather than queue: the crest
+     opens on the later of the two, never on their sum. */
+  const ready = gated ? matchReady(rivals) : null;
+  void import('./vsclash').then(({ showVsClash }) => {
+    const open = (): void => {
+      releaseClash = holdClash();
+      showVsClash(rivals, stakes, reveal);
+    };
+    if (ready) void ready.then(open, open);
+    else open();
+  });
 }
 
 /**
@@ -4721,6 +4860,9 @@ function quitToMenu() {
     overlayOpen = false;
     overlay.hidden = true;
   }
+  /* Menu, the back key, the share door and the pause sheet's quit all land here: whatever the
+     settlement ducked, the bed is the menu's again from this beat on. */
+  setMusicMatchOver(false);
   sheets.close();
   /* Walking out of a live online race is a resignation: the rival takes the win immediately, and
      the socket goes with it — leaving it open would only hold the other player's seat hostage. */
@@ -6252,6 +6394,10 @@ again.addEventListener('click', () => {
      goes with it */
   stopVictoryFanfare();
   stopDefeat();
+  /* ...and the bed comes back with the next race. Placed after the two stops so the fanfare's tail
+     is not faded over; a rematch VOTE returned above and never reaches this line, which is what
+     keeps the bed parked while the room is still deciding. */
+  setMusicMatchOver(false);
   /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) {
     const mode: 'pvp' | 'arena' | 'channel_war' = warMatch
