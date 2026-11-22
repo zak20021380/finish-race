@@ -2738,21 +2738,91 @@
                one at a time (a second reaction retargets this same pill). -->
           <p class="crowd-toast" id="crowd-toast" role="status" aria-live="polite"></p>
 
-          <!-- LIVE CROWD & PREDICTIONS. The tappable sheet behind the top pill and the support bar. -->
+          <!-- LIVE CROWD & PREDICTIONS. The tappable sheet behind the top pill and the support bar:
+               a drag handle, a LIVE header with the viewer count, a head-to-head arena split, a
+               three-way filter row, then one card per spectator. Every figure is a Latin-digit
+               <bdi dir="ltr"> run and every name a <bdi dir="auto">; icons are inline SVG. -->
           <div class="crowd-sheet" id="crowd-sheet" role="dialog" aria-modal="true"
             aria-labelledby="crowd-sheet-title" hidden>
             <div class="crowd-sheet-scrim" id="crowd-sheet-scrim" aria-hidden="true"></div>
             <div class="crowd-sheet-card" role="document">
+              <i class="crowd-sheet-grip" aria-hidden="true"></i>
+
               <header class="crowd-sheet-head">
-                <div class="crowd-sheet-copy">
-                  <h3 class="crowd-sheet-title" id="crowd-sheet-title">Live crowd &amp; predictions</h3>
-                  <p class="crowd-sheet-sub" id="crowd-sheet-sub"></p>
-                </div>
+                <span class="crowd-sheet-live">
+                  <i class="crowd-dot" aria-hidden="true"></i>
+                  <span id="crowd-sheet-live">LIVE</span>
+                </span>
+                <h3 class="crowd-sheet-title" id="crowd-sheet-title">Live crowd &amp; predictions</h3>
+                <span class="crowd-viewers-pill" id="crowd-sheet-viewers" aria-live="polite">
+                  <svg class="crowd-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M2.6 12S6.2 6.4 12 6.4 21.4 12 21.4 12 17.8 17.6 12 17.6 2.6 12 2.6 12Z"
+                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                    <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7" />
+                  </svg>
+                  <bdi id="crowd-sheet-count" dir="ltr">0</bdi>
+                </span>
                 <button class="crowd-sheet-close" id="crowd-sheet-close" type="button" aria-label="Close">
                   <span aria-hidden="true">&times;</span>
                 </button>
               </header>
+
+              <!-- head-to-head arena split: both seats, their head counts, their staked coins, and
+                   one 6px dual-segment tug-of-war rail. Locked to LTR so crimson is always left. -->
+              <div class="crowd-h2h" id="crowd-h2h">
+                <div class="crowd-h2h-top">
+                  <div class="crowd-h2h-side is-red">
+                    <bdi class="crowd-h2h-name" id="crowd-h2h-red-name" dir="auto">P1</bdi>
+                    <span class="crowd-h2h-meta">
+                      <span class="crowd-h2h-fans">
+                        <svg class="crowd-h2h-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M6 7.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Zm5.2.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM2 13.2c0-2 1.8-3.4 4-3.4s4 1.4 4 3.4M10.6 9.9c2 .1 3.4 1.4 3.4 3.3"
+                            fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+                        </svg>
+                        <bdi dir="ltr" id="crowd-h2h-red-fans">0</bdi>
+                      </span>
+                      <span class="crowd-h2h-stake">
+                        <span class="coin" data-coin aria-hidden="true"></span>
+                        <bdi dir="ltr" id="crowd-h2h-red-stake">0</bdi>
+                      </span>
+                    </span>
+                  </div>
+                  <span class="crowd-h2h-vs" aria-hidden="true">VS</span>
+                  <div class="crowd-h2h-side is-blue">
+                    <bdi class="crowd-h2h-name" id="crowd-h2h-blue-name" dir="auto">P2</bdi>
+                    <span class="crowd-h2h-meta">
+                      <span class="crowd-h2h-fans">
+                        <svg class="crowd-h2h-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M6 7.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Zm5.2.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM2 13.2c0-2 1.8-3.4 4-3.4s4 1.4 4 3.4M10.6 9.9c2 .1 3.4 1.4 3.4 3.3"
+                            fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+                        </svg>
+                        <bdi dir="ltr" id="crowd-h2h-blue-fans">0</bdi>
+                      </span>
+                      <span class="crowd-h2h-stake">
+                        <span class="coin" data-coin aria-hidden="true"></span>
+                        <bdi dir="ltr" id="crowd-h2h-blue-stake">0</bdi>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+                <span class="crowd-h2h-track" aria-hidden="true">
+                  <i class="crowd-h2h-fill is-red" id="crowd-h2h-fill-red"></i>
+                  <i class="crowd-h2h-fill is-blue" id="crowd-h2h-fill-blue"></i>
+                </span>
+              </div>
+
+              <!-- filter row: the whole mixed house, or one camp's supporters -->
+              <div class="crowd-filters" id="crowd-filters" role="group" aria-label="Filter spectators">
+                <button class="crowd-filter is-on" id="crowd-filter-all" type="button"
+                  data-crowd-filter="all" aria-pressed="true">All</button>
+                <button class="crowd-filter" id="crowd-filter-p1" type="button"
+                  data-crowd-filter="0" aria-pressed="false">P1</button>
+                <button class="crowd-filter" id="crowd-filter-p2" type="button"
+                  data-crowd-filter="1" aria-pressed="false">P2</button>
+              </div>
+
               <ul class="crowd-list" id="crowd-list" aria-label="Spectators"></ul>
+              <p class="crowd-empty" id="crowd-empty" hidden></p>
             </div>
           </div>
         </section>

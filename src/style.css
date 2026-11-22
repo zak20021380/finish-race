@@ -45591,16 +45591,48 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-bar-fill.is-red { background: linear-gradient(90deg, #e11d48, #fb7185); }
 .crowd-bar-fill.is-blue { background: linear-gradient(90deg, #38bdf8, #0284c7); }
 
+/* ---- the fan avatar: a 36×36 disc whose tint names the gender, plus a corner symbol badge ---- */
 .crowd-av {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: var(--av-bg, #1E293B);
-  color: var(--av-ink, #E2E8F0);
+  border-radius: 50%;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1;
-  box-shadow: 0 0 0 1.5px var(--av-ring, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
 }
+.crowd-av.is-f {
+  background: linear-gradient(135deg, rgba(244, 114, 182, .24), rgba(192, 132, 252, .14));
+  border: 1.5px solid rgba(244, 114, 182, .50);
+  color: #f9a8d4;
+}
+.crowd-av.is-m {
+  background: linear-gradient(135deg, rgba(56, 189, 248, .24), rgba(99, 102, 241, .14));
+  border: 1.5px solid rgba(56, 189, 248, .50);
+  color: #7dd3fc;
+}
+.crowd-av-ini { display: block; transform: translateY(.5px); }
+/* the 15×15 dark disc pinned to the avatar's inline-end corner: Venus or Mars, drawn inline */
+.crowd-gbadge {
+  position: absolute;
+  inset-block-end: -2px;
+  inset-inline-end: -3px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #0b1018;
+  border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+}
+.crowd-gbadge svg { width: 9px; height: 9px; display: block; }
+.crowd-av.is-f .crowd-gbadge svg { color: #f472b6; }
+.crowd-av.is-m .crowd-gbadge svg { color: #38bdf8; }
 
 /* ---- 3. the one floating reaction pill ----
    Above the HUD dock, pointer-transparent, and it never owns a tap. */
@@ -45639,7 +45671,10 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-toast-name { font-weight: 800; unicode-bidi: isolate; }
 .crowd-toast-txt { min-width: 0; overflow-wrap: anywhere; }
 
-/* ---- 4. the live crowd & predictions sheet ---- */
+/* ---- 4. the live crowd & predictions sheet — an e-sports arena board ----
+   A dark obsidian card whose face is driven by local custom properties, so the same board reads
+   correctly on the porcelain theme without a single hardcoded ink. Structure: drag grip, LIVE
+   header, head-to-head split box, 3-way filter row, then one card per spectator. */
 .crowd-sheet {
   position: absolute;
   inset: 0;
@@ -45655,123 +45690,362 @@ html.reduced-motion .frm-scrim { transition: none; }
   background: rgba(3, 5, 9, .62);
 }
 .crowd-sheet-card {
+  --cs-face: linear-gradient(180deg, #161b26 0%, #0e121a 100%);
+  --cs-ink: #f8fafc;
+  --cs-soft: rgba(203, 213, 225, .66);
+  --cs-line: rgba(255, 255, 255, .08);
+  --cs-row: rgba(255, 255, 255, .03);
+  --cs-row-line: rgba(255, 255, 255, .06);
+  --cs-chip: rgba(255, 255, 255, .05);
+  --cs-track: rgba(255, 255, 255, .07);
+  --cs-h2h: linear-gradient(180deg, #161b26 0%, #0e121a 100%);
+  --cs-gold: #f6c85e;
+  --cs-on: rgba(255, 255, 255, .10);
   position: relative;
   z-index: 1;
-  width: min(100%, 380px);
-  max-height: min(72%, 520px);
+  width: min(100%, 400px);
+  max-height: min(86%, 580px);
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--hair);
+  border: 1px solid var(--cs-line);
   border-radius: 22px;
-  background: var(--tint-glass);
-  color: var(--ink);
+  background: var(--cs-face);
+  color: var(--cs-ink);
   box-shadow: 0 22px 44px -22px var(--shadow);
   overflow: hidden;
+}
+/* the drag handle: a grab rail, not an affordance that promises a drag */
+.crowd-sheet-grip {
+  flex: none;
+  width: 38px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .16);
 }
 .crowd-sheet-head {
   flex: none;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 12px 8px;
-  border-bottom: 1px solid var(--hair);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px 9px;
 }
-.crowd-sheet-copy { flex: 1 1 auto; min-width: 0; text-align: start; }
+/* the emerald LIVE tag: a static glowing dot, no keyframes on the compositor */
+.crowd-sheet-live {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid rgba(16, 185, 129, .30);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .12);
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #6ee7b7;
+}
+.crowd-sheet-live .crowd-dot {
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .18), 0 0 10px 2px rgba(52, 211, 153, .34);
+}
 .crowd-sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
-  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: .01em;
-  color: var(--ink);
+  color: var(--cs-ink);
 }
-.crowd-sheet-sub {
-  margin: 3px 0 0;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--ink-soft);
+.crowd-viewers-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--cs-line);
+  border-radius: 999px;
+  background: var(--cs-chip);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: var(--cs-ink);
 }
+.crowd-viewers-pill .crowd-eye { width: 11px; height: 11px; }
 .crowd-sheet-close {
   appearance: none;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--hair);
+  border: 1px solid var(--cs-line);
   border-radius: 50%;
-  background: transparent;
-  color: var(--ink-soft);
+  background: var(--cs-chip);
+  color: var(--cs-soft);
   cursor: pointer;
   touch-action: manipulation;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
 }
-.crowd-sheet-close span { font-size: 16px; line-height: 1; margin-top: -2px; }
+.crowd-sheet-close:hover { color: var(--cs-ink); border-color: rgba(255, 255, 255, .2); }
+.crowd-sheet-close span { font-size: 19px; line-height: 1; margin-top: -2px; }
 .crowd-sheet-close:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- 4a. the head-to-head arena split ---- */
+.crowd-h2h {
+  flex: none;
+  margin: 0 12px 10px;
+  padding: 12px;
+  border: 1px solid var(--cs-line);
+  border-radius: 16px;
+  background: var(--cs-h2h);
+  /* crimson is always the left camp and cyan always the right, whatever the shell language */
+  direction: ltr;
+}
+.crowd-h2h-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.crowd-h2h-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.crowd-h2h-side.is-blue { align-items: flex-end; text-align: right; }
+.crowd-h2h-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.crowd-h2h-side.is-red .crowd-h2h-name { color: #fda4af; }
+.crowd-h2h-side.is-blue .crowd-h2h-name { color: #7dd3fc; }
+.crowd-h2h-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--cs-soft);
+  white-space: nowrap;
+}
+.crowd-h2h-fans { display: inline-flex; align-items: center; gap: 3px; }
+.crowd-h2h-ico { width: 11px; height: 11px; display: block; }
+.crowd-h2h-stake { display: inline-flex; align-items: center; gap: 3px; color: var(--cs-gold); }
+.crowd-h2h-stake .coin { width: 11px; height: 11px; }
+.crowd-h2h-vs {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: rgba(255, 255, 255, .3);
+}
+.crowd-h2h-track {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: var(--cs-track);
+  overflow: hidden;
+}
+.crowd-h2h-fill {
+  display: block;
+  height: 100%;
+  width: 50%;
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+.crowd-h2h-fill.is-red { background: linear-gradient(90deg, #e11d48, #fb7185); }
+.crowd-h2h-fill.is-blue { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+
+/* ---- 4b. the three-way filter row ---- */
+.crowd-filters {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0 12px 10px;
+}
+.crowd-filter {
+  appearance: none;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cs-line);
+  border-radius: 10px;
+  background: var(--cs-chip);
+  color: var(--cs-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.crowd-filter bdi {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crowd-filter:hover { color: var(--cs-ink); }
+.crowd-filter.is-on {
+  color: var(--cs-ink);
+  background: var(--cs-on);
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.crowd-filter:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- 4c. the spectator list: one 3-column card per fan ---- */
 .crowd-list {
   flex: 1 1 auto;
   min-height: 0;
   margin: 0;
-  padding: 2px 4px 6px;
+  padding: 0 10px 12px;
   list-style: none;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+/* a filtered-to-empty list drops out, leaving only the note (never a hole in the card) */
+.crowd-list[hidden],
+.crowd-empty[hidden] { display: none !important; }
 .crowd-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: 10px;
+  gap: 10px;
+  background: var(--cs-row);
+  border: 1px solid var(--cs-row-line);
+  border-radius: 14px;
+  padding: 9px 11px;
+  margin: 0 0 6px;
   text-align: start;
 }
-.crowd-row + .crowd-row { border-top: 1px solid var(--hair); border-radius: 0; }
-.crowd-av { width: 24px; height: 24px; font-size: 11px; }
-.crowd-nm {
+.crowd-row:last-child { margin-bottom: 0; }
+/* the middle column: identity stack, anchored beside the avatar and never able to push the stake */
+.crowd-mid {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.crowd-mid-top {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.crowd-handle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--cs-ink);
+}
+/* the subtle inline gender pill beside the handle: Venus or Mars, the same mark as the badge */
+.crowd-gpill {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+.crowd-gpill.is-f { color: #f472b6; background: rgba(244, 114, 182, .14); }
+.crowd-gpill.is-m { color: #38bdf8; background: rgba(56, 189, 248, .14); }
+.crowd-vip {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid rgba(246, 200, 94, .30);
+  border-radius: 4px;
+  background: rgba(246, 200, 94, .12);
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: .06em;
+  color: var(--cs-gold);
+}
+.crowd-support {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
   font-weight: 700;
-  color: var(--ink);
+  line-height: 1.25;
 }
-.crowd-side {
-  max-width: 132px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 9px;
-  font-weight: 800;
-  white-space: nowrap;
-  padding: 2px 6px;
-  border-radius: 999px;
-}
-.crowd-side.is-red { color: #e26a80; background: rgba(251, 113, 133, .12); }
-.crowd-side.is-blue { color: #4aa8d8; background: rgba(56, 189, 248, .12); }
+.crowd-support.is-red { color: #fda4af; }
+.crowd-support.is-blue { color: #7dd3fc; }
+/* the end column: the staked coins, tabular so a column of numbers lines up */
 .crowd-stake {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 10px;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 800;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
+  color: var(--cs-gold);
 }
-.crowd-stake .coin { width: 10px; height: 10px; }
+.crowd-stake .coin { width: 12px; height: 12px; }
+.crowd-empty {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 18px 16px 24px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cs-soft);
+  text-align: center;
+}
 
 /* the sheet listens for the active UI direction, not the document's */
-html[data-lang="fa"] :is(.crowd-toast, .crowd-sheet-title, .crowd-sheet-sub, .crowd-nm, .crowd-side),
-html[data-lang="ar"] :is(.crowd-toast, .crowd-sheet-title, .crowd-sheet-sub, .crowd-nm, .crowd-side) {
+html[data-lang="fa"] :is(.crowd-toast, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter),
+html[data-lang="ar"] :is(.crowd-toast, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter) {
   letter-spacing: 0;
 }
 html[data-lang="fa"] .crowd-sheet-title,
-html[data-lang="ar"] .crowd-sheet-title,
-html[data-lang="fa"] .crowd-sheet-sub,
-html[data-lang="ar"] .crowd-sheet-sub { direction: rtl; }
+html[data-lang="ar"] .crowd-sheet-title { direction: rtl; }
+/* the head-to-head box stays LTR-locked, so its own copy never mirrors the two camps */
+html[data-lang="fa"] .crowd-h2h-name,
+html[data-lang="ar"] .crowd-h2h-name { letter-spacing: 0; }
 
 /* ---- the lesson owns the board: no audience chrome over its choreography ---- */
 body.tutorial-live :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-sheet),
@@ -45788,9 +46062,39 @@ html[data-theme="light"] .crowd-sheet-card {
     0 8px 18px -12px rgba(88, 73, 48, .5);
 }
 html[data-theme="light"] .crowd-sheet-scrim { background: rgba(28, 36, 48, .42); }
-/* the odds card keeps its obsidian face in both themes; only the sheet's chips follow the porcelain */
-html[data-theme="light"] .crowd-side.is-red { color: #b01438; }
-html[data-theme="light"] .crowd-side.is-blue { color: #1f45b5; }
+/* the odds card keeps its obsidian face in both themes; the sheet's arena board follows the
+   porcelain through its own custom properties, so no ink is hardcoded here */
+html[data-theme="light"] .crowd-sheet-card {
+  --cs-face: linear-gradient(180deg, #ffffff 0%, #f1f4fa 100%);
+  --cs-ink: #0f172a;
+  --cs-soft: rgba(51, 65, 85, .74);
+  --cs-line: rgba(15, 23, 42, .10);
+  --cs-row: rgba(15, 23, 42, .035);
+  --cs-row-line: rgba(15, 23, 42, .07);
+  --cs-chip: rgba(15, 23, 42, .05);
+  --cs-track: rgba(15, 23, 42, .09);
+  --cs-h2h: linear-gradient(180deg, #f8fafc 0%, #eef2f8 100%);
+  --cs-gold: #a86a12;
+  --cs-on: rgba(15, 23, 42, .08);
+}
+html[data-theme="light"] .crowd-sheet-grip { background: rgba(15, 23, 42, .16); }
+html[data-theme="light"] .crowd-sheet-live {
+  border-color: rgba(16, 185, 129, .34);
+  background: rgba(16, 185, 129, .12);
+  color: #047857;
+}
+html[data-theme="light"] .crowd-sheet-close:hover { border-color: rgba(15, 23, 42, .22); }
+html[data-theme="light"] .crowd-filter.is-on {
+  border-color: rgba(15, 23, 42, .22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+html[data-theme="light"] .crowd-h2h-vs { color: rgba(15, 23, 42, .34); }
+html[data-theme="light"] .crowd-h2h-side.is-red .crowd-h2h-name { color: #be123c; }
+html[data-theme="light"] .crowd-h2h-side.is-blue .crowd-h2h-name { color: #0369a1; }
+html[data-theme="light"] .crowd-support.is-red { color: #b01438; }
+html[data-theme="light"] .crowd-support.is-blue { color: #1f45b5; }
+html[data-theme="light"] .crowd-av.is-f { color: #be185d; }
+html[data-theme="light"] .crowd-av.is-m { color: #0369a1; }
 html[data-theme="light"] .crowd-count { color: #0B3B30; }
 html[data-theme="light"] .crowd-eye { color: #0F9D72; }
 html[data-theme="light"] .crowd-dot {
@@ -45802,12 +46106,18 @@ html[data-theme="light"] .crowd-dot {
 html.reduced-motion .crowd-bar-fill,
 html.reduced-motion .crowd-bar,
 html.reduced-motion .crowd-toast,
-html.reduced-motion .crowd-pill { transition: none; }
+html.reduced-motion .crowd-pill,
+html.reduced-motion .crowd-h2h-fill,
+html.reduced-motion .crowd-filter,
+html.reduced-motion .crowd-sheet-close { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .crowd-bar-fill,
   .crowd-bar,
   .crowd-toast,
-  .crowd-pill { transition: none; }
+  .crowd-pill,
+  .crowd-h2h-fill,
+  .crowd-filter,
+  .crowd-sheet-close { transition: none; }
 }
 
 /* ---- short phones: the rail stays one line, the dock keeps its room ---- */

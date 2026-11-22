@@ -8,6 +8,11 @@
  * which open one tappable sheet. Every label names the SEATS actually playing (`p1Name` / `p2Name`
  * from the host): a 1v1 reads as the two players, a 2v2 as the two duo labels.
  *
+ * The audience itself is combinatorial, not a hardcoded roster: ~18 gender-tagged roots per gender
+ * plus a tail table synthesise thousands of handles, so a 58-seat house never repeats a name. Every
+ * metric that can be random is re-rolled per match — head count (7..58), the female/male mix, the
+ * support split, each fan's side roll, the list order (Fisher–Yates) and the simulated stake.
+ *
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
@@ -35,9 +40,13 @@ export interface CrowdSetup {
 type Camp = 0 | 1;
 type Gender = 'f' | 'm';
 type SideKey = 'p1' | 'p2' | 'A' | 'B';
+/** The sheet's filter: the whole mixed house, or one camp's supporters. */
+type Filter = 'all' | Camp;
 
 interface Fan {
-  name: string;
+  /** a synthesised gamer handle, unique inside this match */
+  handle: string;
+  /** derived from the root pool the handle was built from */
   gender: Gender;
   /** 0 = the crimson camp (seat 0's side), 1 = the cyan camp. */
   camp: Camp;
@@ -53,34 +62,86 @@ interface Fan {
 interface MatchCrowd {
   fans: Fan[];
   teamMode: boolean;
+  /** the female share rolled for this match, reused when a spectator joins mid-game */
+  femaleShare: number;
   /** The two sides' own names, in camp order. An empty slot falls back to a localized label. */
   names: [string, string];
 }
 
-/* ---------- the persona pool ----------
- * Fifty names, Persian and international, each carrying its own gender so the avatar ring and the
- * copy feel like a person rather than a placeholder. Deliberately no duplicates: a match seats at
- * most 44 fans, so every spectator on a board is a distinct name. */
-const NAMES: ReadonlyArray<readonly [string, Gender]> = [
-  ['سارا', 'f'], ['امیر', 'm'], ['نیلوفر', 'f'], ['آرش', 'm'], ['مریم', 'f'],
-  ['کیان', 'm'], ['هستی', 'f'], ['رضا', 'm'], ['ترانه', 'f'], ['پارسا', 'm'],
-  ['لیلا', 'f'], ['بهرام', 'm'], ['نازنین', 'f'], ['سینا', 'm'], ['الهام', 'f'],
-  ['سامان', 'm'], ['مهسا', 'f'], ['فرزاد', 'm'], ['شیرین', 'f'], ['کاوه', 'm'],
-  ['آیدا', 'f'], ['مهدی', 'm'], ['رویا', 'f'], ['بابک', 'm'], ['غزل', 'f'],
-  ['Sara', 'f'], ['Alex', 'm'], ['Elena', 'f'], ['Liam', 'm'], ['Maya', 'f'],
-  ['Daniel', 'm'], ['Nora', 'f'], ['Kian', 'm'], ['Zara', 'f'], ['Leo', 'm'],
-  ['Mia', 'f'], ['Noah', 'm'], ['Sofia', 'f'], ['Ethan', 'm'], ['Aisha', 'f'],
-  ['Omar', 'm'], ['Yuki', 'f'], ['Diego', 'm'], ['Priya', 'f'], ['Lucas', 'm'],
-  ['Amara', 'f'], ['Ivan', 'm'], ['Chloe', 'f'], ['Mateo', 'm'], ['Anya', 'f'],
+/* ---------- entropy ----------
+ * `crypto.getRandomValues` where the host offers it, `Math.random` otherwise. Every random draw in
+ * this module goes through `rnd()`, so a match's mix can never be a static 50/50 by accident. */
+function rnd(): number {
+  const c = globalThis.crypto;
+  if (c && typeof c.getRandomValues === 'function') {
+    const buf = new Uint32Array(1);
+    c.getRandomValues(buf);
+    return (buf[0] ?? 0) / 4_294_967_296;
+  }
+  return Math.random();
+}
+
+const pickIndex = (n: number): number => (n > 0 ? Math.floor(rnd() * n) : 0);
+
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = pickIndex(i + 1);
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+/* ---------- the procedural handle generator ----------
+ * Two compact root pools, each entry carrying its own gender, plus a tail table. Clean display form,
+ * tailed form and two-digit numeric form give every root ~120 readable variants: 36 roots therefore
+ * synthesise thousands of distinct handles from a few hundred bytes of source, and the caller's
+ * `Set` guarantees a seat never repeats a handle. */
+const FEMALE_ROOTS: readonly string[] = [
+  'sara', 'nilo', 'maya', 'hasti', 'nika', 'ava', 'lina', 'ruya', 'yara',
+  'sana', 'tara', 'dina', 'aya', 'elena', 'zara', 'mia', 'sofia', 'leila',
 ];
 
-const STAKES = [50, 100, 250, 500, 1000] as const;
-/** Pastel and obsidian badge faces: [background, ink]. Chosen by the name, so a name keeps its badge. */
-const PALETTES: ReadonlyArray<readonly [string, string]> = [
-  ['#FDE2E4', '#9F1239'], ['#E0F2FE', '#075985'], ['#EDE9FE', '#5B21B6'],
-  ['#DCFCE7', '#166534'], ['#FEF3C7', '#92400E'], ['#E0E7FF', '#3730A3'],
-  ['#FCE7F3', '#9D174D'], ['#CCFBF1', '#115E59'], ['#1E293B', '#E2E8F0'],
-  ['#0F172A', '#CBD5E1'],
+const MALE_ROOTS: readonly string[] = [
+  'amir', 'kian', 'arash', 'alex', 'parsa', 'sina', 'saman', 'kaveh', 'babak',
+  'omid', 'reza', 'dani', 'leo', 'noah', 'ethan', 'omar', 'diego', 'ivan',
+];
+
+const HANDLE_TAILS: readonly string[] = [
+  '_x', '.gg', '77', '021', '99', '.pro', 'tx', '07', 'v2', '24', 'star', '88', '11', 'ir',
+];
+
+/** Synthesise one unused handle for `gender`. Falls back to a numeric tail after 48 collisions. */
+function makeHandle(gender: Gender, used: Set<string>): string {
+  const roots = gender === 'f' ? FEMALE_ROOTS : MALE_ROOTS;
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const root = roots[pickIndex(roots.length)] ?? 'fan';
+    const roll = rnd();
+    let handle: string;
+    if (roll < 0.16) {
+      /* clean capitalized display form: `Sara`, `Amir` */
+      handle = root.charAt(0).toUpperCase() + root.slice(1);
+    } else if (roll < 0.76) {
+      /* a tail: `sara.gg`, `hasti_x`, `arash07`, `nilo.pro` */
+      handle = root + (HANDLE_TAILS[pickIndex(HANDLE_TAILS.length)] ?? '');
+    } else {
+      /* a two-digit numeric tail: `maya77`, `kian24` */
+      handle = root + String(10 + pickIndex(90));
+    }
+    if (!used.has(handle)) return handle;
+  }
+  let fallback = '';
+  do {
+    const root = roots[pickIndex(roots.length)] ?? 'fan';
+    fallback = root + String(100 + pickIndex(900));
+  } while (used.has(fallback));
+  return fallback;
+}
+
+/** Simulated stakes. Wide enough that the house reads as a crowd, never as one price point. */
+const STAKES: readonly number[] = [
+  25, 50, 75, 100, 150, 200, 250, 350, 500, 750, 1000, 1500,
 ];
 
 /* ---------- copy ----------
@@ -95,6 +156,10 @@ interface CrowdCopy {
   odds: string;
   /** the pill's small live tag */
   live: string;
+  /** the sheet's filter row */
+  all: string;
+  filters: string;
+  spectators: string;
   /** fallbacks when the host hands the crowd no seat name */
   p1: string;
   p2: string;
@@ -115,6 +180,9 @@ const COPY: Record<LangCode, CrowdCopy> = {
     close: 'Close',
     odds: 'Crowd odds',
     live: 'LIVE',
+    all: 'All',
+    filters: 'Filter spectators',
+    spectators: 'Spectators',
     p1: 'Player 1', p2: 'Player 2',
     fan: 'Backing {name}',
     wall: ['Clutch wall by {name}!', 'That wall shut {name} down!', 'Smart block — no way through for {name}!'],
@@ -129,6 +197,9 @@ const COPY: Record<LangCode, CrowdCopy> = {
     close: 'بستن',
     odds: 'پیش‌بینی سکوها',
     live: 'زنده',
+    all: 'همه',
+    filters: 'فیلتر تماشاگران',
+    spectators: 'تماشاگران',
     p1: 'بازیکن 1', p2: 'بازیکن 2',
     fan: 'حمایت از {name}',
     wall: ['عجب دیواری برای {name} بست!', 'این دیوار مسیر {name} رو بست!', 'دفاع حساب‌شده روی {name}!'],
@@ -143,6 +214,9 @@ const COPY: Record<LangCode, CrowdCopy> = {
     close: 'Закрыть',
     odds: 'Прогноз трибун',
     live: 'ЭФИР',
+    all: 'Все',
+    filters: 'Фильтр зрителей',
+    spectators: 'Зрители',
     p1: 'Игрок 1', p2: 'Игрок 2',
     fan: 'За {name}',
     wall: ['Отличный блок от {name}!', 'Эта стена остановила {name}!', 'Умная защита — {name} не пройдёт!'],
@@ -157,6 +231,9 @@ const COPY: Record<LangCode, CrowdCopy> = {
     close: 'إغلاق',
     odds: 'توقع الجمهور',
     live: 'مباشر',
+    all: 'الكل',
+    filters: 'تصفية الجمهور',
+    spectators: 'الجمهور',
     p1: 'اللاعب 1', p2: 'اللاعب 2',
     fan: 'دعم {name}',
     wall: ['سدٌّ حاسم من {name}!', 'هذا السد أوقف {name}!', 'دفاع ذكي — لا مرور لـ {name}!'],
@@ -171,6 +248,9 @@ const COPY: Record<LangCode, CrowdCopy> = {
     close: 'Cerrar',
     odds: 'Cuotas del público',
     live: 'EN VIVO',
+    all: 'Todos',
+    filters: 'Filtrar espectadores',
+    spectators: 'Espectadores',
     p1: 'Jugador 1', p2: 'Jugador 2',
     fan: 'A por {name}',
     wall: ['¡Muro decisivo de {name}!', '¡Ese muro frenó a {name}!', '¡Bloqueo inteligente — {name} no pasa!'],
@@ -182,22 +262,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
 
 const copy = (): CrowdCopy => COPY[lang] ?? COPY.en;
 
-/* ---------- deterministic badge identity ---------- */
-function hashName(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
+/* ---------- badge identity ---------- */
 const initialOf = (name: string): string => Array.from(name)[0] ?? '?';
-
-function paintAvatar(el: HTMLElement, fan: Fan): void {
-  const palette = PALETTES[hashName(fan.name) % PALETTES.length]!;
-  el.textContent = initialOf(fan.name);
-  el.style.setProperty('--av-bg', palette[0]);
-  el.style.setProperty('--av-ink', palette[1]);
-  el.style.setProperty('--av-ring', fan.gender === 'f' ? 'rgba(244,114,182,.72)' : 'rgba(56,189,248,.66)');
-}
 
 /* ---------- number formatting ----------
  * `en-US` guarantees Latin digits and thousands separators even when the shell is Persian. */
@@ -250,8 +316,30 @@ function campName(camp: Camp): string {
   return camp === 0 ? c.p1 : c.p2;
 }
 
+/* ---------- the two crisp gender marks ----------
+ * Fixed inline vector paths: a Venus ring-and-cross and a Mars arrow-and-ring. No emoji, no font
+ * dependency, no external asset — they inherit `currentColor` from their badge. */
+const GENDER_ICON: Record<Gender, string> = {
+  f: '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
+    + '<circle cx="8" cy="6" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+    + '<path d="M8 10.1v4.4M5.9 12.4h4.2" fill="none" stroke="currentColor" stroke-width="1.5"'
+    + ' stroke-linecap="round"/></svg>',
+  m: '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
+    + '<circle cx="6.6" cy="9.4" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+    + '<path d="M9.6 6.4 13.8 2.2M10.4 2.2h3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.5"'
+    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+/** Mount a gender badge (15×15 dark disc) into `host`. */
+function paintGenderBadge(host: HTMLElement, gender: Gender): void {
+  host.className = `crowd-gbadge is-${gender}`;
+  /* A trusted constant, never host or user text: the only innerHTML in this module. */
+  host.innerHTML = GENDER_ICON[gender];
+}
+
 /* ---------- the live simulation ---------- */
 let match: MatchCrowd | null = null;
+let filter: Filter = 'all';
 let toastTimer = 0;
 let lastReactionAt = -Infinity;
 let lastFocus: HTMLElement | null = null;
@@ -259,26 +347,18 @@ let lastFocus: HTMLElement | null = null;
 const REACTION_GAP_MS = 3400;
 const TOAST_MS = 2600;
 
-const pickIndex = (n: number): number => (n > 0 ? Math.floor(Math.random() * n) : 0);
+/* The house band. A match rolls its own head count inside it; joins and leaves stay inside it. */
+const MIN_SEATS = 7;
+const MAX_SEATS = 58;
 
-function shuffle<T>(arr: T[]): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const tmp = arr[i]!;
-    arr[i] = arr[j]!;
-    arr[j] = tmp;
-  }
-  return arr;
-}
-
-function makeFan(name: string, gender: Gender, camp: Camp, teamMode: boolean): Fan {
+function makeFan(handle: string, gender: Gender, camp: Camp, teamMode: boolean): Fan {
   return {
-    name,
+    handle,
     gender,
     camp,
     sideKey: teamMode ? (camp === 0 ? 'A' : 'B') : (camp === 0 ? 'p1' : 'p2'),
     stake: STAKES[pickIndex(STAKES.length)]!,
-    decided: Math.random() < 0.58,
+    decided: rnd() < 0.58,
     bandwagon: false,
   };
 }
@@ -299,7 +379,7 @@ const campStakes = (fans: readonly Fan[]): [number, number] => {
 function leadingCamp(): Camp {
   if (!match) return 0;
   const [a, b] = campCounts(match.fans);
-  if (a === b) return Math.random() < 0.5 ? 0 : 1;
+  if (a === b) return rnd() < 0.5 ? 0 : 1;
   return a > b ? 0 : 1;
 }
 
@@ -321,10 +401,22 @@ interface CrowdUi {
   toast: HTMLElement;
   sheet: HTMLElement;
   sheetTitle: HTMLElement;
-  sheetSub: HTMLElement;
+  sheetLive: HTMLElement;
+  sheetCount: HTMLElement;
+  sheetViewers: HTMLElement;
   list: HTMLElement;
+  empty: HTMLElement;
   closeBtn: HTMLButtonElement;
   scrim: HTMLElement;
+  h2hRedName: HTMLElement;
+  h2hBlueName: HTMLElement;
+  h2hRedFans: HTMLElement;
+  h2hBlueFans: HTMLElement;
+  h2hRedStake: HTMLElement;
+  h2hBlueStake: HTMLElement;
+  h2hRedFill: HTMLElement;
+  h2hBlueFill: HTMLElement;
+  filters: HTMLButtonElement[];
 }
 
 let ui: CrowdUi | null = null;
@@ -349,26 +441,65 @@ function resolveUi(): CrowdUi | null {
   const toast = byId('crowd-toast');
   const sheet = byId('crowd-sheet');
   const sheetTitle = byId('crowd-sheet-title');
-  const sheetSub = byId('crowd-sheet-sub');
+  const sheetLive = byId('crowd-sheet-live');
+  const sheetCount = byId('crowd-sheet-count');
+  const sheetViewers = byId('crowd-sheet-viewers');
   const list = byId('crowd-list');
+  const empty = byId('crowd-empty');
   const closeBtn = byId<HTMLButtonElement>('crowd-sheet-close');
   const scrim = byId('crowd-sheet-scrim');
+  const h2hRedName = byId('crowd-h2h-red-name');
+  const h2hBlueName = byId('crowd-h2h-blue-name');
+  const h2hRedFans = byId('crowd-h2h-red-fans');
+  const h2hBlueFans = byId('crowd-h2h-blue-fans');
+  const h2hRedStake = byId('crowd-h2h-red-stake');
+  const h2hBlueStake = byId('crowd-h2h-blue-stake');
+  const h2hRedFill = byId('crowd-h2h-fill-red');
+  const h2hBlueFill = byId('crowd-h2h-fill-blue');
+  const filterAll = byId<HTMLButtonElement>('crowd-filter-all');
+  const filterP1 = byId<HTMLButtonElement>('crowd-filter-p1');
+  const filterP2 = byId<HTMLButtonElement>('crowd-filter-p2');
   /* The screen can be booted without this chrome (headless probes, a host that strips it):
      no refs means no painting, and every hook below is a no-op instead of a throw. */
   if (!pill || !count || !live || !bar || !title || !redName || !blueName || !redPct || !bluePct
     || !redStake || !blueStake || !redFill || !blueFill || !toast || !sheet || !sheetTitle
-    || !sheetSub || !list || !closeBtn || !scrim) {
+    || !sheetLive || !sheetCount || !sheetViewers || !list || !empty || !closeBtn || !scrim
+    || !h2hRedName || !h2hBlueName || !h2hRedFans || !h2hBlueFans || !h2hRedStake || !h2hBlueStake
+    || !h2hRedFill || !h2hBlueFill || !filterAll || !filterP1 || !filterP2) {
     return null;
   }
   ui = {
     pill, count, live, bar, title, redName, blueName, redPct, bluePct, redStake, blueStake,
-    redFill, blueFill, toast, sheet, sheetTitle, sheetSub, list, closeBtn, scrim,
+    redFill, blueFill, toast, sheet, sheetTitle, sheetLive, sheetCount, sheetViewers, list, empty,
+    closeBtn, scrim, h2hRedName, h2hBlueName, h2hRedFans, h2hBlueFans, h2hRedStake, h2hBlueStake,
+    h2hRedFill, h2hBlueFill, filters: [filterAll, filterP1, filterP2],
   };
   wire(ui);
   return ui;
 }
 
+/** A `<bdi>` that carries a label without ever joining the surrounding bidi run. */
+function bdiNode(text: string, dir: 'ltr' | 'auto', className?: string): HTMLElement {
+  const el = document.createElement('bdi');
+  el.dir = dir;
+  if (className) el.className = className;
+  el.textContent = text;
+  return el;
+}
+
 /* ---------- painting ---------- */
+/** Label the three filter keys with this board's own seat names. */
+function paintFilterLabels(): void {
+  if (!ui) return;
+  const c = copy();
+  ui.filters[0]!.replaceChildren(bdiNode(c.all, 'auto'));
+  ui.filters[1]!.replaceChildren(bdiNode(campName(0), 'auto'));
+  ui.filters[2]!.replaceChildren(bdiNode(campName(1), 'auto'));
+  ui.filters[0]!.setAttribute('aria-label', c.all);
+  ui.filters[1]!.setAttribute('aria-label', campName(0));
+  ui.filters[2]!.setAttribute('aria-label', campName(1));
+}
+
 function paintBar(): void {
   if (!match || !ui) return;
   const c = copy();
@@ -389,7 +520,7 @@ function paintBar(): void {
   const wide = Math.min(94, Math.max(6, pctA));
   ui.redFill.style.width = `${wide}%`;
   ui.blueFill.style.width = `${100 - wide}%`;
-  ui.count.textContent = formatNum(total);
+  ui.count.textContent = formatNum(ca + cb);
   ui.title.textContent = c.odds;
   ui.live.textContent = c.live;
 
@@ -402,9 +533,65 @@ function paintBar(): void {
   if (!ui.sheet.hidden) renderSheet();
 }
 
-/** Repaint everything the pill and the card own. Cheap: two small loops over ≤44 records. */
+/** Repaint everything the pill and the card own. Cheap: two small loops over ≤58 records. */
 function paint(): void {
   paintBar();
+}
+
+/** One spectator card: avatar + gender badge | identity stack | stake pill. */
+function fanRow(fan: Fan): HTMLLIElement {
+  const c = copy();
+  const li = document.createElement('li');
+  li.className = `crowd-row is-${fan.gender}`;
+
+  /* column 1 — 36×36 avatar with its corner gender badge */
+  const av = document.createElement('span');
+  av.className = `crowd-av is-${fan.gender}`;
+  av.setAttribute('aria-hidden', 'true');
+  const ini = document.createElement('span');
+  ini.className = 'crowd-av-ini';
+  ini.textContent = initialOf(fan.handle);
+  const badge = document.createElement('span');
+  paintGenderBadge(badge, fan.gender);
+  av.append(ini, badge);
+
+  /* column 2 — handle + gender pill + VIP, then the side they back */
+  const mid = document.createElement('span');
+  mid.className = 'crowd-mid';
+
+  const top = document.createElement('span');
+  top.className = 'crowd-mid-top';
+  top.append(bdiNode(fan.handle, 'ltr', 'crowd-handle'));
+  const gPill = document.createElement('span');
+  gPill.className = `crowd-gpill is-${fan.gender}`;
+  gPill.textContent = fan.gender === 'f' ? '♀' : '♂';
+  gPill.setAttribute('aria-hidden', 'true');
+  top.append(gPill);
+  if (fan.stake >= 500) {
+    const vip = document.createElement('span');
+    vip.className = 'crowd-vip';
+    vip.textContent = 'VIP';
+    vip.setAttribute('aria-hidden', 'true');
+    top.append(vip);
+  }
+
+  const support = document.createElement('span');
+  support.className = `crowd-support ${fan.camp === 0 ? 'is-red' : 'is-blue'}`;
+  support.append(templateNodes(c.fan, { name: campName(fan.camp) }, [], ['name']));
+
+  mid.append(top, support);
+
+  /* column 3 — the staked coins */
+  const stake = document.createElement('span');
+  stake.className = 'crowd-stake';
+  const coin = document.createElement('span');
+  coin.className = 'coin';
+  coin.setAttribute('data-coin', '');
+  coin.setAttribute('aria-hidden', 'true');
+  stake.append(coin, bdiNode(formatNum(fan.stake), 'ltr'));
+
+  li.append(av, mid, stake);
+  return li;
 }
 
 function renderSheet(): void {
@@ -412,58 +599,61 @@ function renderSheet(): void {
   const c = copy();
   const [ca, cb] = campCounts(match.fans);
   const total = ca + cb;
+  const [sa, sb] = campStakes(match.fans);
 
   ui.sheetTitle.textContent = c.title;
+  ui.sheetLive.textContent = c.live;
+  ui.sheetCount.textContent = formatNum(total);
+  ui.sheetViewers.setAttribute('aria-label', c.viewers.replace('{n}', formatNum(total)));
   ui.closeBtn.setAttribute('aria-label', c.close);
-  const sub = document.createDocumentFragment();
-  sub.append(templateNodes(c.viewers, { n: formatNum(total) }, ['n']));
-  sub.append(' · ');
-  sub.append(templateNodes(
-    c.split,
-    { a: formatNum(ca), b: formatNum(cb), p1: campName(0), p2: campName(1) },
-    ['a', 'b'],
-    ['p1', 'p2'],
-  ));
-  ui.sheetSub.replaceChildren(sub);
 
+  /* the head-to-head summary: both seat names, their head counts and their staked totals */
+  ui.h2hRedName.textContent = campName(0);
+  ui.h2hBlueName.textContent = campName(1);
+  ui.h2hRedFans.textContent = formatNum(ca);
+  ui.h2hBlueFans.textContent = formatNum(cb);
+  ui.h2hRedStake.textContent = formatNum(sa);
+  ui.h2hBlueStake.textContent = formatNum(sb);
+  const wide = Math.min(94, Math.max(6, Math.round((ca / Math.max(1, total)) * 100)));
+  ui.h2hRedFill.style.width = `${wide}%`;
+  ui.h2hBlueFill.style.width = `${100 - wide}%`;
+
+  /* the filter row, labelled with this board's own seat names */
+  paintFilterLabels();
+
+  const list = ui.list;
+  /* A live event re-renders the board under the reader: keep their place in the list. */
+  const keepScroll = list.scrollTop;
+  const shown = filter === 'all' ? match.fans : match.fans.filter((f) => f.camp === filter);
   const frag = document.createDocumentFragment();
-  for (const fan of match.fans) {
-    const li = document.createElement('li');
-    li.className = 'crowd-row';
-
-    const av = document.createElement('span');
-    av.className = 'crowd-av';
-    av.setAttribute('aria-hidden', 'true');
-    paintAvatar(av, fan);
-
-    const nm = document.createElement('span');
-    nm.className = 'crowd-nm';
-    nm.dir = 'auto';
-    nm.textContent = fan.name;
-
-    const side = document.createElement('span');
-    side.className = `crowd-side ${fan.camp === 0 ? 'is-red' : 'is-blue'}`;
-    side.append(templateNodes(c.fan, { name: campName(fan.camp) }, [], ['name']));
-
-    const stake = document.createElement('span');
-    stake.className = 'crowd-stake';
-    const coin = document.createElement('span');
-    coin.className = 'coin';
-    coin.setAttribute('data-coin', '');
-    coin.setAttribute('aria-hidden', 'true');
-    const num = document.createElement('bdi');
-    num.dir = 'ltr';
-    num.textContent = formatNum(fan.stake);
-    stake.append(coin, num);
-
-    li.append(av, nm, side, stake);
-    frag.append(li);
-  }
-  ui.list.replaceChildren(frag);
-  mountCoins(ui.list);
+  for (const fan of shown) frag.append(fanRow(fan));
+  list.replaceChildren(frag);
+  list.setAttribute('aria-label', c.spectators);
+  list.hidden = shown.length === 0;
+  ui.empty.hidden = shown.length > 0;
+  ui.empty.textContent = c.filters;
+  list.scrollTop = keepScroll;
+  mountCoins(list);
 }
 
 /* ---------- the sheet ---------- */
+function applyFilter(next: Filter): void {
+  if (filter === next) return;
+  filter = next;
+  if (ui) {
+    for (const btn of ui.filters) {
+      const on = btn.dataset['crowdFilter'] === String(next);
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  if (match && ui && !ui.sheet.hidden) {
+    renderSheet();
+    /* a different filter is a different list: start it at the top */
+    ui.list.scrollTop = 0;
+  }
+}
+
 function openSheet(): void {
   if (!match) return;
   const refs = resolveUi();
@@ -496,7 +686,7 @@ function onSheetKey(e: KeyboardEvent): void {
   closeSheet();
 }
 
-/** One-time listeners: the two triggers, the close key, the scrim and the language watcher. */
+/** One-time listeners: the two triggers, the close key, the scrim, the filters, the language. */
 let wired = false;
 function wire(refs: CrowdUi): void {
   if (wired) return;
@@ -505,6 +695,13 @@ function wire(refs: CrowdUi): void {
   refs.bar.addEventListener('click', openSheet);
   refs.closeBtn.addEventListener('click', () => closeSheet());
   refs.scrim.addEventListener('click', () => closeSheet());
+  mountCoins(refs.sheet);
+  for (const btn of refs.filters) {
+    btn.addEventListener('click', () => {
+      const raw = btn.dataset['crowdFilter'] ?? 'all';
+      applyFilter(raw === '0' ? 0 : raw === '1' ? 1 : 'all');
+    });
+  }
   /* A language flip repaints the labels in place; the simulation itself is language-neutral. */
   onLang(() => {
     if (!match) return;
@@ -536,7 +733,7 @@ function showToast(
   const name = document.createElement('bdi');
   name.dir = 'auto';
   name.className = 'crowd-toast-name';
-  name.textContent = fan.name;
+  name.textContent = fan.handle;
   frag.append(name, ': ');
   const text = document.createElement('span');
   text.className = 'crowd-toast-txt';
@@ -577,19 +774,17 @@ function driftCount(): boolean {
   if (!match) return false;
   const [ca, cb] = campCounts(match.fans);
   const total = ca + cb;
-  const canAdd = total < 44;
-  const canRemove = total > 14 && Math.max(ca, cb) > 3;
+  const canAdd = total < MAX_SEATS;
+  const canRemove = total > MIN_SEATS && Math.max(ca, cb) > 2;
   if (!canAdd && !canRemove) return false;
-  const add = canAdd && (!canRemove || Math.random() < 0.55);
+  const add = canAdd && (!canRemove || rnd() < 0.55);
+  /* arrive on the side the room is already leaning toward, weighted by head count */
+  const camp: Camp = ca === cb ? (rnd() < 0.5 ? 0 : 1) : (ca > cb ? 0 : 1);
   if (add) {
-    /* arrive on the side the room is already leaning toward, weighted by head count */
-    const camp: Camp = ca === cb ? (Math.random() < 0.5 ? 0 : 1) : (ca > cb ? 0 : 1);
-    const used = new Set(match.fans.map((f) => f.name));
-    const pool = NAMES.filter(([name]) => !used.has(name));
-    const [name, gender] = pool[pickIndex(pool.length)] ?? NAMES[pickIndex(NAMES.length)]!;
-    match.fans.push(makeFan(name, gender, camp, match.teamMode));
+    const used = new Set(match.fans.map((f) => f.handle));
+    const gender: Gender = rnd() < match.femaleShare ? 'f' : 'm';
+    match.fans.push(makeFan(makeHandle(gender, used), gender, camp, match.teamMode));
   } else {
-    const camp: Camp = ca === cb ? (Math.random() < 0.5 ? 0 : 1) : (ca > cb ? 0 : 1);
     const idx = match.fans.findIndex((f) => f.camp === camp);
     if (idx < 0) return false;
     match.fans.splice(idx, 1);
@@ -602,13 +797,13 @@ function driftCount(): boolean {
 function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   if (!match) return;
   const target = leader ?? leadingCamp();
-  const switched = shiftSupport(target, type === 'wall' ? 1 : Math.random() < 0.5 ? 1 : 2);
+  const switched = shiftSupport(target, type === 'wall' ? 1 : rnd() < 0.5 ? 1 : 2);
   const now = performance.now();
   if (now - lastReactionAt < REACTION_GAP_MS) return;
   const c = copy();
 
   /* A fresh switcher quotes their stake about half the time; the rest are pure crowd noise. */
-  if (switched && Math.random() < 0.5) {
+  if (switched && rnd() < 0.5) {
     lastReactionAt = now;
     showToast(switched, c.back, { n: formatNum(switched.stake), name: campName(target) }, ['name']);
     return;
@@ -616,7 +811,7 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   const pool = type === 'wall' ? c.wall : type === 'mine' ? c.mine : c.near;
   const line = pool[pickIndex(pool.length)] ?? pool[0] ?? '';
   /* Prefer a fan on the leading camp: the reaction belongs to the side the play favors. */
-  const fans = target === 0 ? match.fans.filter((f) => f.camp === 0) : match.fans.filter((f) => f.camp === 1);
+  const fans = match.fans.filter((f) => f.camp === target);
   const fan = fans[pickIndex(fans.length)] ?? match.fans[pickIndex(match.fans.length)];
   if (!fan || !line) return;
   lastReactionAt = now;
@@ -629,25 +824,60 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
   const refs = resolveUi();
   if (!refs) return;
 
-  const total = 14 + Math.floor(Math.random() * 31);       // 14..44
-  const redShare = 0.42 + Math.random() * 0.22;            // 42%..64%, never a static 50/50
-  let red = Math.round(total * redShare);
-  red = Math.min(total - 3, Math.max(3, red));
-  const blue = total - red;
-
+  /* Every metric is re-rolled: head count 7..58, a 30%..70% female mix, a 22%..78% support lean.
+     Each fan's side is then an independent weighted roll, never a block transfer, and the finished
+     list is shuffled so both camps and both genders interleave across the whole card. */
+  const total = MIN_SEATS + pickIndex(MAX_SEATS - MIN_SEATS + 1);
+  const redShare = 0.22 + rnd() * 0.56;
+  const femaleShare = 0.3 + rnd() * 0.4;
   const teamMode = setup.teamMode === true;
-  const roster = shuffle(NAMES.slice());
+
+  const used = new Set<string>();
   const fans: Fan[] = [];
   for (let i = 0; i < total; i++) {
-    const [name, gender] = roster[i] ?? NAMES[i % NAMES.length]!;
-    fans.push(makeFan(name, gender, i < red ? 0 : 1, teamMode));
+    const gender: Gender = rnd() < femaleShare ? 'f' : 'm';
+    const handle = makeHandle(gender, used);
+    used.add(handle);
+    const camp: Camp = rnd() < redShare ? 0 : 1;
+    fans.push(makeFan(handle, gender, camp, teamMode));
   }
+
+  /* Keep both camps populated: a filter that can only ever show an empty board is a broken filter. */
+  let [ca] = campCounts(fans);
+  const need = Math.min(2, Math.floor(total / 2));
+  for (let i = 0; i < fans.length && ca < need; i++) {
+    const fan = fans[i]!;
+    if (fan.camp === 1) {
+      fan.camp = 0;
+      fan.sideKey = teamMode ? 'A' : 'p1';
+      ca++;
+    }
+  }
+  for (let i = 0; i < fans.length && total - ca < need; i++) {
+    const fan = fans[i]!;
+    if (fan.camp === 0) {
+      fan.camp = 1;
+      fan.sideKey = teamMode ? 'B' : 'p2';
+      ca--;
+    }
+  }
+
+  shuffle(fans);
+
   match = {
     fans,
     teamMode,
+    femaleShare,
     names: [(setup.p1Name ?? '').trim(), (setup.p2Name ?? '').trim()],
   };
   lastReactionAt = -Infinity;
+  filter = 'all';
+  paintFilterLabels();
+  for (const btn of refs.filters) {
+    const on = btn.dataset['crowdFilter'] === 'all';
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
 
   refs.pill.hidden = false;
   refs.bar.hidden = false;
@@ -677,10 +907,10 @@ export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null):
       bigPlay('near', leader);
       break;
     case 'turn':
-      if (Math.random() < 0.1) driftCount();
+      if (rnd() < 0.1) driftCount();
       break;
     case 'move':
-      if (Math.random() < 0.06) driftCount();
+      if (rnd() < 0.06) driftCount();
       break;
   }
 }
@@ -690,6 +920,7 @@ export function closeCrowd(): void {
   hideToast();
   closeSheet(false);
   match = null;
+  filter = 'all';
   lastReactionAt = -Infinity;
   const refs = ui;
   if (!refs) return;
