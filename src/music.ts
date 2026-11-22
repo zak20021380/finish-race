@@ -24,6 +24,14 @@
  * `requestAnimationFrame`, the render loop or the 60 fps budget. One element, one timer handle,
  * no nodes, nothing to collect: flipping the switch a thousand times cannot leak.
  *
+ * THE BED IS A MATCH VOICE, NEVER A MENU ONE. Nothing here plays outside a live board: Home,
+ * Ranks, the Shop, VIP, Squads, Friends, the lobby and every other screen between matches are
+ * silent even with the Music switch on, because `inMatch` is part of `shouldPlay()` and it starts
+ * `false` on boot. `setMusicInMatch(true)` is the only door in and it is opened by the board itself
+ * (the reveal onto the playable race, or a rematch dealt in place); `setMusicInMatch(false)` closes
+ * it on every exit. The switch, the gesture unlock and the lifecycle still work exactly as before —
+ * a tap on Home pre-blesses the element for the WebView, it just does not start anything.
+ *
  * THE SETTLEMENT OWNS ITS OWN VOICE. When the result capsule opens the bed steps aside — a 220 ms
  * duck, then a pause — so `01-victory-fan.ogg` or `defeat.m4a` is heard alone. It stays parked for
  * as long as that capsule is up: no gesture, focus, visibility change or settings toggle can lift
@@ -88,15 +96,32 @@ let suspended = false;
  */
 let matchOver = false;
 
+/**
+ * A match is genuinely live on the board. This is the STRICT gate the brief asks for, and it is
+ * `false` on boot: no bed on Home, Ranks, the Shop, VIP, Squads, Friends, the lobby or any drawer
+ * over a menu. Only `setMusicInMatch(true)` — called by the board's own reveal and by a rematch
+ * dealt in place — opens it, and `setMusicInMatch(false)` closes it on every exit.
+ */
+let inMatch = false;
+
 /** Telegram's `deactivated`/`activated` pair is registered once, and only when the SDK has landed. */
 let tgBound = false;
 
 /** The music switch as of the last change, so the tap that turns it ON is read as a gesture. */
 let lastEnabled = settings.musicEnabled;
 
-/** True when the bed should be audible right now. */
+/** The page is actually on screen. A read that headless browsers cannot answer reads as visible. */
+function pageHidden(): boolean {
+  try { return document.hidden; } catch { return false; }
+}
+
+/**
+ * True when the bed should be audible right now: a live match, no settlement over it, the Music
+ * switch on, the element blessed by a gesture, and the Mini App actually on screen.
+ */
 function shouldPlay(): boolean {
-  return booted && unlocked && !suspended && !matchOver && settings.musicEnabled;
+  return booted && inMatch && !matchOver && settings.musicEnabled && unlocked
+    && !suspended && !pageHidden();
 }
 
 /**
@@ -237,6 +262,31 @@ export function setMusicMatchOver(isOver: boolean): void {
   if (!booted) return;                  // nothing is built yet, and nothing should be
   if (isOver) duckForSettlement();
   else sync();
+}
+
+/**
+ * The only door into the bed: a match is entering the playable board, or leaving it.
+ *
+ * `true` — the reveal onto the race (Solo/Bot, local, 1v1, 3P/4P, 2v2, a friend duel) or a rematch
+ * dealt in place. The settlement duck is lifted (`matchOver`) because a fresh board has no result
+ * on it, and the bed comes up to the ambient mix over `FADE_IN_MS` if it is genuinely wanted: the
+ * switch on, a gesture already landed, the Mini App on screen. Anything else is silence, and the
+ * first gesture/focus/toggle after this call is what brings it up through `sync()`.
+ *
+ * `false` — the player quit to the menu, aborted the race, or moved to a non-match screen. The bed
+ * ramps down and parks; the element is kept (it is already decoded) so the next match starts at
+ * once, and no timer is left ticking.
+ */
+export function setMusicInMatch(active: boolean): void {
+  inMatch = active;
+  /* a board being dealt has no verdict on it: the settlement duck belongs to the last race */
+  if (active) matchOver = false;
+  if (!booted) return;                  // nothing is built yet, and nothing should be
+  if (active) {
+    if (shouldPlay()) startBed();       // fade up to TARGET_VOLUME over FADE_IN_MS
+    return;
+  }
+  stopBed();                            // fade down to 0 over FADE_OUT_MS, then pause
 }
 
 /** Reconcile the element with the switches, the gesture and the Mini App's lifecycle. */

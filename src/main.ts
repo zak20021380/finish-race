@@ -46,9 +46,11 @@ import {
 import { playDefeat, stopDefeat } from './sound';
 /* The ambient bed's own controller. It registers its listeners and builds its element only when
    `initMusic()` runs below — after the first screen has mounted — so nothing here touches boot.
-   `setMusicMatchOver()` is the settlement's only door into it: the result capsule ducks the bed so
-   the victory/defeat fanfare is heard alone, and the player's exit is what brings it back. */
-import { initMusic, setMusicMatchOver } from './music';
+   `setMusicInMatch()` is the STRICT gate: the bed is a match voice, so it is opened when the board
+   becomes playable and closed on every exit — it is never heard over Home, the Shop, VIP, Ranks,
+   Squads, Friends or the lobby. `setMusicMatchOver()` is the settlement's own door: the result
+   capsule ducks the bed so the victory/defeat fanfare is heard alone. */
+import { initMusic, setMusicInMatch, setMusicMatchOver } from './music';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
   resetMatchClaims, tiqRecoveryLimit,
@@ -1179,6 +1181,11 @@ const router = createRouter($('screens'), (id, prev, phase) => {
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
   if (id !== 'game') { cancelTutorial(); pauseGame(); }   // the board only ticks while it is on screen
+  /* ...and the bed follows the board. Every screen that is not the playable race is a non-match
+     screen — Home, Ranks, the Shop, Squads, Compete, a lobby — so the strict gate is closed on
+     arrival there. The board itself is gated ON by `reveal()` and by a `restart()` dealt in place,
+     never by a route alone, which is what keeps matchmaking and the menu silent. */
+  if (id !== 'game') setMusicInMatch(false);
   /* Returning to a live board by a route (not just a fresh `startGame`) must not inherit the
      pause that was raised on the way out. The pause family is sheet-owned, so a sheet still above
      the board keeps its own stop. */
@@ -3874,9 +3881,12 @@ function restart() {
   banter.close();
   overlayOpen = false;
   overlay.hidden = true;
-  /* The settlement is behind us and a board is being dealt: the bed is wanted again. This is the
-     door Play again, a rematch start and every `startGame()` walk through, so one call here covers
-     them all — and `setMusicMatchOver` is a no-op when nothing was ducked. */
+  /* The settlement is behind us and a board is being dealt: the bed is wanted again, but ONLY if
+     this board is already the visible one. Play again and a room's rematch restart in place on a
+     live board, so the strict gate opens here; a fresh `startGame()` still sits behind the menu,
+     the lobby or the online queue, and `reveal()` is what opens it when the race is playable.
+     `setMusicMatchOver` is a no-op when nothing was ducked. */
+  setMusicInMatch(router.current === 'game');
   setMusicMatchOver(false);
   overlay.classList.remove('win', 'lose', 'is-party');
   menuBtn.disabled = false;
@@ -4642,6 +4652,11 @@ function startGame(setup: StartSetup) {
        frame is guaranteed to hold every pawn on its exact spawn tile centre. */
     snapBalls();
     router.go('game');
+    /* THE RACE IS PLAYABLE. The face-off is behind the player and the board in front of them, so
+       this is the moment the bed is allowed: Solo/Bot, local, 1v1, 3P/4P, 2v2 and a friend duel
+       all pass through here, and `quiet` launches (a lesson, a room's own countdown) reach it too.
+       The ramp is the module's own 500 ms fade; nothing here touches a frame. */
+    setMusicInMatch(true);
     /* The first turn began in `restart()` behind the face-off (or the lobby veil). The board is
        only now visible, so this is the instant its wall clock starts. */
     startClock();
@@ -4861,7 +4876,10 @@ function quitToMenu() {
     overlay.hidden = true;
   }
   /* Menu, the back key, the share door and the pause sheet's quit all land here: whatever the
-     settlement ducked, the bed is the menu's again from this beat on. */
+     settlement ducked, the bed is the menu's again from this beat on — which under the strict
+     gate means parked and silent until a race actually begins. The match gate is closed FIRST so
+     lifting the settlement duck above cannot fade a bed in over the menu for a quarter second. */
+  setMusicInMatch(false);
   setMusicMatchOver(false);
   sheets.close();
   /* Walking out of a live online race is a resignation: the rival takes the win immediately, and
@@ -6397,17 +6415,21 @@ again.addEventListener('click', () => {
   /* ...and the bed comes back with the next race. Placed after the two stops so the fanfare's tail
      is not faded over; a rematch VOTE returned above and never reaches this line, which is what
      keeps the bed parked while the room is still deciding. */
-  setMusicMatchOver(false);
   /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) {
     const mode: 'pvp' | 'arena' | 'channel_war' = warMatch
       ? 'channel_war'
       : active.mode === 'arena' ? 'arena' : 'pvp';
+    /* The board is left behind on this beat and the queue screen takes over, so the strict match
+       gate closes HERE — `setMusicMatchOver(false)` would lift the duck over a screen that is no
+       longer a match. The queued race opens it again at its own reveal. */
+    setMusicInMatch(false);
     active.close();
     active = null;
     queueMatch(mode);
     return;
   }
+  setMusicMatchOver(false);
   restart();
 });
 shareBtn.addEventListener('click', () => {
