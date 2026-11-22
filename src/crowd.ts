@@ -4,12 +4,15 @@
  * This module is deliberately isolated from the economy, the rules and the wire. It never reads or
  * writes coins, Stars, TIQ or a match outcome; it never sends an action; it owns no server state.
  * It invents a believable audience for the board on screen, lets a few of those fans drift toward
- * whoever is ahead, and paints three small pieces of chrome plus one tappable sheet.
+ * whoever is ahead, and paints a live-viewers pill plus a crowd-odds card above the board, both of
+ * which open one tappable sheet. Every label names the SEATS actually playing (`p1Name` / `p2Name`
+ * from the host): a 1v1 reads as the two players, a 2v2 as the two duo labels.
  *
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
  *   · every rendered number is Latin `0-9` inside a `<bdi dir="ltr">`, so RTL never mirrors a score;
+ *   · every name is isolated in a `<bdi dir="auto">`, so a handle never reorders its sentence;
  *   · icons are inline SVG, never emoji.
  *
  * The DOM is static (`index.html`, inside `#s-game`); this module only reads it by id, fills it and
@@ -24,6 +27,9 @@ export type CrowdEventType = 'move' | 'wall' | 'mine' | 'near_finish' | 'turn';
 export interface CrowdSetup {
   /** `true` for a 2v2 board, where a fan is tagged as team A/B rather than p1/p2. */
   teamMode?: boolean;
+  /** The seats actually on this board: a player name, or a duo label (`Name1 & Name2`). */
+  p1Name?: string;
+  p2Name?: string;
 }
 
 type Camp = 0 | 1;
@@ -47,6 +53,8 @@ interface Fan {
 interface MatchCrowd {
   fans: Fan[];
   teamMode: boolean;
+  /** The two sides' own names, in camp order. An empty slot falls back to a localized label. */
+  names: [string, string];
 }
 
 /* ---------- the persona pool ----------
@@ -83,82 +91,92 @@ interface CrowdCopy {
   viewers: string;
   split: string;
   close: string;
-  red: string;
-  blue: string;
-  fanRed: string;
-  fanBlue: string;
+  /** the card's centre micro-title: what the meter actually measures */
+  odds: string;
+  /** the pill's small live tag */
+  live: string;
+  /** fallbacks when the host hands the crowd no seat name */
+  p1: string;
+  p2: string;
+  /** a spectator row's own caption: `Backing {name}` */
+  fan: string;
   wall: string[];
   mine: string[];
   near: string[];
-  backRed: string;
-  backBlue: string;
+  /** a fan's stake landing on a named side */
+  back: string;
 }
 
 const COPY: Record<LangCode, CrowdCopy> = {
   en: {
     title: 'Live crowd & predictions',
     viewers: '{n} live spectators',
-    split: '{a} Red · {b} Blue',
+    split: '{a} backing {p1} · {b} backing {p2}',
     close: 'Close',
-    red: 'Red', blue: 'Blue',
-    fanRed: 'Red fan', fanBlue: 'Blue fan',
-    wall: ['Clutch wall block!', 'That wall changed the race!', 'Smart block — no way through!'],
-    mine: ['The mine hit!', 'Boom — right on the rival!', 'That trap was brutal!'],
-    near: ['One step from FINISH!', 'So close to the line!', "Don't blink — final stretch!"],
-    backRed: '+{n} backing Red!',
-    backBlue: '+{n} backing Blue!',
+    odds: 'Crowd odds',
+    live: 'LIVE',
+    p1: 'Player 1', p2: 'Player 2',
+    fan: 'Backing {name}',
+    wall: ['Clutch wall by {name}!', 'That wall shut {name} down!', 'Smart block — no way through for {name}!'],
+    mine: ['Boom — right on {name}!', 'The mine caught {name}!', 'That trap was brutal on {name}!'],
+    near: ['{name} is one step from FINISH!', 'So close for {name}!', "Don't blink — {name} is on the final stretch!"],
+    back: '+{n} backing {name}!',
   },
   fa: {
     title: 'تماشاگران و پیش‌بینی‌ها',
     viewers: '{n} تماشاگر زنده',
-    split: '{a} قرمز · {b} آبی',
+    split: '{a} حمایت از {p1} · {b} حمایت از {p2}',
     close: 'بستن',
-    red: 'قرمز', blue: 'آبی',
-    fanRed: 'طرفدار قرمز', fanBlue: 'طرفدار آبی',
-    wall: ['عجب دیواری بست!', 'این دیوار مسیر رو بست!', 'دفاع حساب‌شده بود!'],
-    mine: ['مین کار خودش رو کرد!', 'ترکید — مستقیم روی رقیب!', 'این تله بی‌رحمانه بود!'],
-    near: ['فقط دو قدم تا خط پایان!', 'خیلی نزدیک شد!', 'نفس‌ها حبس شد!'],
-    backRed: '+{n} روی قرمز!',
-    backBlue: '+{n} روی آبی!',
+    odds: 'پیش‌بینی سکوها',
+    live: 'زنده',
+    p1: 'بازیکن 1', p2: 'بازیکن 2',
+    fan: 'حمایت از {name}',
+    wall: ['عجب دیواری برای {name} بست!', 'این دیوار مسیر {name} رو بست!', 'دفاع حساب‌شده روی {name}!'],
+    mine: ['مین کار خودش رو کرد روی {name}!', 'ترکید — مستقیم روی {name}!', 'این تله برای {name} بی‌رحمانه بود!'],
+    near: ['{name} فقط دو قدم تا خط پایان!', '{name} خیلی نزدیک شد!', 'نفس‌ها برای {name} حبس شد!'],
+    back: '+{n} روی {name}!',
   },
   ru: {
     title: 'Живая трибуна и прогнозы',
     viewers: '{n} зрителей онлайн',
-    split: '{a} красных · {b} синих',
+    split: '{a} за {p1} · {b} за {p2}',
     close: 'Закрыть',
-    red: 'Красные', blue: 'Синие',
-    fanRed: 'Фанат красных', fanBlue: 'Фанат синих',
-    wall: ['Отличный блок!', 'Эта стена меняет гонку!', 'Умная защита!'],
-    mine: ['Мина сработала!', 'Бум — прямо по сопернику!', 'Жёсткая ловушка!'],
-    near: ['Один шаг до ФИНИША!', 'Совсем рядом с финишем!', 'Не моргай — решающий рывок!'],
-    backRed: '+{n} за красных!',
-    backBlue: '+{n} за синих!',
+    odds: 'Прогноз трибун',
+    live: 'ЭФИР',
+    p1: 'Игрок 1', p2: 'Игрок 2',
+    fan: 'За {name}',
+    wall: ['Отличный блок от {name}!', 'Эта стена остановила {name}!', 'Умная защита — {name} не пройдёт!'],
+    mine: ['Мина сработала — {name} попался!', 'Бум — прямо по {name}!', 'Жёсткая ловушка для {name}!'],
+    near: ['{name} в одном шаге от ФИНИША!', 'Совсем рядом для {name}!', 'Не моргай — {name} на финишной прямой!'],
+    back: '+{n} за {name}!',
   },
   ar: {
     title: 'الجمهور المباشر والتوقعات',
     viewers: '{n} مشاهد مباشر',
-    split: '{a} للأحمر · {b} للأزرق',
+    split: '{a} يدعم {p1} · {b} يدعم {p2}',
     close: 'إغلاق',
-    red: 'الأحمر', blue: 'الأزرق',
-    fanRed: 'مشجع الأحمر', fanBlue: 'مشجع الأزرق',
-    wall: ['سدٌّ حاسم!', 'هذا السد غيّر السباق!', 'دفاع ذكي!'],
-    mine: ['اللغم انفجر!', 'بووم — على الخصم مباشرة!', 'فخ قاسٍ!'],
-    near: ['خطوة واحدة حتى النهاية!', 'قريب جداً من خط النهاية!', 'لا ترمش — اللفة الأخيرة!'],
-    backRed: '+{n} على الأحمر!',
-    backBlue: '+{n} على الأزرق!',
+    odds: 'توقع الجمهور',
+    live: 'مباشر',
+    p1: 'اللاعب 1', p2: 'اللاعب 2',
+    fan: 'دعم {name}',
+    wall: ['سدٌّ حاسم من {name}!', 'هذا السد أوقف {name}!', 'دفاع ذكي — لا مرور لـ {name}!'],
+    mine: ['اللغم انفجر — {name} في الفخ!', 'بووم — مباشرة على {name}!', 'فخ قاسٍ لـ {name}!'],
+    near: ['{name} على خطوة من النهاية!', 'قريب جداً لـ {name}!', 'لا ترمش — {name} في اللفة الأخيرة!'],
+    back: '+{n} على {name}!',
   },
   es: {
     title: 'Público en vivo y pronósticos',
     viewers: '{n} espectadores en vivo',
-    split: '{a} Rojo · {b} Azul',
+    split: '{a} con {p1} · {b} con {p2}',
     close: 'Cerrar',
-    red: 'Rojo', blue: 'Azul',
-    fanRed: 'Fan del rojo', fanBlue: 'Fan del azul',
-    wall: ['¡Muro decisivo!', '¡Ese muro cambió la carrera!', '¡Bloqueo inteligente!'],
-    mine: ['¡La mina explotó!', '¡Bum — directo al rival!', '¡Vaya trampa!'],
-    near: ['¡A un paso de la META!', '¡Muy cerca de la línea!', '¡No parpadees — recta final!'],
-    backRed: '¡+{n} a por el rojo!',
-    backBlue: '¡+{n} a por el azul!',
+    odds: 'Cuotas del público',
+    live: 'EN VIVO',
+    p1: 'Jugador 1', p2: 'Jugador 2',
+    fan: 'A por {name}',
+    wall: ['¡Muro decisivo de {name}!', '¡Ese muro frenó a {name}!', '¡Bloqueo inteligente — {name} no pasa!'],
+    mine: ['¡La mina atrapó a {name}!', '¡Bum — directo a {name}!', '¡Vaya trampa para {name}!'],
+    near: ['¡{name} a un paso de la META!', '¡Muy cerca para {name}!', '¡No parpadees — {name} en la recta final!'],
+    back: '¡+{n} a por {name}!',
   },
 };
 
@@ -186,13 +204,15 @@ function paintAvatar(el: HTMLElement, fan: Fan): void {
 const formatNum = (n: number): string => Math.round(n).toLocaleString('en-US');
 
 /**
- * Turn a localized template into DOM nodes, isolating every numeric placeholder in a
- * `<bdi dir="ltr">`. Everything else is appended as a text node — never parsed as markup.
+ * Turn a localized template into DOM nodes: every numeric placeholder becomes a
+ * `<bdi dir="ltr">`, every name placeholder a `<bdi dir="auto">` (so a handle never reorders the
+ * sentence around it), and everything else is appended as a text node — never parsed as markup.
  */
 function templateNodes(
   template: string,
   vars: Record<string, string>,
   digitalKeys: readonly string[],
+  nameKeys: readonly string[] = [],
 ): DocumentFragment {
   const frag = document.createDocumentFragment();
   const re = /\{(\w+)\}/g;
@@ -206,6 +226,13 @@ function templateNodes(
       b.dir = 'ltr';
       b.textContent = value;
       frag.append(b);
+    } else if (nameKeys.includes(key)) {
+      /* A player handle keeps its own direction and never reorders the sentence around it. */
+      const b = document.createElement('bdi');
+      b.dir = 'auto';
+      b.className = 'crowd-name-inline';
+      b.textContent = value;
+      frag.append(b);
     } else {
       frag.append(value);
     }
@@ -213,6 +240,14 @@ function templateNodes(
   }
   if (last < template.length) frag.append(template.slice(last));
   return frag;
+}
+
+/** The name a camp fights under: the host's own seat name, or a localized placeholder. */
+function campName(camp: Camp): string {
+  const raw = match?.names[camp]?.trim() ?? '';
+  if (raw) return raw;
+  const c = copy();
+  return camp === 0 ? c.p1 : c.p2;
 }
 
 /* ---------- the live simulation ---------- */
@@ -272,8 +307,9 @@ function leadingCamp(): Camp {
 interface CrowdUi {
   pill: HTMLButtonElement;
   count: HTMLElement;
-  faces: HTMLElement;
+  live: HTMLElement;
   bar: HTMLButtonElement;
+  title: HTMLElement;
   redName: HTMLElement;
   blueName: HTMLElement;
   redPct: HTMLElement;
@@ -299,8 +335,9 @@ function resolveUi(): CrowdUi | null {
   if (ui) return ui;
   const pill = byId<HTMLButtonElement>('crowd-pill');
   const count = byId('crowd-count');
-  const faces = byId('crowd-faces');
+  const live = byId('crowd-live');
   const bar = byId<HTMLButtonElement>('crowd-bar');
+  const title = byId('crowd-bar-title');
   const redName = byId('crowd-bar-red-name');
   const blueName = byId('crowd-bar-blue-name');
   const redPct = byId('crowd-pct-red');
@@ -318,13 +355,13 @@ function resolveUi(): CrowdUi | null {
   const scrim = byId('crowd-sheet-scrim');
   /* The screen can be booted without this chrome (headless probes, a host that strips it):
      no refs means no painting, and every hook below is a no-op instead of a throw. */
-  if (!pill || !count || !faces || !bar || !redName || !blueName || !redPct || !bluePct
+  if (!pill || !count || !live || !bar || !title || !redName || !blueName || !redPct || !bluePct
     || !redStake || !blueStake || !redFill || !blueFill || !toast || !sheet || !sheetTitle
     || !sheetSub || !list || !closeBtn || !scrim) {
     return null;
   }
   ui = {
-    pill, count, faces, bar, redName, blueName, redPct, bluePct, redStake, blueStake,
+    pill, count, live, bar, title, redName, blueName, redPct, bluePct, redStake, blueStake,
     redFill, blueFill, toast, sheet, sheetTitle, sheetSub, list, closeBtn, scrim,
   };
   wire(ui);
@@ -332,23 +369,6 @@ function resolveUi(): CrowdUi | null {
 }
 
 /* ---------- painting ---------- */
-function paintFaces(): void {
-  if (!match || !ui) return;
-  ui.faces.textContent = '';
-  const fans = match.fans;
-  if (!fans.length) return;
-  /* Three stable faces from start, middle and end: the audience reads as a sample, not a queue. */
-  const picks = fans.length <= 3
-    ? fans.slice(0, 3)
-    : [fans[0]!, fans[Math.floor(fans.length / 2)]!, fans[fans.length - 1]!];
-  for (const fan of picks) {
-    const face = document.createElement('span');
-    face.className = 'crowd-face';
-    paintAvatar(face, fan);
-    ui.faces.append(face);
-  }
-}
-
 function paintBar(): void {
   if (!match || !ui) return;
   const c = copy();
@@ -358,32 +378,33 @@ function paintBar(): void {
   const pctB = 100 - pctA;
   const [sa, sb] = campStakes(match.fans);
 
-  ui.redName.textContent = c.red;
-  ui.blueName.textContent = c.blue;
+  ui.redName.textContent = campName(0);
+  ui.blueName.textContent = campName(1);
   ui.redPct.textContent = `${pctA}%`;
   ui.bluePct.textContent = `${pctB}%`;
   ui.redStake.textContent = formatNum(sa);
   ui.blueStake.textContent = formatNum(sb);
   /* Keep 6% of the rail alive for a swept side, and let the leader stop at 94%: the two widths
-     always sum to 100, so the bar can never paint a third of a pixel of background. */
+     always sum to 100, so the meter can never paint a third of a pixel of background. */
   const wide = Math.min(94, Math.max(6, pctA));
   ui.redFill.style.width = `${wide}%`;
   ui.blueFill.style.width = `${100 - wide}%`;
-  ui.count.textContent = String(total);
+  ui.count.textContent = formatNum(total);
+  ui.title.textContent = c.odds;
+  ui.live.textContent = c.live;
 
-  const c2 = copy();
-  ui.pill.setAttribute('aria-label', c2.title);
-  ui.pill.title = c2.title;
-  ui.bar.setAttribute('aria-label', c2.title);
-  ui.bar.title = c2.title;
+  ui.pill.setAttribute('aria-label', c.title);
+  ui.pill.title = c.title;
+  const summary = `${c.odds}: ${campName(0)} ${pctA}% · ${campName(1)} ${pctB}%`;
+  ui.bar.setAttribute('aria-label', summary);
+  ui.bar.title = summary;
 
   if (!ui.sheet.hidden) renderSheet();
 }
 
-/** Repaint everything the pill and the bar own. Cheap: two small loops over ≤44 records. */
+/** Repaint everything the pill and the card own. Cheap: two small loops over ≤44 records. */
 function paint(): void {
   paintBar();
-  paintFaces();
 }
 
 function renderSheet(): void {
@@ -397,7 +418,12 @@ function renderSheet(): void {
   const sub = document.createDocumentFragment();
   sub.append(templateNodes(c.viewers, { n: formatNum(total) }, ['n']));
   sub.append(' · ');
-  sub.append(templateNodes(c.split, { a: formatNum(ca), b: formatNum(cb) }, ['a', 'b']));
+  sub.append(templateNodes(
+    c.split,
+    { a: formatNum(ca), b: formatNum(cb), p1: campName(0), p2: campName(1) },
+    ['a', 'b'],
+    ['p1', 'p2'],
+  ));
   ui.sheetSub.replaceChildren(sub);
 
   const frag = document.createDocumentFragment();
@@ -417,7 +443,7 @@ function renderSheet(): void {
 
     const side = document.createElement('span');
     side.className = `crowd-side ${fan.camp === 0 ? 'is-red' : 'is-blue'}`;
-    side.textContent = fan.camp === 0 ? c.fanRed : c.fanBlue;
+    side.append(templateNodes(c.fan, { name: campName(fan.camp) }, [], ['name']));
 
     const stake = document.createElement('span');
     stake.className = 'crowd-stake';
@@ -497,7 +523,12 @@ function hideToast(): void {
   if (ui) ui.toast.classList.remove('is-on');
 }
 
-function showToast(fan: Fan, template: string, vars: Record<string, string> = {}): void {
+function showToast(
+  fan: Fan,
+  template: string,
+  vars: Record<string, string> = {},
+  nameKeys: readonly string[] = [],
+): void {
   const refs = resolveUi();
   if (!refs) return;
   window.clearTimeout(toastTimer);
@@ -509,7 +540,7 @@ function showToast(fan: Fan, template: string, vars: Record<string, string> = {}
   frag.append(name, ': ');
   const text = document.createElement('span');
   text.className = 'crowd-toast-txt';
-  text.append(templateNodes(template, vars, ['n']));
+  text.append(templateNodes(template, vars, ['n'], nameKeys));
   frag.append(text);
   refs.toast.replaceChildren(frag);
   refs.toast.classList.add('is-on');
@@ -579,7 +610,7 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   /* A fresh switcher quotes their stake about half the time; the rest are pure crowd noise. */
   if (switched && Math.random() < 0.5) {
     lastReactionAt = now;
-    showToast(switched, target === 0 ? c.backRed : c.backBlue, { n: formatNum(switched.stake) });
+    showToast(switched, c.back, { n: formatNum(switched.stake), name: campName(target) }, ['name']);
     return;
   }
   const pool = type === 'wall' ? c.wall : type === 'mine' ? c.mine : c.near;
@@ -589,7 +620,7 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   const fan = fans[pickIndex(fans.length)] ?? match.fans[pickIndex(match.fans.length)];
   if (!fan || !line) return;
   lastReactionAt = now;
-  showToast(fan, line);
+  showToast(fan, line, { name: campName(target) }, ['name']);
 }
 
 /** Start a fresh audience for the board that is about to be played. */
@@ -611,7 +642,11 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
     const [name, gender] = roster[i] ?? NAMES[i % NAMES.length]!;
     fans.push(makeFan(name, gender, i < red ? 0 : 1, teamMode));
   }
-  match = { fans, teamMode };
+  match = {
+    fans,
+    teamMode,
+    names: [(setup.p1Name ?? '').trim(), (setup.p2Name ?? '').trim()],
+  };
   lastReactionAt = -Infinity;
 
   refs.pill.hidden = false;
@@ -660,6 +695,5 @@ export function closeCrowd(): void {
   if (!refs) return;
   refs.pill.hidden = true;
   refs.bar.hidden = true;
-  refs.faces.textContent = '';
   refs.list.replaceChildren();
 }

@@ -2309,58 +2309,70 @@
         <!-- ---------------- game ---------------- -->
         <section class="screen game" id="s-game" data-screen="game" tabindex="-1" hidden aria-label="Race">
           <div class="g-head">
-            <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
-              <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
-            </button>
-            <!-- the round is the only thing the top bar says; whose turn is on the cards below -->
+            <!-- start slot: the menu key and the live-viewers pill. One compact cluster, so the
+                 round caption between the two outer tracks can never be shoved off centre. -->
+            <div class="g-head-start">
+              <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
+                <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
+              </button>
+              <!-- the live crowd: a simulated audience, client-side and cosmetic. Tapping opens the
+                   fan list. Every figure inside is a Latin-digit <bdi dir="ltr"> run. -->
+              <button class="crowd-pill" id="crowd-pill" type="button" aria-haspopup="dialog"
+                aria-controls="crowd-sheet" aria-expanded="false" aria-label="Live crowd and predictions" hidden>
+                <i class="crowd-dot" aria-hidden="true"></i>
+                <svg class="crowd-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2.6 12S6.2 6.4 12 6.4 21.4 12 21.4 12 17.8 17.6 12 17.6 2.6 12 2.6 12Z"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                  <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7" />
+                </svg>
+                <bdi class="crowd-count" id="crowd-count" dir="ltr">0</bdi>
+                <span class="crowd-live" id="crowd-live">LIVE</span>
+              </button>
+            </div>
+            <!-- center slot: the round is the only thing the top bar says; whose turn rides below -->
             <p class="g-round" id="round-label">Round 1</p>
-            <!-- the live crowd: a simulated audience, client-side and cosmetic. Tapping opens the
-                 fan list. Every figure inside is a Latin-digit <bdi dir="ltr"> run. -->
-            <button class="crowd-pill" id="crowd-pill" type="button" aria-haspopup="dialog"
-              aria-controls="crowd-sheet" aria-expanded="false" aria-label="Live crowd and predictions" hidden>
-              <i class="crowd-dot" aria-hidden="true"></i>
-              <svg class="crowd-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M2.6 12S6.2 6.4 12 6.4 21.4 12 21.4 12 17.8 17.6 12 17.6 2.6 12 2.6 12Z"
-                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7" />
-              </svg>
-              <bdi class="crowd-count" id="crowd-count" dir="ltr">0</bdi>
-              <span class="crowd-faces" id="crowd-faces" aria-hidden="true"></span>
-            </button>
-            <!-- the finish switch: sun (pearl board) / moon (midnight board), persisted locally -->
-            <button class="theme-toggle" type="button" id="theme-toggle" role="switch"
-              aria-checked="false" aria-label="Light board theme" title="Switch board theme">
-              <span class="theme-toggle-thumb" aria-hidden="true"></span>
-              <svg class="ico tt-sun" aria-hidden="true" focusable="false"><use href="#i-sun" /></svg>
-              <svg class="ico tt-moon" aria-hidden="true" focusable="false"><use href="#i-moon" /></svg>
-            </button>
+            <!-- end slot: the finish switch (sun = pearl board, moon = midnight board) -->
+            <div class="g-head-end">
+              <button class="theme-toggle" type="button" id="theme-toggle" role="switch"
+                aria-checked="false" aria-label="Light board theme" title="Switch board theme">
+                <span class="theme-toggle-thumb" aria-hidden="true"></span>
+                <svg class="ico tt-sun" aria-hidden="true" focusable="false"><use href="#i-sun" /></svg>
+                <svg class="ico tt-moon" aria-hidden="true" focusable="false"><use href="#i-moon" /></svg>
+              </button>
+            </div>
           </div>
 
           <main class="card">
-            <!-- CROWD PREDICTION & SUPPORT BAR. One ultra-slim rail above the board: the crimson
-                 share on the start edge, the cyan share on the end edge, and the stakes each camp
-                 has simulated. Tapping it opens the same fan sheet the top pill opens. -->
+            <!-- CROWD ODDS CARD. The simulated audience's prediction, named after the two seats
+                 actually on this board: P1 on the left, P2 on the right, a clear micro-title in the
+                 middle, and a dual-segment meter underneath. Tapping opens the same fan sheet the
+                 top pill opens. -->
             <button class="crowd-bar" id="crowd-bar" type="button" aria-haspopup="dialog"
               aria-controls="crowd-sheet" aria-expanded="false" aria-label="Crowd predictions — open live crowd" hidden>
-              <span class="crowd-bar-side is-red">
-                <b class="crowd-bar-name" id="crowd-bar-red-name">Red</b>
-                <bdi class="crowd-bar-pct" id="crowd-pct-red" dir="ltr">50%</bdi>
-                <span class="crowd-bar-stake">
-                  <span class="coin" data-coin aria-hidden="true"></span>
-                  <bdi id="crowd-stake-red" dir="ltr">0</bdi>
+              <span class="crowd-bar-row">
+                <span class="crowd-bar-side is-red">
+                  <i class="crowd-bar-dot is-red" aria-hidden="true"></i>
+                  <bdi class="crowd-bar-name" id="crowd-bar-red-name" dir="auto">P1</bdi>
+                  <bdi class="crowd-bar-pct" id="crowd-pct-red" dir="ltr">50%</bdi>
+                  <span class="crowd-bar-stake">
+                    <span class="coin" data-coin aria-hidden="true"></span>
+                    <bdi id="crowd-stake-red" dir="ltr">0</bdi>
+                  </span>
+                </span>
+                <span class="crowd-bar-title" id="crowd-bar-title">Crowd odds</span>
+                <span class="crowd-bar-side is-blue">
+                  <span class="crowd-bar-stake">
+                    <span class="coin" data-coin aria-hidden="true"></span>
+                    <bdi id="crowd-stake-blue" dir="ltr">0</bdi>
+                  </span>
+                  <bdi class="crowd-bar-pct" id="crowd-pct-blue" dir="ltr">50%</bdi>
+                  <bdi class="crowd-bar-name" id="crowd-bar-blue-name" dir="auto">P2</bdi>
+                  <i class="crowd-bar-dot is-blue" aria-hidden="true"></i>
                 </span>
               </span>
               <span class="crowd-bar-track" aria-hidden="true">
                 <i class="crowd-bar-fill is-red" id="crowd-fill-red"></i>
                 <i class="crowd-bar-fill is-blue" id="crowd-fill-blue"></i>
-              </span>
-              <span class="crowd-bar-side is-blue">
-                <span class="crowd-bar-stake">
-                  <span class="coin" data-coin aria-hidden="true"></span>
-                  <bdi id="crowd-stake-blue" dir="ltr">0</bdi>
-                </span>
-                <bdi class="crowd-bar-pct" id="crowd-pct-blue" dir="ltr">50%</bdi>
-                <b class="crowd-bar-name" id="crowd-bar-blue-name">Blue</b>
               </span>
             </button>
             <div class="board-slot">

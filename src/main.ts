@@ -3872,8 +3872,20 @@ function restart() {
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
   state = newGame(sizes, seatTeamMap());
   /* A fresh audience for a fresh board (14–44 simulated fans, organically split). Cosmetic only:
-     `showOverlay()` and `quitToMenu()` tear it down when this race leaves the screen. */
-  initMatchCrowd({ teamMode: sizes.length === 2 && sizes[0] === 2 && sizes[1] === 2 });
+     `showOverlay()` and `quitToMenu()` tear it down when this race leaves the screen. The audience
+     cheers for the SEATS at this board: a 1v1 passes this player and the rival, a 2v2 folds each
+     pair into one duo label, and a missing name only falls back inside the crowd module. */
+  initMatchCrowd({
+    teamMode: sizes.length === 2 && sizes[0] === 2 && sizes[1] === 2,
+    p1Name: sideOf(state, localSide)
+      .map((seat) => (seat === localSide ? localPlayerName() : seatFullName(seat)))
+      .filter(Boolean)
+      .join(' & '),
+    p2Name: sideOf(state, rivalSide())
+      .map((seat) => (seat === localSide ? localPlayerName() : seatFullName(seat)))
+      .filter(Boolean)
+      .join(' & '),
+  });
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
   renderer.setPerspective(currentPerspective());

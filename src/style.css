@@ -45363,38 +45363,72 @@ html.reduced-motion .frm-scrim { transition: none; }
    SIMULATED LIVE CROWD — in-match atmosphere, 100% client-side and cosmetic.
 
    Four small pieces, all scoped to the race screen:
-     · a spectator pill in the top bar (emerald dot + eye + count + mini faces),
-     · an ultra-slim prediction rail above the board (crimson vs cyan, 300ms width),
+     · a compact live-viewers pill in the top bar (emerald dot + eye + count + LIVE tag),
+     · an obsidian crowd-odds card above the board (named P1 | micro-title | named P2, dual meter),
      · one pointer-transparent reaction pill above the HUD dock,
-     · a light modal sheet listing the simulated audience.
+     · a light modal sheet listing the simulated audience by the side it backs.
 
    Hard rules: no backdrop-filter, no looping keyframes, no emoji, Latin digits only (the markup
-   wraps every figure in a <bdi dir="ltr">), and logical insets so an RTL shell never mirrors a
-   score. The rail's two fills always sum to 100%, so the tug-of-war never paints a seam.
+   wraps every figure in a <bdi dir="ltr">), every name in a <bdi dir="auto">, and logical insets
+   so an RTL shell never mirrors a score. The meter's two fills always sum to 100%, so the
+   tug-of-war never paints a seam.
    ============================================================================ */
 
-/* ---- 1. the top-bar spectator pill ---- */
+/* ---- 0. the top match bar: menu+viewers | round | theme ----
+   A three-track grid, not a flex row: the two 1fr tracks are equal by construction, so `ROUND X`
+   sits dead centre and no pill can shove it sideways. */
+.g-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+.g-head-start,
+.g-head-end {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.g-head-end { justify-content: flex-end; }
+/* the round caption owns the middle track now: the old absolute centring is retired */
+.g-head .g-round {
+  position: static;
+  transform: none;
+  max-width: 100%;
+  justify-self: center;
+}
+.g-head-end .theme-toggle { margin-left: 0; }
+
+/* ---- 1. the top-bar live-viewers pill ---- */
 .crowd-pill {
   appearance: none;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
-  padding: 0 7px;
-  height: 26px;
+  padding: 0 9px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid var(--hair);
+  border: 1px solid rgba(16, 185, 129, .26);
   border-radius: 999px;
-  background: var(--tint-glass);
+  background: rgba(16, 185, 129, .10);
   color: var(--ink);
   font: inherit;
   font-size: 10px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: .01em;
+  white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: inset 0 1px 0 var(--hair-lit), 0 3px 8px -6px var(--shadow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.crowd-pill:hover:not(:active) {
+  background: rgba(16, 185, 129, .17);
+  border-color: rgba(16, 185, 129, .42);
 }
 .crowd-pill:active { transform: translateY(1px); }
 .crowd-pill:focus-visible,
@@ -45411,26 +45445,152 @@ html.reduced-motion .frm-scrim { transition: none; }
   height: 6px;
   border-radius: 50%;
   background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, .14);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .16);
 }
 .crowd-eye {
   flex: none;
-  width: 13px;
-  height: 13px;
-  color: var(--ink-soft);
+  width: 12px;
+  height: 12px;
+  color: #34d399;
 }
 .crowd-count {
+  flex: none;
   line-height: 1;
-  font-size: 10.5px;
-  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  color: #d9fff2;
 }
-.crowd-faces {
+.crowd-live {
+  flex: none;
+  padding-inline-start: 5px;
+  border-inline-start: 1px solid rgba(16, 185, 129, .3);
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(110, 231, 183, .95);
+}
+
+/* ---- 2. the crowd-odds card above the board ----
+   One obsidian slab, aligned with the board's own width: names + percentages + stakes on the first
+   row (P1 left, micro-title centre, P2 right), the dual tug-of-war meter on the second. The card
+   is `direction: ltr` on purpose, so crimson is always left and cyan always right; the handles
+   inside stay `<bdi dir="auto">` and the figures `<bdi dir="ltr">` whatever the shell language. */
+.crowd-bar {
+  appearance: none;
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+  margin: 4px auto 6px;
+  padding: 7px 11px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #151923 0%, #0d1017 100%);
+  color: #e8edf7;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+  direction: ltr;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 6px 14px -12px rgba(0, 0, 0, .9);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.crowd-bar:hover:not(:active) { border-color: rgba(255, 255, 255, .18); }
+.crowd-bar:active { transform: translateY(1px); }
+.crowd-bar-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+}
+.crowd-bar-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.crowd-bar-side.is-blue { justify-content: flex-end; }
+.crowd-bar-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.crowd-bar-dot.is-red {
+  background: #fb7185;
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, .18);
+}
+.crowd-bar-dot.is-blue {
+  background: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, .18);
+}
+.crowd-bar-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.crowd-bar-side.is-red .crowd-bar-name { color: #fecdd3; }
+.crowd-bar-side.is-blue .crowd-bar-name { color: #bae6fd; }
+.crowd-bar-pct {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #ffffff;
+}
+.crowd-bar-title {
+  justify-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .06em;
+  color: rgba(255, 255, 255, .48);
+  white-space: nowrap;
+}
+.crowd-bar-stake {
   flex: none;
   display: inline-flex;
   align-items: center;
-  padding-inline-start: 2px;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #f2c979;
 }
-.crowd-face,
+.crowd-bar-stake .coin { width: 9px; height: 9px; }
+.crowd-bar-track {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+.crowd-bar-fill {
+  display: block;
+  height: 100%;
+  width: 50%;
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+.crowd-bar-fill.is-red { background: linear-gradient(90deg, #e11d48, #fb7185); }
+.crowd-bar-fill.is-blue { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+
 .crowd-av {
   display: grid;
   place-items: center;
@@ -45441,89 +45601,6 @@ html.reduced-motion .frm-scrim { transition: none; }
   line-height: 1;
   box-shadow: 0 0 0 1.5px var(--av-ring, transparent);
 }
-.crowd-face {
-  width: 16px;
-  height: 16px;
-  font-size: 8px;
-  margin-inline-start: -5px;
-  box-shadow:
-    0 0 0 1.5px var(--tint-glass),
-    0 0 0 2.5px var(--av-ring, transparent);
-}
-.crowd-face:first-child { margin-inline-start: 0; }
-
-/* ---- 2. the prediction & support rail above the board ----
-   Lives inside the card, so its max width is exactly the board's widest box. */
-.crowd-bar {
-  appearance: none;
-  flex: none;
-  width: 100%;
-  max-width: 100%;
-  margin: 4px auto 6px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  touch-action: manipulation;
-  text-align: start;
-}
-.crowd-bar-side {
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  white-space: nowrap;
-}
-.crowd-bar-side.is-blue { justify-content: flex-end; }
-.crowd-bar-name {
-  font-weight: 800;
-  color: var(--ink-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.crowd-bar-side.is-red .crowd-bar-name { color: #e26a80; }
-.crowd-bar-side.is-blue .crowd-bar-name { color: #4aa8d8; }
-.crowd-bar-pct {
-  font-weight: 800;
-  color: var(--ink);
-}
-.crowd-bar-stake {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 9px;
-  color: var(--ink-soft);
-}
-.crowd-bar-stake .coin { width: 9px; height: 9px; }
-.crowd-bar-track {
-  flex: 1 1 44px;
-  min-width: 36px;
-  height: 4px;
-  display: flex;
-  align-items: stretch;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--hair);
-  box-shadow: inset 0 1px 1px var(--shadow-soft);
-}
-.crowd-bar-fill {
-  display: block;
-  height: 100%;
-  width: 50%;
-  transition: width 300ms ease;
-}
-.crowd-bar-fill.is-red { background: #fb7185; }
-.crowd-bar-fill.is-blue { background: #38bdf8; }
 
 /* ---- 3. the one floating reaction pill ----
    Above the HUD dock, pointer-transparent, and it never owns a tap. */
@@ -45664,6 +45741,9 @@ html.reduced-motion .frm-scrim { transition: none; }
   color: var(--ink);
 }
 .crowd-side {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 9px;
   font-weight: 800;
   white-space: nowrap;
@@ -45708,17 +45788,24 @@ html[data-theme="light"] .crowd-sheet-card {
     0 8px 18px -12px rgba(88, 73, 48, .5);
 }
 html[data-theme="light"] .crowd-sheet-scrim { background: rgba(28, 36, 48, .42); }
-html[data-theme="light"] .crowd-bar-side.is-red .crowd-bar-name,
+/* the odds card keeps its obsidian face in both themes; only the sheet's chips follow the porcelain */
 html[data-theme="light"] .crowd-side.is-red { color: #b01438; }
-html[data-theme="light"] .crowd-bar-side.is-blue .crowd-bar-name,
 html[data-theme="light"] .crowd-side.is-blue { color: #1f45b5; }
+html[data-theme="light"] .crowd-count { color: #0B3B30; }
+html[data-theme="light"] .crowd-eye { color: #0F9D72; }
+html[data-theme="light"] .crowd-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, .18);
+}
 
 /* ---- reduced motion: state changes stay instant ---- */
 html.reduced-motion .crowd-bar-fill,
+html.reduced-motion .crowd-bar,
 html.reduced-motion .crowd-toast,
 html.reduced-motion .crowd-pill { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .crowd-bar-fill,
+  .crowd-bar,
   .crowd-toast,
   .crowd-pill { transition: none; }
 }
@@ -45726,4 +45813,11 @@ html.reduced-motion .crowd-pill { transition: none; }
 /* ---- short phones: the rail stays one line, the dock keeps its room ---- */
 @media (max-height: 700px) {
   .crowd-toast { bottom: 78px; }
+}
+
+/* ---- narrow phones: the pill sheds its LIVE tag so the round stays centred ---- */
+@media (max-width: 379px) {
+  .crowd-live { display: none; }
+  .crowd-bar-title { font-size: 9px; letter-spacing: 0; }
+  .crowd-bar-name { max-width: 64px; }
 }
