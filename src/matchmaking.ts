@@ -259,7 +259,12 @@ export type RaceFrame =
       opponent: { name: string; tiq: number; tier: string; flag: string; avatar?: string;
         nation?: string; guild?: string; isBot?: boolean; vip?: boolean };
       /** True when the frame arrived as `DUEL_START`: a relic challenge accepted in-game. */
-      duel?: true }
+      duel?: true;
+      /**
+       * True when the room re-bound this dropped seat to a fresh socket: the race on screen is
+       * the same one, and the relays it missed follow this frame. Never a new board.
+       */
+      resume?: true }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
@@ -501,6 +506,7 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
           vip: o.vip === true,
         },
         ...(msg.type === 'DUEL_START' ? { duel: true as const } : {}),
+        ...(msg.resume === true ? { resume: true as const } : {}),
       };
     }
     if (msg.type === 'MOVE') {
@@ -594,6 +600,7 @@ function post(sock: WebSocket, payload: string): void {
 function forget(sock: WebSocket): void {
   if (sock === durableSocket) durableSocket = null;
   if (race?.socket === sock) {
+    abandonRaceRetry();
     race = null;
     raceMove = null;
     raceEnd = null;
@@ -624,6 +631,7 @@ function forget(sock: WebSocket): void {
  */
 function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   if (race?.socket !== sock) return;
+  abandonRaceRetry();
   const ended = raceEnd;
   raceMove = null;
   raceEnd = null;
@@ -645,8 +653,161 @@ function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   }
 }
 
+/* ---------- the ranked race's silent reconnect ladder ---------- */
+
+/**
+ * A ranked duel's socket that closes is not a verdict by itself. The server holds the seat for
+ * eight seconds; this ladder spends the client half of that window reopening the socket, fastest
+ * rung first, so a carrier hand-off heals before either screen notices. Only an explicit operator
+ * abort (4001) closes the race on the spot; an exhausted ladder ends it as a drop, exactly as the
+ * old immediate path did.
+ */
+const RACE_RETRY_DELAYS: ReadonlyArray<number> = [300, 800, 1500, 2500];
+/** Total time the race is held while the ladder runs; the server's grace is the backstop. */
+const RACE_RETRY_BUDGET_MS = 7500;
+/** How long one probe may sit open without the room's answer before the next rung is tried. */
+const RACE_PROBE_MS = 2500;
+
+/** One ladder run: the socket it lost, when it started, and the probe currently open. */
+interface RaceRetry {
+  lost: WebSocket;
+  startedAt: number;
+  attempt: number;
+  timer: number;
+  probe: WebSocket | null;
+}
+
+let raceRetry: RaceRetry | null = null;
+
+/** Stop the ladder without touching the race or the lost socket. */
+function clearRaceRetry(): void {
+  if (!raceRetry) return;
+  window.clearTimeout(raceRetry.timer);
+  raceRetry = null;
+}
+
+/** Stop the ladder and let go of a probe that was never adopted. */
+function abandonRaceRetry(): void {
+  const state = raceRetry;
+  clearRaceRetry();
+  if (state?.probe) {
+    try {
+      state.probe.close(1000, 'retry_done');
+    } catch {
+      /* already closed */
+    }
+  }
+}
+
+/** The resume socket carries the match it is walking back into, on the same identity params. */
+function raceResumeUrl(matchId: string): string {
+  const base = socketUrl();
+  if (!base) return '';
+  const params = new URLSearchParams(socketParams(false));
+  params.delete('wide');
+  params.set('resume', matchId);
+  return `${base}?${params.toString()}`;
+}
+
+/** A live ranked race lost its socket: hold the verdict while the ladder runs. */
+function retryRace(lost: WebSocket): void {
+  if (raceRetry || race?.socket !== lost) return;
+  raceRetry = { lost, startedAt: Date.now(), attempt: 0, timer: 0, probe: null };
+  armRaceRetry();
+}
+
+function armRaceRetry(): void {
+  const state = raceRetry;
+  if (!state) return;
+  const left = RACE_RETRY_BUDGET_MS - (Date.now() - state.startedAt);
+  if (state.attempt >= RACE_RETRY_DELAYS.length || left <= 0) {
+    abandonRaceRetry();
+    endRace(state.lost, false, 'drop');
+    return;
+  }
+  state.timer = window.setTimeout(() => openRaceProbe(state), Math.min(RACE_RETRY_DELAYS[state.attempt++], left));
+}
+
+function openRaceProbe(state: RaceRetry): void {
+  if (raceRetry !== state) return;
+  const active = race;
+  if (!active || active.socket !== state.lost) { clearRaceRetry(); return; }
+  const left = RACE_RETRY_BUDGET_MS - (Date.now() - state.startedAt);
+  const url = left > 0 ? raceResumeUrl(active.matchId) : '';
+  if (!url) {
+    abandonRaceRetry();
+    endRace(state.lost, false, 'drop');
+    return;
+  }
+  let probe: WebSocket;
+  try {
+    probe = new WebSocket(url);
+  } catch {
+    armRaceRetry();
+    return;
+  }
+  state.probe = probe;
+  let adopted = false;
+  const watchdog = window.setTimeout(() => {
+    if (adopted) return;
+    try {
+      probe.close(1000, 'retry');
+    } catch {
+      /* already closed */
+    }
+  }, Math.min(left, RACE_PROBE_MS));
+  const settle = (): void => {
+    window.clearTimeout(watchdog);
+    if (state.probe === probe) state.probe = null;
+  };
+  probe.addEventListener('message', (ev) => {
+    const frame = readRaceFrame(String(ev.data));
+    if (!frame) return;
+    /* Adopted: this socket is the race now, and every relay behind the resume frame lands on
+       the handlers the board already installed. */
+    if (adopted) { applyRaceFrame(probe, frame); return; }
+    if (raceRetry !== state) return;
+    if (frame.type === 'ERROR') {
+      /* The room did not take this probe (it may not have seen the close yet, or the grace is
+         gone). The rung failed — the ladder, not one answer, decides the race. */
+      settle();
+      try {
+        probe.close(1000, 'no_race');
+      } catch {
+        /* already closed */
+      }
+      armRaceRetry();
+      return;
+    }
+    if (frame.type === 'MATCH_FOUND' && frame.resume) {
+      if (!race || race.matchId !== frame.matchId) return;
+      adopted = true;
+      settle();
+      clearRaceRetry();
+      race.socket = probe;
+      wsMatched = true;                  // the race owns this socket now, not the old search
+    }
+  });
+  probe.addEventListener('close', (ev) => {
+    settle();
+    if (adopted) {
+      /* The resumed socket dropped too: a fresh ladder, unless the operator pulled the room. */
+      if (ev.code === 4001) { socketGone(probe); return; }
+      retryRace(probe);
+      return;
+    }
+    if (raceRetry !== state) return;
+    armRaceRetry();
+  });
+  probe.addEventListener('error', () => {
+    /* an error is followed by a close frame: the next rung is armed there */
+  });
+}
+
 function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_FOUND' }>): OnlineSession {
-  return {
+  /* The session outlives its first socket: a ranked race that dropped is resumed on a fresh one,
+     so every method speaks through whichever socket is live at the moment of the call. */
+  const session: OnlineSession = {
     matchId: found.matchId,
     seed: found.seed,
     side: found.side,
@@ -655,47 +816,52 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
     opponent: onlineOpponent(found),
     socket: sock,
     send(action) {
-      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      const live = race === session ? session.socket : null;
+      if (!live || live.readyState !== 1) return false;
       try {
-        sock.send(JSON.stringify({ type: 'MOVE', action }));
+        live.send(JSON.stringify({ type: 'MOVE', action }));
         return true;
       } catch {
         return false;
       }
     },
     sendEmote(emote) {
-      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      const live = race === session ? session.socket : null;
+      if (!live || live.readyState !== 1) return false;
       try {
-        sock.send(JSON.stringify({ type: 'EMOTE', emote }));
+        live.send(JSON.stringify({ type: 'EMOTE', emote }));
         return true;
       } catch {
         return false;
       }
     },
     sendPhrase(lang, index) {
-      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      const live = race === session ? session.socket : null;
+      if (!live || live.readyState !== 1) return false;
       try {
-        sock.send(JSON.stringify({ type: 'PHRASE', lang, index }));
+        live.send(JSON.stringify({ type: 'PHRASE', lang, index }));
         return true;
       } catch {
         return false;
       }
     },
     sendChat(text) {
-      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      const live = race === session ? session.socket : null;
+      if (!live || live.readyState !== 1) return false;
       try {
-        sock.send(JSON.stringify({ type: 'CHAT', text }));
+        live.send(JSON.stringify({ type: 'CHAT', text }));
         return true;
       } catch {
         return false;
       }
     },
     sendPostMatchChat(line) {
-      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      const live = race === session ? session.socket : null;
+      if (!live || live.readyState !== 1) return false;
       try {
         /* one field or the other, never both: the room resolves a preset itself and checks a
            text against this seat's entitlement */
-        sock.send(JSON.stringify({ type: 'POST_MATCH_CHAT', ...line }));
+        live.send(JSON.stringify({ type: 'POST_MATCH_CHAT', ...line }));
         return true;
       } catch {
         return false;
@@ -704,10 +870,10 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
     resign() {
       /* An explicit exit is a forfeit, not a dead socket: the room must hear it while the socket
          is still open, or the seat would be treated as a drop and held for the reconnect grace. */
-      post(sock, JSON.stringify({ type: 'FORFEIT' }));
+      if (race === session) post(session.socket, JSON.stringify({ type: 'FORFEIT' }));
     },
     close() {
-      forget(sock);
+      forget(session.socket);
     },
     onMove(cb) {
       raceMove = cb;
@@ -749,6 +915,7 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       raceReject = cb;
     },
   };
+  return session;
 }
 
 /** The matchmaker's payload, in the shape the stage paints. */
@@ -816,8 +983,20 @@ function wire(sock: WebSocket): void {
     const frame = readRaceFrame(String(ev.data));
     if (frame) applyRaceFrame(sock, frame);
   });
-  sock.addEventListener('close', () => socketGone(sock));
-  sock.addEventListener('error', () => socketGone(sock));
+  sock.addEventListener('close', (ev: CloseEvent) => {
+    /* An explicit operator abort is a verdict, not a drop: it ends at once. Every other close of
+       a live ranked race is held while the silent reconnect ladder runs. */
+    if (race?.socket === sock && ev.code !== 4001) {
+      retryRace(sock);
+      return;
+    }
+    socketGone(sock);
+  });
+  sock.addEventListener('error', () => {
+    /* A close frame follows an error: a live race's verdict waits for the ladder there. */
+    if (race?.socket === sock) return;
+    socketGone(sock);
+  });
 }
 
 /** A socket the ambient duel channel owns has closed: settle whatever race it was carrying. */

@@ -288,6 +288,16 @@ interface Waiter {
   /** Set the moment they are paired: the race this socket now carries. */
   race: Race | null;
   side: 0 | 1;
+  /**
+   * When this seat's socket dropped mid-race, or 0 while it is up. The ranked reconnect grace
+   * reads it: a reconnect inside the window takes the same seat back, and only an expiry forfeits.
+   */
+  disconnectedAt: number;
+  /**
+   * The relays this seat missed while its socket was away. Flushed behind the resume frame so the
+   * returning board lands on the authoritative state instead of the one it dropped on.
+   */
+  missed: string[];
 }
 
 /** A live 1v1: the two sockets, and the authoritative board they are playing. */
@@ -444,6 +454,12 @@ interface LiveRoom {
    */
   settled?: boolean;
   /**
+   * When this room's race settled, or 0 while it is still playing (and again after a rematch
+   * launches). The settled-room TTL reads it, so a capsule nobody rematches is evicted instead of
+   * living in memory until the object hits its ceiling.
+   */
+  settledAt: number;
+  /**
    * True while this settled room is collecting rematch votes. Cleared the moment a fresh board
    * launches, so a late vote can never be read against the board it already replaced.
    */
@@ -578,6 +594,18 @@ const LOBBY_AWAY_RELEASE_MS = 20_000;
  * player gets their exact seat, their board and their turn back.
  */
 const RECONNECT_GRACE_MS = 20_000;
+/**
+ * The ranked duel's own reconnect window. A queue socket that drops mid-race is held for this
+ * long — long enough for a phone hand-off or a sleeping webview to walk back in, short enough
+ * that the rival is never left waiting on a socket that is plainly gone.
+ */
+const RANKED_RECONNECT_GRACE_MS = 8_000;
+/**
+ * How long a settled room is kept so its friends can vote a rematch on the sockets they already
+ * hold. Past this the room, its refs and its banter lanes are evicted: a capsule nobody rematches
+ * must not sit in the object's memory until the 128 MB ceiling.
+ */
+const SETTLED_ROOM_TTL_MS = 10 * 60_000;
 /**
  * The close code for a board the OPERATOR pulled, and the only one a client may read as "this room
  * was closed on purpose". Everything else closes with 1000/1001/1011 — an eviction, a deploy, an
@@ -2043,7 +2071,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
 /** `MATCH_FOUND` as the client reads it: the seat, the shared race, and who is opposite. */
 function foundMessage(
   matchId: string, seed: number, side: 0 | 1, me: Waiter, opponent: Waiter,
-  sizes: [number, number], mode: 'pvp' | 'arena',
+  sizes: [number, number], mode: 'pvp' | 'arena', resume = false,
 ): string {
   return JSON.stringify({
     type: 'MATCH_FOUND',
@@ -2052,6 +2080,9 @@ function foundMessage(
     side,
     sizes,
     mode,
+    /* True when this frame re-bound a dropped seat to a fresh socket instead of opening a new
+       race: the client swaps its transport and keeps the board it already has. */
+    ...(resume ? { resume: true } : {}),
     /* The caller's own entitlement and the rival's, both judged by the room before it paired. */
     isVip: me.premium,
     vipUntil: me.vipUntil,
@@ -3143,12 +3174,17 @@ export class MatchmakerDO {
       || readInviteRoomCode(queryValue(url, 'code'))
       || (roomSize ? '' : readRoomCode(queryValue(url, 'room'))));
 
+    /* A ranked duel whose socket dropped walks back in with the match it was playing. The
+       identity is already proven above, and a resume socket is a race already on a board, so an
+       arena lock must not turn it away; the operator's maintenance lock still stops everything. */
+    const resumeMatchId = (!roomCode && !roomSize ? queryValue(url, 'resume').slice(0, 64) : '');
+
     /* The tournament gate sits before the queue, not inside the panel: a socket that connects
        while the arena is locked is told why and let go, while races already on a board resolve.
        A friends room is NOT matchmaking: a four-digit code two people already agreed on is a
        private room, and neither the season clock nor the arena lock may close that door. Only the
        operator's own maintenance lock stops a room — and that reason has a line of its own. */
-    if (this.maintenance || (this.arenaLocked() && !roomCode)) {
+    if (this.maintenance || (this.arenaLocked() && !roomCode && !resumeMatchId)) {
       const gate = new WebSocketPair();
       const denied = gate[1];
       denied.accept();
@@ -3162,6 +3198,26 @@ export class MatchmakerDO {
         /* the socket is already gone */
       }
       return new Response(null, { status: 101, webSocket: gate[0] });
+    }
+
+    /* THE RANKED RECONNECT DOOR. A dropped seat reclaims its chair on the socket the client
+       just reopened; the room flushes the resume frame and every relay missed while away. A
+       resume that names no live held seat is answered inside the socket and let go, so the
+       client's ladder can stop instead of waiting out its whole budget. */
+    if (resumeMatchId) {
+      const resumed = new WebSocketPair();
+      const clientEnd = resumed[0];
+      const serverEnd = resumed[1];
+      serverEnd.accept();
+      if (!this.resumeRaceSeat(serverEnd, identity, resumeMatchId)) {
+        try {
+          serverEnd.send(JSON.stringify({ type: 'ERROR', reason: 'NO_RACE' }));
+          serverEnd.close(1000, 'race_gone');
+        } catch {
+          /* the socket is already gone */
+        }
+      }
+      return new Response(null, { status: 101, webSocket: clientEnd });
     }
 
     const pair = new WebSocketPair();
@@ -3209,34 +3265,42 @@ export class MatchmakerDO {
 
   /** The wait timer. A room that has run out of patience fills its seats and starts. */
   async alarm(): Promise<void> {
-    const now = Date.now();
-    this.purgeGhosts();
-    this.expireRelicChallenges(now);
-    for (const live of [...this.openRooms]) {
-      if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
+    try {
+      const now = Date.now();
+      this.purgeGhosts();
+      this.expireRelicChallenges(now);
+      for (const live of [...this.openRooms]) {
+        if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
+      }
+      /* A lobby whose 3 - 2 - 1 has run out launches only if every seat is still at an open Mini App;
+         otherwise the countdown is rewound and the room goes back to WAITING out loud. */
+      for (const live of [...this.lobbies.values()]) {
+        if (live.driver || live.countdownEndsAt <= 0 || now < live.countdownEndsAt) continue;
+        live.countdownEndsAt = 0;
+        if (this.lobbyReadyToStart(live)) this.launchRoom(live);
+        else this.broadcastLobby(live);
+      }
+      /* The friends lobbies' own clocks: a dropped guest's chair goes back on the market, and a
+         room nobody has held for ten minutes is retired so its code can be reused. */
+      this.sweepLobbies(now);
+      this.sweepRacedRooms(now);
+      this.sweepRaces(now);
+      this.sweepRetired();
+      /* The season clock is an alarm too: at the boundary the arena closes itself and tells
+         everyone, rather than waiting for the next admin to notice. */
+      if (this.arena.status === 'active' && this.arena.endsAt <= now) {
+        this.arena = { ...this.arena, status: 'finale', matchLocked: true, updatedAt: now };
+        this.evictAll('SEASON_ENDED');
+        this.persistArena();
+        this.broadcastArena('SEASON_ENDED');
+      }
+    } catch (err) {
+      console.error('alarm_err', err);
+    } finally {
+      /* Whatever an alarm tick threw, the next one is still armed: an object that stops its own
+         clock silently strands every wait it holds. */
+      this.rearm();
     }
-    /* A lobby whose 3 - 2 - 1 has run out launches only if every seat is still at an open Mini App;
-       otherwise the countdown is rewound and the room goes back to WAITING out loud. */
-    for (const live of [...this.lobbies.values()]) {
-      if (live.driver || live.countdownEndsAt <= 0 || now < live.countdownEndsAt) continue;
-      live.countdownEndsAt = 0;
-      if (this.lobbyReadyToStart(live)) this.launchRoom(live);
-      else this.broadcastLobby(live);
-    }
-    /* The friends lobbies' own clocks: a dropped guest's chair goes back on the market, and a
-       room nobody has held for ten minutes is retired so its code can be reused. */
-    this.sweepLobbies(now);
-    this.sweepRacedRooms(now);
-    this.sweepRetired();
-    /* The season clock is an alarm too: at the boundary the arena closes itself and tells
-       everyone, rather than waiting for the next admin to notice. */
-    if (this.arena.status === 'active' && this.arena.endsAt <= now) {
-      this.arena = { ...this.arena, status: 'finale', matchLocked: true, updatedAt: now };
-      this.evictAll('SEASON_ENDED');
-      this.persistArena();
-      this.broadcastArena('SEASON_ENDED');
-    }
-    this.rearm();
   }
 
   /* ---------- registered squads ---------- */
@@ -5019,7 +5083,7 @@ export class MatchmakerDO {
     this.rolesDirty = false;
     void Promise.resolve().then(() => {
       try {
-        void storage.put('roles', [...this.admins.values()]);
+        void storage.put('roles', [...this.admins.values()]).catch(() => undefined);
       } catch {
         /* a store that refuses the write: the registry stays in memory */
       }
@@ -5033,7 +5097,7 @@ export class MatchmakerDO {
     this.broadcastsDirty = false;
     void Promise.resolve().then(() => {
       try {
-        void storage.put('broadcasts', [...this.broadcasts.values()]);
+        void storage.put('broadcasts', [...this.broadcasts.values()]).catch(() => undefined);
       } catch {
         /* a store that refuses the write: the history stays in memory */
       }
@@ -5608,7 +5672,7 @@ export class MatchmakerDO {
     const storage = this.state?.storage;
     if (!storage) return;
     try {
-      void storage.put('arena', this.arena);
+      void storage.put('arena', this.arena).catch(() => undefined);
     } catch {
       /* a store that refuses the write: the board stays in memory */
     }
@@ -5771,7 +5835,7 @@ export class MatchmakerDO {
     const storage = this.state?.storage;
     if (!storage) return;
     try {
-      void storage.put(VIP_CONFIG_KEY, this.vipConfig);
+      void storage.put(VIP_CONFIG_KEY, this.vipConfig).catch(() => undefined);
     } catch {
       /* a store that refuses the write: the config stays live in this isolate */
     }
@@ -5781,7 +5845,7 @@ export class MatchmakerDO {
     const storage = this.state?.storage;
     if (!storage) return;
     try {
-      void storage.put(VIP_SALES_KEY, this.vipSales);
+      void storage.put(VIP_SALES_KEY, this.vipSales).catch(() => undefined);
     } catch {
       /* a store that refuses the write: the ledger stays live in this isolate */
     }
@@ -6073,7 +6137,7 @@ export class MatchmakerDO {
     const storage = this.state?.storage;
     if (!storage) return;
     try {
-      void storage.put(nationLedgerKey(this.nations.seasonNo), this.nations);
+      void storage.put(nationLedgerKey(this.nations.seasonNo), this.nations).catch(() => undefined);
     } catch {
       /* a store that refuses the write: the ledger stays live for this object's lifetime */
     }
@@ -6475,7 +6539,7 @@ export class MatchmakerDO {
         void storage.put({
           [GAME_METRICS_KEY]: this.gameMetrics,
           [GROWTH_KEY]: this.growth,
-        });
+        }).catch(() => undefined);
       } catch {
         /* a store that refuses the write: the counters stay live for this object's lifetime */
       }
@@ -6714,8 +6778,8 @@ export class MatchmakerDO {
       const storage = this.state.storage;
       if (!storage) return;
       try {
-        void storage.put('players', [...this.players.values()]);
-        void storage.put('bans', [...this.banned]);
+        void storage.put('players', [...this.players.values()]).catch(() => undefined);
+        void storage.put('bans', [...this.banned]).catch(() => undefined);
       } catch {
         /* a store that refuses the write: the registry stays in memory */
       }
@@ -6818,13 +6882,19 @@ export class MatchmakerDO {
       vipUntil: Math.max(identity.vipUntil, this.players.get(identity.player.id)?.vipUntil ?? 0),
       race: null,
       side: 0,
+      disconnectedAt: 0,
+      missed: [],
     };
     if (queued) this.queue.push(waiter);
     return waiter;
   }
 
   private attach(waiter: Waiter, session = false): void {
-    waiter.ws.addEventListener('message', (ev: MessageEvent) => {
+    /* The handlers belong to THIS socket, not to the waiter: a resumed seat wears a newer socket,
+       and the old one's late frames and close must be ghosts that cannot touch the live chair. */
+    const sock = waiter.ws;
+    sock.addEventListener('message', (ev: MessageEvent) => {
+      if (waiter.ws !== sock) return;
       const board = boardOf(waiter);
       const msg = readMessage(ev.data, waiter.side, board.cols, board.rows);
       if (!msg) return;
@@ -6847,19 +6917,21 @@ export class MatchmakerDO {
       else if (msg.type === 'WIDEN') this.widen(waiter);
       else if (msg.type === 'CANCEL') this.leave(waiter, true);
     });
-    waiter.ws.addEventListener('close', () => {
+    sock.addEventListener('close', () => {
+      if (waiter.ws !== sock) return;
       if (session && this.sessions.get(waiter.id) === waiter) {
         this.sessions.delete(waiter.id);
         this.dropChallengesFor(waiter.id);
       }
-      this.leave(waiter, false);
+      this.leave(waiter, false, sock);
     });
-    waiter.ws.addEventListener('error', () => {
+    sock.addEventListener('error', () => {
+      if (waiter.ws !== sock) return;
       if (session && this.sessions.get(waiter.id) === waiter) {
         this.sessions.delete(waiter.id);
         this.dropChallengesFor(waiter.id);
       }
-      this.leave(waiter, false);
+      this.leave(waiter, false, sock);
     });
   }
 
@@ -6918,20 +6990,76 @@ export class MatchmakerDO {
   }
 
   /** Out of the room. A CANCEL closes the socket; a dead socket is just forgotten — and either
-   *  way a player who was racing hands the win to the seat opposite. */
-  private leave(waiter: Waiter, close: boolean): void {
+   *  way a player who was racing hands the win to the seat opposite, unless the drop is a ranked
+   *  duel still inside its reconnect window. */
+  private leave(waiter: Waiter, close: boolean, ws?: WebSocket): void {
+    /* A close frame from a socket the seat no longer wears is a ghost: the player already
+       reconnected on a newer socket and this one must not settle the live seat. */
+    if (ws && waiter.ws !== ws) return;
     this.markActive(waiter.id, waiter.race?.mode ?? waiter.mode);
     /* a settled seat walking out ends the banter lane before the socket closes */
     this.dropPostChat(waiter.ws, true);
     const at = this.queue.indexOf(waiter);
     if (at !== -1) this.queue.splice(at, 1);
-    if (waiter.race) this.endRace(waiter.race, waiter.side, 'LEFT');
+    if (waiter.race) {
+      const race = waiter.race;
+      /* A ranked duel holds the seat through a short reconnect window: a carrier hand-off or a
+         sleeping webview is not a resignation. An explicit CANCEL, a custom duel, or an expired
+         window still settles exactly as before. */
+      if (!close && race.origin === 'queue' && !race.over) {
+        if (waiter.disconnectedAt <= 0) waiter.disconnectedAt = Date.now();
+        this.rearm();
+        return;
+      }
+      this.endRace(race, waiter.side, 'LEFT');
+    }
     if (!close) return;
     try {
       waiter.ws.close(1000, 'cancelled');
     } catch {
       /* the socket is already gone */
     }
+  }
+
+  /**
+   * A ranked duel seat takes its chair back on the socket the player just reopened. The identity
+   * must match the seat, the drop must still be inside the grace, and the race must still be live;
+   * the caller answers `NO_RACE` otherwise. The resume frame swaps the client's transport, and
+   * every relay the seat missed while it was away follows in order — that is the authoritative
+   * board the returning screen resumes on.
+   */
+  private resumeRaceSeat(ws: WebSocket, identity: Identity, matchId: string): boolean {
+    const race = this.races.get(matchId);
+    if (!race || race.over) return false;
+    if (race.origin !== 'queue') return false;
+    const seat = race.seats.find((s) => s.id === identity.player.id);
+    if (!seat || seat.race !== race) return false;
+    /* A live socket holding this seat is another tab, not a reconnect. Only a seat the room saw
+       drop — or one whose socket is plainly dead — may be rebound. */
+    if (seat.disconnectedAt > 0) {
+      if (Date.now() - seat.disconnectedAt > RANKED_RECONNECT_GRACE_MS) return false;
+    } else if (this.socketAlive(seat.ws)) {
+      return false;
+    }
+    const rival = race.seats[seat.side === 0 ? 1 : 0];
+    const previous = seat.ws;
+    seat.ws = ws;
+    seat.disconnectedAt = 0;
+    this.attach(seat);
+    this.deliver(seat, foundMessage(race.matchId, race.seed, seat.side, seat, rival, race.sizes, race.mode, true));
+    const missed = seat.missed;
+    seat.missed = [];
+    for (const frame of missed) this.deliver(seat, frame);
+    if (previous !== ws) {
+      try {
+        previous.close(1000, 'replaced');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+    this.markActive(seat.id, race.mode);
+    this.rearm();
+    return true;
   }
 
   /* ---------- relic duels: send, accept, decline, expire ---------- */
@@ -7242,7 +7370,7 @@ export class MatchmakerDO {
       const storage = this.state.storage;
       if (!storage) return;
       try {
-        void storage.put(RELIC_CHALLENGES_KEY, [...this.relicChallenges.values()]);
+        void storage.put(RELIC_CHALLENGES_KEY, [...this.relicChallenges.values()]).catch(() => undefined);
       } catch {
         /* a store that refuses the write: the mailbox stays live for this object's lifetime */
       }
@@ -7385,6 +7513,7 @@ export class MatchmakerDO {
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
         countdownEndsAt: 0,
+        settledAt: 0,
       };
       this.openRooms.push(live);
     }
@@ -7509,6 +7638,7 @@ export class MatchmakerDO {
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
         countdownEndsAt: 0,
+        settledAt: 0,
       };
       this.lobbies.set(key, room);
     }
@@ -8290,6 +8420,7 @@ export class MatchmakerDO {
         disconnectBotMoves: Array.from({ length: size }, () => 0),
         seq: 0,
         countdownEndsAt: 0,
+        settledAt: 0,
       });
     }
   }
@@ -8390,7 +8521,14 @@ export class MatchmakerDO {
     const seat = driver.state.turn;
     const action = this.roomFallbackAction(driver.state, seat);
     const before = driver.state;
-    const result = driver.submit(seat, action, this.substituteBudget(live));
+    /* A fallback the board refuses is a no-op, and one that throws is no different: an alarm
+       tick never dies on a malformed action. */
+    let result: ReturnType<RoomDriver['submit']>;
+    try {
+      result = driver.submit(seat, action, this.substituteBudget(live));
+    } catch {
+      return;
+    }
     if (!result.ok) return;
     this.countBoard(before, driver.state);
     this.pushRoomEvents(live, result.events, seat);
@@ -8431,6 +8569,14 @@ export class MatchmakerDO {
   private sweepRacedRooms(now: number): void {
     for (const live of [...this.rooms.values()]) {
       if (!live.driver) continue;
+      /* A settled room is a capsule, not a race: once its TTL passes, the sockets, refs and banter
+         lanes are released and the registry entry disappears, so memory never only grows. */
+      if (live.driver.state.winner !== null && live.settledAt > 0
+        && now - live.settledAt >= SETTLED_ROOM_TTL_MS) {
+        this.evictSettledRoom(live);
+        continue;
+      }
+      const settled = live.driver.state.winner !== null;
       /* A socket that went quiet is gone even if no close frame ever came: a killed webview or a
          mobile link that died behind a proxy. The clock reads the last ANY frame, so a player who is
          actively moving is never called away by a throttled heartbeat. Marking it away here starts
@@ -8451,6 +8597,10 @@ export class MatchmakerDO {
       for (let i = 0; i < live.members.length; i++) {
         const m = live.members[i];
         if (!m || m.connected || m.droppedAt <= 0) continue;
+        /* The board already has a winner: a closed tab is somebody leaving the capsule, not a
+           race seat missing its clock. Zero the drop so no alarm can ever re-arm for it, and
+           release the banter lane so its socket entry cannot outlive the player. */
+        if (settled) { m.droppedAt = 0; this.dropPostChat(m.ws, true); continue; }
         const elapsed = now - m.droppedAt;
         /* A drop that outlives the silent hold earns the pill; the grace it prints is what is left
            of the reconnect window, so the client's lease matches the server's own forfeit clock. */
@@ -8463,6 +8613,44 @@ export class MatchmakerDO {
            not handed to a bot for the rest of the match. */
         this.eliminateSeat({ live, seat: i });
         if (live.driver.state.winner !== null) break;
+      }
+    }
+  }
+
+  /**
+   * A settled room has said everything it will say. The capsule's TTL is up: the sockets are let
+   * go, their refs and banter lanes are forgotten, and the registry entry is deleted so ten
+   * minutes of finished boards can never stack toward the object's memory ceiling.
+   */
+  private evictSettledRoom(live: LiveRoom): void {
+    this.rooms.delete(live.matchId);
+    for (const m of live.members) {
+      if (!m) continue;
+      this.refs.delete(m.ws);
+      this.dropPostChat(m.ws, false);
+      m.connected = false;
+      m.droppedAt = 0;
+      try {
+        m.ws.close(1000, 'room_expired');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+  }
+
+  /**
+   * The ranked duel's own reconnect clock: a seat whose socket dropped mid-race is held for
+   * `RANKED_RECONNECT_GRACE_MS`, then forfeits exactly as a close used to. The alarm carries the
+   * clock, so an eviction between the drop and the expiry cannot freeze the race.
+   */
+  private sweepRaces(now: number): void {
+    for (const race of [...this.races.values()]) {
+      if (race.over || race.origin !== 'queue') continue;
+      for (const seat of race.seats) {
+        if (seat.disconnectedAt <= 0) continue;
+        if (now - seat.disconnectedAt < RANKED_RECONNECT_GRACE_MS) continue;
+        this.endRace(race, seat.side, 'LEFT');
+        break;
       }
     }
   }
@@ -8511,21 +8699,45 @@ export class MatchmakerDO {
     for (const challenge of this.relicChallenges.values()) {
       if (challenge.status === 'pending') soonest = Math.min(soonest, challenge.expiresAt);
     }
+    /* A spent code's tombstone ages out on its own clock. `forfeited` shares the same expiry:
+       it is cleared with the tombstone in `sweepRetired`, so this one timestamp covers both. */
+    for (const retiredAt of this.retired.values()) {
+      soonest = Math.min(soonest, retiredAt + RETIRED_TTL_MS);
+    }
+    /* A ranked duel's dropped seat is held for its reconnect grace. The alarm is what closes
+       that window even if the object is evicted while the player is walking back. */
+    for (const race of this.races.values()) {
+      if (race.over || race.origin !== 'queue') continue;
+      for (const seat of race.seats) {
+        if (seat.disconnectedAt > 0) {
+          soonest = Math.min(soonest, seat.disconnectedAt + RANKED_RECONNECT_GRACE_MS);
+        }
+      }
+    }
     /* A launched room has two clocks of its own: the active seat's turn deadline (plus the
        network grace) and every dropped seat's reconnect window. Both must survive eviction, so
        both live on the alarm rather than on a `setTimeout`. */
     for (const live of this.rooms.values()) {
       if (!live.driver) continue;
-      if (live.driver.state.winner === null && live.turnDeadlineMs > 0 && !live.driver.botTurn) {
+      /* A settled capsule's race clock is over: no turn deadline and no dropped-seat grace may
+         arm again. Its own clock is the TTL that evicts it. A past-due grace here used to re-arm
+         the alarm to the same instant and spin the object in a hot loop. */
+      const settled = live.driver.state.winner !== null;
+      if (settled && live.settledAt > 0) {
+        soonest = Math.min(soonest, live.settledAt + SETTLED_ROOM_TTL_MS);
+      }
+      if (!settled && live.turnDeadlineMs > 0 && !live.driver.botTurn) {
         soonest = Math.min(soonest, live.turnDeadlineMs + TURN_GRACE_MS);
       }
       for (const m of live.members) {
         if (!m) continue;
+        /* A seat answering the heartbeat still owes the next one, capsule or race: the alarm is
+           what lets a silently dead tab leave the rematch quorum. */
         if (m.connected && m.lastPingAt > 0) {
           soonest = Math.min(soonest, m.lastSeenAt + SEAT_SILENCE_MS);
         }
         /* A struck chair has no grace left to run: `droppedAt` is 0, so it arms nothing. */
-        if (!m.connected && m.droppedAt > 0) {
+        if (!settled && !m.connected && m.droppedAt > 0) {
           /* The silent hold ends at the announce delay; the forfeit at the full grace. Both are
              alarms so a webview that reconnects mid-handoff is heard even across an eviction. */
           if (!m.reconnectAnnounced) {
@@ -8536,7 +8748,9 @@ export class MatchmakerDO {
       }
     }
     if (soonest === Infinity) storage.deleteAlarm();
-    else storage.setAlarm(soonest);
+    /* Hard floor: a timestamp already in the past would fire at once, re-arm to the same past
+       instant and spin the object forever. Every alarm is at least a beat in the future. */
+    else storage.setAlarm(Math.max(Date.now() + 250, soonest));
   }
 
   /**
@@ -8821,9 +9035,16 @@ export class MatchmakerDO {
     /* Authoritative crossing gate: a perpendicular bar through another wall's centre anchor is
        refused before it can reach the driver, using the same predicate as the client and the bot. */
     const preRejected = msg.action.kind === 'wall' && wallClashesWithState(before, msg.action.wall);
-    const result = preRejected
-      ? { ok: false as const, reason: 'illegal' as const }
-      : live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
+    /* The duel lane already treats a frame shaped to throw as a frame refused; the room lane
+       must answer the same way instead of letting the exception escape the socket handler. */
+    let result: ReturnType<RoomDriver['submit']>;
+    try {
+      result = preRejected
+        ? { ok: false, reason: 'illegal' }
+        : live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
+    } catch {
+      return;
+    }
     if (!result.ok) {
       const member = live.members[ref.seat];
       if (member) {
@@ -8866,6 +9087,8 @@ export class MatchmakerDO {
    * or fewer than two people left at their screens) is closed here.
    */
   private retireFinished(live: LiveRoom): void {
+    /* The race is over from this instant: the settled-room TTL is measured from here. */
+    live.settledAt = Date.now();
     const alive = this.rematchActiveSeats(live);
     if (!live.code || alive.length < 2) {
       this.rooms.delete(live.matchId);
@@ -8974,6 +9197,7 @@ export class MatchmakerDO {
     live.rematchSig = undefined;
     live.rematchCount = (live.rematchCount ?? 0) + 1;
     live.settled = false;
+    live.settledAt = 0;
     live.counted = false;
     live.driver = createRoomDriver(live.room, live.mode === 'team' ? live.teams : undefined);
     live.seed = hash(`${live.room.code}|rematch|${live.rematchCount}|${live.members.map((m) => m?.id ?? 'bot').join('|')}`);
@@ -9188,8 +9412,20 @@ export class MatchmakerDO {
   ): void {
     const live = ref.live;
     const driver = live.driver;
-    if (!driver || driver.state.winner !== null || isLeft(driver.state, ref.seat)) return;
     const member = live.members[ref.seat];
+    /* The board already has a winner: there is no seat left to forfeit. A close here is a player
+       leaving the capsule, so the drop clock is zeroed and the banter lane released instead of
+       arming a grace that can never run. */
+    if (driver && driver.state.winner !== null) {
+      if (member) {
+        this.refs.delete(member.ws);
+        this.dropPostChat(member.ws, true);
+        member.connected = false;
+        member.droppedAt = 0;
+      }
+      return;
+    }
+    if (!driver || isLeft(driver.state, ref.seat)) return;
     const name = member?.name ?? driver.room.seats[ref.seat]?.name ?? `Seat ${ref.seat}`;
     /** The competitive verdict, by player id: the leaver pays, the survivors' finish pays. */
     const tiqDeltas: Record<string, number> = {};
@@ -9291,6 +9527,13 @@ export class MatchmakerDO {
       member.connected = false;
       member.droppedAt = Date.now();
       member.reconnectAnnounced = false;
+    }
+    /* A tab closed after the board settled is a player leaving the capsule, not a raced seat
+       dropping: zero the clock so no grace is armed, and close the result lane the socket owned
+       so it cannot leak past the client that walked away from it. */
+    if (ref.live.driver && ref.live.driver.state.winner !== null) {
+      member.droppedAt = 0;
+      this.dropPostChat(member.ws, true);
     }
     ref.live.lastSeenAt = Date.now();
     this.rearm();
@@ -9496,7 +9739,16 @@ export class MatchmakerDO {
 
     race.state = next;
     this.countBoard(before, next);
-    this.deliver(race.seats[seat.side === 0 ? 1 : 0], JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action }));
+    const rival = race.seats[seat.side === 0 ? 1 : 0];
+    const relayed = JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action });
+    /* A rival inside its reconnect window cannot hear this frame: hold it for the resume flush
+       instead of writing it into a closed socket. */
+    if (rival.disconnectedAt > 0) {
+      rival.missed.push(relayed);
+      if (rival.missed.length > 64) rival.missed.shift();
+    } else {
+      this.deliver(rival, relayed);
+    }
     /* The board is decided: both clients can see the winner for themselves, so the room just
        stops being a race rather than guessing what the loser's screen does next. The post-match
        lane opens at the same beat, because both result capsules stay up and may speak. */
@@ -9539,6 +9791,9 @@ export class MatchmakerDO {
     }
     for (const seat of race.seats) {
       if (seat.race === race) seat.race = null;
+      /* a settled race has no grace left to run and no relays left to flush */
+      seat.disconnectedAt = 0;
+      seat.missed = [];
       this.markActive(seat.id, race.mode);
       /* A queue pairing, an Arena cup and an accepted relic duel are always two real sockets:
          no bot can hold a `Race` seat, so every win here is a verified PvP win. */
