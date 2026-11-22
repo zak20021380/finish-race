@@ -2037,6 +2037,10 @@ export function createMenu(api: MenuApi): Menu {
     if (el) el.textContent = value;
   };
 
+  /* The quest card's deadline is the campaign's own window, printed once: the number never
+     moves, and the two words around it are the two translated halves of the same pill. */
+  svText('sv-quest-hours', en(Math.round(REFERRAL_CONFIG.QUEST_DURATION_MS / 3_600_000)));
+
   /** Sprite instances for the figures the room builds at runtime — never an emoji. */
   const svIcon = (href: string, cls: string): SVGSVGElement => {
     const NS = 'http://www.w3.org/2000/svg';
@@ -2223,7 +2227,12 @@ export function createMenu(api: MenuApi): Menu {
     const holderName = cardholder ? `@${cardholder}` : playerName();
     svText('sv-card-holder', holderName);
     const holder = document.getElementById('sv-card-holder');
-    if (holder) holder.title = holderName;
+    if (holder) {
+      holder.title = holderName;
+      /* A handle is a Latin token and stays LTR; a plain player name is whatever script it is,
+         so the tag hands its direction back to the bidi algorithm in that one case. */
+      holder.setAttribute('dir', holderName.startsWith('@') ? 'ltr' : 'auto');
+    }
     svText('sv-card-gift', svFill('vault_card_starter_tag', { gift: en(vault.starterBonus) }));
     const giftTag = document.getElementById('sv-card-gift');
     if (giftTag) giftTag.hidden = vault.starterBonus <= 0;
@@ -2243,7 +2252,8 @@ export function createMenu(api: MenuApi): Menu {
     svText('sv-earned', `+${en(vault.earnedStars)}`);
     svText('sv-paid', en(vault.paidOutStars));
 
-    svText('sv-quest-reward-n', `+${en(C.TOTAL_PER_FRIEND_STARS)}`);
+    /* The reward itself is the card's title now, and its deadline is stamped once at setup:
+       these two rows are the only figures the quest card re-reads on every paint. */
     svText('sv-row-matches', svFill('quest_row_matches', { n: en(C.QUEST_MIN_MATCHES) }));
     svText('sv-row-wins', svFill('quest_row_wins', { n: en(C.QUEST_MIN_HARD_WINS) }));
 
