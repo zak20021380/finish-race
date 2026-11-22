@@ -44,6 +44,9 @@ import {
   audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
 } from './audio';
 import { playDefeat, stopDefeat } from './sound';
+/* The ambient bed's own controller. It registers its listeners and builds its element only when
+   `initMusic()` runs below — after the first screen has mounted — so nothing here touches boot. */
+import { initMusic } from './music';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
   resetMatchClaims, tiqRecoveryLimit,
@@ -6876,6 +6879,11 @@ const banter = createBanter({
 router.start('home');
 setBackButton(false);
 menu.afterStart();
+/* THE AMBIENT BED, ARMED LAST. Boot is done (Home is mounted, the router owns the back stack), so
+   this is the first moment the music controller may register its first-touch unlock and its
+   Mini App lifecycle. It still fetches and decodes nothing: `bgm.mp3` waits for the player's own
+   first gesture, which is the only frame where a WebView will let it play. */
+initMusic();
 /* Home is the ROOT of the screen stack, so `quitToMenu()` can always pop back to #s-home after
    the first playable experience. The boot then settles the locale before anything else mounts. */
 

@@ -14,6 +14,12 @@ export type Appearance = 'dark' | 'light';
 export interface Settings {
   /** every engine voice — steps, walls, blasts, chimes and the post-match fanfares */
   sound: boolean;
+  /**
+   * The looping ambient bed (`bgm.mp3`, `src/music.ts`). Independently persisted and independently
+   * switched: silencing the music never touches a gameplay voice, and the Sound switch never
+   * silences the bed.
+   */
+  musicEnabled: boolean;
   haptics: boolean;
   reducedMotion: boolean;
   /** Light Mode is a race-stage finish, not an app-wide skin: the arena turns pearl, the shell stays. */
@@ -53,7 +59,9 @@ export interface MenuState {
 
 const S_KEY = 'detour.settings.v1';
 const M_KEY = 'detour.menu.v1';
-const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false, appearance: 'dark' };
+const DEFAULT_SETTINGS: Settings = {
+  sound: true, musicEnabled: true, haptics: true, reducedMotion: false, appearance: 'dark',
+};
 const DEFAULT_MENU: MenuState = { mode: 'bot', tab: 'solo', difficulty: 'normal', sizes: [1, 1] };
 
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -63,6 +71,8 @@ try { motion.addEventListener('change', (e) => { systemReduce = e.matches; }); }
 export const settings: Settings = { ...DEFAULT_SETTINGS, ...readJson<Settings>(S_KEY) };
 export const menuState: MenuState = { ...DEFAULT_MENU, ...readJson<MenuState>(M_KEY) };
 if (settings.appearance !== 'light') settings.appearance = 'dark';
+/* a hand-edited or pre-music blob can only ever fall back to the default bed */
+if (typeof settings.musicEnabled !== 'boolean') settings.musicEnabled = DEFAULT_SETTINGS.musicEnabled;
 if (menuState.difficulty !== 'easy' && menuState.difficulty !== 'hard') menuState.difficulty = 'normal';
 if (menuState.mode !== 'bot') menuState.mode = 'bot';
 if (menuState.tab !== 'party') menuState.tab = 'solo';
@@ -321,6 +331,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Language',
     languageSub: 'App language · applies instantly',
     sound: 'Sound',
+    music: 'Music',
     haptics: 'Haptics',
     prefsSupport: 'Preferences & Support',
     prefsSupportSub: 'Language · channel · help',
@@ -1528,6 +1539,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'زبان',
     languageSub: 'زبان برنامه · اعمال فوری',
     sound: 'صدا',
+    music: 'موزیک پس‌زمینه',
     haptics: 'لرزش (ویبره)',
     prefsSupport: 'تنظیمات و پشتیبانی',
     prefsSupportSub: 'زبان · کانال · کمک',
@@ -2875,6 +2887,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Язык',
     languageSub: 'Язык приложения · применяется сразу',
     sound: 'Звук',
+    music: 'Фоновая музыка',
     haptics: 'Вибрация',
     prefsSupport: 'Настройки и поддержка',
     prefsSupportSub: 'Язык · канал · помощь',
@@ -3492,6 +3505,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'اللغة',
     languageSub: 'لغة التطبيق · تُطبق فورًا',
     sound: 'الصوت',
+    music: 'الموسيقى الخلفية',
     haptics: 'الاهتزاز',
     prefsSupport: 'الإعدادات والدعم',
     prefsSupportSub: 'اللغة · القناة · المساعدة',
@@ -4096,6 +4110,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Idioma',
     languageSub: 'Idioma de la app · se aplica al instante',
     sound: 'Sonido',
+    music: 'Música de fondo',
     haptics: 'Vibración',
     prefsSupport: 'Preferencias y ayuda',
     prefsSupportSub: 'Idioma · canal · ayuda',

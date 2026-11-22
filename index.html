@@ -1787,6 +1787,12 @@
                   <span class="row-txt"><span class="row-t" data-i18n="sound">Sound</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
+                <!-- the ambient bed's own switch (src/music.ts): one row, the same switch markup as
+                     Sound, so the music can be silenced without taking the gameplay SFX with it. -->
+                <button class="row" type="button" role="switch" aria-checked="true" data-set="musicEnabled">
+                  <span class="row-txt"><span class="row-t" data-i18n="music">Music</span></span>
+                  <span class="switch" aria-hidden="true"></span>
+                </button>
                 <button class="row" type="button" role="switch" aria-checked="true" data-set="haptics">
                   <span class="row-txt"><span class="row-t" data-i18n="haptics">Haptics</span></span>
                   <span class="switch" aria-hidden="true"></span>
