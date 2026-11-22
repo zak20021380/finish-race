@@ -3372,6 +3372,11 @@ export class MatchmakerDO {
     if (url.pathname === '/api/user/check-subscription') {
       return this.checkSubscription(request, url);
     }
+    /* Friends & Rivals: one exact seat, found by `@username` or player id, and only for a caller
+       that proved a seat of its own. Read-only, no directory page, no cursor. */
+    if (url.pathname === '/api/user/lookup') {
+      return this.lookupPlayer(request, url);
+    }
     /* Match and heartbeat telemetry from a player's own device. It is the only way a bot race the
        server never saw can reach the growth rings; the player door is proven inside. */
     if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match') {
@@ -5693,6 +5698,39 @@ export class MatchmakerDO {
       isMember: check.member,
       ...(check.unavailable ? { unavailable: true } : {}),
     }, 200, { 'cache-control': 'no-store' });
+  }
+
+  /**
+   * `GET /api/user/lookup?q=<@username_or_id>` — the Friends & Rivals manual-add door.
+   *
+   * This is deliberately narrower than the directory: it resolves ONE exact handle (leading `@`
+   * stripped, case-folded) or one exact player id, never a fuzzy page of people. The caller must
+   * prove a seat through the same player door every other player route uses, and a banned seat is
+   * answered exactly like a missing one so this can never be used to probe an account's state.
+   */
+  private async lookupPlayer(request: Request, url: URL): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ error: 'unauthorized', hint: 'signed initData required' }, 401);
+    const needle = (url.searchParams.get('q') ?? '').trim().replace(/^@+/, '').trim().slice(0, 64);
+    if (!needle) return json({ ok: false, error: 'query_required' }, 400);
+    const lower = needle.toLowerCase();
+    const rows = [...this.players.values()];
+    let row = this.players.get(needle);
+    if (!row && /^[0-9]{1,20}$/.test(needle)) {
+      row = this.players.get(`tg-${needle}`) ?? rows.find((p) => p.tgId === needle);
+    }
+    if (!row) row = rows.find((p) => p.username !== '' && p.username.toLowerCase() === lower);
+    if (!row) row = rows.find((p) => p.id.toLowerCase() === lower);
+    if (!row || row.banned) return json({ ok: false, error: 'not_found' }, 404);
+    return json({
+      ok: true,
+      id: row.id,
+      name: row.name,
+      username: row.username,
+      avatar: row.avatar,
+    });
   }
 
   /**

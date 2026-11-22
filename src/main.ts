@@ -81,6 +81,7 @@ import {
   setRewardSeats, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
+import { initFriends, openFriendsRivals, recordFriendsMatch, type FriendOpponent } from './friends';
 import { initSeize, resetSeizeContext } from './seize';
 import type { Lobby, LobbyRace, RematchState } from './lobby';
 import {
@@ -1869,6 +1870,40 @@ function resultPhoto(seat: Player): string {
 }
 
 /**
+ * The people on the far side of the board that just settled, shaped for the Friends & Rivals
+ * store. Only a board with two people at it reaches here: a bot race, a room the machine
+ * backfilled and a seat somebody walked out of are not rivalries. A 2v2 partner is a partner,
+ * never a rival, and an FFA seat the local player finished above is a win against that seat.
+ */
+function settledOpponents(won: boolean): FriendOpponent[] {
+  if (!active || matchMode() !== 'pvp') return [];
+  const order = finalStandings();
+  const champions = winningSeats();
+  const rankOf = (side: Player): number => order.indexOf(side);
+  const myRank = rankOf(localSide);
+  const out: FriendOpponent[] = [];
+  if ('seats' in active) {
+    const teamMatch = active.mode === 'team';
+    const myTeam = active.seats.find((seat) => seat.side === localSide)?.team ?? 0;
+    for (const seat of active.seats) {
+      if (seat.side === localSide || seat.bot || seat.left) continue;
+      if (teamMatch && seat.team === myTeam) continue;   // a 2v2 partner is not a rival
+      const rivalWon = champions.includes(seat.side as Player);
+      const verdict = teamMatch
+        ? won
+        : won ? !rivalWon : (!rivalWon && myRank >= 0 && rankOf(seat.side as Player) > myRank);
+      out.push({ id: seat.id, name: seat.name, avatar: seat.avatarUrl ?? '', won: verdict });
+    }
+    return out;
+  }
+  const rival = active.opponent;
+  if (rival && !rival.isBot) {
+    out.push({ id: rival.id, name: rival.name, avatar: rival.avatarUrl ?? '', won });
+  }
+  return out;
+}
+
+/**
  * Does this seat hold VIP? The local seat reads the live entitlement; the online rival is judged
  * by the room's stamped flag on `MATCH_FOUND`, never by anything the rival's own client claims.
  */
@@ -2916,6 +2951,9 @@ function showOverlay() {
   warBadge.hidden = true;
   warEpoch += 1;
   const won = localWon();
+  /* Friends & Rivals: fold this board's people into the persistent head-to-head roster before
+     the board is reset. Bot seats, a struck chair and a 2v2 partner never reach the store. */
+  recordFriendsMatch(settledOpponents(won));
   /* A rival who walked out mid-race leaves a machine in the chair. A duel whose only opponent is
      gone has nobody to answer, so its capsule opens dead. A party still has people at the table
      while ANY other seat is held by a person, so it stays alive; the server's rematch consensus
@@ -6758,7 +6796,10 @@ initGameModes(sheets, {
   onSeatEliminated: () => quitToMenu(),
   /* A server-side maintenance refusal still raises the one-key notice. */
   onMaintenance: () => showNote(t('maintenanceBody'), false, 3200),
+  /* The friends pane's second door: the H2H sheet, opened over the drawer. */
+  onFriendsRivals: openFriendsRivals,
 });
+initFriends();
 onGameModeChange(paintParty);
 onLang(paintParty);
 /* the result is a live surface too: a language flip repaints its copy, tags and aria labels.

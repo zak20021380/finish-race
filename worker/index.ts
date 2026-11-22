@@ -348,6 +348,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     return withForceJoinCors(await lobby.fetch(request));
   }
 
+  /* Friends & Rivals: the one exact-player read behind manual adding. The room proves the
+     caller's own seat itself and answers a single row or a 404. */
+  if (url.pathname === '/api/user/lookup') {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   /* The one public announcement feed: what a client reads to raise an urgent popup. */
   if (url.pathname === '/api/client/announcements/active') {
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));

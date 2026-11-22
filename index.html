@@ -3043,6 +3043,50 @@
         </section>
       </div>
 
+      <!-- ============ Friends & Rivals · the persistent head-to-head sheet ============
+           One modal, built once. Rows are plain flex cards with `contain: layout paint`, and the
+           list's two actions ride one delegated listener; nothing here blurs or animates forever. -->
+      <div class="frm" id="friends-modal" hidden>
+        <div class="frm-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="frm-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="fr-title" aria-describedby="fr-sub">
+          <span class="frm-handle" data-modal-close aria-hidden="true"></span>
+          <button class="frm-x" type="button" data-modal-close
+                  data-i18n-aria="frClose" aria-label="Close Friends &amp; Rivals">×</button>
+
+          <header class="frm-head">
+            <span class="frm-head-ic" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
+            <span class="frm-head-txt">
+              <h2 class="frm-title" id="fr-title" data-i18n="frTitle">Friends &amp; Rivals</h2>
+              <p class="frm-sub" id="fr-sub" data-i18n="frSub">Head-to-head stats · Quick challenge</p>
+            </span>
+          </header>
+
+          <form class="frm-add" id="fr-add-form" autocomplete="off">
+            <input class="frm-input" id="fr-input" type="text" dir="auto"
+                   inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                   data-i18n-ph="frAddPlaceholder" data-i18n-aria="frAddPlaceholder"
+                   placeholder="@username or Player ID" aria-label="@username or Player ID" />
+            <button class="frm-add-btn" id="fr-add" type="submit">
+              <span class="frm-add-plus" aria-hidden="true">+</span><span data-i18n="frAdd">Add</span>
+            </button>
+          </form>
+          <p class="frm-status" id="fr-status" role="status" aria-live="polite" hidden></p>
+
+          <div class="frm-scroll" data-scroll>
+            <div class="frm-recent" id="fr-recent" hidden>
+              <p class="frm-recent-t" data-i18n="frRecent">Recent · 1 match</p>
+              <div class="frm-chips" id="fr-chips"></div>
+            </div>
+            <ul class="frm-list" id="fr-list" aria-live="polite"></ul>
+            <div class="frm-empty" id="fr-empty" hidden>
+              <span class="frm-empty-ic" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
+              <p class="frm-empty-t" data-i18n="frEmpty">Play more than once with someone or add a friend by @username to track your head-to-head record.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <!-- ============ Stars Vault · the invited friends sheet ============
            The feed the vault used to carry inline. It is the one surface here that may scroll,
            because a player with twenty friends must still reach the close key. -->
@@ -5812,6 +5856,19 @@
                   <span class="fr-create-t" data-i18n="createRoom">Create New Room</span>
                   <span class="fr-create-s" data-i18n="createRoomSub">You host · pick a format</span>
                 </span>
+              </button>
+              <!-- One quiet second door: the persistent H2H roster and its quick challenge. It opens
+                   its own sheet, so the room pane stays exactly as light as it was. -->
+              <button class="fr-rivals" type="button" id="friends-rivals-btn"
+                aria-haspopup="dialog" aria-controls="friends-modal"
+                data-i18n-aria="frTitle" aria-label="Friends &amp; Rivals">
+                <span class="fr-rivals-ic" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
+                <span class="fr-rivals-txt">
+                  <span class="fr-rivals-t" data-i18n="frTitle">Friends &amp; Rivals</span>
+                  <span class="fr-rivals-s" data-i18n="frSub">Head-to-head stats · Quick challenge</span>
+                </span>
+                <span class="fr-rivals-count" aria-hidden="true"><bdi dir="ltr" id="friends-rivals-count">0</bdi></span>
+                <svg class="ico fr-rivals-chev" aria-hidden="true" focusable="false"><use href="#i-chevron-right" /></svg>
               </button>
               <p class="gm-err" id="gm-err" role="status" hidden></p>
             </div>

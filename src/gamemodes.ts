@@ -2144,6 +2144,11 @@ export interface GameModeInit {
   /** A maintenance lockout: raise the single-key notice instead of opening the room. */
   onMaintenance?: () => void;
   /**
+   * The friends pane's second door: the Friends & Rivals sheet (head-to-head roster, manual add,
+   * quick challenge). It is a sheet of its own, so this pane never pays for its DOM or its store.
+   */
+  onFriendsRivals?: () => void;
+  /**
    * This seat was struck from a live race after a disconnect. Leave the board through the app's
    * one quit path and land Home — the room has already said why.
    */
@@ -2215,6 +2220,13 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   });
 
   /* ---- entry: create mints a code and walks straight into the lobby ---- */
+  /* The second door on this pane is its own sheet: it opens over the drawer without touching the
+     room socket, the roster or the session. */
+  document.getElementById('friends-rivals-btn')?.addEventListener('click', () => {
+    impact('light');
+    hooks.onFriendsRivals?.();
+  });
+
   document.getElementById('gm-create')?.addEventListener('click', () => {
     if (hooks.maintenance?.()) {
       hooks.onMaintenance?.();
