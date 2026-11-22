@@ -2691,14 +2691,65 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   z-index: 5;                          /* above every veil, always the live layer */
   flex: none;
   pointer-events: auto;
+  gap: 10px;
+  min-height: 44px;
 }
-#s-shop.is-sealed .m-head .m-title { color: var(--ink); opacity: 1; }
+#s-shop.is-sealed .m-head .m-title {
+  /* pinned to the row's true centre, so the wider coin pill never nudges the title off
+     axis; the ellipsis cap keeps it clear of the pill on a 320px phone */
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: max-content;
+  max-width: 46%;
+  margin-inline: auto;
+  color: #eef2fa;
+  opacity: 1;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+#s-shop.is-sealed .m-head .balance { margin-inline-start: auto; }
 #s-shop.is-sealed .m-head .icon-btn,
 #s-shop.is-sealed .m-head .balance { opacity: 1; filter: none; }
+/* the back key: a 38px obsidian disc, not the light clay chip it wears elsewhere */
+#s-shop.is-sealed .m-head .icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #1b1f2a 0%, #0b0d13 100%);
+  color: #dfe6f2;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 6px 14px -10px rgba(0, 0, 0, .9);
+}
+#s-shop.is-sealed .m-head .icon-btn .ico { width: 18px; height: 18px; }
+/* the wallet: a sleek metallic gold-rimmed pill on obsidian, gold coin, Latin digits only */
 #s-shop.is-sealed .m-head .balance {
-  color: var(--coin-ink);
-  background: var(--coin);
-  box-shadow: inset 0 0 0 1px var(--coin-line), 0 0 20px -12px rgba(245, 158, 11, .8);
+  height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 999px;
+  color: #f6d68d;
+  font-size: 12.5px;
+  font-weight: 800;
+  background: linear-gradient(180deg, rgba(43, 36, 20, .96) 0%, rgba(14, 14, 12, .98) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 196, 81, .42),
+    inset 0 1px 0 rgba(255, 232, 168, .18),
+    0 6px 16px -12px rgba(245, 196, 81, .85);
+}
+#s-shop.is-sealed .m-head .balance .coin { width: 15px; height: 15px; }
+#s-shop.is-sealed .m-head .balance #shop-coins {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: .01em;
+}
+#s-shop.is-sealed .m-head .balance .balance-l {
+  color: rgba(246, 214, 141, .72);
+  font-size: 10.5px;
+  font-weight: 700;
 }
 
 /* ---- category pills: muted obsidian, dimmed, completely inert ---- */
@@ -44030,7 +44081,7 @@ bdi { unicode-bidi: isolate; }
   flex: 0 0 calc(100vw - 56px);
   max-width: 360px;
   height: 100%;
-  border-radius: 22px;
+  border-radius: 24px;
   scroll-snap-align: center;
   box-sizing: border-box;
 }
@@ -44041,7 +44092,7 @@ bdi { unicode-bidi: isolate; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   height: 16px;
   padding: 0 18px;
 }
@@ -44050,12 +44101,14 @@ bdi { unicode-bidi: isolate; }
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   transition: width 0.2s ease, background-color 0.2s ease;
 }
 .shop-dot.is-active {
-  width: 16px;
-  background: rgba(245, 196, 81, 0.88);
+  width: 18px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe3a0 0%, #e5b64a 100%);
   box-shadow: 0 0 10px -3px rgba(245, 196, 81, 0.8);
 }
 
@@ -44069,18 +44122,19 @@ bdi { unicode-bidi: isolate; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  /* one uniform vertical rhythm: header -> tier cards -> perk pills -> gold CTA */
-  gap: 10px;
-  padding: 16px;
-  border-radius: 22px;
+  /* one tight vertical rhythm: header -> tier cards -> benefit tiles -> gold CTA */
+  gap: 14px;
+  padding: 18px 16px 16px;
+  border-radius: 24px;
   border: 1px solid rgba(245, 196, 81, 0.34);
-  /* ONE surface only: a tight 24K spotlight behind the crown over pure carbon obsidian.
-     No second overlay box inside the card, so the header cannot cut a horizontal seam. */
+  /* ONE surface only: a warm 24K wash bleeding from behind the crown into layered obsidian,
+     so the plate reads as a lit jewel instead of a flat dark fill. No second overlay box
+     inside the card, so the header cannot cut a horizontal seam. */
   background:
-    radial-gradient(circle 150px at 50% 44px, rgba(255, 206, 84, 0.20) 0%, rgba(245, 184, 61, 0.06) 48%, rgba(9, 10, 15, 0) 100%),
-    linear-gradient(180deg, #11131b 0%, #08090d 100%);
+    radial-gradient(circle at 50% 8%, rgba(245, 196, 81, 0.22) 0%, rgba(245, 196, 81, 0.06) 32%, rgba(245, 196, 81, 0) 52%),
+    linear-gradient(180deg, #171a24 0%, #0c0e14 100%);
   /* one contact shadow, no bloom: the tab opens in a single frame */
-  box-shadow: 0 10px 22px -14px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 224, 138, 0.22);
+  box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 224, 138, 0.2);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -44094,43 +44148,48 @@ bdi { unicode-bidi: isolate; }
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
   background: none !important;
   border: none !important;
   box-shadow: none !important;
 }
+/* the crown medallion: a warm metallic gold radial glow, sized to lead the plate */
 .vip-flag-crest {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255, 222, 130, 0.28), rgba(20, 17, 12, 0.92));
-  border: 1px solid rgba(245, 196, 81, 0.48);
-  box-shadow: 0 0 24px rgba(245, 196, 81, 0.24), inset 0 1px 1px rgba(255, 240, 190, 0.35);
+  background: radial-gradient(circle at 35% 30%, rgba(247, 207, 104, 0.28), rgba(245, 196, 81, 0.06));
+  border: 1.5px solid rgba(245, 196, 81, 0.45);
+  box-shadow: 0 6px 20px rgba(245, 196, 81, 0.14);
 }
 .vip-flag-crest-svg { width: 30px; height: 30px; }
 .vip-flag-copy { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .vip-flag-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 900;
+  letter-spacing: -0.01em;
   line-height: 1.25;
-  color: #f7e7bb;
-  background: linear-gradient(168deg, #fff6da 8%, #e9cd8c 42%, #b98c3c 62%, #f6e3b0 100%);
+  color: #f9f1de;
+}
+/* the Latin mark wears the gold foil; the name beside it stays crisp cream */
+.vip-flag-title-vip {
+  background: linear-gradient(168deg, #fff6da 8%, #f0cf85 44%, #c4952f 68%, #ffe6ab 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .vip-flag-sub {
-  margin: 0;
-  font-size: 10.5px;
+  margin: 4px 0 0;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1.5;
-  color: #9fa7b6;
+  color: #a6aebd;
 }
 
 .vip-flag-active {
@@ -44160,47 +44219,60 @@ bdi { unicode-bidi: isolate; }
 
 .vip-flag-tiers {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  /* no extra top margin: the card's uniform 14px gap already clears the floating
-     POPULAR / -45% pills, which rise 10px above their own cards */
-  margin: 0;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  /* 6px of breathing room under the head, while the card's 14px gap already clears the
+     floating POPULAR / -45% pills, which rise 10px above their own cards */
+  margin: 6px 0 0;
 }
 .vip-flag-tier {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 6px 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(245, 196, 81, 0.16);
-  background: linear-gradient(180deg, rgba(24, 28, 39, 0.92), rgba(10, 12, 18, 0.94));
-  color: #cfd5e1;
+  gap: 5px;
+  padding: 12px 6px 9px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #12151e;
+  color: #b9c1d1;
   cursor: pointer;
   font: inherit;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
 }
 .vip-flag-tier:hover { border-color: rgba(245, 196, 81, 0.34); }
+/* the chosen tier: a warm gold wash, a crisp 1.5px gold edge and one soft outer glow */
 .vip-flag-tier.is-selected {
-  border-color: rgba(245, 196, 81, 0.58);
-  background: linear-gradient(180deg, rgba(44, 35, 18, 0.94), rgba(15, 14, 11, 0.96));
-  color: #f8e9be;
-  box-shadow: inset 0 0 0 1px rgba(245, 196, 81, 0.18), 0 10px 24px -18px rgba(245, 196, 81, 1);
+  border: 1.5px solid #f5c451;
+  background: linear-gradient(180deg, rgba(245, 196, 81, 0.18) 0%, rgba(245, 196, 81, 0.05) 100%);
+  color: #ffefc6;
+  box-shadow: 0 6px 18px rgba(245, 196, 81, 0.14);
 }
-.vip-flag-tier-days { display: inline-flex; align-items: baseline; gap: 3px; font-size: 13.5px; font-weight: 900; line-height: 1.2; }
-.vip-flag-tier-unit { font-size: 9px; font-weight: 700; opacity: 0.72; }
+/* the duration line: crisp muted silver, never competing with the price below it */
+.vip-flag-tier-days {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #98a2b6;
+}
+.vip-flag-tier.is-selected .vip-flag-tier-days { color: #ecd49b; }
+.vip-flag-tier-unit { font-size: 11px; font-weight: 700; opacity: 0.82; }
+/* the price line: one large tabular figure paired inline with the Telegram Star */
 .vip-flag-tier-price {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-numeric);
-  font-size: 10px;
-  font-weight: 700;
-  color: #e8c477;
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.15;
+  color: #f8dfa4;
 }
 /* the bundled Telegram Stars artwork: full-colour PNG, never re-tinted, never a glyph.
    It rides the price rows and the gold CTA, lifted off the metal by a soft contact shadow. */
@@ -44216,6 +44288,8 @@ bdi { unicode-bidi: isolate; }
   user-select: none;
   -webkit-user-select: none;
 }
+.vip-flag-tier .tg-star-icon { width: 18px; height: 18px; }
+/* the two floating pills: centred on the top border, never clipped, never overlapping */
 .vip-flag-tier-badge,
 .vip-flag-tier-tag {
   position: absolute;
@@ -44224,61 +44298,82 @@ bdi { unicode-bidi: isolate; }
   transform: translateX(-50%);
   white-space: nowrap;
   z-index: 3;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 7.5px;
+  font-size: 8.5px;
   font-weight: 800;
-  line-height: 1.5;
+  line-height: 1.35;
   letter-spacing: 0.02em;
   pointer-events: none;
 }
+/* the hero ribbon: metallic gold fill under dark obsidian text */
 .vip-flag-tier-badge {
-  background: linear-gradient(180deg, #ffe9a8, #e0b25c);
-  color: #241a05;
-  border: 1px solid rgba(255, 246, 220, 0.6);
+  background: linear-gradient(180deg, #ffe6a3 0%, #e5a932 100%);
+  color: #1c1508;
+  border: 1px solid rgba(255, 246, 220, 0.55);
   box-shadow: 0 4px 10px -6px rgba(245, 196, 81, 0.9);
 }
+/* the long-term saving: an emerald pill with a gold hairline, cold against the warm gold */
 .vip-flag-tier-tag {
-  background: rgba(245, 196, 81, 0.12);
-  border: 1px solid rgba(245, 196, 81, 0.34);
-  color: #f0d494;
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.26) 0%, rgba(16, 185, 129, 0.14) 100%);
+  border: 1px solid rgba(245, 196, 81, 0.4);
+  color: #74e8b8;
+  box-shadow: 0 4px 10px -7px rgba(16, 185, 129, 0.9);
 }
 
 .vip-flag-perks {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+/* each promise is a tile, not a pill: a gold-tinted icon well and one crisp label on the
+   start side, a high-contrast tabular value on the end side */
 .vip-flag-perk {
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 6px;
   min-width: 0;
-  padding: 7px 9px;
-  border-radius: 12px;
-  border: 1px solid rgba(245, 196, 81, 0.1);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  padding: 9px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
 }
-.vip-flag-perk-ico { flex: none; display: inline-flex; width: 15px; height: 15px; color: #f5c451; }
+.vip-flag-perk-ico {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: rgba(245, 196, 81, 0.12);
+  color: #f6c85e;
+}
 .vip-flag-perk-svg { width: 15px; height: 15px; }
 .vip-flag-perk-label {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: #dde2ec;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #e3e8f1;
   overflow-wrap: anywhere;
 }
 .vip-flag-perk-val {
   flex: none;
-  font-size: 9.5px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(245, 196, 81, 0.1);
+  font-size: 11.5px;
   font-weight: 800;
   line-height: 1.3;
-  color: #f0d494;
+  color: #f6c85e;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
 }
 
 .vip-flag-cta {
@@ -44289,20 +44384,21 @@ bdi { unicode-bidi: isolate; }
   justify-content: center;
   gap: 6px;
   width: 100%;
-  min-height: 44px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 240, 185, 0.5);
-  background: linear-gradient(180deg, #ffeeb8 0%, #f5c451 44%, #c99a2f 100%);
+  height: 50px;
+  min-height: 50px;
+  padding: 0 14px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 240, 185, 0.45);
+  background: linear-gradient(180deg, #fbd673 0%, #e5a932 100%);
   color: #241804;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 900;
   letter-spacing: 0.01em;
   cursor: pointer;
   box-shadow:
-    0 16px 30px -18px rgba(245, 196, 81, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    0 6px 20px rgba(235, 178, 56, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 .vip-flag-cta > * { position: relative; z-index: 1; }
 /* a static specular sheen: the Shop never runs an infinite keyframe loop */
@@ -44312,8 +44408,9 @@ bdi { unicode-bidi: isolate; }
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.16) 50%, transparent 62%);
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.18) 50%, transparent 62%);
 }
+.vip-flag-cta:active { background: linear-gradient(180deg, #f2cb66 0%, #d99f2c 100%); }
 .vip-flag-cta:disabled { cursor: default; opacity: 0.72; }
 /* on the brushed-gold CTA the Star steps up one size so it holds the label's cap height */
 .vip-flag-cta .tg-star-icon { width: 19px; height: 19px; }
@@ -44340,7 +44437,7 @@ bdi { unicode-bidi: isolate; }
   justify-content: center;
   text-align: center;
   gap: 12px;
-  padding: 24px;
+  padding: 18px 16px 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: linear-gradient(180deg, #0d0f15 0%, #08090d 100%);
   color: rgba(255, 255, 255, 0.72);
@@ -44410,25 +44507,52 @@ html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
 html[data-lang="fa"] .soon-name,
 html[data-lang="ar"] .soon-name { line-height: 1.6; }
 
+@media (max-width: 400px) {
+  /* one notch below the 360 plate: the benefit tiles keep their label on one line and
+     their value pill on the end side, so the 2x2 grid never reflows to three rows */
+  .vip-flag-perk { padding: 8px 9px; gap: 5px; }
+  .vip-flag-perk-ico { width: 24px; height: 24px; border-radius: 8px; }
+  .vip-flag-perk-label { font-size: 11px; }
+  .vip-flag-perk-val { font-size: 11px; padding: 2px 5px; }
+  .vip-flag-title { font-size: 19px; }
+  .vip-flag-tier { padding: 11px 5px 9px; }
+  .vip-flag-tier-price { font-size: 20px; }
+}
+
 @media (max-width: 360px) {
-  /* same centred crest stack and 22px plate, only the rhythm tightens to fit 320px,
-     while the 10px gap still clears the floating POPULAR / -45% pills above their cards */
-  .vip-flag { padding: 16px 12px; gap: 10px; }
-  .vip-flag-title { font-size: 14.5px; }
-  .vip-flag-perk { padding: 7px 7px; gap: 6px; }
-  .vip-flag-perk-label { font-size: 9.5px; }
-  .vip-flag-tier-days { font-size: 12px; }
-  .vip-flag-cta { font-size: 11.5px; }
-  .tg-star-icon { width: 16px; height: 16px; }
+  /* same centred crest stack and 24px plate, only the rhythm tightens to fit 320px,
+     while the 14px gap still clears the floating POPULAR / -45% pills above their cards */
+  .vip-flag { padding: 16px 12px 14px; gap: 12px; }
+  .vip-flag-crest { width: 48px; height: 48px; }
+  .vip-flag-title { font-size: 18px; }
+  .vip-flag-sub { font-size: 10px; }
+  .vip-flag-tiers { gap: 8px; margin-top: 5px; }
+  .vip-flag-tier { padding: 10px 4px 8px; gap: 4px; }
+  .vip-flag-tier-days { font-size: 11.5px; }
+  .vip-flag-tier-unit { font-size: 10px; }
+  .vip-flag-tier-price { font-size: 18px; gap: 4px; }
+  .vip-flag-tier .tg-star-icon { width: 16px; height: 16px; }
+  .vip-flag-perk { padding: 7px 7px; gap: 4px; }
+  .vip-flag-perk-ico { width: 22px; height: 22px; }
+  .vip-flag-perk-svg { width: 13px; height: 13px; }
+  .vip-flag-perk-label { font-size: 10.5px; }
+  .vip-flag-perk-val { font-size: 10.5px; padding: 1px 5px; }
+  .vip-flag-cta { font-size: 12.5px; height: auto; min-height: 46px; padding: 8px 12px; line-height: 1.2; }
+  .vip-flag-cta .tg-star-icon { width: 17px; height: 17px; }
   .soon-name { font-size: 12px; }
 }
-/* short phones: the card is a fixed height now, so the flagship buys back headroom
-   instead of pushing the CTA past the plate's foot */
-@media (max-height: 700px) {
-  .vip-flag { gap: 8px; padding: 14px 16px; }
-  .vip-flag-crest { width: 42px; height: 42px; }
+/* short phones below the 640 reference: the card is a fixed height now, so the flagship
+   buys back headroom instead of pushing the CTA past the plate's foot */
+@media (max-height: 620px) {
+  .vip-flag { gap: 10px; padding: 14px 14px 12px; }
+  .vip-flag-crest { width: 46px; height: 46px; }
   .vip-flag-crest-svg { width: 26px; height: 26px; }
-  .vip-flag-perk { padding: 6px 9px; }
+  .vip-flag-title { font-size: 18px; }
+  .vip-flag-sub { margin-top: 2px; }
+  .vip-flag-tiers { margin-top: 4px; }
+  .vip-flag-tier { padding: 10px 4px 8px; }
+  .vip-flag-perk { padding: 7px 9px; }
+  .vip-flag-cta { height: auto; min-height: 46px; padding: 8px 14px; line-height: 1.2; }
   .shop-carousel { padding: 4px 18px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {

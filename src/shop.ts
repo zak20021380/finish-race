@@ -89,7 +89,7 @@ function write(root: HTMLElement, template: string, values: Record<string, strin
 
 export function createShop(api: ShopApi): Shop {
   const chip = $<HTMLElement>('shop-balance');
-  const coins = $<HTMLSpanElement>('shop-coins');
+  const coins = $<HTMLElement>('shop-coins');
   const tierRow = $<HTMLElement>('shop-vip-tiers');
   const perks = $<HTMLUListElement>('shop-vip-perks');
   const activePill = $<HTMLElement>('shop-vip-active');
@@ -107,6 +107,20 @@ export function createShop(api: ShopApi): Shop {
   let busy = false;
   let statusKey = '';
   let mounted = false;
+
+  /** The flagship's name is split once at paint time so only the Latin "VIP" wears the gold
+   *  foil while the rest of the title stays crisp cream — in every script, RTL included. */
+  function paintTitle(): void {
+    const host = $<HTMLElement>('shop-vip-title');
+    if (!host) return;
+    host.replaceChildren();
+    for (const part of t('shopVipTitle').split(/(VIP)/g)) {
+      if (!part) continue;
+      host.append(part === 'VIP'
+        ? el('span', 'vip-flag-title-vip', part)
+        : document.createTextNode(part));
+    }
+  }
 
   const planOf = (): ShopVipTier | null => tiers.find((tier) => tier.id === selected) ?? tiers[0] ?? null;
 
@@ -450,6 +464,7 @@ export function createShop(api: ShopApi): Shop {
   function mount(): void {
     if (mounted) return;
     mounted = true;
+    paintTitle();
     paintTiers();
     paintPerks();
     paint();
@@ -487,6 +502,7 @@ export function createShop(api: ShopApi): Shop {
     mountCarousel();
     onVipChange(() => paint());
     onLang(() => {
+      paintTitle();
       paintTiers();
       paintPerks();
       paint();
