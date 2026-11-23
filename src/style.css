@@ -44661,21 +44661,113 @@ html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
 .cw-verifybox { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .cw-reg-body .cw-verifybox { margin-top: 4px; }
 .cw-detail-body .cw-verifybox { margin-top: 2px; }
-.cw-reg-skip {
+.cw-sheet .cw-method2 {
   appearance: none;
-  min-height: 34px;
-  margin-top: 2px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px var(--cw-hair);
-  color: var(--ink-soft);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 14px;
+  border: 1.5px solid rgba(56, 189, 248, .38);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, .14) 0%, rgba(30, 58, 95, .22) 100%);
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, .22), 0 6px 16px rgba(0, 0, 0, .28);
+  color: #f1f5f9;
   font: inherit;
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 800;
+  line-height: 1.45;
+  text-align: start;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), border-color var(--motion-fast);
 }
-.cw-reg-skip:disabled { opacity: .6; cursor: default; }
+.cw-sheet .cw-method2:hover:not(:active) { border-color: rgba(56, 189, 248, .52); }
+.cw-sheet .cw-method2:active:not(:disabled) { transform: scale(.985); }
+.cw-sheet .cw-method2:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+.cw-sheet .cw-method2[aria-expanded="true"] {
+  border-color: rgba(56, 189, 248, .56);
+  background: linear-gradient(180deg, rgba(56, 189, 248, .2) 0%, rgba(30, 58, 95, .28) 100%);
+}
+.cw-sheet .cw-method2-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: rgba(56, 189, 248, .16);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .16);
+  color: #38bdf8;
+}
+.cw-sheet .cw-method2-globe { width: 16px; height: 16px; }
+.cw-sheet .cw-method2-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #f1f5f9;
+  line-height: 1.5;
+}
+.cw-sheet .cw-method2-label bdi {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+.cw-sheet .cw-method2-chevron {
+  --cw-chevron-flip: 1;
+  --cw-chevron-turn: 0deg;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #7dd3fc;
+  transform: scaleX(var(--cw-chevron-flip)) rotate(var(--cw-chevron-turn));
+  transition: transform var(--motion-fast);
+}
+.cw-sheet .cw-method2[dir="rtl"] .cw-method2-chevron { --cw-chevron-flip: -1; }
+.cw-sheet .cw-method2[aria-expanded="true"] .cw-method2-chevron { --cw-chevron-turn: 90deg; }
+
+.cw-sheet .cw-reg-skip {
+  appearance: none;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  margin-top: 2px;
+  padding: 0 14px;
+  border: 1.5px solid rgba(148, 163, 184, .34);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .095) 0%, rgba(255, 255, 255, .045) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 6px 16px rgba(0, 0, 0, .30);
+  color: #f1f5f9;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), border-color var(--motion-fast);
+}
+.cw-sheet .cw-reg-skip:hover:not(:active):not(:disabled) { border-color: rgba(148, 163, 184, .48); }
+.cw-sheet .cw-reg-skip:active:not(:disabled) {
+  transform: scale(.985);
+  background: rgba(255, 255, 255, .13);
+}
+.cw-sheet .cw-reg-skip:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
+.cw-sheet .cw-reg-skip-icon { flex: none; width: 17px; height: 17px; color: #cbd5e1; }
+.cw-sheet .cw-reg-skip:disabled { opacity: .6; cursor: default; }
+html[data-lang="fa"] .cw-sheet .cw-reg-skip,
+html[data-lang="ar"] .cw-sheet .cw-reg-skip {
+  direction: rtl;
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+}
+html[data-lang="fa"] .cw-sheet .cw-reg-skip-icon,
+html[data-lang="ar"] .cw-sheet .cw-reg-skip-icon { transform: scaleX(-1); }
 /* The admin door grew a second method, so its body is the scroller on a short phone. */
 .cw-reg-body { overflow-y: auto; padding-inline-end: 2px; }
 

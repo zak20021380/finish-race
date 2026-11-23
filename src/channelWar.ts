@@ -1090,6 +1090,33 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       },
     });
     regVerifyHost.append(regVerifyPanel.el);
+    const toggle = regVerifyPanel.el.querySelector<HTMLButtonElement>('.sqv-toggle');
+    if (!toggle) return;
+    const label = toggle.textContent ?? '';
+    toggle.replaceChildren();
+    toggle.classList.add('cw-method2');
+    toggle.setAttribute('dir', lang === 'fa' || lang === 'ar' ? 'rtl' : 'ltr');
+
+    const badge = document.createElement('span');
+    badge.className = 'cw-method2-icon';
+    badge.setAttribute('aria-hidden', 'true');
+    badge.append(icon('#i-globe', 'cw-method2-globe'));
+
+    const labelRun = document.createElement('span');
+    labelRun.className = 'cw-method2-label';
+    let offset = 0;
+    for (const match of label.matchAll(/[0-9]+/g)) {
+      const at = match.index ?? 0;
+      if (at > offset) labelRun.append(label.slice(offset, at));
+      const digits = document.createElement('bdi');
+      digits.setAttribute('dir', 'ltr');
+      digits.textContent = match[0];
+      labelRun.append(digits);
+      offset = at + match[0].length;
+    }
+    if (offset < label.length) labelRun.append(label.slice(offset));
+
+    toggle.append(badge, labelRun, icon('#i-next', 'cw-method2-chevron'));
   }
 
   function showInviteCard(handle: string): void {
