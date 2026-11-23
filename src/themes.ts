@@ -214,11 +214,44 @@ export const oppositeColor = (color: PieceColor): PieceColor => (color === 'red'
  * Index 4 is the refusal palette that owns no side. Four is the rules' team ceiling; it is spelled
  * out here so this data module stays free of a runtime import on the pure rules module.
  */
-export function perspectiveRamps(localSeat: number, rivalSeat: number, color: PieceColor): Ramp[] {
+interface TeamRampContext { seatTeam: number[]; localSide: number }
+let teamRampContext: TeamRampContext | null = null;
+
+/**
+ * Keep the renderer's existing three-argument call team-aware without changing its public API.
+ * The context is synchronous and restored even if painting throws, so menu previews and every
+ * non-team caller keep the ordinary perspective palette.
+ */
+export function withTeamRampContext<T>(
+  seatTeam: number[] | undefined, localSide: number, paint: () => T,
+): T {
+  const previous = teamRampContext;
+  teamRampContext = seatTeam ? { seatTeam, localSide } : null;
+  try { return paint(); } finally { teamRampContext = previous; }
+}
+
+export function perspectiveRamps(
+  localSeat: number, rivalSeat: number, color: PieceColor,
+  seatTeam?: number[], localSide?: number,
+): Ramp[] {
   const chosen = PIECE_RAMPS[color];
   const foe = PIECE_RAMPS[oppositeColor(color)];
-  const spare = [GOLD_RAMP, TEAM3_RAMP, TEAM2_RAMP];
+  const team = seatTeam ?? teamRampContext?.seatTeam;
+  const self = localSide ?? (seatTeam ? localSeat : teamRampContext?.localSide) ?? localSeat;
   const out: Ramp[] = [];
+  if (team) {
+    /* Warm local: ruby + gold against cyan + amethyst. Cool local: cyan + emerald against
+       ruby + amethyst. The first enemy keeps the familiar opposing signature colour. */
+    const partner = color === 'red' ? GOLD_RAMP : TEAM2_RAMP;
+    for (let seat = 0; seat < 4; seat++) {
+      if (seat === self) out.push(chosen);
+      else if (team[seat] === team[self]) out.push(partner);
+      else out.push(seat === rivalSeat ? foe : TEAM3_RAMP);
+    }
+    out.push(ERR_RAMP);
+    return out;
+  }
+  const spare = [GOLD_RAMP, TEAM3_RAMP, TEAM2_RAMP];
   let k = 0;
   for (let seat = 0; seat < 4; seat++) {
     if (seat === localSeat) out.push(chosen);

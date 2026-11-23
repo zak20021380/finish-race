@@ -41,7 +41,7 @@ import { channelWarHandleOf } from '../shared/config';
 import { mountCoins } from './coin';
 import {
   appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, setSkip2xConfirm,
-  skip2xConfirm, t, tIn, toggleAppearance,
+  skip2xConfirm, t, tIn, toggleAppearance, type LangCode,
 } from './settings';
 import {
   audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
@@ -77,7 +77,7 @@ import {
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetWall,
 } from './tutorial';
-import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
+import { PEARL_BOARD, perspectiveRamps, withTeamRampContext, type Theme } from './themes';
 import { mineStage, setCapsuleStage, setMineStage, STAGE_CLEAR } from './staging';
 import { setPieceBoxes, type PieceBox } from './boardpieces';
 import {
@@ -100,7 +100,7 @@ import {
 import { runtime, tiqFrom } from './runtime';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import {
-  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, hasHumanRival, isAutomated, isHuman,
+  MIN_SEATS, ROOM_WAIT_MS, createRoom, defaultTeam, difficultyFor, hasHumanRival, isAutomated, isHuman,
   lobbyLine, rewardEligible, seatBadge, seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { channelGateBlocks, initJoinGate, raiseChannelGate } from './joinGate';
@@ -1266,7 +1266,14 @@ let forfeitMatch = false;
 let forfeitToast = false;
 /** The one competitive stake, in TIQ: what a forfeit costs and what the victory pays. */
 const FORFEIT_TIQ = 15;
-const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
+const rivalSide = (): Player => {
+  if (state.seatTeam) {
+    const allies = sideOf(state, localSide);
+    const enemy = roster().find((seat) => !allies.includes(seat));
+    if (enemy !== undefined) return enemy;
+  }
+  return localSide === 0 ? 1 : 0;
+};
 /**
  * How this board is counted: an Arena cup race carries the tag the room announced; every other
  * online board is PvP, and a board with no live seat is a practice race against the machine.
@@ -1298,6 +1305,14 @@ function quitKind(): QuitKind {
 }
 /** The two sides this screen actually paints: the player's chosen colour, the rival in the other. */
 const currentPerspective = (): Perspective => ({ local: localSide, rival: rivalSide(), color: pieceColor() });
+
+/** Paint the board through the live team map while keeping the renderer's API untouched. */
+function paintRendererPerspective(reset = false): void {
+  withTeamRampContext(state.seatTeam, localSide, () => {
+    if (reset) renderer.setPerspective(null);
+    renderer.setPerspective(currentPerspective());
+  });
+}
 /**
  * The win streak's own gate: ranked PvP only. A matchmaker seat — the duel queue or an Arena cup —
  * with a person on the far side is ranked; a friends room (an invite link or a private code) and a
@@ -1477,7 +1492,7 @@ const roster = (): Player[] => Array.from({ length: state.teams.length }, (_t, i
 function seatTeamMap(): number[] | undefined {
   if (!active || !('seats' in active) || active.mode !== 'team') return undefined;
   const seats = active.seats;
-  return sizes.map((_n, seat) => seats.find((s) => s.side === seat)?.team ?? 0);
+  return sizes.map((_n, seat) => seats.find((s) => s.side === seat)?.team ?? defaultTeam(seat));
 }
 
 /** Did this screen's SIDE take the race? A partner who crossed the line wins this seat too. */
@@ -1899,7 +1914,7 @@ function settledOpponents(won: boolean): FriendOpponent[] {
   const out: FriendOpponent[] = [];
   if ('seats' in active) {
     const teamMatch = active.mode === 'team';
-    const myTeam = active.seats.find((seat) => seat.side === localSide)?.team ?? 0;
+    const myTeam = active.seats.find((seat) => seat.side === localSide)?.team ?? defaultTeam(localSide);
     for (const seat of active.seats) {
       if (seat.side === localSide || seat.bot || seat.left) continue;
       if (teamMatch && seat.team === myTeam) continue;   // a 2v2 partner is not a rival
@@ -3888,7 +3903,7 @@ function restart() {
   });
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
-  renderer.setPerspective(currentPerspective());
+  paintRendererPerspective(true);
   /* The gold VIP halo follows the entitlement, not the client's claim: the local seat reads the
      live pass, the rival reads the room's `MATCH_FOUND` stamp. */
   paintVipSeats();
@@ -4061,9 +4076,48 @@ function opponentForfeited(info: { side: number; name: string; deltas: Record<st
 function seatTint(p: Player): PawnTint {
   const chosen = pieceColor();
   if (p === localSide) return chosen;
+  if (state.seatTeam) {
+    if (sideOf(state, localSide).includes(p)) return chosen === 'red' ? 'gold' : 'blue';
+    return p === rivalSide() ? (chosen === 'red' ? 'blue' : 'red') : 'amethyst';
+  }
   if (p === rivalSide()) return chosen === 'red' ? 'blue' : 'red';
   const extras = [0, 1, 2, 3].filter((x) => x !== localSide && x !== rivalSide());
   return extras.indexOf(p) === 0 ? 'gold' : 'amethyst';
+}
+
+type TeamRelation = 'you' | 'ally' | 'enemy';
+const TEAM_RELATION_LABEL: Record<LangCode, Record<TeamRelation, string>> = {
+  en: { you: 'YOU', ally: 'ALLY', enemy: 'ENEMY' },
+  fa: { you: 'تو', ally: 'یار', enemy: 'حریف' },
+  ru: { you: 'ТЫ', ally: 'СОЮЗНИК', enemy: 'ВРАГ' },
+  ar: { you: 'أنت', ally: 'حليف', enemy: 'خصم' },
+  es: { you: 'TÚ', ally: 'ALIADO', enemy: 'RIVAL' },
+};
+const teamBadges: (HTMLSpanElement | null)[] = [null, null, null, null];
+
+/** One persistent, localized relation pill per chip; only team races reveal them. */
+function paintTeamBadges(): void {
+  const teamed = !!state.seatTeam;
+  setAttr(chipsEl, 'data-team', String(teamed));
+  const allies = teamed ? sideOf(state, localSide) : [];
+  for (let p = 0; p < chips.length; p++) {
+    const chip = chips[p];
+    chip.classList.add('seat-chip');
+    let badge = teamBadges[p];
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'team-badge';
+      badge.setAttribute('aria-live', 'off');
+      chip.querySelector<HTMLElement>('.res')?.append(badge);
+      teamBadges[p] = badge;
+    }
+    badge.hidden = !teamed || p >= state.teams.length;
+    if (!teamed) { delete chip.dataset.relation; continue; }
+    const relation: TeamRelation = p === localSide ? 'you' : allies.includes(p) ? 'ally' : 'enemy';
+    setAttr(chip, 'data-relation', relation);
+    setAttr(badge, 'data-relation', relation);
+    setText(badge, TEAM_RELATION_LABEL[lang][relation]);
+  }
 }
 
 /**
@@ -4078,6 +4132,7 @@ function paintRoster(): void {
      that name and it costs a string. Both say the same thing: how many chips the dock is laying out. */
   chipsEl.dataset.players = String(n);
   chipsEl.dataset.seats = String(n);
+  paintTeamBadges();
   /* The chip's class is the colour it wears on THIS screen: the local seat gets the player's
      chosen family, its rival the opposite, then the fixed gold / amethyst order for extra seats.
      Online, the local seat can be seat 1 — the class follows the perspective, not the index. */
@@ -4201,7 +4256,7 @@ function paintSeatIdentity(): void {
  * wears the local seat's colour from here too.
  */
 function paintSeatTints(): void {
-  const ramps = perspectiveRamps(localSide, rivalSide(), pieceColor());
+  const ramps = perspectiveRamps(localSide, rivalSide(), pieceColor(), state.seatTeam, localSide);
   for (let i = 0; i < chips.length; i++) {
     const r = ramps[i];
     if (!r) continue;
@@ -7027,6 +7082,7 @@ initGameModes(sheets, {
 initFriends();
 onGameModeChange(paintParty);
 onLang(paintParty);
+onLang(paintTeamBadges);
 /* the result is a live surface too: a language flip repaints its copy, tags and aria labels.
    The race's own name rides along — it is translated copy on the pause header and this caption. */
 onLang(() => { paintRaceTags(); if (overlayOpen && resultView) paintResultCopy(); });
@@ -7154,8 +7210,10 @@ onChange(() => {
 /* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
    colour repaints the whole perspective (both sides, the finish wash and every chip) */
 const paintTheme = () => {
-  renderer.setTheme(liveTheme());
-  renderer.setPerspective(currentPerspective());
+  withTeamRampContext(state.seatTeam, localSide, () => {
+    renderer.setTheme(liveTheme());
+    renderer.setPerspective(currentPerspective());
+  });
   paintRoster();
   paintSeatTints();
 };

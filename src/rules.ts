@@ -773,6 +773,7 @@ export interface Step { ball: number; to: Pos }
  */
 function rawSteps(s: GameState, team: Player): Step[] {
   const b = blocks(s.walls);
+  const allies = sideOf(s, team);
   const out: Step[] = [];
   for (const ball of s.balls) {
     if (ball.team !== team || ball.isCheckmated) continue;
@@ -785,8 +786,8 @@ function rawSteps(s: GameState, team: Player): Step[] {
         if (o.pos.c === to.c && o.pos.r === to.r) { blocker = o; break; }
       }
       if (!blocker) { out.push({ ball: ball.id, to }); continue; }
-      /* An opponent is a solid obstacle, exactly like a wall: stop here and offer nothing beyond. */
-      if (blocker.team !== ball.team) continue;
+      /* An enemy is a solid obstacle; any seat on the mover's side is a friendly stepping stone. */
+      if (!allies.includes(blocker.team)) continue;
       for (const land of leapTargets(s, b, to, dc, dr)) out.push({ ball: ball.id, to: land });
     }
   }
@@ -860,6 +861,7 @@ export function stepField(s: GameState, team: Player = s.turn): Int16Array {
   growStepScratch(n);
   const body = _body;
   const bodyTeam = _bodyTeam;
+  const allies = sideOf(s, team);
   body.fill(0, 0, n);
   bodyTeam.fill(255, 0, n);
   for (const o of s.balls) {
@@ -887,7 +889,7 @@ export function stepField(s: GameState, team: Player = s.turn): Int16Array {
       const nc = c + dc, nr = r + dr;
       const over = nr * cols + nc;
       if (!body[over]) { link(from, over); continue; }
-      if (bodyTeam[over] !== team) continue;      // opponent: a solid obstacle, never a bridge
+      if (!allies.includes(bodyTeam[over])) continue; // enemy: a solid obstacle, never a bridge
       eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc), body);
     }
   };
@@ -976,11 +978,13 @@ export const mineAt = (s: GameState, cell: Cell): Mine | null =>
  * The live mine on a cell, ignoring the charges a chain has ALREADY spent this turn. `doMove()`
  * resolves every blast against one private board whose ledger is only rebuilt at the end, so the
  * loop carries the spent identities here instead of mutating a mine record. Same order as `mineAt`
- * — the first live, unspent charge on the square — so a chain is as deterministic as a single hit.
+ * — the first live, unspent ENEMY charge on the square — so a chain is deterministic, and a friendly
+ * charge on the same cell neither fires nor hides an enemy charge behind it.
  */
-function mineAtIn(mines: readonly Mine[], cell: Cell, spent: ReadonlySet<Mine>): Mine | null {
-  for (const m of mines) {
-    if (m.triggered || spent.has(m)) continue;
+function mineAtIn(s: GameState, cell: Cell, spent: ReadonlySet<Mine>, mover: Player): Mine | null {
+  const allies = sideOf(s, mover);
+  for (const m of s.mines) {
+    if (m.triggered || spent.has(m) || allies.includes(m.owner)) continue;
     if (m.cell.c === cell.c && m.cell.r === cell.r) return m;
   }
   return null;
@@ -1001,9 +1005,11 @@ export const MAX_CHAIN = 10;
  * consult this one, since a hidden trap that refused its square would sweep the board for a radar,
  * while the confirmation that actually commits to the square must (`doMine`).
  */
-export const rivalMineAt = (s: GameState, cell: Cell, owner: Player): Mine | null =>
-  s.mines.find((m) => !m.triggered && m.owner !== owner
+export const rivalMineAt = (s: GameState, cell: Cell, owner: Player): Mine | null => {
+  const allies = sideOf(s, owner);
+  return s.mines.find((m) => !m.triggered && !allies.includes(m.owner)
     && m.cell.c === cell.c && m.cell.r === cell.r) ?? null;
+};
 
 /** Mines a side still has to bury: the budget minus what it has spent, never below zero. */
 export function minesLeft(s: GameState, team: Player): number {
@@ -1262,7 +1268,7 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
   let landed: Pos = { c: to.c, r: to.r };
   let chainCount = 0;
   while (chainCount < MAX_CHAIN) {
-    const hit = mineAtIn(base.mines, landed, spent);
+    const hit = mineAtIn(base, landed, spent, team);
     if (!hit) break;                       // mine-free landing: the chain is over, finalise the turn
     chain.push(hit);
     spent.add(hit);
@@ -1419,13 +1425,14 @@ export function getAutoMove(s: GameState, team: Player = s.turn): Action {
 /* ---------- fog of war ---------- */
 
 /**
- * The state as one team is allowed to see it: its own mines plus the ones already set off, with
- * every opponent mine still in the ground stripped out. Nothing else changes, so the projection is
- * still a valid `GameState` the client can run the same queries against.
+ * The state as one side is allowed to see it: its own and its partner's mines plus the ones already
+ * set off, with every enemy mine still in the ground stripped out. Nothing else changes, so the
+ * projection is still a valid `GameState` the client can run the same queries against.
  *
  * SECURITY: the server must only ever send `view(state, team)` to a client — never the raw state,
  * which carries the hidden mines.
  */
 export function view(s: GameState, team: Player): GameState {
-  return { ...s, mines: s.mines.filter((m) => m.owner === team || m.triggered) };
+  const allies = sideOf(s, team);
+  return { ...s, mines: s.mines.filter((m) => allies.includes(m.owner) || m.triggered) };
 }

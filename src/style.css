@@ -46214,3 +46214,45 @@ html.reduced-motion .crowd-sheet-close { transition: none; }
   .crowd-bar-title { font-size: 9px; letter-spacing: 0; }
   .crowd-bar-name { max-width: 64px; }
 }
+
+/* ---- 2v2 seat identity: team rims and compact YOU / ALLY / ENEMY pills ----
+   Scoped to live team boards only; duel and FFA dock geometry remain untouched. */
+.chips[data-team="true"] .seat-chip {
+  border: 1px solid transparent;
+  border-color: color-mix(in srgb, var(--tint) 62%, #34405a);
+}
+.chips[data-team="true"][data-players="4"] .seat-chip { height: 52px; }
+.chips[data-team="true"][data-players="4"] .seat-chip .chip-txt { transform: translateY(-5px); }
+.chips[data-team="true"] .team-badge {
+  position: absolute;
+  z-index: 2;
+  right: 44px;
+  bottom: 1px;
+  left: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 12px;
+  padding: 0 3px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tint) 72%, #FFFFFF);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint) 24%, #070B12);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chips[data-team="true"] .team-badge[hidden] { display: none; }
+html[data-lang="fa"] .chips[data-team="true"] .team-badge,
+html[data-lang="ar"] .chips[data-team="true"] .team-badge {
+  font-family: 'Vazirmatn', system-ui, sans-serif;
+  letter-spacing: 0;
+}
