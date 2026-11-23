@@ -2309,8 +2309,24 @@
         <!-- ---------------- game ---------------- -->
         <section class="screen game" id="s-game" data-screen="game" tabindex="-1" hidden aria-label="Race">
           <div class="g-head">
-            <!-- start slot: the menu key and the live-viewers pill. One compact cluster, so the
-                 round caption between the two outer tracks can never be shoved off centre. -->
+            <!-- one shared Telegram Star: the gold gradient and the five-point path are defined once,
+                 so every simulated stake in this screen references the same crisp vector -->
+            <svg class="crowd-star-defs" aria-hidden="true" focusable="false" width="0" height="0">
+              <defs>
+                <linearGradient id="crowd-star-g" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#fbbf24" />
+                  <stop offset="1" stop-color="#f59e0b" />
+                </linearGradient>
+              </defs>
+              <symbol id="i-crowd-star" viewBox="0 0 16 16">
+                <path d="M8 1.3l2.03 4.11 4.54.66-3.28 3.2.77 4.52L8 11.68l-4.06 2.12.77-4.52-3.28-3.2 4.54-.66Z"
+                  fill="url(#crowd-star-g)" />
+                <path d="M8 1.3l2.03 4.11 4.54.66-3.28 3.2.77 4.52L8 11.68l-4.06 2.12.77-4.52-3.28-3.2 4.54-.66Z"
+                  fill="none" stroke="#fde68a" stroke-opacity=".55" stroke-width=".6" stroke-linejoin="round" />
+              </symbol>
+            </svg>
+            <!-- start slot: the menu key and the live-viewers pill, one compact cluster on the
+                 start edge now that the round caption is gone. -->
             <div class="g-head-start">
               <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
                 <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
@@ -2329,8 +2345,9 @@
                 <span class="crowd-live" id="crowd-live">LIVE</span>
               </button>
             </div>
-            <!-- center slot: the round is the only thing the top bar says; whose turn rides below -->
-            <p class="g-round" id="round-label">Round 1</p>
+            <!-- the round caption is retired: main.ts still writes it, but it no longer renders in
+                 the match bar, leaving menu + LIVE crowd on the start edge and the theme switch on the end -->
+            <p class="g-round" id="round-label" hidden aria-hidden="true">Round 1</p>
             <!-- end slot: the finish switch (sun = pearl board, moon = midnight board) -->
             <div class="g-head-end">
               <button class="theme-toggle" type="button" id="theme-toggle" role="switch"
@@ -2343,30 +2360,30 @@
           </div>
 
           <main class="card">
-            <!-- CROWD ODDS CARD. The simulated audience's prediction, named after the two seats
-                 actually on this board: P1 on the left, P2 on the right, a clear micro-title in the
-                 middle, and a dual-segment meter underneath. Tapping opens the same fan sheet the
-                 top pill opens. -->
+            <!-- CROWD ODDS CARD. The simulated audience's live call: the dominant camp's share on
+                 top, YOU WIN on the left and YOU LOSE on the right with their Star totals, and a
+                 dual-segment meter underneath. Tapping opens the same fan sheet the top pill opens. -->
             <button class="crowd-bar" id="crowd-bar" type="button" aria-haspopup="dialog"
               aria-controls="crowd-sheet" aria-expanded="false" aria-label="Crowd predictions — open live crowd" hidden>
+              <!-- the live call: the dominant camp's share, rewritten on every simulation beat -->
+              <span class="crowd-bar-call" id="crowd-bar-title" dir="auto">Betting you WIN</span>
               <span class="crowd-bar-row">
                 <span class="crowd-bar-side is-red">
                   <i class="crowd-bar-dot is-red" aria-hidden="true"></i>
-                  <bdi class="crowd-bar-name" id="crowd-bar-red-name" dir="auto">P1</bdi>
+                  <bdi class="crowd-bar-name" id="crowd-bar-red-name" dir="auto">YOU WIN</bdi>
                   <bdi class="crowd-bar-pct" id="crowd-pct-red" dir="ltr">50%</bdi>
                   <span class="crowd-bar-stake">
-                    <span class="coin" data-coin aria-hidden="true"></span>
+                    <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
                     <bdi id="crowd-stake-red" dir="ltr">0</bdi>
                   </span>
                 </span>
-                <span class="crowd-bar-title" id="crowd-bar-title">Crowd odds</span>
                 <span class="crowd-bar-side is-blue">
                   <span class="crowd-bar-stake">
-                    <span class="coin" data-coin aria-hidden="true"></span>
+                    <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
                     <bdi id="crowd-stake-blue" dir="ltr">0</bdi>
                   </span>
                   <bdi class="crowd-bar-pct" id="crowd-pct-blue" dir="ltr">50%</bdi>
-                  <bdi class="crowd-bar-name" id="crowd-bar-blue-name" dir="auto">P2</bdi>
+                  <bdi class="crowd-bar-name" id="crowd-bar-blue-name" dir="auto">YOU LOSE</bdi>
                   <i class="crowd-bar-dot is-blue" aria-hidden="true"></i>
                 </span>
               </span>
@@ -2772,12 +2789,12 @@
                 </button>
               </header>
 
-              <!-- head-to-head arena split: both seats, their head counts, their staked coins, and
-                   one 6px dual-segment tug-of-war rail. Locked to LTR so crimson is always left. -->
+              <!-- head-to-head arena split: both betting camps, their head counts, their staked
+                   Stars, and one 6px dual-segment tug-of-war rail. Locked to LTR so WIN is always left. -->
               <div class="crowd-h2h" id="crowd-h2h">
                 <div class="crowd-h2h-top">
                   <div class="crowd-h2h-side is-red">
-                    <bdi class="crowd-h2h-name" id="crowd-h2h-red-name" dir="auto">P1</bdi>
+                    <bdi class="crowd-h2h-name" id="crowd-h2h-red-name" dir="auto">YOU WIN</bdi>
                     <span class="crowd-h2h-meta">
                       <span class="crowd-h2h-fans">
                         <svg class="crowd-h2h-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -2787,14 +2804,14 @@
                         <bdi dir="ltr" id="crowd-h2h-red-fans">0</bdi>
                       </span>
                       <span class="crowd-h2h-stake">
-                        <span class="coin" data-coin aria-hidden="true"></span>
+                        <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
                         <bdi dir="ltr" id="crowd-h2h-red-stake">0</bdi>
                       </span>
                     </span>
                   </div>
                   <span class="crowd-h2h-vs" aria-hidden="true">VS</span>
                   <div class="crowd-h2h-side is-blue">
-                    <bdi class="crowd-h2h-name" id="crowd-h2h-blue-name" dir="auto">P2</bdi>
+                    <bdi class="crowd-h2h-name" id="crowd-h2h-blue-name" dir="auto">YOU LOSE</bdi>
                     <span class="crowd-h2h-meta">
                       <span class="crowd-h2h-fans">
                         <svg class="crowd-h2h-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -2804,7 +2821,7 @@
                         <bdi dir="ltr" id="crowd-h2h-blue-fans">0</bdi>
                       </span>
                       <span class="crowd-h2h-stake">
-                        <span class="coin" data-coin aria-hidden="true"></span>
+                        <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
                         <bdi dir="ltr" id="crowd-h2h-blue-stake">0</bdi>
                       </span>
                     </span>

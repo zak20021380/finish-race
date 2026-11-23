@@ -2,31 +2,31 @@
  * SIMULATED LIVE CROWD — in-match atmosphere, client-side only.
  *
  * This module is deliberately isolated from the economy, the rules and the wire. It never reads or
- * writes coins, Stars, TIQ or a match outcome; it never sends an action; it owns no server state.
- * It invents a believable audience for the board on screen, lets a few of those fans drift toward
- * whoever is ahead, and paints a live-viewers pill plus a crowd-odds card above the board, both of
- * which open one tappable sheet. Every label names the SEATS actually playing (`p1Name` / `p2Name`
- * from the host): a 1v1 reads as the two players, a 2v2 as the two duo labels.
+ * writes the player's real coins, Stars or TIQ; it never sends an action; it owns no server state.
+ * It invents a believable audience for the board on screen, lets those fans bet simulated Telegram
+ * Stars on whether YOU WIN or YOU LOSE, and paints a live-viewers pill plus a crowd-odds card above
+ * the board, both of which open one tappable sheet.
  *
  * The audience itself is combinatorial, not a hardcoded roster: ~18 gender-tagged roots per gender
  * plus a tail table synthesise thousands of handles, so a 58-seat house never repeats a name. Every
  * metric that can be random is re-rolled per match — head count (7..58), the female/male mix, the
- * support split, each fan's side roll, the list order (Fisher–Yates) and the simulated stake.
+ * support split, each fan's side roll, the list order (Fisher–Yates) and the simulated Star wager.
  *
  * The house is alive for the whole race, not just on a big play. Every committed action flips a
  * couple of fans toward the side the board favours (a wall or a mine flips more than a routine
- * turn), a few new faces arrive or leave, and a 3.5s ambient tick keeps one pledge or one seat
- * moving while both players are still thinking. The odds rail therefore breathes by itself.
+ * turn), a few new faces arrive or leave, and a 2.0s ambient tick keeps one pledge or one seat
+ * moving while both players are still thinking. The odds rail and the two Star totals therefore
+ * fluctuate constantly by themselves.
  *
- * A match also opens with one brief kickoff banner — how many fans backed seat 1 — which is
- * pointer-transparent, auto-dismissing and owned by the same module.
+ * A match also opens with one brief kickoff banner — how many fans staked how many Stars on the
+ * dominant camp — which is pointer-transparent, auto-dismissing and owned by the same module.
  *
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
  *   · every rendered number is Latin `0-9` inside a `<bdi dir="ltr">`, so RTL never mirrors a score;
  *   · every name is isolated in a `<bdi dir="auto">`, so a handle never reorders its sentence;
- *   · a gender reads as a word beside the Venus/Mars mark, never as a bare glyph;
+ *   · a gender reads as a circular portrait silhouette, never as a word or a bare glyph;
  *   · icons are inline SVG, never emoji.
  *
  * The DOM is static (`index.html`, inside `#s-game`); this module only reads it by id, fills it and
@@ -34,7 +34,6 @@
  * the lifecycle hook `main.ts` calls after committed play, and `closeCrowd()` tears everything down.
  */
 import { lang, onLang, type LangCode } from './settings';
-import { mountCoins } from './coin';
 
 export type CrowdEventType = 'move' | 'wall' | 'mine' | 'near_finish' | 'turn';
 
@@ -60,7 +59,7 @@ interface Fan {
   /** 0 = the crimson camp (seat 0's side), 1 = the cyan camp. */
   camp: Camp;
   sideKey: SideKey;
-  /** simulated fan coins, purely narrative */
+  /** simulated Telegram Star wager, purely narrative */
   stake: number;
   /** a fan who has made up their mind; an undecided one is the bandwagon's raw material */
   decided: boolean;
@@ -148,9 +147,9 @@ function makeHandle(gender: Gender, used: Set<string>): string {
   return fallback;
 }
 
-/** Simulated stakes. Wide enough that the house reads as a crowd, never as one price point. */
+/** Simulated Telegram Star wagers. Wide enough to read as a crowd, never one price point. */
 const STAKES: readonly number[] = [
-  25, 50, 75, 100, 150, 200, 250, 350, 500, 750, 1000, 1500,
+  5, 10, 15, 25, 50, 75, 100, 150, 250, 500,
 ];
 
 /* ---------- copy ----------
@@ -159,10 +158,7 @@ const STAKES: readonly number[] = [
 interface CrowdCopy {
   title: string;
   viewers: string;
-  split: string;
   close: string;
-  /** the card's centre micro-title: what the meter actually measures */
-  odds: string;
   /** the pill's small live tag */
   live: string;
   /** the sheet's filter row */
@@ -172,122 +168,126 @@ interface CrowdCopy {
   /** fallbacks when the host hands the crowd no seat name */
   p1: string;
   p2: string;
-  /** a spectator row's own caption: `Backing {name}` */
-  fan: string;
-  /** the inline gender badge's word, printed beside the Venus / Mars mark */
-  girl: string;
-  boy: string;
-  /** the kickoff banner: `{n}` fans backed `{name}` to win */
-  kickoff: string;
+  /** the two betting camps, short tag first, then the provocative headline */
+  winTag: string;
+  loseTag: string;
+  winHead: string;
+  loseHead: string;
+  /** the prediction card's live centre call: `{p}` carries the dominant share, percent included */
+  winCall: string;
+  loseCall: string;
+  /** the kickoff banner: how many fans staked how many Stars on the dominant camp */
+  kickoffWin: string;
+  kickoffLose: string;
+  /** a spectator row's full bet badge, crimson or sky */
+  betWin: string;
+  betLose: string;
   wall: string[];
   mine: string[];
   near: string[];
-  /** a fan's stake landing on a named side */
-  back: string;
 }
 
 const COPY: Record<LangCode, CrowdCopy> = {
   en: {
     title: 'Live crowd & predictions',
     viewers: '{n} live spectators',
-    split: '{a} backing {p1} · {b} backing {p2}',
     close: 'Close',
-    odds: 'Crowd odds',
     live: 'LIVE',
     all: 'All',
     filters: 'Filter spectators',
     spectators: 'Spectators',
     p1: 'Player 1', p2: 'Player 2',
-    fan: 'Backing {name}',
-    girl: 'Girl', boy: 'Boy',
-    kickoff: '{n} fans backed {name} to win!',
+    winTag: 'YOU WIN', loseTag: 'YOU LOSE',
+    winHead: 'Betting you WIN', loseHead: 'Betting you LOSE',
+    winCall: '{p} bet you WIN!', loseCall: '{p} bet you LOSE!',
+    kickoffWin: '{n} fans staked {s} Stars betting you WIN!',
+    kickoffLose: '{n} fans staked {s} Stars betting you LOSE!',
+    betWin: 'Bet: you WIN', betLose: 'Bet: you LOSE',
     wall: ['Clutch wall by {name}!', 'That wall shut {name} down!', 'Smart block — no way through for {name}!'],
     mine: ['Boom — right on {name}!', 'The mine caught {name}!', 'That trap was brutal on {name}!'],
     near: ['{name} is one step from FINISH!', 'So close for {name}!', "Don't blink — {name} is on the final stretch!"],
-    back: '+{n} backing {name}!',
   },
   fa: {
     title: 'تماشاگران و پیش‌بینی‌ها',
     viewers: '{n} تماشاگر زنده',
-    split: '{a} حمایت از {p1} · {b} حمایت از {p2}',
     close: 'بستن',
-    odds: 'پیش‌بینی سکوها',
     live: 'زنده',
     all: 'همه',
     filters: 'فیلتر تماشاگران',
     spectators: 'تماشاگران',
     p1: 'بازیکن 1', p2: 'بازیکن 2',
-    fan: 'حمایت از {name}',
-    girl: 'دختر', boy: 'پسر',
-    kickoff: '{n} تماشاگر روی برد {name} شرط بستن!',
+    winTag: 'می‌بری', loseTag: 'می‌بازی',
+    winHead: 'شرط بستن تو می‌بری', loseHead: 'شرط بستن تو می‌بازی',
+    winCall: '{p} شرط بستن تو می‌بری!', loseCall: '{p} شرط بستن تو می‌بازی!',
+    kickoffWin: '{n} نفر با {s} استارز شرط بستن تو می‌بری!',
+    kickoffLose: '{n} نفر با {s} استارز شرط بستن تو می‌بازی!',
+    betWin: 'شرط: تو می‌بری', betLose: 'شرط: تو می‌بازی',
     wall: ['عجب دیواری برای {name} بست!', 'این دیوار مسیر {name} رو بست!', 'دفاع حساب‌شده روی {name}!'],
     mine: ['مین کار خودش رو کرد روی {name}!', 'ترکید — مستقیم روی {name}!', 'این تله برای {name} بی‌رحمانه بود!'],
     near: ['{name} فقط دو قدم تا خط پایان!', '{name} خیلی نزدیک شد!', 'نفس‌ها برای {name} حبس شد!'],
-    back: '+{n} روی {name}!',
   },
   ru: {
     title: 'Живая трибуна и прогнозы',
     viewers: '{n} зрителей онлайн',
-    split: '{a} за {p1} · {b} за {p2}',
     close: 'Закрыть',
-    odds: 'Прогноз трибун',
     live: 'ЭФИР',
     all: 'Все',
     filters: 'Фильтр зрителей',
     spectators: 'Зрители',
     p1: 'Игрок 1', p2: 'Игрок 2',
-    fan: 'За {name}',
-    girl: 'Девушка', boy: 'Парень',
-    kickoff: '{n} зрителей поставили на победу {name}!',
+    winTag: 'ТЫ ПОБЕДИШЬ', loseTag: 'ТЫ ПРОИГРАЕШЬ',
+    winHead: 'Ставят на твою победу', loseHead: 'Ставят на твой проигрыш',
+    winCall: '{p} ставят на твою победу!', loseCall: '{p} ставят на твой проигрыш!',
+    kickoffWin: '{n} зрителей поставили {s} звёзд на твою победу!',
+    kickoffLose: '{n} зрителей поставили {s} звёзд на твой проигрыш!',
+    betWin: 'Ставка: ты победишь', betLose: 'Ставка: ты проиграешь',
     wall: ['Отличный блок от {name}!', 'Эта стена остановила {name}!', 'Умная защита — {name} не пройдёт!'],
     mine: ['Мина сработала — {name} попался!', 'Бум — прямо по {name}!', 'Жёсткая ловушка для {name}!'],
     near: ['{name} в одном шаге от ФИНИША!', 'Совсем рядом для {name}!', 'Не моргай — {name} на финишной прямой!'],
-    back: '+{n} за {name}!',
   },
   ar: {
     title: 'الجمهور المباشر والتوقعات',
     viewers: '{n} مشاهد مباشر',
-    split: '{a} يدعم {p1} · {b} يدعم {p2}',
     close: 'إغلاق',
-    odds: 'توقع الجمهور',
     live: 'مباشر',
     all: 'الكل',
     filters: 'تصفية الجمهور',
     spectators: 'الجمهور',
     p1: 'اللاعب 1', p2: 'اللاعب 2',
-    fan: 'دعم {name}',
-    girl: 'بنت', boy: 'ولد',
-    kickoff: '{n} مشجعاً راهنوا على فوز {name}!',
+    winTag: 'ستفوز', loseTag: 'ستخسر',
+    winHead: 'يراهنون أنك ستفوز', loseHead: 'يراهنون أنك ستخسر',
+    winCall: '{p} يراهنون أنك ستفوز!', loseCall: '{p} يراهنون أنك ستخسر!',
+    kickoffWin: '{n} مشجعاً راهنوا بـ {s} نجمة على فوزك!',
+    kickoffLose: '{n} مشجعاً راهنوا بـ {s} نجمة على خسارتك!',
+    betWin: 'رهان: ستفوز', betLose: 'رهان: ستخسر',
     wall: ['سدٌّ حاسم من {name}!', 'هذا السد أوقف {name}!', 'دفاع ذكي — لا مرور لـ {name}!'],
     mine: ['اللغم انفجر — {name} في الفخ!', 'بووم — مباشرة على {name}!', 'فخ قاسٍ لـ {name}!'],
     near: ['{name} على خطوة من النهاية!', 'قريب جداً لـ {name}!', 'لا ترمش — {name} في اللفة الأخيرة!'],
-    back: '+{n} على {name}!',
   },
   es: {
     title: 'Público en vivo y pronósticos',
     viewers: '{n} espectadores en vivo',
-    split: '{a} con {p1} · {b} con {p2}',
     close: 'Cerrar',
-    odds: 'Cuotas del público',
     live: 'EN VIVO',
     all: 'Todos',
     filters: 'Filtrar espectadores',
     spectators: 'Espectadores',
     p1: 'Jugador 1', p2: 'Jugador 2',
-    fan: 'A por {name}',
-    girl: 'Chica', boy: 'Chico',
-    kickoff: '{n} fans apostaron por la victoria de {name}!',
+    winTag: 'GANAS', loseTag: 'PIERDES',
+    winHead: 'Apuestan a que GANAS', loseHead: 'Apuestan a que PIERDES',
+    winCall: '{p} apuestan a que GANAS!', loseCall: '{p} apuestan a que PIERDES!',
+    kickoffWin: '¡{n} fans apostaron {s} Stars a que GANAS!',
+    kickoffLose: '¡{n} fans apostaron {s} Stars a que PIERDES!',
+    betWin: 'Apuesta: GANAS', betLose: 'Apuesta: PIERDES',
     wall: ['¡Muro decisivo de {name}!', '¡Ese muro frenó a {name}!', '¡Bloqueo inteligente — {name} no pasa!'],
     mine: ['¡La mina atrapó a {name}!', '¡Bum — directo a {name}!', '¡Vaya trampa para {name}!'],
     near: ['¡{name} a un paso de la META!', '¡Muy cerca para {name}!', '¡No parpadees — {name} en la recta final!'],
-    back: '¡+{n} a por {name}!',
   },
 };
 
 const copy = (): CrowdCopy => COPY[lang] ?? COPY.en;
 
-/* ---------- badge identity ---------- */
-const initialOf = (name: string): string => Array.from(name)[0] ?? '?';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /* ---------- number formatting ----------
  * `en-US` guarantees Latin digits and thousands separators even when the shell is Persian. */
@@ -340,38 +340,43 @@ function campName(camp: Camp): string {
   return camp === 0 ? c.p1 : c.p2;
 }
 
-/* ---------- the two crisp gender marks ----------
- * Fixed inline vector paths: a Venus ring-and-cross and a Mars arrow-and-ring. No emoji, no font
- * dependency, no external asset — they inherit `currentColor` from their badge. */
-const GENDER_ICON: Record<Gender, string> = {
-  f: '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-    + '<circle cx="8" cy="6" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/>'
-    + '<path d="M8 10.1v4.4M5.9 12.4h4.2" fill="none" stroke="currentColor" stroke-width="1.5"'
-    + ' stroke-linecap="round"/></svg>',
-  m: '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-    + '<circle cx="6.6" cy="9.4" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/>'
-    + '<path d="M9.6 6.4 13.8 2.2M10.4 2.2h3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.5"'
-    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>',
-};
-
-/** Mount a gender badge (15×15 dark disc) into `host`. */
-function paintGenderBadge(host: HTMLElement, gender: Gender): void {
-  host.className = `crowd-gbadge is-${gender}`;
-  /* A trusted constant, never host or user text: `GENDER_ICON` / `KICKOFF_ICON` are the only
-     markup this module ever writes with innerHTML. */
-  host.innerHTML = GENDER_ICON[gender];
+/** One Telegram Star, drawn inline against the shared gradient symbol in the game top bar. */
+function starIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'crowd-star');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', '#i-crowd-star');
+  svg.append(use);
+  return svg;
 }
 
-/* ---------- the kickoff mark ----------
- * A gold coin struck with a three-head crowd, drawn inline at 16px so it stays crisp at any DPR.
- * Same contract as the gender marks: a fixed path string, `currentColor`, never an asset. */
-const KICKOFF_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-  + '<circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/>'
-  + '<circle cx="6.1" cy="6.2" r="1.5" fill="currentColor"/>'
-  + '<path d="M3.4 11.1c0-1.5 1.2-2.3 2.7-2.3s2.7.8 2.7 2.3Z" fill="currentColor"/>'
-  + '<circle cx="10.6" cy="6.9" r="1.15" fill="currentColor" opacity=".62"/>'
-  + '<path d="M8.7 11.1c0-1.1.85-1.75 1.9-1.75s1.9.65 1.9 1.75Z" fill="currentColor" opacity=".62"/>'
-  + '</svg>';
+/* ---------- the two crisp portrait silhouettes ----------
+ * Fixed inline vector paths, never emoji, never a font glyph: a rose feminine portrait and a sky
+ * masculine portrait, both drawn inside the same 36-unit frame their circular tint lives in. */
+const PORTRAIT: Record<Gender, string> = {
+  f: '<svg viewBox="0 0 36 36" aria-hidden="true" focusable="false">'
+    + '<path d="M18 4.4c-5.7 0-9.2 3.9-9.2 9.4v9.1c0 2.2-1.2 3.5-2.3 4.6 3.1 1.4 6.6.6 8.5-1.4l3-3.2 3 3.2c1.9 2 5.4 2.8 8.5 1.4-1.1-1.1-2.3-2.4-2.3-4.6v-9.1c0-5.5-3.5-9.4-9.2-9.4Z"'
+    + ' fill="#f472b6" opacity=".92"/>'
+    + '<circle cx="18" cy="14.6" r="5.7" fill="#f9a8d4"/>'
+    + '<path d="M18 21.2c-5.6 0-10.2 3.6-10.2 8.1 0 1.5 1 2.5 2.4 2.5h15.6c1.4 0 2.4-1 2.4-2.5 0-4.5-4.6-8.1-10.2-8.1Z"'
+    + ' fill="#f9a8d4"/></svg>',
+  m: '<svg viewBox="0 0 36 36" aria-hidden="true" focusable="false">'
+    + '<path d="M18 5.1c-5 0-8.3 3.5-8.3 8.4 0 .9.1 1.8.3 2.5.8-2.7 3.8-4.6 8-4.6s7.2 1.9 8 4.6c.2-.7.3-1.6.3-2.5 0-4.9-3.3-8.4-8.3-8.4Z"'
+    + ' fill="#38bdf8"/>'
+    + '<circle cx="18" cy="14.6" r="5.7" fill="#7dd3fc"/>'
+    + '<path d="M18 21.2c-5.9 0-10.7 3.6-10.7 8.1 0 1.5 1 2.5 2.4 2.5h16.6c1.4 0 2.4-1 2.4-2.5 0-4.5-4.8-8.1-10.7-8.1Z"'
+    + ' fill="#7dd3fc"/></svg>',
+};
+
+/** Mount the circular portrait avatar: the gender reads as a silhouette, never as a word. */
+function paintPortrait(host: HTMLElement, gender: Gender): void {
+  host.className = `crowd-av is-${gender}`;
+  /* A trusted constant, never host or user text. */
+  host.innerHTML = PORTRAIT[gender];
+}
 
 /* ---------- the live simulation ---------- */
 let match: MatchCrowd | null = null;
@@ -389,7 +394,7 @@ const TOAST_MS = 2600;
 const KICKOFF_DELAY_MS = 350;
 const KICKOFF_MS = 2800;
 /* The house never stands still: one pledge or one seat moves on this beat. */
-const AMBIENT_MS = 3500;
+const AMBIENT_MS = 2000;
 
 /* The house band. A match rolls its own head count inside it; joins and leaves stay inside it. */
 const MIN_SEATS = 7;
@@ -535,16 +540,16 @@ function bdiNode(text: string, dir: 'ltr' | 'auto', className?: string): HTMLEle
 }
 
 /* ---------- painting ---------- */
-/** Label the three filter keys with this board's own seat names. */
+/** Label the three filter keys: the mixed house, then the two betting camps. */
 function paintFilterLabels(): void {
   if (!ui) return;
   const c = copy();
   ui.filters[0]!.replaceChildren(bdiNode(c.all, 'auto'));
-  ui.filters[1]!.replaceChildren(bdiNode(campName(0), 'auto'));
-  ui.filters[2]!.replaceChildren(bdiNode(campName(1), 'auto'));
+  ui.filters[1]!.replaceChildren(bdiNode(c.winTag, 'auto'));
+  ui.filters[2]!.replaceChildren(bdiNode(c.loseTag, 'auto'));
   ui.filters[0]!.setAttribute('aria-label', c.all);
-  ui.filters[1]!.setAttribute('aria-label', campName(0));
-  ui.filters[2]!.setAttribute('aria-label', campName(1));
+  ui.filters[1]!.setAttribute('aria-label', c.winHead);
+  ui.filters[2]!.setAttribute('aria-label', c.loseHead);
 }
 
 function paintBar(): void {
@@ -556,8 +561,8 @@ function paintBar(): void {
   const pctB = 100 - pctA;
   const [sa, sb] = campStakes(match.fans);
 
-  ui.redName.textContent = campName(0);
-  ui.blueName.textContent = campName(1);
+  ui.redName.textContent = c.winTag;
+  ui.blueName.textContent = c.loseTag;
   ui.redPct.textContent = `${pctA}%`;
   ui.bluePct.textContent = `${pctB}%`;
   ui.redStake.textContent = formatNum(sa);
@@ -568,12 +573,17 @@ function paintBar(): void {
   ui.redFill.style.width = `${wide}%`;
   ui.blueFill.style.width = `${100 - wide}%`;
   ui.count.textContent = formatNum(ca + cb);
-  ui.title.textContent = c.odds;
   ui.live.textContent = c.live;
+
+  /* The card's centre call is the dominant camp, updated on every single beat. */
+  const dominant: Camp = ca >= cb ? 0 : 1;
+  const call = dominant === 0 ? c.winCall : c.loseCall;
+  const dominantPct = dominant === 0 ? pctA : pctB;
+  ui.title.replaceChildren(templateNodes(call, { p: `${dominantPct}%` }, ['p']));
 
   ui.pill.setAttribute('aria-label', c.title);
   ui.pill.title = c.title;
-  const summary = `${c.odds}: ${campName(0)} ${pctA}% · ${campName(1)} ${pctB}%`;
+  const summary = `${c.winHead} ${pctA}% · ${c.loseHead} ${pctB}%`;
   ui.bar.setAttribute('aria-label', summary);
   ui.bar.title = summary;
 
@@ -585,40 +595,24 @@ function paint(): void {
   paintBar();
 }
 
-/** One spectator card: avatar + gender badge | identity stack | stake pill. */
+/** One spectator card: portrait | handle + bet badge | Star stake. */
 function fanRow(fan: Fan): HTMLLIElement {
   const c = copy();
   const li = document.createElement('li');
   li.className = `crowd-row is-${fan.gender}`;
 
-  /* column 1 — 36×36 avatar with its corner gender badge */
+  /* column 1 — the circular portrait silhouette, the only place gender is rendered */
   const av = document.createElement('span');
-  av.className = `crowd-av is-${fan.gender}`;
   av.setAttribute('aria-hidden', 'true');
-  const ini = document.createElement('span');
-  ini.className = 'crowd-av-ini';
-  ini.textContent = initialOf(fan.handle);
-  const badge = document.createElement('span');
-  paintGenderBadge(badge, fan.gender);
-  av.append(ini, badge);
+  paintPortrait(av, fan.gender);
 
-  /* column 2 — handle + gender pill + VIP, then the side they back */
+  /* column 2 — handle (+ VIP), then the side they actually bet on */
   const mid = document.createElement('span');
   mid.className = 'crowd-mid';
 
   const top = document.createElement('span');
   top.className = 'crowd-mid-top';
   top.append(bdiNode(fan.handle, 'ltr', 'crowd-handle'));
-  /* the gender badge: the same Venus/Mars mark as the avatar corner, plus a plain word, so a
-     spectator's gender reads at a glance on a phone instead of hiding in a 9px glyph */
-  const gPill = document.createElement('span');
-  gPill.className = `crowd-gpill is-${fan.gender}`;
-  const gMark = document.createElement('span');
-  gMark.className = 'crowd-gpill-ico';
-  gMark.setAttribute('aria-hidden', 'true');
-  gMark.innerHTML = GENDER_ICON[fan.gender];
-  gPill.append(gMark, bdiNode(fan.gender === 'f' ? c.girl : c.boy, 'auto', 'crowd-gpill-txt'));
-  top.append(gPill);
   if (fan.stake >= 500) {
     const vip = document.createElement('span');
     vip.className = 'crowd-vip';
@@ -627,20 +621,17 @@ function fanRow(fan: Fan): HTMLLIElement {
     top.append(vip);
   }
 
-  const support = document.createElement('span');
-  support.className = `crowd-support ${fan.camp === 0 ? 'is-red' : 'is-blue'}`;
-  support.append(templateNodes(c.fan, { name: campName(fan.camp) }, [], ['name']));
+  const bet = document.createElement('span');
+  bet.className = `crowd-bet ${fan.camp === 0 ? 'is-red' : 'is-blue'}`;
+  bet.dir = 'auto';
+  bet.textContent = fan.camp === 0 ? c.betWin : c.betLose;
 
-  mid.append(top, support);
+  mid.append(top, bet);
 
-  /* column 3 — the staked coins */
+  /* column 3 — the staked Telegram Stars */
   const stake = document.createElement('span');
   stake.className = 'crowd-stake';
-  const coin = document.createElement('span');
-  coin.className = 'coin';
-  coin.setAttribute('data-coin', '');
-  coin.setAttribute('aria-hidden', 'true');
-  stake.append(coin, bdiNode(formatNum(fan.stake), 'ltr'));
+  stake.append(starIcon(), bdiNode(formatNum(fan.stake), 'ltr'));
 
   li.append(av, mid, stake);
   return li;
@@ -659,9 +650,9 @@ function renderSheet(): void {
   ui.sheetViewers.setAttribute('aria-label', c.viewers.replace('{n}', formatNum(total)));
   ui.closeBtn.setAttribute('aria-label', c.close);
 
-  /* the head-to-head summary: both seat names, their head counts and their staked totals */
-  ui.h2hRedName.textContent = campName(0);
-  ui.h2hBlueName.textContent = campName(1);
+  /* the head-to-head summary: both betting camps, their head counts and their staked Stars */
+  ui.h2hRedName.textContent = c.winTag;
+  ui.h2hBlueName.textContent = c.loseTag;
   ui.h2hRedFans.textContent = formatNum(ca);
   ui.h2hBlueFans.textContent = formatNum(cb);
   ui.h2hRedStake.textContent = formatNum(sa);
@@ -670,7 +661,7 @@ function renderSheet(): void {
   ui.h2hRedFill.style.width = `${wide}%`;
   ui.h2hBlueFill.style.width = `${100 - wide}%`;
 
-  /* the filter row, labelled with this board's own seat names */
+  /* the filter row, labelled with the two betting camps */
   paintFilterLabels();
 
   const list = ui.list;
@@ -685,7 +676,6 @@ function renderSheet(): void {
   ui.empty.hidden = shown.length > 0;
   ui.empty.textContent = c.filters;
   list.scrollTop = keepScroll;
-  mountCoins(list);
 }
 
 /* ---------- the sheet ---------- */
@@ -747,7 +737,6 @@ function wire(refs: CrowdUi): void {
   refs.bar.addEventListener('click', openSheet);
   refs.closeBtn.addEventListener('click', () => closeSheet());
   refs.scrim.addEventListener('click', () => closeSheet());
-  mountCoins(refs.sheet);
   for (const btn of refs.filters) {
     btn.addEventListener('click', () => {
       const raw = btn.dataset['crowdFilter'] ?? 'all';
@@ -779,6 +768,7 @@ function showToast(
   template: string,
   vars: Record<string, string> = {},
   nameKeys: readonly string[] = [],
+  starValue?: number,
 ): void {
   const refs = resolveUi();
   if (!refs) return;
@@ -789,6 +779,12 @@ function showToast(
   name.className = 'crowd-toast-name';
   name.textContent = fan.handle;
   frag.append(name, ': ');
+  if (starValue !== undefined) {
+    const badge = document.createElement('span');
+    badge.className = 'crowd-toast-stake';
+    badge.append(starIcon(), bdiNode(formatNum(starValue), 'ltr'));
+    frag.append(badge, ' ');
+  }
   const text = document.createElement('span');
   text.className = 'crowd-toast-txt';
   text.append(templateNodes(template, vars, ['n'], nameKeys));
@@ -816,18 +812,22 @@ function showKickoff(): void {
   const refs = ui;
   if (!refs || !match) return;
   const c = copy();
-  const [ca] = campCounts(match.fans);
+  const [ca, cb] = campCounts(match.fans);
+  const [sa, sb] = campStakes(match.fans);
+  /* Announce the camp the room is actually on at kickoff, with both its head count and its Stars. */
+  const dominant: Camp = ca >= cb ? 0 : 1;
+  const n = dominant === 0 ? ca : cb;
+  const s = dominant === 0 ? sa : sb;
   const icon = document.createElement('span');
   icon.className = 'crowd-kickoff-ico';
   icon.setAttribute('aria-hidden', 'true');
-  icon.innerHTML = KICKOFF_ICON;
+  icon.append(starIcon());
   const text = document.createElement('span');
   text.className = 'crowd-kickoff-txt';
   text.append(templateNodes(
-    c.kickoff,
-    { n: formatNum(ca), name: campName(0) },
-    ['n'],
-    ['name'],
+    dominant === 0 ? c.kickoffWin : c.kickoffLose,
+    { n: formatNum(n), s: formatNum(s) },
+    ['n', 's'],
   ));
   refs.kickoff.replaceChildren(icon, text);
   refs.kickoff.classList.add('is-on');
@@ -865,13 +865,13 @@ function ambientTick(): void {
     return;
   }
   const roll = rnd();
-  if (roll < 0.4) {
-    /* a single fan changes their mind — the cheapest visible head-count move */
-    liveShift(null, 1);
+  if (roll < 0.5) {
+    /* two or three fans switch sides — a clearly visible head-count move every beat */
+    liveShift(null, 3);
     return;
   }
-  if (roll < 0.75) {
-    bumpPledge();
+  if (roll < 0.82) {
+    if (!bumpPledge()) liveShift(null, 1);
     return;
   }
   driftCount();
@@ -928,7 +928,7 @@ function addFans(count: number): number {
   return n;
 }
 
-/** One fan tops up or trims their pledge: the coin totals move, the head count does not. */
+/** One fan tops up or trims their pledge: the Star totals move, the head count does not. */
 function bumpPledge(): boolean {
   if (!match || match.fans.length === 0) return false;
   const fan = match.fans[pickIndex(match.fans.length)];
@@ -959,7 +959,7 @@ function driftTarget(leader: Camp | null): Camp {
  *  is capped at ~9% of the house, so a 7-seat room never swings like a 58-seat one. */
 function liveShift(leader: Camp | null, max: number): Fan | null {
   if (!match) return null;
-  const cap = Math.max(1, Math.min(max, Math.round(match.fans.length * 0.09)));
+  const cap = Math.max(1, Math.min(max, Math.round(match.fans.length * 0.11)));
   const switched = shiftSupport(driftTarget(leader), cap);
   const roll = rnd();
   if (roll < 0.14) {
@@ -1004,16 +1004,17 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   if (now - lastReactionAt < REACTION_GAP_MS) return;
   const c = copy();
 
-  /* A fresh switcher quotes their stake about half the time; the rest are pure crowd noise.
+  /* A fresh switcher quotes their Stars most of the time; the rest are pure crowd noise.
      The line names the camp the fan actually moved to, which is usually — not always — the
      side the play favours. */
-  if (switched && rnd() < 0.5) {
+  if (switched && rnd() < 0.6) {
     lastReactionAt = now;
     showToast(
       switched,
-      c.back,
-      { n: formatNum(switched.stake), name: campName(switched.camp) },
-      ['name'],
+      switched.camp === 0 ? c.winHead : c.loseHead,
+      {},
+      [],
+      switched.stake,
     );
     return;
   }
