@@ -61,8 +61,8 @@
  * The mine is spent, and the LANDING square is then checked again: a second live charge there goes
  * off too, throwing the ball onward, and so on until it comes to rest on a mine-free cell. That
  * chain is a bounded pure loop (`MAX_CHAIN`), so both clients and
- * the Worker resolve the same final square from the same board. Opponent mines are secret: clients
- * get `view(state, team)`, never the raw state.
+ * the Worker resolve the same final square from the same board. Every other seat's mines are secret
+ * — a partner's live charge included: clients get `view(state, team)`, never the raw state.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
@@ -978,13 +978,13 @@ export const mineAt = (s: GameState, cell: Cell): Mine | null =>
  * The live mine on a cell, ignoring the charges a chain has ALREADY spent this turn. `doMove()`
  * resolves every blast against one private board whose ledger is only rebuilt at the end, so the
  * loop carries the spent identities here instead of mutating a mine record. Same order as `mineAt`
- * — the first live, unspent ENEMY charge on the square — so a chain is deterministic, and a friendly
- * charge on the same cell neither fires nor hides an enemy charge behind it.
+ * — the first live, unspent charge on the square — so a chain is as deterministic as a single hit.
+ * A charge belongs to whoever buried it, partner included: the trigger never asks whose side the
+ * mine is on, so a team-mate's live trap fires exactly like an enemy's.
  */
-function mineAtIn(s: GameState, cell: Cell, spent: ReadonlySet<Mine>, mover: Player): Mine | null {
-  const allies = sideOf(s, mover);
-  for (const m of s.mines) {
-    if (m.triggered || spent.has(m) || allies.includes(m.owner)) continue;
+function mineAtIn(mines: readonly Mine[], cell: Cell, spent: ReadonlySet<Mine>): Mine | null {
+  for (const m of mines) {
+    if (m.triggered || spent.has(m)) continue;
     if (m.cell.c === cell.c && m.cell.r === cell.r) return m;
   }
   return null;
@@ -1000,16 +1000,15 @@ function mineAtIn(s: GameState, cell: Cell, spent: ReadonlySet<Mine>, mover: Pla
 export const MAX_CHAIN = 10;
 
 /**
- * The RIVAL charge buried on a cell — the one a placement may land on top of. A separate reader
- * from `mineAt` because the two have different audiences: the placement gate (`mineOk`) may NEVER
- * consult this one, since a hidden trap that refused its square would sweep the board for a radar,
- * while the confirmation that actually commits to the square must (`doMine`).
+ * The OTHER charge buried on a cell — a rival's or, in a team race, a partner's — the one a
+ * placement may land on top of. A separate reader from `mineAt` because the two have different
+ * audiences: the placement gate (`mineOk`) may NEVER consult this one, since a hidden trap that
+ * refused its square would sweep the board for a radar, while the confirmation that actually
+ * commits to the square must (`doMine`).
  */
-export const rivalMineAt = (s: GameState, cell: Cell, owner: Player): Mine | null => {
-  const allies = sideOf(s, owner);
-  return s.mines.find((m) => !m.triggered && !allies.includes(m.owner)
+export const rivalMineAt = (s: GameState, cell: Cell, owner: Player): Mine | null =>
+  s.mines.find((m) => !m.triggered && m.owner !== owner
     && m.cell.c === cell.c && m.cell.r === cell.r) ?? null;
-};
 
 /** Mines a side still has to bury: the budget minus what it has spent, never below zero. */
 export function minesLeft(s: GameState, team: Player): number {
@@ -1268,7 +1267,7 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
   let landed: Pos = { c: to.c, r: to.r };
   let chainCount = 0;
   while (chainCount < MAX_CHAIN) {
-    const hit = mineAtIn(base, landed, spent, team);
+    const hit = mineAtIn(base.mines, landed, spent);
     if (!hit) break;                       // mine-free landing: the chain is over, finalise the turn
     chain.push(hit);
     spent.add(hit);
@@ -1360,12 +1359,13 @@ export function doWall(s: GameState, w: Wall): GameState | null {
 /**
  * Bury a mine for the team on turn. The cell is the whole payload; the seat comes from the state.
  *
- * A charge committed onto a RIVAL's buried charge is a DUAL DETONATION: both go off where they lie
- * and the square comes up empty. Neither seat is warned beforehand — the collision is only ever
- * discovered by confirming it — so a blind overlap is a tactical neutralizer instead of the free
- * reconnaissance the placement gate used to hand out. Both entries stay in the ledger as SPENT, so
- * the budget is never refunded and a mined square cannot be farmed for free placements. The turn
- * ends normally either way: the charge was the seat's action.
+ * A charge committed onto another seat's buried charge — a rival's, or a partner's in a team race —
+ * is a DUAL DETONATION: both go off where they lie and the square comes up empty. Neither seat is
+ * warned beforehand — the collision is only ever discovered by confirming it — so a blind overlap is
+ * a tactical neutralizer instead of the free reconnaissance the placement gate used to hand out.
+ * Both entries stay in the ledger as SPENT, so the budget is never refunded and a mined square
+ * cannot be farmed for free placements. The turn ends normally either way: the charge was the
+ * seat's action.
  */
 export function doMine(s: GameState, cell: Cell, owner: Player = s.turn): GameState | null {
   if (owner !== s.turn || !mineOk(s, cell, owner)) return null;
@@ -1425,14 +1425,14 @@ export function getAutoMove(s: GameState, team: Player = s.turn): Action {
 /* ---------- fog of war ---------- */
 
 /**
- * The state as one side is allowed to see it: its own and its partner's mines plus the ones already
- * set off, with every enemy mine still in the ground stripped out. Nothing else changes, so the
- * projection is still a valid `GameState` the client can run the same queries against.
+ * The state as one team is allowed to see it: its own mines plus the ones already set off, with
+ * every other mine still in the ground stripped out — a partner's live charge is hidden from the
+ * client exactly like an enemy's. Nothing else changes, so the projection is still a valid
+ * `GameState` the client can run the same queries against.
  *
  * SECURITY: the server must only ever send `view(state, team)` to a client — never the raw state,
  * which carries the hidden mines.
  */
 export function view(s: GameState, team: Player): GameState {
-  const allies = sideOf(s, team);
-  return { ...s, mines: s.mines.filter((m) => allies.includes(m.owner) || m.triggered) };
+  return { ...s, mines: s.mines.filter((m) => m.owner === team || m.triggered) };
 }
