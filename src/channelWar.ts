@@ -99,6 +99,133 @@ const hash32 = (s: string): number => {
 const TIQ_FMT = new Intl.NumberFormat('en-US');
 const tiqLabel = (n: number): string => TIQ_FMT.format(Math.max(0, Math.floor(n)));
 
+/* ---------- the weekly tournament score ----------
+   The ladder prints the TIQ a channel earned **since it entered the running week**, never the
+   lifetime balance it brought with it. The server owns the authoritative zero point —
+   `baselineTiq` / `tournamentTiq` on the squad view — while this device keeps a matching
+   snapshot for any row it paints before the next sync. A channel registered here therefore
+   starts at exactly `0` TIQ, and a cached board from an old week can never resurrect a head
+   start. */
+const BASELINE_KEY = 'detour:channel-war:baselines.v1';
+
+/** The optional weekly fields a squad view may carry (server-owned). */
+interface WarScoreFields {
+  baselineTiq?: number;
+  tournamentTiq?: number;
+}
+
+type BaselineBook = Record<string, Record<string, number>>;
+
+let baselineBook: BaselineBook | null = null;
+
+/** Read the snapshot book, tolerating a missing store, private mode or a hand-edited blob. */
+function readBaselineBook(): BaselineBook {
+  try {
+    const raw = window.localStorage.getItem(BASELINE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: BaselineBook = {};
+    for (const [season, rows] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!season || !rows || typeof rows !== 'object' || Array.isArray(rows)) continue;
+      const clean: Record<string, number> = {};
+      for (const [id, value] of Object.entries(rows as Record<string, unknown>)) {
+        const n = Number(value);
+        if (id && Number.isFinite(n) && n >= 0) clean[id] = Math.floor(n);
+      }
+      out[season] = clean;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function baselines(): BaselineBook {
+  if (!baselineBook) baselineBook = readBaselineBook();
+  return baselineBook;
+}
+
+/** The running week's key: the war clock's own end instant, so the book rolls with the timer. */
+function warSeasonKey(): string {
+  const end = warEndsAt();
+  return Number.isFinite(end) && end > 0 ? `w${Math.floor(end)}` : 'w0';
+}
+
+function localBaselineOf(squadId: string): number | null {
+  const stored = baselines()[warSeasonKey()]?.[squadId];
+  return typeof stored === 'number' && Number.isFinite(stored) && stored >= 0 ? stored : null;
+}
+
+/** Remember one channel's zero point for this week, keeping the book to the running week only. */
+function noteBaseline(squadId: string, baseline: number): void {
+  if (!squadId) return;
+  const value = Math.max(0, Math.floor(Number.isFinite(baseline) ? baseline : 0));
+  const season = warSeasonKey();
+  const book = baselines();
+  for (const key of Object.keys(book)) if (key !== season) delete book[key];
+  const rows = book[season] ?? (book[season] = {});
+  if (rows[squadId] === value) return;
+  rows[squadId] = value;
+  try {
+    window.localStorage.setItem(BASELINE_KEY, JSON.stringify(book));
+  } catch { /* a device without writable storage still paints this session */ }
+}
+
+/**
+ * The number one ladder row is ranked and painted by: tournament TIQ for the running week.
+ *
+ * The server figure wins whenever it is present. Absent it, the snapshot this device recorded is
+ * subtracted from the channel's live total; the first sighting of a channel with neither starts
+ * its week at `0` instead of borrowing its lifetime score.
+ */
+function warScoreOf(s: RankedSquad): number {
+  const total = Math.max(0, Math.floor(warPointsOf(s)));
+  const fields = s as unknown as WarScoreFields;
+  const serverBaseline = Number(fields.baselineTiq);
+  const hasBaseline = Number.isFinite(serverBaseline) && serverBaseline >= 0;
+  const serverScore = Number(fields.tournamentTiq);
+  if (Number.isFinite(serverScore) && serverScore >= 0) {
+    const clean = Math.max(0, Math.floor(serverScore));
+    if (hasBaseline) {
+      noteBaseline(s.id, serverBaseline);
+      /* The server figure is authoritative, but a total this device has already moved forward
+         (a settled match the board has not re-read yet) must not appear to walk backwards. */
+      return Math.min(total, Math.max(clean, total - Math.floor(serverBaseline)));
+    }
+    return Math.min(total, clean);
+  }
+  if (hasBaseline) {
+    noteBaseline(s.id, serverBaseline);
+    return Math.max(0, total - Math.floor(serverBaseline));
+  }
+  const local = localBaselineOf(s.id);
+  if (local !== null) return Math.max(0, total - local);
+  noteBaseline(s.id, total);
+  return 0;
+}
+
+/** One ladder entry: the squad and the place its tournament score earns this week. */
+interface WarLadderRow {
+  squad: RankedSquad;
+  place: number;
+}
+
+/** The ladder in tournament order — the score a row prints is the score it is ranked by. */
+function warLadder(): WarLadderRow[] {
+  return [...getWarRanking()]
+    .sort((a, b) =>
+      warScoreOf(b) - warScoreOf(a)
+      || (a.name || a.handle).localeCompare(b.name || b.handle)
+      || a.id.localeCompare(b.id))
+    .map((squad, i) => ({ squad, place: i + 1 }));
+}
+
+/** The place one channel holds on this week's ladder, or 0 when it is not on it. */
+function warPlaceOf(squadId: string): number {
+  return squadId ? warLadder().find((row) => row.squad.id === squadId)?.place ?? 0 : 0;
+}
+
 /** The war clock, always in Latin figures: a countdown is a code, not a sentence. */
 function warClock(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -384,22 +511,24 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
    */
   function buildRow(
     s: RankedSquad,
-    opts: { you: boolean; selectable: boolean; inspectable?: boolean },
+    opts: { you: boolean; selectable: boolean; inspectable?: boolean; place: number },
   ): HTMLLIElement {
-    const tiq = warPointsOf(s);
+    const tiq = warScoreOf(s);
     const scored = tiq > 0;
+    const place = opts.place;
     const li = document.createElement('li');
-    li.className = `cw-row${opts.you ? ' is-you' : ''}${scored && s.rank === 1 ? ' is-lead' : ''}${picked === s.id ? ' is-selected' : ''}`;
+    li.className = `cw-row${opts.you ? ' is-you' : ''}${scored && place === 1 ? ' is-lead' : ''}${picked === s.id ? ' is-selected' : ''}`;
 
     /* The leading cluster: everything that identifies the channel, in one shrinkable run. */
     const lead = document.createElement('span');
     lead.className = 'cw-row-lead';
 
     const rank = document.createElement('bdi');
-    rank.className = `cw-rank${scored ? (s.rank <= 3 ? ` is-${s.rank}` : '') : ' is-none'}`;
+    rank.className = `cw-rank${scored ? (place <= 3 ? ` is-${place}` : '') : ' is-none'}`;
     rank.setAttribute('dir', 'ltr');
-    /* A channel nobody has scored for has no place to defend yet: it reads as a dash, never #4. */
-    rank.textContent = scored ? `#${s.rank}` : '—';
+    /* A channel nobody has scored for this week has no place to defend yet: it reads as a dash,
+       never #4 — and a freshly enrolled channel starts exactly there, at 0 TIQ. */
+    rank.textContent = scored ? `#${place}` : '—';
 
     const av = document.createElement('span');
     av.className = 'cw-av';
@@ -498,7 +627,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   function paintBoard(): void {
     if (!boardList) return;
-    const board = getWarRanking();
+    const board = warLadder();
     const mine = getMySquad();
     /* Switching is only free while the channel has nothing to lose: a team that has actually
        fought is a team. The total itself is the roster's real TIQ sum, so the test reads the
@@ -509,9 +638,9 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       boardList.append(emptyRow('cwEmptyBoard'));
       return;
     }
-    for (const s of board.slice(0, LADDER_MAX)) {
+    for (const { squad: s, place } of board.slice(0, LADDER_MAX)) {
       const you = !!mine && s.id === mine.id;
-      boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true }));
+      boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true, place }));
     }
     revealMyRow();
   }
@@ -691,6 +820,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       if (detailId) { detailId = ''; view = 'hub'; paintView(); paint(); }
       return;
     }
+    const place = warPlaceOf(s.id);
     paintAvatar(detailImg, detailMark, detailAv, s);
     if (detailName) detailName.textContent = s.name || displayNameOf(s.handle);
     if (detailHandle) detailHandle.textContent = s.handle;
@@ -703,14 +833,14 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
         ? verifiedBadge('squad-vbadge cw-vbadge')
         : unverifiedPill('squad-unverified cw-unverified'));
     }
-    const tiq = warPointsOf(s);
+    const tiq = warScoreOf(s);
     if (detailRank) {
       const scored = tiq > 0;
-      detailRank.className = `cw-hero-rank${scored ? (s.rank <= 3 ? ` is-${s.rank}` : '') : ' is-none'}`;
+      detailRank.className = `cw-hero-rank${scored ? (place <= 3 ? ` is-${place}` : '') : ' is-none'}`;
       /* `#1` is a code and reads LTR everywhere; the word for "no place yet" is prose and takes
          whatever direction the locale is already running in. */
       detailRank.setAttribute('dir', scored ? 'ltr' : 'auto');
-      detailRank.textContent = scored ? `#${s.rank}` : t('cwUnranked');
+      detailRank.textContent = scored ? `#${place}` : t('cwUnranked');
     }
     /* The metric in its own plain figure — the plate's label already says what the number is. */
     if (detailTiq) detailTiq.textContent = tiqLabel(tiq);
@@ -801,11 +931,11 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   function paintPick(): void {
     if (!pickList) return;
     const mine = getMySquad();
-    const rows = getWarRanking().filter((s) => s.id !== mine?.id).slice(0, PICK_MAX);
+    const rows = warLadder().filter(({ squad }) => squad.id !== mine?.id).slice(0, PICK_MAX);
     pickList.textContent = '';
     if (!rows.length) { pickList.append(emptyRow('cwEmptyBoard')); return; }
-    for (const s of rows) {
-      const li = buildRow(s, { you: false, selectable: true });
+    for (const { squad: s, place } of rows) {
+      const li = buildRow(s, { you: false, selectable: true, place });
       li.dataset.select = s.id;
       pickList.append(li);
     }
@@ -1035,6 +1165,9 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       return;
     }
     if (!result.squad) { setRegError('enlistErrAlready'); notify('warning'); return; }
+    /* This device just enrolled the channel: snapshot its opening balance so an optimistic row
+       starts at exactly `0` TIQ before the next server sync replaces the figure. */
+    noteBaseline(result.squad.id, warPointsOf(result.squad));
     /* A verified enlistment already proved the player's admin seat, so the membership gate is
        answered; an unverified one is a normal registration that earns its badge later. */
     const verified = result.squad.verified === true;

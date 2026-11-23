@@ -36703,7 +36703,7 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 /* The leading cluster. `min-width: 0` at every level is what lets it shrink instead of pushing
    the score column out of the card. */
 .cw-row-lead {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -36776,7 +36776,7 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 /* The two-line identity stack. Line 1 is one clean title with an ellipsis; line 2 carries the
    member count and the one tag that matters, in a single non-wrapping run. */
 .cw-row-id {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -37705,6 +37705,26 @@ html[data-lang="ar"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-acti
 }
 html[data-lang="fa"] .cw-sheet .cw-back .ico,
 html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
+
+/* ---- narrow phones (320–430px): two clusters, one shrinkable run ----
+   The identity is the only part of a card that yields. The rank crest, the face, the stacked
+   score and the door in all keep their width, so a card never wraps, overlaps or pushes its
+   chevron out of the card on the narrowest phone in the range. */
+@media (max-width: 430px) {
+  .cw-row { gap: 8px; }
+  .cw-row-lead { flex: 1 1 0%; gap: 8px; }
+  .cw-row-side { gap: 6px; }
+  .cw-row-score-n { font-size: 13.5px; }
+  .cw-row-go { width: 20px; }
+}
+@media (max-width: 360px) {
+  .cw-row { gap: 7px; padding: 10px; }
+  .cw-row-lead { gap: 7px; }
+  .cw-row-side { gap: 5px; }
+  .cw-row-score-n { font-size: 12.5px; }
+  .cw-row-score-u { font-size: 9px; }
+  .cw-you-pill { padding: 2px 6px; font-size: 9px; letter-spacing: .02em; }
+}
 
 /* ---- the narrow and the short ends of the phone range ----
    The ladder card itself keeps its designed metrics at every width: its leading cluster is the

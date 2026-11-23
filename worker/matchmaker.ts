@@ -76,9 +76,10 @@ import {
 } from '../shared/vip';
 import {
   ACTIVE_CUP_ID, MEMBER_TIQ_CAP, addWarPoints, applicantFromRequest, cupField, cupPlayerBoard,
-  cupSquadIds, isSquadAdmin, markSquadVerified, normalizeChatHandle, readPublicChat,
+  cupSquadIds, enrolInWarSeason, isSquadAdmin, markSquadVerified, normalizeChatHandle, readPublicChat,
   readRegisteredSquad, refreshTelegramMembers, removeSquadMember, roleOf, SQUAD_ALREADY_ENLISTED,
-  squadTotalTiq, squadViewOf, squadWarTiq, syncSquadChatDetails, telegramPhotoUrl, upsertSquadMember,
+  squadTotalTiq, squadTournamentTiq, squadViewOf, squadWarTiq, syncSquadChatDetails, telegramPhotoUrl,
+  upsertSquadMember,
   verifyAndBuildSquad, verifyChannelMembership, verifyPostedCode, verifySquadAdminOwnership,
   verifySquadChat,
   type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow,
@@ -3365,6 +3366,10 @@ export class MatchmakerDO {
               const row = readRegisteredSquad(raw);
               if (row) this.squads.set(row.id, row);
             }
+            /* Every hydrated row joins the running week before it can be ranked: a row from an
+               older week (or storage written before the weekly baseline existed) is snapshotted
+               now, which is what makes a new week start every channel at 0 TIQ. */
+            this.enrolSquadsInWarSeason();
           }
           const arena = readArena(await storage.get<unknown>('arena'));
           if (arena) this.arena = arena;
@@ -3926,6 +3931,15 @@ export class MatchmakerDO {
           }, 400);
         }
       }
+      /* The leader's actual balance seeds the roster row **and** the weekly baseline, so the
+         channel's tournament score starts at `0` from the first frame. A client that did not
+         report a balance is answered from the seat the room already knows, so the first later
+         sync can never turn pre-tournament TIQ into a head start. */
+      const reportedTiq = Number(body.playerTiq ?? body.tiq);
+      const leaderTiq = Number.isFinite(reportedTiq) && reportedTiq > 0
+        ? reportedTiq
+        : (this.players.get(`tg-${requester}`)
+          ?? [...this.players.values()].find((player) => player.tgId === requester))?.tiq ?? 0;
       const result = await verifyAndBuildSquad(rawHandle, requester, this.env, {
         name: typeof body.squadName === 'string' ? body.squadName : '',
         tag: typeof body.squadTag === 'string' ? body.squadTag : '',
@@ -3942,7 +3956,7 @@ export class MatchmakerDO {
         photo: typeof body.photo === 'string' ? body.photo : '',
         /* The leader's actual balance seeds their roster row, so the channel's TOTAL TIQ is a
            real sum from the first frame instead of waiting for a later sync. */
-        playerTiq: Number(body.playerTiq ?? body.tiq),
+        playerTiq: leaderTiq,
       });
       if (!result.ok) {
         return json({
@@ -4229,7 +4243,13 @@ export class MatchmakerDO {
     );
     this.squadsDirty = true;
     await this.persistSquads();
-    return json({ ok: true, warPoints: total, totalTiq: total, squad: squadViewOf(squad) });
+    return json({
+      ok: true,
+      warPoints: total,
+      totalTiq: total,
+      tournamentTiq: squadTournamentTiq(squad),
+      squad: squadViewOf(squad),
+    });
   }
 
   /**
@@ -4263,7 +4283,13 @@ export class MatchmakerDO {
       }
     }
     const total = squadTotalTiq(squad);
-    return json({ ok: true, totalTiq: total, warPoints: total, squad: squadViewOf(squad) });
+    return json({
+      ok: true,
+      totalTiq: total,
+      warPoints: total,
+      tournamentTiq: squadTournamentTiq(squad),
+      squad: squadViewOf(squad),
+    });
   }
 
   /**
@@ -4558,9 +4584,10 @@ export class MatchmakerDO {
    */
   private async squadBoard(): Promise<Response> {
     await this.syncSquadsFromStorage();
-    /* The Squad IQ ladder is ranked by the exact sum of the TIQ its joined players hold, ties
-       broken by the roster size, then the handle: the order a client paints is the order this
-       endpoint hands back. */
+    if (this.squadsDirty) await this.persistSquads();
+    /* The weekly ladder is ranked by the tournament score it prints — TIQ earned inside this
+       cycle — with the lifetime figures only breaking ties. A channel's history never outranks
+       this week's work. */
     const squads = [...this.squads.values()]
       .filter((squad) => !squad.banned && squad.verification !== 'revoked')
       .map((squad) => {
@@ -4569,7 +4596,8 @@ export class MatchmakerDO {
         return view;
       })
       .sort((a, b) =>
-        b.totalTiq - a.totalTiq
+        b.tournamentTiq - a.tournamentTiq
+        || b.totalTiq - a.totalTiq
         || b.members - a.members
         || a.handle.localeCompare(b.handle));
     return json({ ok: true, timestamp: Date.now(), squads });
@@ -4593,6 +4621,7 @@ export class MatchmakerDO {
     const squad = await this.squadNamed(id);
     if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
     if (squad.banned) return json({ ok: false, error: 'squad_banned' }, 403);
+    if (this.squadsDirty) await this.persistSquads();
     if (await refreshTelegramMembers(squad, this.env)) {
       this.squadsDirty = true;
       await this.persistSquads();
@@ -4625,6 +4654,7 @@ export class MatchmakerDO {
    */
   private async squadCupBoard(url: URL): Promise<Response> {
     await this.syncSquadsFromStorage();
+    if (this.squadsDirty) await this.persistSquads();
     const asked = (url.searchParams.get('cup') ?? '').trim().slice(0, 48);
     const cupId = asked || ACTIVE_CUP_ID;
     const rawLimit = Number(url.searchParams.get('limit'));
@@ -4664,9 +4694,27 @@ export class MatchmakerDO {
            keep the in-memory roster, but never resurrect a row the store does not have. */
         if (!held) this.squads.set(row.id, row);
       }
+      /* Enrolment is idempotent inside a week: this only stamps legacy rows and the first sighting
+         of a new cycle, so a refresh can never move a live baseline. */
+      this.enrolSquadsInWarSeason();
     } catch {
       /* a store that refuses the read: the rows already in memory still answer */
     }
+  }
+
+  /**
+   * Enrol every registry row in the running weekly cycle, flushing when a stamp moved.
+   *
+   * A row from an older week — or storage written before the weekly baseline existed — snapshots
+   * the TIQ it holds now and starts at `0`. A row already enrolled in this week is untouched, so
+   * re-opening the hub or refreshing the rankings never resets a live score.
+   */
+  private enrolSquadsInWarSeason(): void {
+    let changed = false;
+    for (const squad of this.squads.values()) {
+      if (enrolInWarSeason(squad)) changed = true;
+    }
+    if (changed) this.squadsDirty = true;
   }
 
   /**

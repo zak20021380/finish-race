@@ -6,6 +6,24 @@ import type { Env } from './env';
  */
 export const ACTIVE_CUP_ID = 'cup-200-stars';
 
+/**
+ * The weekly Channel Wars cycle. Every channel's tournament score is measured from the balance it
+ * held when it entered the running cycle, so a channel that has existed on Telegram for years
+ * never carries its pre-tournament TIQ into a fresh week.
+ *
+ * The cycle is anchored on a Monday at 00:00 UTC and the id changes with it: that single changing
+ * string is what makes every new week start every channel at exactly `0` TIQ.
+ */
+export const WAR_SEASON_MS = 7 * 24 * 60 * 60 * 1000;
+/** A Monday, 00:00 UTC — the anchor every weekly cycle is counted from. */
+const WAR_SEASON_ANCHOR = Date.UTC(2025, 0, 6);
+
+/** The tournament cycle running at `at`, as a stable id for the whole week. */
+export function warSeasonId(at: number = Date.now()): string {
+  const weeks = Math.max(0, Math.floor((at - WAR_SEASON_ANCHOR) / WAR_SEASON_MS));
+  return `cw-w${weeks}`;
+}
+
 export type SquadKind = 'channel' | 'group';
 
 /** The audit state the Command Center shows: confirmed admin, awaiting review, or pulled. */
@@ -115,6 +133,18 @@ export interface RegisteredSquad {
    * a squad without this stamp is not in the field, so none of its players can be either.
    */
   cupId: string;
+  /**
+   * The weekly tournament cycle this channel's baseline belongs to. When the cycle rolls, the row
+   * is re-enrolled with a fresh snapshot — that is what makes a new week start at `0` TIQ.
+   */
+  seasonId: string;
+  /**
+   * The channel's cumulative TIQ at the exact moment it entered `seasonId`. The tournament score
+   * is `current - baseline`, so no pre-tournament history is ever counted on the weekly ladder.
+   */
+  baselineTiq: number;
+  /** When the channel entered `seasonId` (ms). */
+  enrolledAt: number;
   createdAt: number;
   /** `verified` — the bot proved the submitter is an admin; `pending` — awaits an audit. */
   verification: SquadVerification;
@@ -468,6 +498,8 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
      before the flag existed was verified by the old bot-admin enlistment, so it keeps the badge
      only while its audit state is `verified`. */
   const verification = verificationOf(row.verification);
+  const baselineRaw = Number(row.baselineTiq);
+  const enrolledRaw = Number(row.enrolledAt);
   return {
     id,
     chatId: text(row.chatId, 32),
@@ -485,6 +517,11 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     /* A row written before the stamp existed was enlisted into the championship that was
        running, so it keeps its place in that field instead of being orphaned by the upgrade. */
     cupId: text(row.cupId, 48) || ACTIVE_CUP_ID,
+    /* A row written before the weekly baseline existed carries no season stamp: `enrolInWarSeason`
+       snapshots it on first sight instead of trusting a stored zero. */
+    seasonId: text(row.seasonId, 24),
+    baselineTiq: Number.isFinite(baselineRaw) && baselineRaw > 0 ? Math.floor(baselineRaw) : 0,
+    enrolledAt: Number.isFinite(enrolledRaw) && enrolledRaw > 0 ? Math.floor(enrolledRaw) : 0,
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
     verification,
     verified: verification === 'verified',
@@ -600,6 +637,42 @@ export function squadTotalTiq(squad: RegisteredSquad): number {
 
 /** The same sum under the admin telemetry's historical name. */
 export const squadWarTiq = squadTotalTiq;
+
+/**
+ * Is this row enrolled in the tournament cycle that is running now? A legacy row (no season
+ * stamp) or a row from an older week is not: it has to be snapshotted before it can be ranked.
+ */
+export function warSeasonEnrolled(squad: RegisteredSquad, at: number = Date.now()): boolean {
+  return !!squad.seasonId && squad.seasonId === warSeasonId(at);
+}
+
+/**
+ * Enrol a channel in the running weekly tournament: snapshot the TIQ it holds right now as its
+ * baseline and start its tournament score at exactly `0`.
+ *
+ * Idempotent inside a cycle — re-opening the hub, refreshing the rankings or syncing a member
+ * never moves the baseline mid-week. Returns `true` only when the row actually changed (a legacy
+ * row, or the first sighting of a new week).
+ */
+export function enrolInWarSeason(squad: RegisteredSquad, at: number = Date.now()): boolean {
+  const seasonId = warSeasonId(at);
+  if (squad.seasonId === seasonId) return false;
+  squad.seasonId = seasonId;
+  squad.baselineTiq = squadTotalTiq(squad);
+  squad.enrolledAt = at;
+  return true;
+}
+
+/**
+ * The number the Channel Wars ladder paints: TIQ earned **since this channel entered the running
+ * week**, never the lifetime balance it arrived with. A channel can lose a member and fall below
+ * its baseline; the score floors at `0` rather than going negative.
+ */
+export function squadTournamentTiq(squad: RegisteredSquad, at: number = Date.now()): number {
+  if (!warSeasonEnrolled(squad, at)) return 0;
+  const baseline = Math.max(0, Math.floor(squad.baselineTiq || 0));
+  return Math.max(0, squadTotalTiq(squad) - baseline);
+}
 
 /** A war-point reading, bounded. Anything malformed is a zero, never a NaN on the board. */
 export function warTotalOf(raw: unknown): number {
@@ -728,6 +801,17 @@ export interface SquadView {
   warPoints: number;
   /** The same total under its Channel Wars name. Always equal to `warPoints`. */
   totalTiq: number;
+  /** The weekly cycle this row is enrolled in. */
+  seasonId: string;
+  /** The lifetime TIQ the channel held when it entered the running week. */
+  baselineTiq: number;
+  /** When the channel entered the running week (ms). */
+  enrolledAt: number;
+  /**
+   * The Channel Wars tournament score: TIQ earned since enrolment, floored at `0`. This — never
+   * the lifetime sum — is the number the weekly ladder is ranked and painted by.
+   */
+  tournamentTiq: number;
   /** The roster as the inspector ranks it: highest real TIQ first. */
   fighters: SquadFighterView[];
   creatorId: string;
@@ -773,6 +857,11 @@ export function squadViewOf(squad: RegisteredSquad, options: SquadViewOptions = 
     }))
     .sort((a, b) => b.tiq - a.tiq || a.id.localeCompare(b.id));
   const totalTiq = squadTotalTiq(squad);
+  /* A row that has not been enrolled in the running week has no baseline yet; its tournament
+     score is a clean `0` rather than a borrowed lifetime total. */
+  const enrolled = warSeasonEnrolled(squad);
+  const baselineTiq = enrolled ? Math.max(0, Math.floor(squad.baselineTiq || 0)) : 0;
+  const tournamentTiq = enrolled ? Math.max(0, totalTiq - baselineTiq) : 0;
   const audience = squad.telegramMembers;
   return {
     id: squad.id,
@@ -791,6 +880,10 @@ export function squadViewOf(squad: RegisteredSquad, options: SquadViewOptions = 
     tiq: totalTiq,
     warPoints: totalTiq,
     totalTiq,
+    seasonId: squad.seasonId,
+    baselineTiq,
+    enrolledAt: squad.enrolledAt,
+    tournamentTiq,
     fighters,
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
@@ -819,9 +912,16 @@ export function squadCupOf(squad: Pick<RegisteredSquad, 'cupId'>): string {
 export function cupField(squads: Iterable<RegisteredSquad>, cupId: string): RegisteredSquad[] {
   const id = text(cupId, 48);
   if (!id) return [];
+  /* One clock for the whole sort: the weekly leaderboard is ranked by the score it prints.
+     Lifetime Squad IQ only breaks ties, so a channel's history never outranks this week's work. */
+  const now = Date.now();
   return [...squads]
     .filter((squad) => !squad.banned && squad.verification !== 'revoked' && squadCupOf(squad) === id)
-    .sort((a, b) => squadAvgTiq(b) - squadAvgTiq(a) || b.members - a.members || a.handle.localeCompare(b.handle));
+    .sort((a, b) =>
+      squadTournamentTiq(b, now) - squadTournamentTiq(a, now)
+      || squadAvgTiq(b) - squadAvgTiq(a)
+      || b.members - a.members
+      || a.handle.localeCompare(b.handle));
 }
 
 /** The ids registered for one cup — the membership test every player row must pass. */
@@ -1435,6 +1535,13 @@ export async function verifyAndBuildSquad(
   /* Method 1 (and the legacy enlistment) asks Telegram who owns the chat and whether the bot
      stands beside them. The other two doors only resolve the public chat: an unverified squad is
      allowed to exist, and the code door proves control from the channel's own public page. */
+  /* The leader's own balance is the channel's opening balance. It is also the tournament
+     baseline: a channel that registers today starts the week at 0 TIQ, whatever it brought. */
+  const enrolledAt = Date.now();
+  const leaderTiq = Number.isFinite(Number(identity?.playerTiq)) && Number(identity?.playerTiq) > 0
+    ? Math.min(MEMBER_TIQ_CAP, Math.floor(Number(identity?.playerTiq)))
+    : 0;
+
   let chat: ResolvedChat;
   let verified = false;
   let verifiedBy = '';
@@ -1479,12 +1586,10 @@ export async function verifyAndBuildSquad(
       roster: [{
         id: requester,
         name: text(identity?.memberName, 24),
-        /* The leader already holds a real balance; the channel's TOTAL TIQ starts at it, not 0. */
-        tiq: Number.isFinite(Number(identity?.playerTiq)) && Number(identity?.playerTiq) > 0
-          ? Math.min(MEMBER_TIQ_CAP, Math.floor(Number(identity?.playerTiq)))
-          : 0,
+        /* The leader already holds a real balance; the channel's lifetime total starts there. */
+        tiq: leaderTiq,
         role: 'leader',
-        joinedAt: Date.now(),
+        joinedAt: enrolledAt,
         country: '',
         username: text(identity?.username, 32).replace(/^@+/, ''),
         photo: photoOf(identity?.photo),
@@ -1497,7 +1602,12 @@ export async function verifyAndBuildSquad(
       creatorId: requester,
       ownerId: requester,
       cupId: text(identity?.cupId, 48) || ACTIVE_CUP_ID,
-      createdAt: Date.now(),
+      /* The tournament baseline is the balance held at registration, so the new row's first
+         Channel Wars score is `0` and only TIQ earned after this instant moves it. */
+      seasonId: warSeasonId(enrolledAt),
+      baselineTiq: leaderTiq,
+      enrolledAt,
+      createdAt: enrolledAt,
       /* Only a proof that actually ran earns the badge; a plain registration is pending. */
       verification: verified ? 'verified' : 'pending',
       verified,
