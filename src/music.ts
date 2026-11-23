@@ -7,12 +7,13 @@
  * switch never silences the bed. The two switches are independent by construction, not by a flag
  * both engines read.
  *
- * BOOT COST IS ZERO. `bgm.mp3` is ~2.8 MB, so it must never ride the first frame: the URL is a
- * plain `new URL(..., import.meta.url)` so Vite emits it as its own static asset (never inlined
- * into JS), the element is `preload = 'none'`, and the element is not even created until playback
- * is genuinely wanted — after the app has mounted and the player has touched the page. The fetch
- * and the decode happen on that first gesture, in the background, where they cannot delay Home,
- * matchmaking or the board.
+ * BOOT NEVER WAITS FOR IT. `bgm.mp3` is ~2.8 MB, so it must never ride the first frame: the URL
+ * is a plain `new URL(..., import.meta.url)` so Vite emits it as its own static asset (never
+ * inlined into JS), and the element is only built by `warmUpBgm()` — 1.8 s after the first screen
+ * has mounted, or on the player's first tap, whichever lands first. From there `preload = 'auto'`
+ * and a single `load()` pull the track into the media cache while the player is still on Home, so
+ * the board's first `play()` is served from memory instead of a cold socket. The warm-up is volume
+ * 0, never a `play()`, and always off the critical path.
  *
  * MOBILE WEBVIEWS NEED A GESTURE. Telegram's WebView (and iOS Safari) refuses to start audio
  * outside a trusted interaction, so the first pointerdown/touchstart/keydown is the unlock. Every
@@ -38,6 +39,18 @@
  * it, because the state is part of `shouldPlay()` rather than a listener's private business.
  * `setMusicMatchOver(false)` is the only door back, and the player's own exit — Play again, a
  * rematch, the menu, a new race — is what opens it.
+ *
+ * EVERY RACE OPENS AT 0:00. The bed is one long loop, and a paused element remembers where it
+ * stopped: without a rewind, quitting at 1:40 would open the next race at 1:40. So the cursor is
+ * parked at the top wherever a match is left — the fade-out in `stopBed()`, the settlement duck —
+ * and again the instant a new board opens. A lifecycle pause is the one exception: a chat hop
+ * mid-race must come back exactly where it left off, so `pauseNow()` never seeks.
+ *
+ * A SLOW SOCKET IS NOT A DEAD BED. The warm-up makes a cold start rare, not impossible, so the
+ * element reports its own health: `canplay` is what starts a board still waiting on data (from the
+ * top, at the ambient mix, through the same fade), `stalled` repeats a request the browser
+ * dropped, and `error` re-requests a dead stream a bounded number of times per match. All three
+ * ask `shouldPlay()` first, so a warm-up that struggles on Home is never a bed on a menu.
  *
  * A CLOSED MINI APP IS SILENT. `visibilitychange` and `blur` cover a chat hop and a native sheet;
  * `pagehide` and Telegram's own `deactivated` are the last events a WebView reliably fires on a
@@ -75,6 +88,19 @@ const MATCH_OVER_FADE_MS = 220;
 /** One fade tick. ~30 ms is smooth to the ear and cheap enough to be irrelevant to the CPU. */
 const FADE_STEP_MS = 30;
 
+/**
+ * The pre-buffer's delay. Long enough that Home has painted, the first screen's own requests have
+ * gone out and the device has gone idle — short enough that a player who taps Play immediately
+ * still finds the track already in cache. It is a timer, not a wait: nothing blocks on it.
+ */
+const WARM_UP_DELAY_MS = 1800;
+
+/**
+ * How many times a dead stream may be re-requested inside one match. Three rides out a flapping
+ * mobile link; a file that is genuinely gone must not turn into a retry loop.
+ */
+const MAX_RECOVERIES = 3;
+
 /** The one shared element, or null in a webview that cannot build one. */
 let audio: HTMLAudioElement | null = null;
 
@@ -108,6 +134,15 @@ let inMatch = false;
 /** Telegram's `deactivated`/`activated` pair is registered once, and only when the SDK has landed. */
 let tgBound = false;
 
+/**
+ * The background pre-buffer has already been kicked. `warmUpBgm()` is reachable from a timer, the
+ * first tap and the Music switch, and only the first of those pays for a `load()`.
+ */
+let warmed = false;
+
+/** Re-requests spent on this match's stream; a new board opens with a fresh budget. */
+let recoveries = 0;
+
 /** The music switch as of the last change, so the tap that turns it ON is read as a gesture. */
 let lastEnabled = settings.musicEnabled;
 
@@ -126,22 +161,67 @@ function shouldPlay(): boolean {
 }
 
 /**
+ * Park the cursor at the top of the track. A seek can be refused on an element whose metadata has
+ * not arrived yet, or one that is mid-`load()`, so it is always wrapped: the `canplay` door rewinds
+ * again before it starts anything, so a refused seek costs nothing.
+ */
+function rewind(el: HTMLAudioElement): void {
+  try { el.currentTime = 0; } catch { /* not seekable yet: the next start rewinds */ }
+}
+
+/**
+ * The stream's own health, heard as three media events.
+ *
+ * A cold socket on a bad mobile link can still be filling the buffer when the board opens, so the
+ * element gets to finish the job the warm-up started: `canplay` is "the data is here", and if the
+ * board is live and silent it starts the track from the top and fades it up to the mix; `stalled`
+ * is a request the browser dropped, so the play attempt is repeated; `error` is a stream that died,
+ * so the resource is re-requested — a bounded number of times per match, because a permanently
+ * broken file must not become a retry loop.
+ *
+ * Every branch asks `shouldPlay()` first: a warm-up that stalls while the player is still on Home
+ * is just a fetch finishing in its own time, never a bed on a menu.
+ */
+function armRecovery(el: HTMLAudioElement): void {
+  try {
+    el.addEventListener('canplay', () => {
+      if (!shouldPlay() || !el.paused) return;
+      rewind(el);                       // a board waiting on data opens at 0:00
+      startBed();                       // and fades in to TARGET_VOLUME like any other start
+    });
+    el.addEventListener('stalled', () => {
+      if (!shouldPlay() || !el.paused) return;
+      startBed();                       // re-arm the request the browser gave up on
+    });
+    el.addEventListener('error', () => {
+      if (!shouldPlay() || !el.paused) return;
+      if (recoveries >= MAX_RECOVERIES) return;
+      recoveries++;
+      try { el.load(); } catch { /* nothing left to retry with */ }
+    });
+  } catch { /* headless: no media events to hear */ }
+}
+
+/**
  * The single shared element, built once on first use.
  *
- * `preload` is set BEFORE `src` on purpose: a browser that sees a `src` first may start fetching
- * immediately, and the whole point of this module is that a 2.8 MB track never competes with the
- * first frame. Nothing calls `load()`; playback is what opens the stream.
+ * `preload` is set BEFORE `src` on purpose: the strategy has to be in place before the browser sees
+ * a URL, or it may start fetching on a default it chose rather than the one this module wants.
+ * `'auto'` is deliberate — the whole point of `warmUpBgm()` is that the 2.8 MB track is already in
+ * the media cache by the time a board opens. Nothing plays here: the element is built at volume 0,
+ * and only `warmUpBgm()` (silent) or `startBed()` (after a real `play()`) opens the stream.
  */
 function element(): HTMLAudioElement | null {
   if (audio) return audio;
   try {
     const el = new Audio();
-    el.preload = 'none';
+    el.preload = 'auto';
     el.loop = true;
     el.volume = 0;
     el.src = BGM_URL;
     /* iOS keeps an inline `<audio>` inline instead of handing it to the fullscreen player */
     el.setAttribute('playsinline', '');
+    armRecovery(el);
     audio = el;
   } catch { audio = null; }
   return audio;
@@ -221,14 +301,26 @@ function startBed(): void {
   } catch { /* a WebView refusal is silence, never an exception */ }
 }
 
-/** Fade the bed out over `FADE_OUT_MS`, then park it — the SFX engines are untouched. */
-function stopBed(): void {
+/**
+ * Fade the bed out over `FADE_OUT_MS`, then park it — the SFX engines are untouched.
+ *
+ * `fromTop` is what separates the two reasons this runs. Leaving a match (`setMusicInMatch(false)`)
+ * parks the cursor as well as the element, so the next race cannot open mid-phrase; a switch or a
+ * settings change mid-race does not, because the player is still on that board and a later toggle
+ * back on should resume where the music was.
+ */
+function stopBed(fromTop = false): void {
   const el = audio;
   if (!el) return;
-  if (el.paused && el.volume === 0) { clearFade(); return; }
+  if (el.paused && el.volume === 0) {
+    clearFade();
+    if (fromTop) rewind(el);
+    return;
+  }
   fadeTo(0, FADE_OUT_MS, () => {
     if (shouldPlay()) return;           // switched back on mid-fade: the new ramp owns the element
     try { el.pause(); } catch { /* never started */ }
+    if (fromTop) rewind(el);            // the next race opens at 0:00, never mid-phrase
   });
 }
 
@@ -241,10 +333,11 @@ function stopBed(): void {
 function duckForSettlement(): void {
   const el = audio;
   if (!el) { clearFade(); return; }
-  if (el.paused && el.volume === 0) { clearFade(); return; }
+  if (el.paused && el.volume === 0) { clearFade(); rewind(el); return; }
   fadeTo(0, MATCH_OVER_FADE_MS, () => {
     try { el.pause(); } catch { /* never started */ }
     try { el.volume = 0; } catch { /* refused: stay silent */ }
+    rewind(el);                         // the race is over: the next one starts at the top
   });
 }
 
@@ -279,15 +372,28 @@ export function setMusicMatchOver(isOver: boolean): void {
  * once, and no timer is left ticking.
  */
 export function setMusicInMatch(active: boolean): void {
+  /* a genuine new board, as opposed to a repeated call from a rematch path */
+  const entering = active && !inMatch;
   inMatch = active;
   /* a board being dealt has no verdict on it: the settlement duck belongs to the last race */
-  if (active) matchOver = false;
+  if (active) {
+    matchOver = false;
+    recoveries = 0;                     // this race gets its own budget of re-requests
+  }
   if (!booted) return;                  // nothing is built yet, and nothing should be
   if (active) {
-    if (shouldPlay()) startBed();       // fade up to TARGET_VOLUME over FADE_IN_MS
+    if (shouldPlay()) {
+      const el = element();
+      /* EVERY NEW MATCH STARTS AT 0:00. A paused element remembers its cursor, and an aborted
+         race leaves it wherever the player quit — so the top of the track is restored before
+         `play()` rather than trusted to the last stop. A live bed is never re-seeked: only a
+         parked one is rewound, so a repeated call cannot restart the music under a running race. */
+      if (el && (entering || el.paused)) rewind(el);
+      startBed();                       // fade up to TARGET_VOLUME over FADE_IN_MS
+    }
     return;
   }
-  stopBed();                            // fade down to 0 over FADE_OUT_MS, then pause
+  stopBed(true);                        // fade down to 0, park, and rewind for the next race
 }
 
 /** Reconcile the element with the switches, the gesture and the Mini App's lifecycle. */
@@ -297,11 +403,37 @@ function sync(): void {
   else stopBed();
 }
 
+/**
+ * The silent pre-buffer. Builds the element if it does not exist yet, keeps it at volume 0 and asks
+ * the browser for the bytes once — while the player is still on Home — so the board's first
+ * `play()` is served from the media cache instead of a cold socket. That is the whole of the
+ * startup delay this module used to pay on a slow link, and it is paid by an idle menu instead.
+ *
+ * It is a no-op in the three cases that must not pay for it: before boot (nothing is mounted), on a
+ * live board (the bed already owns the element and `startBed()` is fetching), and with the Music
+ * switch off (a player who turned the bed off must not be handed 2.8 MB). `warmed` keeps it to one
+ * `load()`: the timer, the first tap and the switch can all call it for the price of a boolean.
+ *
+ * Nothing here plays, ramps or pauses: `volume` stays 0 and `play()` is never called, so a
+ * restricted WebView is not asked for permission it has not granted yet.
+ */
+function warmUpBgm(): void {
+  if (!booted || warmed || inMatch) return;
+  if (!settings.musicEnabled) return;
+  const el = element();
+  if (!el) return;
+  warmed = true;
+  if (!el.paused) return;               // a live stream: never re-load underneath it
+  try { el.volume = 0; } catch { /* refused: stay silent */ }
+  try { el.load(); } catch { /* a WebView that refuses load() fetches on the first play */ }
+}
+
 /** The first trusted gesture: bless the element and let the bed come up. */
 function onFirstTouch(): void {
   if (!booted) return;
   unlocked = true;
   sync();
+  warmUpBgm();                          // the same tap that unlocks it also pays for the pre-buffer
 }
 
 /**
@@ -416,6 +548,11 @@ export function initMusic(): void {
     if (enabled && !lastEnabled) unlocked = true;
     lastEnabled = enabled;
     sync();
+    /* switching the bed on is also the moment to fill the cache, so the first race is not cold */
+    if (enabled) warmUpBgm();
   });
   sync();
+  /* The pre-buffer waits for boot to settle: Home paints with the device's whole pipe first, and
+     a tap that lands sooner warms it through `onFirstTouch()` instead. Never a blocking wait. */
+  try { window.setTimeout(warmUpBgm, WARM_UP_DELAY_MS); } catch { /* no timers: the tap warms it */ }
 }
