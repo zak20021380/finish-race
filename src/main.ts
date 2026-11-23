@@ -3563,9 +3563,9 @@ function play(a: Action, remote = false): boolean {
       if (wait > 0) window.setTimeout(boom, wait);
       else boom();
     }
-    showNote(t('chainDetonationNote').replace('{n}', String(blasts.length)), false, 3000);
+    /* NO TOAST. A detonation speaks through its flash, the board's jolt and the bang — never
+       through a dark banner laid over the pawn it just threw. */
   } else if (blast) {
-    const cells = landed ? landed.r - blast.cell.r : 0;
     /* Stage 1 belongs to the renderer: the pawn steps onto the charge before anything goes off.
        It hands back that beat's length, so the jolt, the bang and the buzz land on the detonation
        frame itself rather than on the move that walked into it. */
@@ -3585,10 +3585,6 @@ function play(a: Action, remote = false): boolean {
     };
     if (delay > 0) window.setTimeout(boom, delay);
     else boom();
-    showNote(duel
-      ? t('dualDetonationNote')
-      : `Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
-        + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
   /* ---- CHECKMATE: the rules just sealed a pawn's last route ----
      The canvas blows the trapped pawn off the board and the board speaks the verdict. A seat that
