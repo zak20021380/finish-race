@@ -45498,18 +45498,29 @@ html.reduced-motion .frm-scrim { transition: none; }
   border: 1.5px solid rgba(56, 189, 248, 0.52);
 }
 
-/* ---- 3. the top-arena banner slot ----
+/* ---- 3. the banner slot, parked beneath the crowd-odds card ----
    Both crowd callouts — the kickoff announcement and the one live fan reaction — live here, in the
-   player's primary line of sight: fixed 52px down, right beneath the top match bar, centred, and
-   pointer-transparent so a banner can never steal a board tap. No blur, no looping keyframes: only
-   opacity/transform animate, and only while a banner actually changes. */
+   player's primary line of sight, centred, and pointer-transparent so a banner can never steal a
+   board tap. The slot used to sit 52px down, which is exactly the top edge of `.card`: the odds
+   card landed underneath it a moment later and a reaction then painted straight over the YOU WIN /
+   YOU LOSE percentages and both Star totals. It now clears the whole odds card and opens at the top
+   edge of the board, so the live rail and the banter are both legible at the same time.
+
+   The 126px is the match bar plus everything the odds card contributes above the board, measured
+   from the column's own top inset (`--pad-t`: 24px on a plain phone, 16px on a short one, the
+   safe-area inset on a notched one):
+     44px  `.g-head` (the top match bar)
+      8px  `.screen.game` gap
+      8px  `.card` top padding
+      4px  `.crowd-bar` top margin
+    ~57px  `.crowd-bar` itself (call line + WIN/LOSE row + 6px meter)
+      5px  clearance, so not one pixel of the card is ever covered.
+   The stack then grows downward from there over the board's top edge, never upward over the rail.
+   No blur, no looping keyframes: only opacity/transform animate, and only while a banner changes. */
 .crowd-toasts {
   position: fixed;
-  /* 52px of clearance under the top match bar. `--pad-t` is the column's own top inset (24px on a
-     plain phone, the safe-area inset on a notched one), so the banner parks just beneath the bar on
-     every host instead of over the menu key and the LIVE pill. */
-  top: 52px;
-  top: calc(var(--pad-t, 24px) + 52px);
+  top: 126px;
+  top: calc(var(--pad-t, 24px) + 126px);
   inset-inline: 12px;
   z-index: 45;
   display: flex;
@@ -45561,6 +45572,8 @@ html.reduced-motion .frm-scrim { transition: none; }
 }
 .crowd-toast-name { font-weight: 800; unicode-bidi: isolate; }
 .crowd-toast-txt { overflow-wrap: anywhere; }
+/* the rival's seat name inside a doubt line: isolated, so a handle never reorders the sentence */
+.crowd-toast-txt bdi { unicode-bidi: isolate; }
 /* the star stake quoted by a reaction: the Stars asset then a Latin-digit run */
 .crowd-toast-stake {
   display: inline-flex;
@@ -46072,10 +46085,12 @@ html.reduced-motion .crowd-sheet-close { transition: none; }
   .crowd-sheet-close { transition: none; }
 }
 
-/* ---- short phones: the banner slot keeps clear of the match bar ---- */
+/* ---- short phones: the banner slot keeps the same clearance under the odds card ----
+   `--pad-t` is already smaller here (16px), so only spacing inside the slot needs tightening; the
+   126px below it is match bar + card geometry and does not change with viewport height. */
 @media (max-height: 700px) {
   .crowd-toasts {
-    top: calc(var(--pad-t, 16px) + 48px);
+    top: calc(var(--pad-t, 16px) + 126px);
     gap: 5px;
   }
   .crowd-toast,

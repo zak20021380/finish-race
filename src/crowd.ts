@@ -21,6 +21,13 @@
  * A match also opens with one brief kickoff banner — how many fans staked how many Stars on the
  * dominant camp — which is pointer-transparent, auto-dismissing and owned by the same module.
  *
+ * The voice is the point. This is not a colour commentator describing the board; it is a tribune
+ * with money on the line. Kickoff says who staked what and what that now demands (`prove them
+ * wrong`, `don't choke now`), every wall, mine and near-finish is read from the side the board
+ * favours so a rival's blunder is your window and your blunder is their gloating, and ordinary
+ * moves still draw a doubt or a dare. Nothing is ever flat (`the wall closed the path`), nothing is
+ * profane, and nothing is emoji: the pressure is competitive, not crude.
+ *
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
@@ -175,8 +182,13 @@ const STAKES: readonly number[] = [
 ];
 
 /* ---------- copy ----------
- * Five locales, the same five the shell ships. Each template marks its numbers as `{n}` so the
- * renderer can isolate them in a `<bdi>`; `{a}` / `{b}` are the two camp totals in the sheet. */
+ * Five locales, the same five the shell ships. Each template marks its numbers as `{n}` / `{s}` so
+ * the renderer can isolate them in a `<bdi dir="ltr">`.
+ *
+ * The house is not a colour commentator — it is a hostile e-sports tribune. Every line is written to
+ * provoke the player's ego: a dare, a doubt, a stake they now have to defend. Nothing here is
+ * descriptive (`this wall closed the path`); everything here puts pride on the table. No profanity,
+ * no slurs, no emoji, and not one figure typed as a literal — numbers only ever arrive as `{n}`. */
 interface CrowdCopy {
   title: string;
   viewers: string;
@@ -198,15 +210,25 @@ interface CrowdCopy {
   /** the prediction card's live centre call: `{p}` carries the dominant share, percent included */
   winCall: string;
   loseCall: string;
-  /** the kickoff banner: how many fans staked how many Stars on the dominant camp */
+  /** the kickoff callout: how many fans staked how many Stars — and what that now demands */
   kickoffWin: string;
   kickoffLose: string;
   /** a spectator row's full bet badge, crimson or sky */
   betWin: string;
   betLose: string;
-  wall: string[];
-  mine: string[];
-  near: string[];
+  /**
+   * Event banter, split by the camp the board favours so the reaction never fires the wrong way:
+   * `me` = the local seat leads (their mistake, your window), `rival` = the opponent leads (your
+   * mistake, their gloating).
+   */
+  wall: { me: string[]; rival: string[] };
+  mine: { me: string[]; rival: string[] };
+  near: { me: string[]; rival: string[] };
+  /** live bandwagon & doubt lines, thrown at the player between committed actions */
+  doubt: string[];
+  /** a fan who just moved their Stars, in their own words: with you, or against you */
+  pledgeWin: string[];
+  pledgeLose: string[];
 }
 
 const COPY: Record<LangCode, CrowdCopy> = {
@@ -222,12 +244,61 @@ const COPY: Record<LangCode, CrowdCopy> = {
     winTag: 'YOU WIN', loseTag: 'YOU LOSE',
     winHead: 'Betting you WIN', loseHead: 'Betting you LOSE',
     winCall: '{p} bet you WIN!', loseCall: '{p} bet you LOSE!',
-    kickoffWin: '{n} fans staked {s} Stars betting you WIN!',
-    kickoffLose: '{n} fans staked {s} Stars betting you LOSE!',
+    kickoffWin: '{n} fans staked {s} Stars on you — don\'t choke now!',
+    kickoffLose: '{n} fans bet {s} Stars you\'ll LOSE — prove them wrong!',
     betWin: 'Bet: you WIN', betLose: 'Bet: you LOSE',
-    wall: ['Clutch wall by {name}!', 'That wall shut {name} down!', 'Smart block — no way through for {name}!'],
-    mine: ['Boom — right on {name}!', 'The mine caught {name}!', 'That trap was brutal on {name}!'],
-    near: ['{name} is one step from FINISH!', 'So close for {name}!', "Don't blink — {name} is on the final stretch!"],
+    wall: {
+      me: [
+        'Look at that cage — your rival is fuming!',
+        'Their path is locked. Now prove who owns this board!',
+        'You boxed them in — close it out!',
+      ],
+      rival: [
+        'You\'re trapped. Let\'s see you escape this cage!',
+        'Your rival read you perfectly — start thinking!',
+        'Walled in by the opponent. Show some brain, not luck!',
+      ],
+    },
+    mine: {
+      me: [
+        'Your rival just ate a mine — finish them now!',
+        'Boom! They walked right into it. Don\'t waste this gift!',
+        'Their mistake, your moment. Take it!',
+      ],
+      rival: [
+        'Eyes open! You just burned every Star we put on you!',
+        'Everyone saw that mine — except you!',
+        'We were counting on you. Why did you step on that?!',
+      ],
+    },
+    near: {
+      me: [
+        'One step away — don\'t bottle it on the last move!',
+        'The finish is right there. Don\'t hand it back now!',
+        'You\'re at the line. Prove you can close!',
+      ],
+      rival: [
+        'Your rival is at the finish line — weren\'t you supposed to win?!',
+        'They\'re closing you out. Make a move!',
+        'One more step and they take it. Recover what\'s yours!',
+      ],
+    },
+    doubt: [
+      'Move faster than that and you\'ll never take this round!',
+      'I\'m switching my bet to your loss — you don\'t look sure at all!',
+      'Are you still the player we staked Stars on, or are you bailing?',
+      'Win this round and I\'ll double my Stars on you next one!',
+      'The crowd is starting to doubt you — make a big move!',
+      '{name} is taking this board apart while you watch!',
+    ],
+    pledgeWin: [
+      'All my Stars are on you — don\'t make me look stupid!',
+      'I backed you. Pay it back with a win!',
+    ],
+    pledgeLose: [
+      'My Stars are on your loss — keep proving me right!',
+      'I called it: you\'re going down.',
+    ],
   },
   fa: {
     title: 'تماشاگران و پیش‌بینی‌ها',
@@ -241,12 +312,61 @@ const COPY: Record<LangCode, CrowdCopy> = {
     winTag: 'می‌بری', loseTag: 'می‌بازی',
     winHead: 'شرط بستن تو می‌بری', loseHead: 'شرط بستن تو می‌بازی',
     winCall: '{p} شرط بستن تو می‌بری!', loseCall: '{p} شرط بستن تو می‌بازی!',
-    kickoffWin: '{n} نفر با {s} استارز شرط بستن تو می‌بری!',
-    kickoffLose: '{n} نفر با {s} استارز شرط بستن تو می‌بازی!',
+    kickoffWin: '{n} نفر {s} استارز رو بردت گذاشتن؛ اگه ببازی آبروت می‌ره!',
+    kickoffLose: '{n} نفر با {s} استارز رو باختت شرط بستن؛ ثابت کن اشتباه می‌کنن!',
     betWin: 'شرط: تو می‌بری', betLose: 'شرط: تو می‌بازی',
-    wall: ['عجب دیواری برای {name} بست!', 'این دیوار مسیر {name} رو بست!', 'دفاع حساب‌شده روی {name}!'],
-    mine: ['مین کار خودش رو کرد روی {name}!', 'ترکید — مستقیم روی {name}!', 'این تله برای {name} بی‌رحمانه بود!'],
-    near: ['{name} فقط دو قدم تا خط پایان!', '{name} خیلی نزدیک شد!', 'نفس‌ها برای {name} حبس شد!'],
+    wall: {
+      me: [
+        'عجب زندانی ساختی! حریفت الان داره حرص می‌خوره!',
+        'راه حریف قفل شد؛ نشون بده رئیس زمین کیه!',
+        'دیوارت حریف رو زمین‌گیر کرد، تمومش کن!',
+      ],
+      rival: [
+        'بدجور گیر افتادی! ببینم چطور از این قفس درمیای!',
+        'حریفت قشنگ راهتو بست، مغزتو به کار بنداز!',
+        'تو قفس حریف زندانی شدی؛ اینجا رو نشون بده!',
+      ],
+    },
+    mine: {
+      me: [
+        'حریفت رفت رو مین! الان نبری دیگه کی می‌خوای ببری؟!',
+        'بوم! حریفت رسماً نابود شد، کارشو تموم کن!',
+        'مین حریفتو گرفت؛ این دست رو از دست نده!',
+      ],
+      rival: [
+        'چشماتو باز کن! با این بازی کل استارزهامونو به باد دادی!',
+        'همه می‌دونستن اونجا مینه، جز خودت!',
+        'تازه داشتیم روت حساب می‌کردیم، چرا رفتی رو مین؟!',
+      ],
+    },
+    near: {
+      me: [
+        'فقط یه قدم مونده؛ نذار دقیقه نود کامبک بخوری!',
+        'خط پایان جلوی چشمته؛ این دست رو حروم نکن!',
+        'رسیدی به خط؛ نشون بده بلدی تمومش کنی!',
+      ],
+      rival: [
+        'حریفت رسید به خط پایان! مگه قرار نبود ببری؟!',
+        'داره تمومت می‌کنه، یه حرکت بزن!',
+        'یک قدم دیگه و حریفت برنده‌ست؛ حقت رو بگیر!',
+      ],
+    },
+    doubt: [
+      'با این حرکت‌های کند عمراً بتونی این دست رو دربیاری!',
+      'دارم شرطمو عوض می‌کنم رو باختت، اصلاً مطمئن بازی نمی‌کنی!',
+      'هنوز همون بازیکنی هستی که روش استارز گذاشتیم یا داری جا می‌زنی؟',
+      'اگه این دست رو ببری، دست بعدی دو برابر استارز می‌ذارم روت!',
+      'تماشاگرا دارن به بازیت شک می‌کنن، یه حرکت خفن بزن!',
+      '{name} داره زمین رو می‌بلعه و تو داری نگاه می‌کنی!',
+    ],
+    pledgeWin: [
+      'همه استارزامو گذاشتم رو بردت، حالا نذار ضایع بشم!',
+      'رو تو حساب کردم؛ جوابش رو با برد بده!',
+    ],
+    pledgeLose: [
+      'استارزامو گذاشتم رو باختت؛ داری ثابت می‌کنی حق با منه!',
+      'من گفتم می‌بازی، داری خودت تأیید می‌کنی!',
+    ],
   },
   ru: {
     title: 'Живая трибуна и прогнозы',
@@ -260,12 +380,61 @@ const COPY: Record<LangCode, CrowdCopy> = {
     winTag: 'ТЫ ПОБЕДИШЬ', loseTag: 'ТЫ ПРОИГРАЕШЬ',
     winHead: 'Ставят на твою победу', loseHead: 'Ставят на твой проигрыш',
     winCall: '{p} ставят на твою победу!', loseCall: '{p} ставят на твой проигрыш!',
-    kickoffWin: '{n} зрителей поставили {s} звёзд на твою победу!',
-    kickoffLose: '{n} зрителей поставили {s} звёзд на твой проигрыш!',
+    kickoffWin: '{n} зрителей поставили {s} звёзд на тебя — не опозорься!',
+    kickoffLose: '{n} зрителей ставят {s} звёзд на твой проигрыш — докажи, что они ошибаются!',
     betWin: 'Ставка: ты победишь', betLose: 'Ставка: ты проиграешь',
-    wall: ['Отличный блок от {name}!', 'Эта стена остановила {name}!', 'Умная защита — {name} не пройдёт!'],
-    mine: ['Мина сработала — {name} попался!', 'Бум — прямо по {name}!', 'Жёсткая ловушка для {name}!'],
-    near: ['{name} в одном шаге от ФИНИША!', 'Совсем рядом для {name}!', 'Не моргай — {name} на финишной прямой!'],
+    wall: {
+      me: [
+        'Вот это клетка — соперник в бешенстве!',
+        'Ты запер его. Покажи, кто здесь хозяин поля!',
+        'Ты его замуровал — доводи до конца!',
+      ],
+      rival: [
+        'Ты в ловушке. Ну, выбирайся из этой клетки!',
+        'Соперник перекрыл тебе путь — включай голову!',
+        'Замурован. Докажи, что умеешь играть, а не угадывать!',
+      ],
+    },
+    mine: {
+      me: [
+        'Соперник влетел в мину — добивай!',
+        'Бум! Он сам себя похоронил, не упусти это!',
+        'Его ошибка, твой шанс. Забирай!',
+      ],
+      rival: [
+        'Глаза открой! Ты только что сжёг все наши звёзды!',
+        'Все видели эту мину. Кроме тебя!',
+        'Мы на тебя ставили — зачем ты туда пошёл?!',
+      ],
+    },
+    near: {
+      me: [
+        'Один шаг — не провались у самого финиша!',
+        'Финиш перед тобой. Не отдай победу сейчас!',
+        'Ты у ленты. Докажи, что умеешь закрывать!',
+      ],
+      rival: [
+        'Соперник уже у финиша — ты же собирался победить?!',
+        'Он тебя добивает. Делай ход!',
+        'Ещё шаг и он выиграл. Забирай своё!',
+      ],
+    },
+    doubt: [
+      'С таким темпом ты этот раунд не заберёшь!',
+      'Я переставляю ставку на твой проигрыш — ты играешь неуверенно!',
+      'Ты всё ещё тот игрок, на кого мы ставили звёзды, или сдаёшься?',
+      'Выиграешь этот раунд — поставлю на тебя вдвое больше!',
+      'Трибуна уже сомневается в тебе — сделай сильный ход!',
+      '{name} разбирает доску, а ты просто смотришь!',
+    ],
+    pledgeWin: [
+      'Все звёзды на тебя — не заставь меня краснеть!',
+      'Я за тебя. Ответь победой!',
+    ],
+    pledgeLose: [
+      'Мои звёзды на твой проигрыш — продолжай подтверждать!',
+      'Я так и сказал: ты проиграешь.',
+    ],
   },
   ar: {
     title: 'الجمهور المباشر والتوقعات',
@@ -279,12 +448,61 @@ const COPY: Record<LangCode, CrowdCopy> = {
     winTag: 'ستفوز', loseTag: 'ستخسر',
     winHead: 'يراهنون أنك ستفوز', loseHead: 'يراهنون أنك ستخسر',
     winCall: '{p} يراهنون أنك ستفوز!', loseCall: '{p} يراهنون أنك ستخسر!',
-    kickoffWin: '{n} مشجعاً راهنوا بـ {s} نجمة على فوزك!',
-    kickoffLose: '{n} مشجعاً راهنوا بـ {s} نجمة على خسارتك!',
+    kickoffWin: '{n} مشجعاً رهنوا {s} نجمة على فوزك — لا تخذلهم الآن!',
+    kickoffLose: '{n} مشجعاً يراهنون بـ {s} نجمة على خسارتك — أثبت أنهم مخطئون!',
     betWin: 'رهان: ستفوز', betLose: 'رهان: ستخسر',
-    wall: ['سدٌّ حاسم من {name}!', 'هذا السد أوقف {name}!', 'دفاع ذكي — لا مرور لـ {name}!'],
-    mine: ['اللغم انفجر — {name} في الفخ!', 'بووم — مباشرة على {name}!', 'فخ قاسٍ لـ {name}!'],
-    near: ['{name} على خطوة من النهاية!', 'قريب جداً لـ {name}!', 'لا ترمش — {name} في اللفة الأخيرة!'],
+    wall: {
+      me: [
+        'يا لهذا القفص — خصمك يغلي الآن!',
+        'أغلقت طريقه؛ أثبت من سيد الساحة!',
+        'حبسته تماماً — أنهِ المهمة!',
+      ],
+      rival: [
+        'أنت محاصر! أرني كيف تخرج من هذا القفص!',
+        'خصمك سدّ طريقك بذكاء — شغّل عقلك!',
+        'أنت في قفصه. أرنا مهارتك لا حظك!',
+      ],
+    },
+    mine: {
+      me: [
+        'خصمك داس على اللغم — أنهِ الأمر الآن!',
+        'بووم! خصمك دمّر نفسه، لا تضيّع الفرصة!',
+        'غلطته فرصتك؛ خذها!',
+      ],
+      rival: [
+        'افتح عينيك! أحرقت كل النجوم التي راهنّا بها عليك!',
+        'الجميع رأى اللغم… إلا أنت!',
+        'كنا نعتمد عليك، لماذا دست على اللغم؟!',
+      ],
+    },
+    near: {
+      me: [
+        'خطوة واحدة فقط — لا تفرّط بها في اللحظة الأخيرة!',
+        'النهاية أمام عينيك، لا تُهدر الفوز الآن!',
+        'أنت عند الخط؛ أثبت أنك تعرف الإنهاء!',
+      ],
+      rival: [
+        'خصمك على خط النهاية — ألم تقل إنك ستفوز؟!',
+        'إنه ينهيك الآن، تحرّك!',
+        'خطوة أخرى ويفوز. استعد حقك!',
+      ],
+    },
+    doubt: [
+      'بهذه الحركات البطيئة لن تأخذ هذه الجولة!',
+      'غيّرت رهاني إلى خسارتك، أنت لا تلعب بثقة!',
+      'هل ما زلت اللاعب الذي راهنّا عليه بالنجوم أم أنك تتراجع؟',
+      'اربح هذه الجولة وسأضاعف نجومي عليك في التالية!',
+      'الجمهور بدأ يشك فيك، اصنع حركة قوية!',
+      '{name} يلتهم الساحة وأنت تتفرج!',
+    ],
+    pledgeWin: [
+      'كل نجومي عليك، لا تجعلني أبدو غبياً!',
+      'أنا معك؛ ردّ الجميل بفوز!',
+    ],
+    pledgeLose: [
+      'نجومي على خسارتك — واصل إثبات صحة كلامي!',
+      'قلتها: أنت خاسر.',
+    ],
   },
   es: {
     title: 'Público en vivo y pronósticos',
@@ -298,12 +516,61 @@ const COPY: Record<LangCode, CrowdCopy> = {
     winTag: 'GANAS', loseTag: 'PIERDES',
     winHead: 'Apuestan a que GANAS', loseHead: 'Apuestan a que PIERDES',
     winCall: '{p} apuestan a que GANAS!', loseCall: '{p} apuestan a que PIERDES!',
-    kickoffWin: '¡{n} fans apostaron {s} Stars a que GANAS!',
-    kickoffLose: '¡{n} fans apostaron {s} Stars a que PIERDES!',
+    kickoffWin: '¡{n} fans apostaron {s} Stars a que GANAS — no falles ahora!',
+    kickoffLose: '¡{n} fans apostaron {s} Stars a que PIERDES — demuéstrales que se equivocan!',
     betWin: 'Apuesta: GANAS', betLose: 'Apuesta: PIERDES',
-    wall: ['¡Muro decisivo de {name}!', '¡Ese muro frenó a {name}!', '¡Bloqueo inteligente — {name} no pasa!'],
-    mine: ['¡La mina atrapó a {name}!', '¡Bum — directo a {name}!', '¡Vaya trampa para {name}!'],
-    near: ['¡{name} a un paso de la META!', '¡Muy cerca para {name}!', '¡No parpadees — {name} en la recta final!'],
+    wall: {
+      me: [
+        '¡Vaya jaula — tu rival está que arde!',
+        'Le cerraste el paso. ¡Demuestra quién manda aquí!',
+        'Lo encerraste — remátalo ahora!',
+      ],
+      rival: [
+        '¡Estás atrapado! A ver cómo sales de esa jaula.',
+        'Tu rival te leyó perfecto — usa la cabeza.',
+        'Encerrado por el rival. ¡Demuestra que sabes jugar!',
+      ],
+    },
+    mine: {
+      me: [
+        '¡Tu rival pisó una mina — remátalo ya!',
+        '¡Bum! Se destruyó solo, ¡no desperdicies el regalo!',
+        'Su error es tu momento. ¡Tómalo!',
+      ],
+      rival: [
+        '¡Abre los ojos! ¡Acabas de quemar todas nuestras Stars!',
+        'Todos vieron esa mina… menos tú.',
+        'Contábamos contigo, ¿por qué pisaste eso?',
+      ],
+    },
+    near: {
+      me: [
+        '¡A un paso — no la líes en el último movimiento!',
+        'La meta está ahí. ¡No la regales ahora!',
+        'Estás en la línea. ¡Demuestra que sabes cerrar!',
+      ],
+      rival: [
+        '¡Tu rival ya está en la meta — no ibas a ganar tú?!',
+        'Te está rematando. ¡Mueve ficha!',
+        'Un paso más y gana. ¡Recupera lo tuyo!',
+      ],
+    },
+    doubt: [
+      '¡Con movimientos tan lentos no te llevas esta ronda!',
+      'Cambio mi apuesta a que pierdes, ¡no juegas con seguridad!',
+      '¿Sigues siendo el jugador al que le pusimos Stars o te estás rajando?',
+      '¡Gana esta ronda y la próxima pongo el doble de Stars en ti!',
+      'El público empieza a dudar de ti — ¡haz una jugada grande!',
+      '¡{name} se está comiendo el tablero y tú mirando!',
+    ],
+    pledgeWin: [
+      '¡Todas mis Stars van contigo, no me dejes en ridículo!',
+      'Te respaldé. ¡Págamelo con una victoria!',
+    ],
+    pledgeLose: [
+      'Mis Stars van a que pierdes — ¡sigue dándome la razón!',
+      'Lo dije: vas a caer.',
+    ],
   },
 };
 
@@ -352,7 +619,10 @@ function templateNodes(
   return frag;
 }
 
-/** The name a camp fights under: the host's own seat name, or a localized placeholder. */
+/**
+ * The name a camp fights under: the host's own seat name, or a localized placeholder. Only the
+ * doubt lines speak it — they name the rival the player is losing to, which is where a name hurts.
+ */
 function campName(camp: Camp): string {
   const raw = match?.names[camp]?.trim() ?? '';
   if (raw) return raw;
@@ -803,9 +1073,10 @@ function wire(refs: CrowdUi): void {
 }
 
 /* ---------- the reaction pill ----------
- * There is exactly one. It lives in the top-arena banner slot (see `.crowd-toasts` in style.css),
- * directly under the top match bar: the player's primary line of sight, and pointer-transparent so
- * it can never steal a board tap. A second reaction retargets this element instead of stacking. */
+ * There is exactly one. It lives in the banner slot (see `.crowd-toasts` in style.css), parked
+ * directly beneath the crowd-odds card so the banter and the live YOU WIN / YOU LOSE rail are never
+ * on top of each other: still the player's line of sight, and pointer-transparent so it can never
+ * steal a board tap. A second reaction retargets this element instead of stacking. */
 function hideToast(): void {
   window.clearTimeout(toastTimer);
   toastTimer = 0;
@@ -836,7 +1107,7 @@ function showToast(
   }
   const text = document.createElement('span');
   text.className = 'crowd-toast-txt';
-  text.append(templateNodes(template, vars, ['n'], nameKeys));
+  text.append(templateNodes(template, vars, ['n', 's'], nameKeys));
   frag.append(text);
   refs.toast.replaceChildren(frag);
   refs.toast.classList.add('is-on');
@@ -1043,8 +1314,16 @@ function driftCount(): boolean {
   return true;
 }
 
-/** A strategic play: a wide bandwagon swing first, then (throttled) one localized live reaction.
- *  A wall or a mine moves the room harder than a routine turn or a near-finish tease. */
+/**
+ * A strategic play: a wide bandwagon swing first, then (throttled) one ego-provocative reaction.
+ *
+ * Which half of the banter fires is decided by `target` — the camp the board favours, i.e. the side
+ * that just gained: camp 0 is the local seat, so `me` lines are the ones that belittle the rival
+ * ("their mistake, your window") and `rival` lines are the ones thrown at the player when the board
+ * has turned against them ("you just burned every Star we put on you"). A near-finish tease is read
+ * from the leader's own side, so it always either demands the player closes it out or demands the
+ * player answers. Never one flat descriptive line.
+ */
 function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   if (!match) return;
   const target = leader ?? leadingCamp();
@@ -1054,28 +1333,54 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   if (now - lastReactionAt < REACTION_GAP_MS) return;
   const c = copy();
 
-  /* A fresh switcher quotes their Stars most of the time; the rest are pure crowd noise.
-     The line names the camp the fan actually moved to, which is usually — not always — the
-     side the play favours. */
+  /* A fresh switcher quotes their Stars most of the time, and says where they put them in their own
+     words — with the player, or against them. The rest of the time the tribune shouts.
+     The line follows the camp the fan actually moved to, which is usually — not always — the side
+     the play favours. */
   if (switched && rnd() < 0.6) {
-    lastReactionAt = now;
-    showToast(
-      switched,
-      switched.camp === 0 ? c.winHead : c.loseHead,
-      {},
-      [],
-      switched.stake,
-    );
-    return;
+    const pool = switched.camp === 0 ? c.pledgeWin : c.pledgeLose;
+    const pledge = pool[pickIndex(pool.length)] ?? pool[0];
+    if (pledge) {
+      lastReactionAt = now;
+      showToast(switched, pledge, {}, [], switched.stake);
+      return;
+    }
   }
-  const pool = type === 'wall' ? c.wall : type === 'mine' ? c.mine : c.near;
-  const line = pool[pickIndex(pool.length)] ?? pool[0] ?? '';
+
+  const event = type === 'wall' ? c.wall : type === 'mine' ? c.mine : c.near;
+  const lines = target === 0 ? event.me : event.rival;
+  const line = lines[pickIndex(lines.length)] ?? lines[0] ?? '';
   /* Prefer a fan on the leading camp: the reaction belongs to the side the play favors. */
   const fans = match.fans.filter((f) => f.camp === target);
   const fan = fans[pickIndex(fans.length)] ?? match.fans[pickIndex(match.fans.length)];
   if (!fan || !line) return;
   lastReactionAt = now;
-  showToast(fan, line, { name: campName(target) }, ['name']);
+  showToast(fan, line);
+}
+
+/**
+ * Routine play still draws a crowd: a doubt or a dare from the tribune between committed actions.
+ * Fired from `move` / `turn`, gated twice — a wide random gate keeps it occasional rather than
+ * non-stop, and the same `REACTION_GAP_MS` throttle the big plays use keeps a second line from
+ * cutting off one that is still on screen. The quote comes from a fan who is not on the leading
+ * camp, so it reads as doubt from the other side of the rail rather than self-congratulation.
+ */
+function crowdDoubt(favored: Camp, chance: number): void {
+  if (!match) return;
+  if (rnd() >= chance) return;
+  const now = performance.now();
+  if (now - lastReactionAt < REACTION_GAP_MS) return;
+  const c = copy();
+  const line = c.doubt[pickIndex(c.doubt.length)] ?? c.doubt[0] ?? '';
+  if (!line) return;
+  const doubters = match.fans.filter((f) => f.camp !== favored);
+  const pool = doubters.length > 0 ? doubters : match.fans;
+  const fan = pool[pickIndex(pool.length)];
+  if (!fan) return;
+  lastReactionAt = now;
+  /* The rival's own seat name is available to every doubt line; templates that do not reference it
+     simply ignore the variable. */
+  showToast(fan, line, { name: campName(1) }, ['name']);
 }
 
 /** Start a fresh audience for the board that is about to be played. */
@@ -1157,8 +1462,9 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
  * The one lifecycle hook `main.ts` calls after committed play.
  *
  * `leader` is the camp the board currently favours (0 = crimson, 1 = cyan), or null when the race
- * is level. Every beat moves the room: a wall or a mine swings it hardest, a near-finish teases it,
- * and a routine turn nudges a single fan. The hook never touches the rules.
+ * is level. Every beat moves the room: a wall or a mine swings it hardest and draws the sharpest
+ * banter, a near-finish teases it, and a routine move or turn nudges a fan and can still earn a
+ * doubt line. The hook never touches the rules.
  */
 export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null): void {
   if (!match) return;
@@ -1174,9 +1480,12 @@ export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null):
       break;
     case 'turn':
       liveShift(leader, 1);
+      /* a routine turn can still draw a dare from the rail */
+      crowdDoubt(leader ?? leadingCamp(), 0.35);
       break;
     case 'move':
       liveShift(leader, rnd() < 0.5 ? 1 : 2);
+      crowdDoubt(leader ?? leadingCamp(), 0.3);
       break;
   }
 }
