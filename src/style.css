@@ -45480,10 +45480,11 @@ html.reduced-motion .frm-scrim { transition: none; }
    player's primary line of sight, centred, and pointer-transparent so a banner can never steal a
    board tap. The slot used to sit 52px down, which is exactly the top edge of `.card`: the odds
    card landed underneath it a moment later and a reaction then painted straight over the YOU WIN /
-   YOU LOSE percentages and both Star totals. It now clears the whole odds card and opens at the top
-   edge of the board, so the live rail and the banter are both legible at the same time.
+   YOU LOSE percentages and both Star totals. It was then lifted clear of the card's body; it now
+   rides 18px higher again, so the odds rail stays fully readable and the callout covers only the
+   board's top trim instead of reaching down into the playable grid.
 
-   The 126px is the match bar plus everything the odds card contributes above the board, measured
+   The 108px is the match bar plus everything the odds card contributes above the board, measured
    from the column's own top inset (`--pad-t`: 24px on a plain phone, 16px on a short one, the
    safe-area inset on a notched one):
      44px  `.g-head` (the top match bar)
@@ -45491,13 +45492,15 @@ html.reduced-motion .frm-scrim { transition: none; }
       8px  `.card` top padding
       4px  `.crowd-bar` top margin
     ~57px  `.crowd-bar` itself (call line + WIN/LOSE row + 6px meter)
-      5px  clearance, so not one pixel of the card is ever covered.
-   The stack then grows downward from there over the board's top edge, never upward over the rail.
+   The slot itself opens 18px higher than the band it occupied before, so the callout tucks up
+   along the top `FINISH` trim rather than reaching down into the grid: together with the compact
+   7px face below, it clears roughly 18px more of the board than it used to. The stack still grows
+   downward from there over the board's own top trim, never upward over the rail.
    No blur, no looping keyframes: only opacity/transform animate, and only while a banner changes. */
 .crowd-toasts {
   position: fixed;
-  top: 126px;
-  top: calc(var(--pad-t, 24px) + 126px);
+  top: 108px;
+  top: calc(var(--pad-t, 24px) + 108px);
   inset-inline: 12px;
   z-index: 45;
   display: flex;
@@ -45516,7 +45519,7 @@ html.reduced-motion .frm-scrim { transition: none; }
   width: fit-content;
   max-width: min(92%, 380px);
   margin: 0;
-  padding: 9px 14px;
+  padding: 7px 13px;
   border: 1px solid rgba(246, 200, 94, 0.36);
   border-radius: 14px;
   background: linear-gradient(180deg, #1b2230 0%, #111622 100%);
@@ -45539,7 +45542,7 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-toast {
   display: block;
   text-align: center;
-  padding: 9px 14px;
+  padding: 7px 13px;
 }
 .crowd-toast.is-on,
 .crowd-kickoff.is-on {
@@ -46062,16 +46065,16 @@ html.reduced-motion .crowd-sheet-close { transition: none; }
   .crowd-sheet-close { transition: none; }
 }
 
-/* ---- short phones: the banner slot keeps the same clearance under the odds card ----
+/* ---- short phones: the banner slot keeps the same lift under the odds card ----
    `--pad-t` is already smaller here (16px), so only spacing inside the slot needs tightening; the
-   126px below it is match bar + card geometry and does not change with viewport height. */
+   108px below it is match bar + card geometry and does not change with viewport height. */
 @media (max-height: 700px) {
   .crowd-toasts {
-    top: calc(var(--pad-t, 16px) + 126px);
+    top: calc(var(--pad-t, 16px) + 108px);
     gap: 5px;
   }
   .crowd-toast,
-  .crowd-kickoff { padding: 8px 12px; font-size: 12px; }
+  .crowd-kickoff { padding: 6px 12px; font-size: 12px; }
 }
 
 /* ---- narrow phones: the pill sheds its LIVE tag so the top bar stays light ---- */

@@ -31,6 +31,8 @@
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
+ *   · a match spends at most TWO callouts — the kickoff banner plus one live reaction, never
+ *     closer than 20s apart — and every further beat updates the rail silently instead;
  *   · every rendered number is Latin `0-9` inside a `<bdi dir="ltr">`, so RTL never mirrors a score;
  *   · every name is isolated in a `<bdi dir="auto">`, so a handle never reorders its sentence;
  *   · a gender reads as a circular two-tone vector portrait, never as a word or a glyph;
@@ -699,12 +701,23 @@ let kickoffShowTimer = 0;
 let kickoffHideTimer = 0;
 let ambientTimer = 0;
 let lastReactionAt = -Infinity;
+/* Callout budget for the match in progress: how many toasts went up, when the last one did, and
+   when this match started (the second slot must be earned, not spent automatically). */
+let toastCount = 0;
+let lastToastAt = -Infinity;
+let matchStartedAt = 0;
 let lastFocus: HTMLElement | null = null;
 
 const REACTION_GAP_MS = 4000;
 /* Generous read time: a reaction sits at the top of the arena for 3.8s, and the gap above is wider
    than the pill's own life so a second reaction never cuts the first one short mid-sentence. */
 const TOAST_MS = 3800;
+/* A match only affords two callouts — the kickoff announcement and one live reaction — and the
+   second one has to wait at least 20s behind the first, so banter never fires back-to-back. Past
+   that the house stays just as alive: the odds rail, both Star totals and every percentage keep
+   moving on every beat, only silently. */
+const MAX_TOASTS_PER_MATCH = 2;
+const TOAST_COOLDOWN_MS = 20000;
 /* The kickoff banner lands once the board is actually on screen, then clears itself after 4.5s. */
 const KICKOFF_DELAY_MS = 350;
 const KICKOFF_MS = 4500;
@@ -1072,11 +1085,45 @@ function wire(refs: CrowdUi): void {
   });
 }
 
+/* ---------- the callout budget ----------
+ * Two toasts per match, 20s apart at the minimum, and the second one only on an earned beat. The
+ * rule lives in one place (`claimToast`) so no caller can talk its way past it. */
+/**
+ * Spend one of this match's two callout slots, or refuse the line. The hard cap and the cooldown
+ * both live here, so every path is covered by the same rule: the kickoff banner, a switcher's
+ * pledge, a tribune wall/mine line and a routine doubt line.
+ *
+ * The second slot is never automatic. It waits `TOAST_COOLDOWN_MS` behind the first, and on top of
+ * that it wants a high-impact beat (`wall`, `mine`, `near_finish`) or a match that has already run
+ * past the cooldown — a routine move cannot claim it the moment the room would allow it.
+ */
+function claimToast(highImpact: boolean): boolean {
+  if (toastCount >= MAX_TOASTS_PER_MATCH) return false;
+  const now = performance.now();
+  /* The slot exists but the room is still reading the last line: hold the beat back. */
+  if (toastCount > 0 && now - lastToastAt < TOAST_COOLDOWN_MS) return false;
+  /* Second slot on a low-impact beat: only once the match itself is 20s old. */
+  if (toastCount > 0 && !highImpact && now - matchStartedAt < TOAST_COOLDOWN_MS) return false;
+  toastCount++;
+  lastToastAt = now;
+  return true;
+}
+
+/**
+ * The opening callout always goes up — it is the match's first line, and it spends one of the two
+ * slots regardless of what else the room has said in the first few hundred milliseconds.
+ */
+function claimKickoffToast(): void {
+  toastCount = Math.min(MAX_TOASTS_PER_MATCH, toastCount + 1);
+  lastToastAt = performance.now();
+}
+
 /* ---------- the reaction pill ----------
  * There is exactly one. It lives in the banner slot (see `.crowd-toasts` in style.css), parked
  * directly beneath the crowd-odds card so the banter and the live YOU WIN / YOU LOSE rail are never
  * on top of each other: still the player's line of sight, and pointer-transparent so it can never
- * steal a board tap. A second reaction retargets this element instead of stacking. */
+ * steal a board tap. A second reaction retargets this element instead of stacking — and it only goes
+ * up while the match still has a callout slot left (see `claimToast`). */
 function hideToast(): void {
   window.clearTimeout(toastTimer);
   toastTimer = 0;
@@ -1089,9 +1136,11 @@ function showToast(
   vars: Record<string, string> = {},
   nameKeys: readonly string[] = [],
   starValue?: number,
+  highImpact = false,
 ): void {
   const refs = resolveUi();
   if (!refs) return;
+  if (!claimToast(highImpact)) return;
   window.clearTimeout(toastTimer);
   const frag = document.createDocumentFragment();
   const name = document.createElement('bdi');
@@ -1159,6 +1208,7 @@ function scheduleKickoff(): void {
   clearKickoff();
   kickoffShowTimer = window.setTimeout(() => {
     kickoffShowTimer = 0;
+    claimKickoffToast();
     showKickoff();
     kickoffHideTimer = window.setTimeout(() => {
       kickoffHideTimer = 0;
@@ -1342,7 +1392,7 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
     const pledge = pool[pickIndex(pool.length)] ?? pool[0];
     if (pledge) {
       lastReactionAt = now;
-      showToast(switched, pledge, {}, [], switched.stake);
+      showToast(switched, pledge, {}, [], switched.stake, true);
       return;
     }
   }
@@ -1355,7 +1405,7 @@ function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   const fan = fans[pickIndex(fans.length)] ?? match.fans[pickIndex(match.fans.length)];
   if (!fan || !line) return;
   lastReactionAt = now;
-  showToast(fan, line);
+  showToast(fan, line, {}, [], undefined, true);
 }
 
 /**
@@ -1438,6 +1488,10 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
     names: [(setup.p1Name ?? '').trim(), (setup.p2Name ?? '').trim()],
   };
   lastReactionAt = -Infinity;
+  /* a fresh match, a fresh budget: two callouts, and 20s of air between them */
+  toastCount = 0;
+  lastToastAt = -Infinity;
+  matchStartedAt = performance.now();
   filter = 'all';
   paintFilterLabels();
   for (const btn of refs.filters) {
@@ -1499,6 +1553,10 @@ export function closeCrowd(): void {
   match = null;
   filter = 'all';
   lastReactionAt = -Infinity;
+  /* the budget dies with the match, so the next one starts from zero */
+  toastCount = 0;
+  lastToastAt = -Infinity;
+  matchStartedAt = 0;
   const refs = ui;
   if (!refs) return;
   refs.pill.hidden = true;
