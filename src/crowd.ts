@@ -26,14 +26,16 @@
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
  *   · every rendered number is Latin `0-9` inside a `<bdi dir="ltr">`, so RTL never mirrors a score;
  *   · every name is isolated in a `<bdi dir="auto">`, so a handle never reorders its sentence;
- *   · a gender reads as a circular portrait silhouette, never as a word or a bare glyph;
- *   · icons are inline SVG, never emoji.
+ *   · a gender reads as a circular two-tone vector portrait, never as a word or a glyph;
+ *   · the only Star mark is the authentic Telegram Stars asset (`telegram_stars.png`);
+ *   · icons are vectors or that PNG, never emoji.
  *
  * The DOM is static (`index.html`, inside `#s-game`); this module only reads it by id, fills it and
  * hides it when the match ends. `initMatchCrowd()` starts a fresh simulation, `onCrowdEvent()` is
  * the lifecycle hook `main.ts` calls after committed play, and `closeCrowd()` tears everything down.
  */
 import { lang, onLang, type LangCode } from './settings';
+import telegramStarsUrl from './assets/images/telegram_stars.png';
 
 export type CrowdEventType = 'move' | 'wall' | 'mine' | 'near_finish' | 'turn';
 
@@ -99,6 +101,26 @@ function shuffle<T>(arr: T[]): T[] {
     arr[j] = tmp;
   }
   return arr;
+}
+
+/**
+ * Break any run of three same-gender portraits after the shuffle. The sheet deals the array from the
+ * top, so the head of the list is what a reader sees first: one pass that swaps the next fan of the
+ * other gender into a third same-gender slot keeps the rose and sky portraits naturally interleaved
+ * instead of opening on a streak. In place, pure swaps — the house's mix is untouched.
+ */
+function interleaveGenders(fans: Fan[]): void {
+  for (let i = 2; i < fans.length; i++) {
+    const gender = fans[i]!.gender;
+    if (fans[i - 1]!.gender !== gender || fans[i - 2]!.gender !== gender) continue;
+    for (let j = i + 1; j < fans.length; j++) {
+      if (fans[j]!.gender === gender) continue;
+      const tmp = fans[i]!;
+      fans[i] = fans[j]!;
+      fans[j] = tmp;
+      break;
+    }
+  }
 }
 
 /* ---------- the procedural handle generator ----------
@@ -287,8 +309,6 @@ const COPY: Record<LangCode, CrowdCopy> = {
 
 const copy = (): CrowdCopy => COPY[lang] ?? COPY.en;
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
 /* ---------- number formatting ----------
  * `en-US` guarantees Latin digits and thousands separators even when the shell is Persian. */
 const formatNum = (n: number): string => Math.round(n).toLocaleString('en-US');
@@ -340,38 +360,61 @@ function campName(camp: Camp): string {
   return camp === 0 ? c.p1 : c.p2;
 }
 
-/** One Telegram Star, drawn inline against the shared gradient symbol in the game top bar. */
-function starIcon(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('class', 'crowd-star');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  const use = document.createElementNS(SVG_NS, 'use');
-  use.setAttribute('href', '#i-crowd-star');
-  svg.append(use);
-  return svg;
+/**
+ * The one Telegram Star mark: the authentic PNG asset, never a hand-drawn polygon, a sprite or a
+ * glyph. Every stake display in this module — odds rail, kickoff banner, reaction pill, head-to-head
+ * box and every spectator row — mounts this same `crowd-star-ico` image.
+ */
+function starIcon(): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = 'crowd-star-ico';
+  img.src = telegramStarsUrl;
+  img.alt = '';
+  img.decoding = 'async';
+  img.draggable = false;
+  img.setAttribute('aria-hidden', 'true');
+  return img;
 }
 
-/* ---------- the two crisp portrait silhouettes ----------
+/**
+ * Point every static `crowd-star-ico` in the markup at Vite's hashed asset URL, so the dev server
+ * and the built bundle both resolve the same Stars PNG and no image is ever left broken.
+ */
+function hydrateStars(): void {
+  const host = document.getElementById('s-game');
+  if (!host) return;
+  for (const img of host.querySelectorAll<HTMLImageElement>('img.crowd-star-ico')) {
+    if (img.getAttribute('src') === telegramStarsUrl) continue;
+    img.src = telegramStarsUrl;
+  }
+}
+
+/* ---------- the two refined vector portraits ----------
  * Fixed inline vector paths, never emoji, never a font glyph: a rose feminine portrait and a sky
- * masculine portrait, both drawn inside the same 36-unit frame their circular tint lives in. */
+ * masculine portrait, each built as three clean layers — hair contour at a soft opacity, a sculpted
+ * face, then a collar/shoulders mass — inside the 38×38 circular frame their gradient tint lives in. */
 const PORTRAIT: Record<Gender, string> = {
-  f: '<svg viewBox="0 0 36 36" aria-hidden="true" focusable="false">'
-    + '<path d="M18 4.4c-5.7 0-9.2 3.9-9.2 9.4v9.1c0 2.2-1.2 3.5-2.3 4.6 3.1 1.4 6.6.6 8.5-1.4l3-3.2 3 3.2c1.9 2 5.4 2.8 8.5 1.4-1.1-1.1-2.3-2.4-2.3-4.6v-9.1c0-5.5-3.5-9.4-9.2-9.4Z"'
-    + ' fill="#f472b6" opacity=".92"/>'
-    + '<circle cx="18" cy="14.6" r="5.7" fill="#f9a8d4"/>'
-    + '<path d="M18 21.2c-5.6 0-10.2 3.6-10.2 8.1 0 1.5 1 2.5 2.4 2.5h15.6c1.4 0 2.4-1 2.4-2.5 0-4.5-4.6-8.1-10.2-8.1Z"'
-    + ' fill="#f9a8d4"/></svg>',
-  m: '<svg viewBox="0 0 36 36" aria-hidden="true" focusable="false">'
-    + '<path d="M18 5.1c-5 0-8.3 3.5-8.3 8.4 0 .9.1 1.8.3 2.5.8-2.7 3.8-4.6 8-4.6s7.2 1.9 8 4.6c.2-.7.3-1.6.3-2.5 0-4.9-3.3-8.4-8.3-8.4Z"'
-    + ' fill="#38bdf8"/>'
-    + '<circle cx="18" cy="14.6" r="5.7" fill="#7dd3fc"/>'
-    + '<path d="M18 21.2c-5.9 0-10.7 3.6-10.7 8.1 0 1.5 1 2.5 2.4 2.5h16.6c1.4 0 2.4-1 2.4-2.5 0-4.5-4.8-8.1-10.7-8.1Z"'
-    + ' fill="#7dd3fc"/></svg>',
+  f: '<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">'
+    + '<path d="M20 4.6c-7.7 0-12.4 5-12.4 12.2v9.4c0 1.7-.7 3.2-1.9 4.3 2.7.6 5.6-.4 7.4-2.6l1.3-1.6V16.9c0-1.1.3-2 .9-2.6 1.5.9 3.2 1.4 5 1.4s3.5-.5 5-1.4c.6.6.9 1.5.9 2.6v9.4l1.3 1.6c1.8 2.2 4.7 3.2 7.4 2.6-1.2-1.1-1.9-2.6-1.9-4.3v-9.4C32.4 9.6 27.7 4.6 20 4.6Z"'
+    + ' fill="#f472b6" opacity="0.75"/>'
+    + '<path d="M20 9.4c-4 0-6.8 2.6-6.8 6.6v2.6c0 3.9 2.7 7 6.8 7s6.8-3.1 6.8-7V16c0-4-2.8-6.6-6.8-6.6Z"'
+    + ' fill="#fce7f3"/>'
+    + '<path d="M20 8.5c-3.9 0-6.7 2.1-7.2 5.3 1.4-1.6 4-2.6 7.2-2.6s5.8 1 7.2 2.6c-.5-3.2-3.3-5.3-7.2-5.3Z"'
+    + ' fill="#f472b6" opacity="0.55"/>'
+    + '<path d="M20 26.4c-5.6 0-10.1 2.9-10.1 6.5 0 1.6 1 2.6 2.5 2.6h15.2c1.5 0 2.5-1 2.5-2.6 0-3.6-4.5-6.5-10.1-6.5Z"'
+    + ' fill="#fbcfe8"/></svg>',
+  m: '<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">'
+    + '<path d="M20 5.1c-6.4 0-10.4 4.1-10.4 10.1 0 .6 0 1.2.1 1.8 1-3.1 4.7-5.2 10.3-5.2s9.3 2.1 10.3 5.2c.1-.6.1-1.2.1-1.8 0-6-4-10.1-10.4-10.1Z"'
+    + ' fill="#38bdf8" opacity="0.78"/>'
+    + '<path d="M20 9.6c-4 0-6.8 2.6-6.8 6.6v2.4c0 3.9 2.7 7 6.8 7s6.8-3.1 6.8-7v-2.4c0-4-2.8-6.6-6.8-6.6Z"'
+    + ' fill="#e0f2fe"/>'
+    + '<path d="M20 26.4c-6 0-10.9 3-10.9 6.6 0 1.6 1 2.5 2.5 2.5h16.8c1.5 0 2.5-.9 2.5-2.5 0-3.6-4.9-6.6-10.9-6.6Z"'
+    + ' fill="#bae6fd"/>'
+    + '<path d="M16.7 26.9 20 30.3l3.3-3.4" fill="none" stroke="#e0f2fe" stroke-width="1.1"'
+    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
-/** Mount the circular portrait avatar: the gender reads as a silhouette, never as a word. */
+/** Mount the circular portrait avatar: the gender reads as a portrait, never as a word. */
 function paintPortrait(host: HTMLElement, gender: Gender): void {
   host.className = `crowd-av is-${gender}`;
   /* A trusted constant, never host or user text. */
@@ -388,11 +431,13 @@ let ambientTimer = 0;
 let lastReactionAt = -Infinity;
 let lastFocus: HTMLElement | null = null;
 
-const REACTION_GAP_MS = 3400;
-const TOAST_MS = 2600;
-/* The kickoff banner lands once the board is actually on screen, then clears itself. */
+const REACTION_GAP_MS = 4000;
+/* Generous read time: a reaction sits at the top of the arena for 3.8s, and the gap above is wider
+   than the pill's own life so a second reaction never cuts the first one short mid-sentence. */
+const TOAST_MS = 3800;
+/* The kickoff banner lands once the board is actually on screen, then clears itself after 4.5s. */
 const KICKOFF_DELAY_MS = 350;
-const KICKOFF_MS = 2800;
+const KICKOFF_MS = 4500;
 /* The house never stands still: one pledge or one seat moves on this beat. */
 const AMBIENT_MS = 2000;
 
@@ -476,6 +521,8 @@ const byId = <T extends HTMLElement>(id: string): T | null => document.getElemen
 
 function resolveUi(): CrowdUi | null {
   if (ui) return ui;
+  /* The static Star images in index.html carry no src: point them at the bundled asset first. */
+  hydrateStars();
   const pill = byId<HTMLButtonElement>('crowd-pill');
   const count = byId('crowd-count');
   const live = byId('crowd-live');
@@ -756,7 +803,9 @@ function wire(refs: CrowdUi): void {
 }
 
 /* ---------- the reaction pill ----------
- * There is exactly one. A second reaction retargets this element instead of stacking another. */
+ * There is exactly one. It lives in the top-arena banner slot (see `.crowd-toasts` in style.css),
+ * directly under the top match bar: the player's primary line of sight, and pointer-transparent so
+ * it can never steal a board tap. A second reaction retargets this element instead of stacking. */
 function hideToast(): void {
   window.clearTimeout(toastTimer);
   toastTimer = 0;
@@ -799,7 +848,8 @@ function showToast(
 
 /* ---------- the kickoff banner ----------
  * One announcement per match, right as the board settles: how many of this house backed seat 1.
- * It is pointer-transparent, it never opens anything, and it takes itself down after 2.8s. */
+ * It is pointer-transparent, it never opens anything, and it takes itself down after 4.5s — long
+ * enough to read both figures and the side they were staked on without hurrying. */
 function clearKickoff(): void {
   window.clearTimeout(kickoffShowTimer);
   window.clearTimeout(kickoffHideTimer);
@@ -833,7 +883,7 @@ function showKickoff(): void {
   refs.kickoff.classList.add('is-on');
 }
 
-/** Arm the kickoff banner: a short settle delay (the board must be visible first), then 2.8s on. */
+/** Arm the kickoff banner: a short settle delay (the board must be visible first), then 4.5s on. */
 function scheduleKickoff(): void {
   clearKickoff();
   kickoffShowTimer = window.setTimeout(() => {
@@ -1073,6 +1123,8 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
   }
 
   shuffle(fans);
+  /* …then break any same-gender streak left at the head of the dealt list. */
+  interleaveGenders(fans);
 
   match = {
     fans,

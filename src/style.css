@@ -45265,18 +45265,18 @@ html.reduced-motion .frm-scrim { transition: none; }
 .g-head-end .theme-toggle { margin-left: 0; }
 
 /* ---- 1. the top-bar live-viewers pill ---- */
-/* one shared vector star definition (the gradient lives in index.html) */
-.crowd-star-defs {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-}
-.crowd-star {
-  flex: none;
-  display: block;
-  width: 11px;
-  height: 11px;
+/* the only Star mark in this screen: the authentic Telegram Stars PNG, hydrated from crowd.ts so
+   the dev server and the built bundle resolve the same hashed asset. Never a drawn polygon. */
+.crowd-star-ico {
+  flex-shrink: 0;
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  vertical-align: middle;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .crowd-pill {
   appearance: none;
@@ -45456,7 +45456,7 @@ html.reduced-motion .frm-scrim { transition: none; }
   font-weight: 700;
   color: #f2c979;
 }
-.crowd-bar-stake .crowd-star { width: 9px; height: 9px; }
+.crowd-bar-stake .crowd-star-ico { width: 12px; height: 12px; }
 .crowd-bar-track {
   display: flex;
   gap: 3px;
@@ -45476,11 +45476,11 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-bar-fill.is-red { background: linear-gradient(90deg, #e11d48, #fb7185); }
 .crowd-bar-fill.is-blue { background: linear-gradient(90deg, #38bdf8, #0284c7); }
 
-/* ---- the fan avatar: a 36×36 circular portrait silhouette; no words, no glyph badges ---- */
+/* ---- the fan avatar: a 38×38 circular two-tone vector portrait, no words, no glyph badges ---- */
 .crowd-av {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -45490,109 +45490,113 @@ html.reduced-motion .frm-scrim { transition: none; }
 }
 .crowd-av svg { width: 100%; height: 100%; display: block; }
 .crowd-av.is-f {
-  background: rgba(244, 114, 182, 0.16);
-  border: 1.5px solid rgba(244, 114, 182, 0.48);
+  background: radial-gradient(circle at 30% 25%, rgba(244, 114, 182, 0.26), rgba(26, 18, 34, 0.94));
+  border: 1.5px solid rgba(244, 114, 182, 0.52);
 }
 .crowd-av.is-m {
-  background: rgba(56, 189, 248, 0.16);
-  border: 1.5px solid rgba(56, 189, 248, 0.48);
+  background: radial-gradient(circle at 30% 25%, rgba(56, 189, 248, 0.26), rgba(15, 24, 38, 0.94));
+  border: 1.5px solid rgba(56, 189, 248, 0.52);
 }
 
-/* ---- 3. the one floating reaction pill ----
-   Above the HUD dock, pointer-transparent, and it never owns a tap. */
-.crowd-toast {
-  position: absolute;
-  z-index: 18;
-  bottom: 86px;
-  inset-inline: 0;
-  width: fit-content;
-  max-width: min(92%, 360px);
-  margin: 0 auto;
-  padding: 6px 12px;
+/* ---- 3. the top-arena banner slot ----
+   Both crowd callouts — the kickoff announcement and the one live fan reaction — live here, in the
+   player's primary line of sight: fixed 52px down, right beneath the top match bar, centred, and
+   pointer-transparent so a banner can never steal a board tap. No blur, no looping keyframes: only
+   opacity/transform animate, and only while a banner actually changes. */
+.crowd-toasts {
+  position: fixed;
+  /* 52px of clearance under the top match bar. `--pad-t` is the column's own top inset (24px on a
+     plain phone, the safe-area inset on a notched one), so the banner parks just beneath the bar on
+     every host instead of over the menu key and the LIVE pill. */
+  top: 52px;
+  top: calc(var(--pad-t, 24px) + 52px);
+  inset-inline: 12px;
+  z-index: 45;
   display: flex;
-  align-items: baseline;
-  gap: 0;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--tint-glass);
-  color: var(--ink);
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.4;
-  text-align: center;
-  box-shadow: 0 10px 24px -16px var(--shadow);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;             /* never blocks a board tap or a player card */
+}
+
+/* the shared banner face: dark obsidian depth under a gold hairline, identical to the odds card's
+   ink, so an announcement reads at a glance on both the pearl and the midnight board */
+.crowd-toast,
+.crowd-kickoff {
+  flex: none;
+  width: fit-content;
+  max-width: min(92%, 380px);
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid rgba(246, 200, 94, 0.36);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1b2230 0%, #111622 100%);
+  color: #f8fafc;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: start;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
   pointer-events: none;             /* never blocks a board tap or a player card */
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(-6px);
   visibility: hidden;
-  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms;
+  transition: opacity 260ms ease, transform 260ms ease, visibility 260ms;
 }
-.crowd-toast.is-on {
+
+/* ---- 3a. the one floating reaction pill ----
+   A single reaction at a time: a second one retargets this element instead of stacking. It wraps as
+   ordinary text (not as flex items), so a long localized line breaks on word boundaries. */
+.crowd-toast {
+  display: block;
+  text-align: center;
+  padding: 9px 14px;
+}
+.crowd-toast.is-on,
+.crowd-kickoff.is-on {
   opacity: 1;
   transform: none;
   visibility: visible;
 }
 .crowd-toast-name { font-weight: 800; unicode-bidi: isolate; }
-.crowd-toast-txt { min-width: 0; overflow-wrap: anywhere; }
-/* the star stake quoted by a reaction: gold icon then a Latin-digit run */
+.crowd-toast-txt { overflow-wrap: anywhere; }
+/* the star stake quoted by a reaction: the Stars asset then a Latin-digit run */
 .crowd-toast-stake {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
   color: #f2c979;
 }
-.crowd-toast-stake .crowd-star { width: 11px; height: 11px; }
+.crowd-toast-stake .crowd-star-ico { width: 13px; height: 13px; }
 
-/* ---- 3a. the kickoff banner ----
-   One announcement as the board settles: `N fans staked S Stars betting you WIN/LOSE!`. It floats
-   just under the crowd-odds rail (header 44px + the screen gap + the card's top pad + the rail's own
-   ~70px, including its live centre call), sits above the board's top rows for 2.8s, and owns no tap:
-   `pointer-events: none`, no scrim, no `backdrop-filter`. Obsidian face in both themes — it is an
-   announcement, not a surface — with a gold star mark and a single emerald hairline under it. */
+/* ---- 3b. the kickoff banner ----
+   One announcement as the board settles: `N fans staked S Stars betting you WIN/LOSE!`. It shares
+   the top-arena slot with the reaction pill, reads for 4.5s, and owns no tap: no scrim, no
+   `backdrop-filter`. Obsidian face in both themes — it is an announcement, not a surface — with a
+   single emerald hairline under it and the authentic Stars mark leading the line. */
 .crowd-kickoff {
-  position: absolute;
-  z-index: 17;
-  top: calc(44px + var(--gap) + var(--pad-card-t) + 70px);
-  inset-inline: 0;
-  width: fit-content;
-  max-width: min(92%, 380px);
-  margin: 0 auto;
-  padding: 8px 14px;
   display: flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(246, 200, 94, .32);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #191d25 0%, #0b0e14 100%);
-  color: #f8fafc;
-  font-size: 12.5px;
-  font-weight: 800;
-  line-height: 1.35;
   text-align: start;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .07),
     inset 0 -1px 0 rgba(16, 185, 129, .34),
-    0 14px 28px -18px rgba(0, 0, 0, .95);
-  pointer-events: none;             /* never blocks a board tap */
-  opacity: 0;
-  transform: translateY(-6px);
-  visibility: hidden;
-  transition: opacity 200ms ease, transform 200ms ease, visibility 200ms;
-}
-.crowd-kickoff.is-on {
-  opacity: 1;
-  transform: none;
-  visibility: visible;
+    0 10px 26px rgba(0, 0, 0, 0.45);
 }
 .crowd-kickoff-ico {
   flex: none;
   width: 15px;
   height: 15px;
-  color: #f6c85e;
+  display: grid;
+  place-items: center;
+  line-height: 0;
 }
-.crowd-kickoff-ico svg { width: 15px; height: 15px; display: block; }
+.crowd-kickoff-ico .crowd-star-ico { width: 15px; height: 15px; display: block; }
 .crowd-kickoff-txt { min-width: 0; overflow-wrap: anywhere; }
 .crowd-kickoff-txt bdi { unicode-bidi: isolate; }
 
@@ -45778,7 +45782,7 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-h2h-fans { display: inline-flex; align-items: center; gap: 3px; }
 .crowd-h2h-ico { width: 11px; height: 11px; display: block; }
 .crowd-h2h-stake { display: inline-flex; align-items: center; gap: 3px; color: var(--cs-gold); }
-.crowd-h2h-stake .crowd-star { width: 11px; height: 11px; }
+.crowd-h2h-stake .crowd-star-ico { width: 13px; height: 13px; }
 .crowd-h2h-vs {
   font-size: 9px;
   font-weight: 800;
@@ -45952,7 +45956,7 @@ html.reduced-motion .frm-scrim { transition: none; }
   font-variant-numeric: tabular-nums;
   color: var(--cs-gold);
 }
-.crowd-stake .crowd-star { width: 12px; height: 12px; }
+.crowd-stake .crowd-star-ico { width: 14px; height: 14px; }
 .crowd-empty {
   flex: 1 1 auto;
   margin: 0;
@@ -45970,9 +45974,12 @@ html[data-lang="ar"] :is(.crowd-toast, .crowd-kickoff, .crowd-sheet-title, .crow
 }
 html[data-lang="fa"] .crowd-sheet-title,
 html[data-lang="ar"] .crowd-sheet-title { direction: rtl; }
-/* the kickoff banner carries a whole sentence: read it right-to-left, number first, coin leading */
+/* the kickoff banner and the reaction pill carry a whole sentence: read them right-to-left, the
+   leading name or figure first */
 html[data-lang="fa"] .crowd-kickoff,
-html[data-lang="ar"] .crowd-kickoff { direction: rtl; }
+html[data-lang="ar"] .crowd-kickoff,
+html[data-lang="fa"] .crowd-toast,
+html[data-lang="ar"] .crowd-toast { direction: rtl; }
 /* the head-to-head box stays LTR-locked, so its own copy never mirrors the two camps */
 html[data-lang="fa"] .crowd-h2h-name,
 html[data-lang="ar"] .crowd-h2h-name { letter-spacing: 0; }
@@ -45985,7 +45992,6 @@ body.tut-match :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-kickoff, .crowd
 
 /* ---- light board: the same objects on porcelain ---- */
 html[data-theme="light"] .crowd-pill,
-html[data-theme="light"] .crowd-toast,
 html[data-theme="light"] .crowd-sheet-card {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .9),
@@ -46032,11 +46038,11 @@ html[data-theme="light"] .crowd-bet.is-blue {
   color: #1f45b5;
 }
 html[data-theme="light"] .crowd-av.is-f {
-  background: rgba(244, 114, 182, .20);
+  background: radial-gradient(circle at 30% 25%, rgba(244, 114, 182, .30), rgba(252, 231, 243, .96));
   border-color: rgba(219, 39, 119, .42);
 }
 html[data-theme="light"] .crowd-av.is-m {
-  background: rgba(56, 189, 248, .20);
+  background: radial-gradient(circle at 30% 25%, rgba(56, 189, 248, .30), rgba(224, 242, 254, .96));
   border-color: rgba(2, 132, 199, .42);
 }
 html[data-theme="light"] .crowd-count { color: #0B3B30; }
@@ -46066,9 +46072,14 @@ html.reduced-motion .crowd-sheet-close { transition: none; }
   .crowd-sheet-close { transition: none; }
 }
 
-/* ---- short phones: the rail stays one line, the dock keeps its room ---- */
+/* ---- short phones: the banner slot keeps clear of the match bar ---- */
 @media (max-height: 700px) {
-  .crowd-toast { bottom: 78px; }
+  .crowd-toasts {
+    top: calc(var(--pad-t, 16px) + 48px);
+    gap: 5px;
+  }
+  .crowd-toast,
+  .crowd-kickoff { padding: 8px 12px; font-size: 12px; }
 }
 
 /* ---- narrow phones: the pill sheds its LIVE tag so the top bar stays light ---- */

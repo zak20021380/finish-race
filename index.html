@@ -2267,22 +2267,6 @@
         <!-- ---------------- game ---------------- -->
         <section class="screen game" id="s-game" data-screen="game" tabindex="-1" hidden aria-label="Race">
           <div class="g-head">
-            <!-- one shared Telegram Star: the gold gradient and the five-point path are defined once,
-                 so every simulated stake in this screen references the same crisp vector -->
-            <svg class="crowd-star-defs" aria-hidden="true" focusable="false" width="0" height="0">
-              <defs>
-                <linearGradient id="crowd-star-g" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#fbbf24" />
-                  <stop offset="1" stop-color="#f59e0b" />
-                </linearGradient>
-              </defs>
-              <symbol id="i-crowd-star" viewBox="0 0 16 16">
-                <path d="M8 1.3l2.03 4.11 4.54.66-3.28 3.2.77 4.52L8 11.68l-4.06 2.12.77-4.52-3.28-3.2 4.54-.66Z"
-                  fill="url(#crowd-star-g)" />
-                <path d="M8 1.3l2.03 4.11 4.54.66-3.28 3.2.77 4.52L8 11.68l-4.06 2.12.77-4.52-3.28-3.2 4.54-.66Z"
-                  fill="none" stroke="#fde68a" stroke-opacity=".55" stroke-width=".6" stroke-linejoin="round" />
-              </symbol>
-            </svg>
             <!-- start slot: the menu key and the live-viewers pill, one compact cluster on the
                  start edge now that the round caption is gone. -->
             <div class="g-head-start">
@@ -2331,13 +2315,13 @@
                   <bdi class="crowd-bar-name" id="crowd-bar-red-name" dir="auto">YOU WIN</bdi>
                   <bdi class="crowd-bar-pct" id="crowd-pct-red" dir="ltr">50%</bdi>
                   <span class="crowd-bar-stake">
-                    <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
+                    <img class="crowd-star-ico" alt="" />
                     <bdi id="crowd-stake-red" dir="ltr">0</bdi>
                   </span>
                 </span>
                 <span class="crowd-bar-side is-blue">
                   <span class="crowd-bar-stake">
-                    <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
+                    <img class="crowd-star-ico" alt="" />
                     <bdi id="crowd-stake-blue" dir="ltr">0</bdi>
                   </span>
                   <bdi class="crowd-bar-pct" id="crowd-pct-blue" dir="ltr">50%</bdi>
@@ -2709,14 +2693,20 @@
             <p class="ad-toast" id="ad-toast" role="status" aria-live="polite" dir="auto"></p>
           </div>
 
-          <!-- KICKOFF CROWD CALL. One brief banner as the board settles: how many of the simulated
-               house backed seat 1 to win. Pointer-transparent, auto-dismissing, never a tap target;
-               every figure is a Latin-digit <bdi dir="ltr"> and the seat name a <bdi dir="auto">. -->
-          <p class="crowd-kickoff" id="crowd-kickoff" role="status" aria-live="polite"></p>
+          <!-- TOP-ARENA CROWD BANNERS. One stack, fixed directly under the top match bar (52px),
+               centred, pointer-transparent: the kickoff callout and at most one live fan reaction.
+               Both are auto-dismissing and never a tap target; every figure inside is a Latin-digit
+               <bdi dir="ltr">, every name a <bdi dir="auto">, and the Star mark is the authentic
+               Telegram Stars image (hydrated from src/crowd.ts). -->
+          <div class="crowd-toasts" id="crowd-toasts">
+            <!-- KICKOFF CROWD CALL. One brief banner as the board settles: how many of the
+                 simulated house staked how many Stars on the side they back. -->
+            <p class="crowd-kickoff" id="crowd-kickoff" role="status" aria-live="polite"></p>
 
-          <!-- ONE FLOATING FAN REACTION. Pointer-transparent, parked above the HUD dock, at most
-               one at a time (a second reaction retargets this same pill). -->
-          <p class="crowd-toast" id="crowd-toast" role="status" aria-live="polite"></p>
+            <!-- ONE FLOATING FAN REACTION. At most one at a time: a second reaction retargets
+                 this same pill rather than stacking another. -->
+            <p class="crowd-toast" id="crowd-toast" role="status" aria-live="polite"></p>
+          </div>
 
           <!-- LIVE CROWD & PREDICTIONS. The tappable sheet behind the top pill and the support bar:
                a drag handle, a LIVE header with the viewer count, a head-to-head arena split, a
@@ -2762,7 +2752,7 @@
                         <bdi dir="ltr" id="crowd-h2h-red-fans">0</bdi>
                       </span>
                       <span class="crowd-h2h-stake">
-                        <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
+                        <img class="crowd-star-ico" alt="" />
                         <bdi dir="ltr" id="crowd-h2h-red-stake">0</bdi>
                       </span>
                     </span>
@@ -2779,7 +2769,7 @@
                         <bdi dir="ltr" id="crowd-h2h-blue-fans">0</bdi>
                       </span>
                       <span class="crowd-h2h-stake">
-                        <svg class="crowd-star" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#i-crowd-star" /></svg>
+                        <img class="crowd-star-ico" alt="" />
                         <bdi dir="ltr" id="crowd-h2h-blue-stake">0</bdi>
                       </span>
                     </span>
