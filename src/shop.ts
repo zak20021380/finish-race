@@ -1,23 +1,21 @@
 /**
- * shop.ts — the Shop: ONE horizontal carousel of five equal cards.
+ * shop.ts — the Shop: the VIP subscription ONLY, as one centered card.
  *
- * Card 1 is the flagship and a storefront, not a second till. Every price comes from the VIP
- * tiers the Worker serves (via premium.ts), and the one checkout is `purchaseVip()` — the same
- * verified Telegram Stars flow the VIP sheet uses. Cards 2-5 are previews only: a tap opens a
- * short toast and never touches coins, Stars or inventory. This module also owns the track's
- * pointer-drag layer and the five-dot rail under it.
+ * There is no carousel, no coming-soon shelf and no other item: the screen is the single
+ * Obsidian VIP centerpiece. Every price comes from the VIP tiers the Worker serves (via
+ * premium.ts), and the one checkout is `purchaseVip()` — the same verified Telegram Stars
+ * flow the VIP sheet uses. The card scrolls vertically with the screen (overflow-x hidden,
+ * overflow-y auto in CSS); nothing horizontal remains to swipe, drag or snap.
  */
 import { profile } from './storage';
 import { setBalance } from './coin';
 import { onLang, t } from './settings';
-import { showToast } from './toast';
 import { impact, notify } from './telegram';
 import {
   isPremiumUser, onVipChange, purchaseVip, refreshShopVipTiers, shopVipTiers, vipDaysLeft,
   type ShopVipTier,
 } from './premium';
 import { VIP_HERO_PLAN, type VipPlanId } from '../shared/vip';
-import telegramStarsImg from './assets/images/telegram_stars.png';
 import type { Sheets } from './sheets';
 
 export interface ShopApi {
@@ -32,12 +30,13 @@ export interface Shop {
 
 const $ = <T extends HTMLElement>(id: string): T | null => document.getElementById(id) as T | null;
 
-/** The four promises, each a title and a value pill; `ltr` pins 4/4, +50% and ×2. */
-const PERKS: ReadonlyArray<{ ico: string; label: string; value: string; ltr: boolean }> = [
-  { ico: '#i-chat', label: 'shopPerkChat', value: 'shopPerkChatVal', ltr: false },
-  { ico: '#i-shield', label: 'shopPerkRecovery', value: 'shopPerkRecoveryVal', ltr: true },
-  { ico: '#i-coins', label: 'shopPerkBoost', value: 'shopPerkBoostVal', ltr: true },
-  { ico: '#i-bolt', label: 'shopPerkDouble', value: 'shopPerkDoubleVal', ltr: true },
+/** The four promises, each a title and a value pill; `ltr` pins 4/4, +50% and ×2.
+ *  Every row wears the same gold check vector (#i-check): a vertical checklist, not tiles. */
+const PERKS: ReadonlyArray<{ label: string; value: string; ltr: boolean }> = [
+  { label: 'shopPerkChat', value: 'shopPerkChatVal', ltr: false },
+  { label: 'shopPerkRecovery', value: 'shopPerkRecoveryVal', ltr: true },
+  { label: 'shopPerkBoost', value: 'shopPerkBoostVal', ltr: true },
+  { label: 'shopPerkDouble', value: 'shopPerkDoubleVal', ltr: true },
 ];
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] => {
@@ -55,16 +54,10 @@ const bdi = (text: string): HTMLElement => {
   return node;
 };
 
-/** The authentic Telegram Stars PNG, bundled and hashed by Vite — never a glyph, sprite or emoji.
- *  `draggable="false"` keeps a mouse drag from peeling the currency mark off the card. */
-function starIcon(cls = 'tg-star-icon'): HTMLImageElement {
-  const img = document.createElement('img');
-  img.src = telegramStarsImg;
-  img.className = cls;
-  img.alt = '';
-  img.setAttribute('aria-hidden', 'true');
-  img.draggable = false;
-  return img;
+/** The Telegram Star as a crisp inline vector SVG (#i-star-3d, the gem-cut gold star) —
+ *  never a glyph, sprite or emoji. Rides every price row and the gold CTA. */
+function starIcon(cls = 'tg-star-icon'): SVGSVGElement {
+  return svg('#i-star-3d', cls);
 }
 
 function svg(href: string, cls: string): SVGSVGElement {
@@ -97,8 +90,6 @@ export function createShop(api: ShopApi): Shop {
   const cta = $<HTMLButtonElement>('shop-vip-cta');
   const ctaText = $<HTMLElement>('shop-vip-cta-t');
   const status = $<HTMLElement>('shop-vip-status');
-  const track = $<HTMLElement>('shop-carousel');
-  const dots = $<HTMLElement>('shop-dots');
 
   let tiers: ShopVipTier[] = shopVipTiers();
   let selected: VipPlanId = tiers.some((tier) => tier.id === VIP_HERO_PLAN)
@@ -132,198 +123,6 @@ export function createShop(api: ShopApi): Shop {
     status.hidden = true;
   }
 
-  /** The carousel's motion layer. Touch keeps its native pan-and-snap; a mouse or pen drag
-   *  follows the pointer with easing, and anything past 6px cancels the tap toast. Capture is
-   *  claimed only after the threshold, so a plain tap still reaches its button. The five-dot
-   *  rail is a readout of the same scroll, never a second source of truth. */
-  function mountCarousel(): void {
-    if (!track || track.dataset.dragReady === '1') return;
-    track.dataset.dragReady = '1';
-    const rail = track;
-
-    /* ---- the dots: one passive read per frame, one write only when the index moves ---- */
-    const marks: HTMLElement[] = [];
-    for (const node of Array.from(dots?.children ?? [])) {
-      if (node instanceof HTMLElement) marks.push(node);
-    }
-    let dotRaf = 0;
-    let activeDot = 0;
-
-    /** The card nearest the scrollport's centre is the one on screen. Measured in viewport
-     *  space, so RTL's negative scrollLeft (and any future change to it) cannot skew it. */
-    const paintDot = (): void => {
-      dotRaf = 0;
-      const box = rail.getBoundingClientRect();
-      const mid = box.left + box.width / 2;
-      let best = 0;
-      let closest = Infinity;
-      for (let i = 0; i < rail.children.length; i += 1) {
-        const card = rail.children[i];
-        if (!(card instanceof HTMLElement)) continue;
-        const rect = card.getBoundingClientRect();
-        const gap = Math.abs(rect.left + rect.width / 2 - mid);
-        if (gap < closest) {
-          closest = gap;
-          best = i;
-        }
-      }
-      if (best === activeDot) return;
-      activeDot = best;
-      for (let i = 0; i < marks.length; i += 1) marks[i].classList.toggle('is-active', i === best);
-    };
-
-    if (marks.length) {
-      rail.addEventListener('scroll', () => {
-        if (!dotRaf) dotRaf = requestAnimationFrame(paintDot);
-      }, { passive: true });
-    }
-
-    /* ---- the drag: touch keeps the native gesture, mouse and pen follow the pointer ---- */
-    const DRAG_SLOP = 6;
-    let pointerId: number | null = null;
-    let captured = false;
-    let startX = 0;
-    let lastX = 0;
-    let lastAt = 0;
-    let velocity = 0;
-    let moved = false;
-    let suppressUntil = 0;
-    let glide = 0;
-    let glideAt = 0;
-    let snapBefore = '';
-    let behaviorBefore = '';
-    /* Pixels of pointer travel per pixel of scrollLeft: -1 in LTR, +1 in RTL, where the
-       scroll origin is the right edge and scrollLeft runs negative as you advance. */
-    let axis = -1;
-
-    const reducedMotion = (): boolean =>
-      document.documentElement.classList.contains('reduced-motion')
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    /* Glide and drag used to share one accumulator: the glide `step` wrote `scrollLeft` on every
-       frame, while a drag wrote it on every raw `pointermove`. Both paths now feed the same
-       one-write-per-frame commit, and the write reads `scrollLeft` exactly once. */
-    let dragRaf = 0;
-    let pendingDx = 0;
-
-    const commitScroll = (): void => {
-      dragRaf = 0;
-      const dx = pendingDx;
-      pendingDx = 0;
-      if (!dx) return;
-      /* One read, one write. The old order read, wrote, then read again to test for an edge —
-         each read after the write forced a synchronous layout flush. */
-      const before = rail.scrollLeft;
-      rail.scrollLeft = before + dx;
-    };
-
-    const queueDrag = (dx: number): void => {
-      pendingDx += dx;
-      if (!dragRaf) dragRaf = requestAnimationFrame(commitScroll);
-    };
-
-    const cancelDrag = (): void => {
-      if (dragRaf) cancelAnimationFrame(dragRaf);
-      dragRaf = 0;
-      pendingDx = 0;
-    };
-
-    const stopGlide = (): void => {
-      if (glide) cancelAnimationFrame(glide);
-      glide = 0;
-    };
-
-    const settle = (): void => {
-      cancelDrag();
-      rail.style.scrollSnapType = snapBefore;
-      rail.style.scrollBehavior = behaviorBefore;
-    };
-
-    const step = (now: number): void => {
-      const frame = Math.min(33, Math.max(8, now - glideAt || 16));
-      glideAt = now;
-      velocity *= Math.pow(0.9, frame / 16);
-      if (Math.abs(velocity) < 0.02) {
-        glide = 0;
-        settle();
-        return;
-      }
-      const before = rail.scrollLeft;
-      rail.scrollLeft = before + velocity * frame;
-      glide = requestAnimationFrame(step);
-    };
-
-    rail.addEventListener('pointerdown', (ev) => {
-      if (ev.pointerType === 'touch' || ev.button !== 0) return;
-      stopGlide();
-      cancelDrag();
-      pointerId = ev.pointerId;
-      startX = lastX = ev.clientX;
-      lastAt = ev.timeStamp;
-      velocity = 0;
-      moved = false;
-      axis = getComputedStyle(rail).direction === 'rtl' ? 1 : -1;
-    });
-
-    rail.addEventListener('pointermove', (ev) => {
-      if (pointerId !== ev.pointerId) return;
-      if (!moved && Math.abs(ev.clientX - startX) > DRAG_SLOP) {
-        moved = true;
-        captured = true;
-        snapBefore = rail.style.scrollSnapType;
-        behaviorBefore = rail.style.scrollBehavior;
-        rail.style.scrollSnapType = 'none';
-        rail.style.scrollBehavior = 'auto';
-        rail.setPointerCapture(ev.pointerId);
-        rail.classList.add('is-dragging');
-      }
-      if (!moved) return;
-      ev.preventDefault();
-      const dx = (ev.clientX - lastX) * axis;
-      const dt = Math.max(1, ev.timeStamp - lastAt);
-      /* The scroll itself is coalesced to one write per frame; the velocity keeps its per-event
-         resolution so a fling still reads the true release speed. */
-      queueDrag(dx);
-      velocity = velocity * 0.35 + (dx / dt) * 0.65;
-      velocity = Math.max(-3, Math.min(3, velocity));
-      lastX = ev.clientX;
-      lastAt = ev.timeStamp;
-    });
-
-    const release = (ev: PointerEvent): void => {
-      if (pointerId !== ev.pointerId) return;
-      pointerId = null;
-      rail.classList.remove('is-dragging');
-      if (captured && rail.hasPointerCapture(ev.pointerId)) rail.releasePointerCapture(ev.pointerId);
-      captured = false;
-      /* the trailing frame lands before the tap gate opens, so a suppressed click cannot be
-         followed by a stray scroll step */
-      cancelDrag();
-      if (!moved) {
-        settle();
-        return;
-      }
-      suppressUntil = performance.now() + 300;
-      /* a pause before release is a placement, not a fling */
-      if (performance.now() - lastAt > 120) velocity = 0;
-      if (!reducedMotion() && Math.abs(velocity) > 0.15) {
-        glideAt = performance.now();
-        glide = requestAnimationFrame(step);
-        return;
-      }
-      settle();
-    };
-    rail.addEventListener('pointerup', release);
-    rail.addEventListener('pointercancel', release);
-
-    rail.addEventListener('click', (ev) => {
-      if (performance.now() >= suppressUntil) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      suppressUntil = 0;
-    }, true);
-  }
-
   /** One serialization of what the tier row is built from, so an unchanged plan snapshot never
    *  rebuilds its buttons. `paintTiers` records the key it painted; `syncPlans` compares. */
   const tierSignature = (): string =>
@@ -352,7 +151,7 @@ export function createShop(api: ShopApi): Shop {
       const days = el('span', 'vip-flag-tier-days');
       days.append(bdi(String(tier.days)), el('span', 'vip-flag-tier-unit', t('vipPlanUnitDays')));
       const price = el('span', 'vip-flag-tier-price');
-      /* the bundled Telegram Stars artwork rides the price row at its own crisp size in every locale */
+      /* the vector Telegram Star rides the price row at its own crisp size in every locale */
       price.append(bdi(String(tier.stars)), starIcon());
 
       button.append(days, price);
@@ -370,7 +169,7 @@ export function createShop(api: ShopApi): Shop {
     perks.replaceChildren(...PERKS.map((perk) => {
       const row = el('li', 'vip-flag-perk');
       const mark = el('span', 'vip-flag-perk-ico');
-      mark.append(svg(perk.ico, 'vip-flag-perk-svg'));
+      mark.append(svg('#i-check', 'vip-flag-perk-svg'));
       const label = el('span', 'vip-flag-perk-label', t(perk.label));
       const value = el('span', 'vip-flag-perk-val');
       if (perk.ltr) value.append(bdi(t(perk.value)));
@@ -493,13 +292,7 @@ export function createShop(api: ShopApi): Shop {
         buy();
         return;
       }
-
-      if (target.closest('[data-soon]')) {
-        impact('light');
-        showToast(t('shopSoonTap'), 'warning', 2600);
-      }
     });
-    mountCarousel();
     onVipChange(() => paint());
     onLang(() => {
       paintTitle();

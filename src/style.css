@@ -43997,15 +43997,16 @@ bdi { unicode-bidi: isolate; }
 }
 
 /* =========================================================================
-   Shop · ONE horizontal carousel — the VIP flagship + four locked previews
-   Five cards, one track, one height. Card 1 is the live Obsidian VIP plate;
-   cards 2-5 are matte disabled plates with a single monochrome lock. Every
-   figure sits in its own <bdi dir="ltr"> island, so 7 / 12 / 30, 4/4, +50%
-   and x2 read the same in every language.
+   Shop · VIP SUBSCRIPTION ONLY — one centered card, no carousel, no shelves.
+   The Obsidian VIP card is the whole screen: crown crest, plan tiers, the
+   perks checklist and the Telegram Stars CTA. Every figure sits in its own
+   <bdi dir="ltr"> island, so 7 / 12 / 30, 4/4, +50% and x2 read the same in
+   every language. No overflow-x anywhere: the reversed RTL horizontal scroll
+   is gone with the track.
    ========================================================================== */
 
 /* Every glow and pseudo-element in the Shop is decorative and inert, so it can
-   never swallow a tap. The five cards stay explicit, real hit targets. */
+   never swallow a tap. The card, its tiers and the CTA stay explicit hits. */
 #s-shop::before,
 #s-shop::after,
 #s-shop *::before,
@@ -44013,126 +44014,57 @@ bdi { unicode-bidi: isolate; }
 
 #shop-vip,
 .vip-flag-tier,
-#shop-vip-cta,
-.soon-card {
+#shop-vip-cta {
   pointer-events: auto;
   cursor: pointer;
   position: relative;
   z-index: 2;
 }
 
-/* THE HEIGHT CONTRACT: a fixed head, a track that owns every remaining pixel, and
-   no vertical scroll anywhere. The bottom dock is a flex sibling of .screens, not
-   a floating overlay, so the pane already stops above it — reserving a dock-sized
-   bottom pad here would be exactly the dead band this screen exists to lose. */
+/* THE SINGLE-VIEW CONTRACT: a fixed head and one centered card. The screen
+   itself scrolls vertically only — overflow-x hidden, overflow-y auto — so
+   a short phone can still reach the CTA, and nothing can swipe sideways. */
 #s-shop {
   height: 100%;
   max-height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 0;
+  padding-bottom: 12px;
 }
 .shop-pane {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-/* ---- the one track: native snap on touch, pointer drag on desktop ---- */
-.shop-carousel {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  /* symmetric side padding frames card 1 and leaves a sliver of card 2 on the edge */
-  padding: 6px 18px 10px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.shop-carousel::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.shop-carousel.is-dragging { cursor: grabbing; }
-.shop-carousel.is-dragging :is(#shop-vip, .soon-card) {
-  cursor: grabbing;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* 100% EQUAL CARDS: one sizing rule, written once, shared by the flagship and all
-   four previews. Nothing inside a card may change the card's outer box. */
-#shop-vip,
-.soon-card {
-  flex: 0 0 calc(100vw - 56px);
-  max-width: 360px;
-  height: 100%;
-  border-radius: 24px;
-  scroll-snap-align: center;
-  box-sizing: border-box;
-}
-
-/* ---- the five-dot rail: a readout, never a control ---- */
-.shop-dots {
-  flex: none;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 16px;
-  padding: 0 18px;
-}
-.shop-dot {
-  display: block;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  transition: width 0.2s ease, background-color 0.2s ease;
-}
-.shop-dot.is-active {
-  width: 18px;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ffe3a0 0%, #e5b64a 100%);
-  box-shadow: 0 0 10px -3px rgba(245, 196, 81, 0.8);
+  gap: 0;
+  padding: 0 16px;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .vip-flag {
   position: relative;
   isolation: isolate;
-  /* The carousel owns the height, so the card distributes instead of growing: crest at
-     the top, gold CTA at the foot, tiers and perks sharing the middle. `overflow: hidden`
-     keeps a wrapped Persian perk label inside the plate instead of bleeding past it. */
+  /* The luxury centerpiece: one commanding obsidian-and-gold plate, centered in the
+     pane. `overflow: hidden` keeps a wrapped Persian perk label inside the plate
+     instead of bleeding past it. */
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  /* one tight vertical rhythm: header -> tier cards -> benefit tiles -> gold CTA */
+  /* one tight vertical rhythm: header -> tiers -> perks checklist -> gold CTA */
   gap: 14px;
-  padding: 18px 16px 16px;
-  border-radius: 24px;
-  border: 1px solid rgba(245, 196, 81, 0.34);
-  /* ONE surface only: a warm 24K wash bleeding from behind the crown into layered obsidian,
-     so the plate reads as a lit jewel instead of a flat dark fill. No second overlay box
-     inside the card, so the header cannot cut a horizontal seam. */
-  background:
-    radial-gradient(circle at 50% 8%, rgba(245, 196, 81, 0.22) 0%, rgba(245, 196, 81, 0.06) 32%, rgba(245, 196, 81, 0) 52%),
-    linear-gradient(180deg, #171a24 0%, #0c0e14 100%);
+  width: 100%;
+  max-width: 400px;
+  margin: 8px auto;
+  box-sizing: border-box;
+  padding: 20px 18px;
+  border-radius: 22px;
+  border: 1.5px solid rgba(246, 200, 94, 0.38);
+  background: linear-gradient(165deg, #1a1814 0%, #11131a 55%, #0b0d12 100%);
   /* one contact shadow, no bloom: the tab opens in a single frame */
   box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 224, 138, 0.2);
   font-variant-numeric: tabular-nums lining-nums;
@@ -44196,7 +44128,7 @@ bdi { unicode-bidi: isolate; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
+  align-self: center;
   margin: 0;
   padding: 5px 10px;
   border-radius: 999px;
@@ -44274,12 +44206,11 @@ bdi { unicode-bidi: isolate; }
   line-height: 1.15;
   color: #f8dfa4;
 }
-/* the bundled Telegram Stars artwork: full-colour PNG, never re-tinted, never a glyph.
+/* the vector Telegram Star: the gem-cut #i-star-3d SVG, never a glyph or emoji.
    It rides the price rows and the gold CTA, lifted off the metal by a soft contact shadow. */
-.tg-star-icon {
+#s-shop .tg-star-icon {
   width: 17px;
   height: 17px;
-  object-fit: contain;
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
@@ -44322,38 +44253,37 @@ bdi { unicode-bidi: isolate; }
 }
 
 .vip-flag-perks {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-/* each promise is a tile, not a pill: a gold-tinted icon well and one crisp label on the
-   start side, a high-contrast tabular value on the end side */
+/* the vertical checklist: a gold check vector on the start side, one crisp label,
+   and a high-contrast tabular value pill on the end side — zero locked clutter */
 .vip-flag-perk {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
-  padding: 9px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.035);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
 }
 .vip-flag-perk-ico {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 9px;
-  background: rgba(245, 196, 81, 0.12);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(245, 196, 81, 0.14);
   color: #f6c85e;
 }
-.vip-flag-perk-svg { width: 15px; height: 15px; }
+.vip-flag-perk-svg { width: 14px; height: 14px; }
 .vip-flag-perk-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -44384,10 +44314,10 @@ bdi { unicode-bidi: isolate; }
   justify-content: center;
   gap: 6px;
   width: 100%;
-  height: 50px;
-  min-height: 50px;
+  height: 48px;
+  min-height: 48px;
   padding: 0 14px;
-  border-radius: 15px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 240, 185, 0.45);
   background: linear-gradient(180deg, #fbd673 0%, #e5a932 100%);
   color: #241804;
@@ -44427,91 +44357,30 @@ bdi { unicode-bidi: isolate; }
 /* an idle card keeps its footer tight: an empty note collapses to nothing at all */
 .vip-flag-status:empty { display: none; }
 
-/* ---- cards 2-5: one matte disabled plate, four times ----
-   No colour, no artwork, no glow. The same muted obsidian, the same 48px lock, the
-   same neutral pill; the only thing that changes between the four is the name. */
-.soon-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 12px;
-  padding: 18px 16px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, #0d0f15 0%, #08090d 100%);
-  color: rgba(255, 255, 255, 0.72);
-  font: inherit;
-  opacity: 0.65;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: opacity 0.18s ease, border-color 0.18s ease;
-}
-.soon-card:hover { opacity: 0.78; border-color: rgba(255, 255, 255, 0.1); }
-.soon-card:active { opacity: 0.86; }
-
-/* the single emblem: a monochrome lock in a faint well, never a disc of colour */
-.soon-lock {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.32);
-}
-.soon-lock-svg { width: 24px; height: 24px; }
-.soon-name {
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: 0;
-  color: rgba(255, 255, 255, 0.72);
-  overflow-wrap: anywhere;
-}
-.soon-tag {
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
 /* ---- joined scripts: Vazirmatn, real RTL, no Latin tracking ----
-   The track flips with the pane: card 1 sits on the right, and the dots rail mirrors
-   with it. Drag and dot maths read the computed direction, so both stay correct. */
+   The single card is centered, so RTL only flips its inner text flow; the
+   <bdi dir="ltr"> islands keep every figure reading left-to-right. */
 html[data-lang="fa"] .shop-pane,
 html[data-lang="ar"] .shop-pane { direction: rtl; }
-html[data-lang="fa"] :is(.vip-flag, .soon-card),
-html[data-lang="ar"] :is(.vip-flag, .soon-card) {
+html[data-lang="fa"] .vip-flag,
+html[data-lang="ar"] .vip-flag {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
-html[data-lang="fa"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .soon-tag),
-html[data-lang="ar"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag, .soon-tag) {
+html[data-lang="fa"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag),
+html[data-lang="ar"] :is(.vip-flag-tier-badge, .vip-flag-tier-tag) {
   letter-spacing: 0;
 }
 html[data-lang="fa"] .vip-flag-title,
 html[data-lang="ar"] .vip-flag-title { line-height: 1.5; }
 html[data-lang="fa"] .vip-flag-sub,
 html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
-html[data-lang="fa"] .soon-name,
-html[data-lang="ar"] .soon-name { line-height: 1.6; }
 
 @media (max-width: 400px) {
-  /* one notch below the 360 plate: the benefit tiles keep their label on one line and
-     their value pill on the end side, so the 2x2 grid never reflows to three rows */
-  .vip-flag-perk { padding: 8px 9px; gap: 5px; }
-  .vip-flag-perk-ico { width: 24px; height: 24px; border-radius: 8px; }
+  /* one notch below the 360 plate: the checklist keeps its label on one line and
+     its value pill on the end side, so a row never wraps to two */
+  .vip-flag-perk { padding: 8px 9px; gap: 8px; }
+  .vip-flag-perk-ico { width: 22px; height: 22px; border-radius: 50%; }
   .vip-flag-perk-label { font-size: 11px; }
   .vip-flag-perk-val { font-size: 11px; padding: 2px 5px; }
   .vip-flag-title { font-size: 19px; }
@@ -44539,10 +44408,9 @@ html[data-lang="ar"] .soon-name { line-height: 1.6; }
   .vip-flag-perk-val { font-size: 10.5px; padding: 1px 5px; }
   .vip-flag-cta { font-size: 12.5px; height: auto; min-height: 46px; padding: 8px 12px; line-height: 1.2; }
   .vip-flag-cta .tg-star-icon { width: 17px; height: 17px; }
-  .soon-name { font-size: 12px; }
 }
-/* short phones below the 640 reference: the card is a fixed height now, so the flagship
-   buys back headroom instead of pushing the CTA past the plate's foot */
+/* short phones below the 640 reference: the card buys back headroom instead of
+   pushing the CTA past the plate's foot, since the screen scrolls vertically */
 @media (max-height: 620px) {
   .vip-flag { gap: 10px; padding: 14px 14px 12px; }
   .vip-flag-crest { width: 46px; height: 46px; }
@@ -44553,13 +44421,10 @@ html[data-lang="ar"] .soon-name { line-height: 1.6; }
   .vip-flag-tier { padding: 10px 4px 8px; }
   .vip-flag-perk { padding: 7px 9px; }
   .vip-flag-cta { height: auto; min-height: 46px; padding: 8px 14px; line-height: 1.2; }
-  .shop-carousel { padding: 4px 18px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vip-flag-tier, .soon-card, .shop-dot { transition: none; }
-  .shop-carousel { scroll-behavior: auto; }
+  .vip-flag-tier { transition: none; }
 }
-html.reduced-motion .shop-carousel { scroll-behavior: auto; }
 
 /* ==========================================================================
    SQUAD VERIFICATION — the strict badge gate and its dual-mode block.

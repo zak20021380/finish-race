@@ -1837,12 +1837,11 @@
           </div>
         </section>
 
-        <!-- ---------------- shop · ONE HORIZONTAL CAROUSEL ----------------
-             The Shop is a single snap track, not a stack: Obsidian VIP is card 1 and the four
-             locked previews are cards 2-5, every card the same size. The head (back key + wallet)
-             and the flagship stay live; the preview cards never touch coins, Stars or inventory.
-             The pane carries no [data-scroll]: the Shop has nothing to scroll vertically, and
-             that attribute's touch-action: pan-y would veto the track's horizontal pan. -->
+        <!-- ---------------- shop · VIP SUBSCRIPTION ONLY ----------------
+             The Shop is a single centered view: the one Obsidian VIP subscription card.
+             No boards, pawns, bundles, coming-soon cards, tabs or carousel — the head
+             (back key + wallet) and the flagship are the whole screen. The screen
+             scrolls vertically only (overflow-x hidden, overflow-y auto in CSS). -->
         <section class="screen menu is-sealed" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
           <div class="m-head">
             <button class="icon-btn" type="button" data-back aria-label="Back to home">
@@ -1856,15 +1855,11 @@
 
           <div class="pane shop-pane">
 
-            <!-- ONE track, five equal cards. Card 1 is the live flagship; cards 2-5 are matte
-                 disabled previews with a single monochrome lock emblem and no purchase path. -->
-            <div class="shop-carousel" id="shop-carousel" role="group" aria-label="Shop cards">
-
-              <!-- the flagship: matte obsidian, a 1px gold hairline, an ambient crest glow.
-                   The head is a centred crest stack — crown, name, one promise — so no empty
-                   gutter is left beside it in any script, RTL included. The card is a
-                   space-between column, so crest, tiers, perks and the gold CTA share the
-                   height evenly instead of pooling a gap at the foot. -->
+            <!-- the sole offer: the live VIP subscription centerpiece. Crown crest, plan
+                 tiers, the perks checklist and the Telegram Stars CTA — nothing else. -->
+              <!-- the flagship: obsidian-and-gold centerpiece, centered in the pane. The head
+                   is a centred crest stack — crown, name, one promise — so no empty gutter
+                   is left beside it in any script, RTL included. -->
               <section class="vip-flag" id="shop-vip" aria-labelledby="shop-vip-title">
                 <div class="vip-flag-head">
                   <span class="vip-flag-crest" aria-hidden="true">
@@ -1890,43 +1885,6 @@
                 </button>
                 <p class="vip-flag-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
               </section>
-
-              <!-- cards 2-5: the same plate, muted and inert. No colour, no artwork, no glow —
-                   one lock, one name, one neutral pill. A tap only announces itself. -->
-              <button class="soon-card" type="button" data-soon>
-                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                <span class="soon-name" data-i18n="shopSoonPawns">Neon Pawns</span>
-                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-              </button>
-
-              <button class="soon-card" type="button" data-soon>
-                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                <span class="soon-name" data-i18n="shopSoonBoards">Obsidian Board</span>
-                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-              </button>
-
-              <button class="soon-card" type="button" data-soon>
-                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                <span class="soon-name" data-i18n="shopSoonFrames">Royal Avatar Frame</span>
-                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-              </button>
-
-              <button class="soon-card" type="button" data-soon>
-                <span class="soon-lock" aria-hidden="true"><svg class="soon-lock-svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg></span>
-                <span class="soon-name" data-i18n="shopSoonEffects">Victory Effects</span>
-                <span class="soon-tag" data-i18n="shopSoon">Coming soon</span>
-              </button>
-            </div>
-
-            <!-- five dots: a gold pill for the card on screen, muted dots for the rest. Painted
-                 from the scroll position, never the other way round — the rail is a readout. -->
-            <div class="shop-dots" id="shop-dots" aria-hidden="true">
-              <span class="shop-dot is-active"></span>
-              <span class="shop-dot"></span>
-              <span class="shop-dot"></span>
-              <span class="shop-dot"></span>
-              <span class="shop-dot"></span>
-            </div>
           </div>
         </section>
 
