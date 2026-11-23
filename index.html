@@ -4830,8 +4830,11 @@
                crown's figure, the winner-takes-all rule and the live clock in one hierarchy. -->
           <div class="cw-prize">
             <div class="cw-prize-top">
+              <!-- The authentic Telegram Stars asset, not a glyph: the card's one emblem, at 28px
+                   on its 38px gold tile. src/channelWar.ts hydrates the bundled URL on init. -->
               <span class="cw-prize-emblem" aria-hidden="true">
-                <svg class="ico" viewBox="0 0 24 24" focusable="false"><use href="#i-tg-star" /></svg>
+                <img class="cw-star-ico" id="cw-prize-star" src="./src/assets/images/telegram_stars.png"
+                     width="28" height="28" alt="" decoding="async" draggable="false" />
               </span>
               <span class="cw-prize-id">
                 <span class="cw-prize-eyebrow" data-cw-copy="eyebrow">1ST PLACE BOUNTY</span>
@@ -4856,23 +4859,17 @@
             </div>
             <ol class="cw-list" id="cw-board-list" data-scroll aria-label="Channel rankings"></ol>
 
-            <!-- Open challenger slots: while the ladder holds fewer than three channels, one
-                 live bracket card keeps the tournament looking open instead of empty. -->
-            <div class="cw-wait" id="cw-wait" hidden>
-              <div class="cw-slot">
-                <span class="cw-slot-ranks" aria-hidden="true">
-                  <span class="cw-slot-rank is-2">#2</span>
-                  <span class="cw-slot-rank is-3">#3</span>
-                </span>
-                <span class="cw-slot-id">
-                  <b class="cw-slot-t" data-cw-copy="slotTitle">Open Contender Slot</b>
-                  <span class="cw-slot-sub" data-cw-copy="slotSub">Challenge a rival channel to enter the war</span>
-                </span>
-                <button class="cw-slot-go" id="cw-wait-invite" type="button">
-                  <span data-cw-copy="inviteRival">Invite Rival</span>
-                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-chevron-right" /></svg>
-                </button>
-              </div>
+            <!-- The open league: while the ladder holds fewer than three channels, one quiet note
+                 states the actual rule — register a channel, climb with TIQ — instead of inventing
+                 a rival slot. No head-to-head language, no second door. -->
+            <div class="cw-league" id="cw-league" hidden>
+              <span class="cw-league-ico" aria-hidden="true">
+                <svg class="ico" viewBox="0 0 24 24" focusable="false"><use href="#i-cup" /></svg>
+              </span>
+              <span class="cw-league-id">
+                <b class="cw-league-t" data-cw-copy="leagueTitle">Weekly Channel League</b>
+                <span class="cw-league-sub" data-cw-copy="leagueSub">Register your channel and climb with TIQ</span>
+              </span>
             </div>
 
             <!-- the quick pick: one tap for a player who has not chosen a channel yet -->

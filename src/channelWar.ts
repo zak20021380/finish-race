@@ -30,6 +30,9 @@ import {
   registerSquadWithTelegram, syncChannelTiq, type SquadVerifyPanel,
 } from './squadRegister';
 import { channelWarAppLink, telegramShareLink } from '../shared/config';
+/* The authentic Telegram Stars mark — the same asset the shop and the vault carry, never a
+   glyph, a sprite star or a typed emoji. Vite fingerprints it, so the path is never dangling. */
+import telegramStarsUrl from './assets/images/telegram_stars.png';
 
 export interface ChannelWarApi {
   sheets: Sheets;
@@ -54,48 +57,45 @@ const LADDER_MAX = 20;
 const PICK_MAX = 6;
 
 /* The bounty header's own micro-copy. It lives here, beside the surface that reads it, so the
-   Championship card can carry a stronger voice without reaching into the shared dictionary. */
-type CwCopyKey = 'eyebrow' | 'unit' | 'sub' | 'slotTitle' | 'slotSub' | 'inviteRival';
+   Championship card can carry a stronger voice without reaching into the shared dictionary.
+   `leagueTitle`/`leagueSub` are the open-league note: the war is one weekly ladder anyone may
+   register into, so the only call to action it ever makes is "register and climb". */
+type CwCopyKey = 'eyebrow' | 'unit' | 'sub' | 'leagueTitle' | 'leagueSub';
 const CW_COPY: Record<LangCode, Record<CwCopyKey, string>> = {
   en: {
     eyebrow: '1ST PLACE BOUNTY',
     unit: 'STARS',
     sub: 'Winner-takes-all · Top 10 squad contributors split the prize',
-    slotTitle: 'Open Contender Slot',
-    slotSub: 'Challenge a rival channel to enter the war',
-    inviteRival: 'Invite Rival',
+    leagueTitle: 'Weekly Channel League',
+    leagueSub: 'Register your channel and climb with TIQ',
   },
   fa: {
     eyebrow: 'جایزه قهرمانی',
     unit: 'استارز',
     sub: 'برنده همه را می‌برد · ده مشارکت‌کننده برتر جایزه تیم را تقسیم می‌کنند',
-    slotTitle: 'جایگاه رقیب آزاد',
-    slotSub: 'برای ورود به نبرد، کانال رقیبی را به چالش بکش',
-    inviteRival: 'دعوت رقیب',
+    leagueTitle: 'لیگ هفتگی کانال‌ها',
+    leagueSub: 'کانال خودت را ثبت کن و امتیاز TIQ جمع کن',
   },
   ru: {
     eyebrow: 'ПРИЗОВОЙ ФОНД',
     unit: 'ЗВЁЗД',
     sub: 'Победитель забирает всё · Топ-10 участников отряда делят приз',
-    slotTitle: 'Свободный слот претендента',
-    slotSub: 'Брось вызов каналу-сопернику, чтобы вступить в войну',
-    inviteRival: 'Позвать соперника',
+    leagueTitle: 'Недельная лига каналов',
+    leagueSub: 'Зарегистрируй свой канал и поднимайся с TIQ',
   },
   ar: {
     eyebrow: 'جائزة المركز الأول',
     unit: 'نجوم',
     sub: 'الفائز يأخذ كل شيء · أفضل عشرة مساهمين في الفريق يتقاسمون الجائزة',
-    slotTitle: 'مقعد منافس مفتوح',
-    slotSub: 'تحدَّ قناة منافسة للدخول إلى الحرب',
-    inviteRival: 'دعوة منافس',
+    leagueTitle: 'دوري القنوات الأسبوعي',
+    leagueSub: 'سجّل قناتك واصعد بنقاط TIQ',
   },
   es: {
     eyebrow: 'RECOMPENSA DEL 1.er PUESTO',
     unit: 'ESTRELLAS',
     sub: 'El ganador se lo lleva todo · Los 10 mejores del escuadrón reparten el premio',
-    slotTitle: 'Puesto de aspirante libre',
-    slotSub: 'Reta a un canal rival para entrar en la guerra',
-    inviteRival: 'Invitar rival',
+    leagueTitle: 'Liga semanal de canales',
+    leagueSub: 'Registra tu canal y sube con TIQ',
   },
 };
 const AVATAR_HUES = [198, 210, 232, 262, 288, 318, 24, 42, 158, 174];
@@ -253,7 +253,15 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const clock = document.getElementById('cw-countdown');
   const prizeRule = document.getElementById('cw-prize-rule');
   const boardList = document.getElementById('cw-board-list');
+  const leagueNote = document.getElementById('cw-league');
   const liveRegion = document.getElementById('cw-live-region');
+
+  /* The Championship mark is the real Telegram Stars asset. The markup carries the element so the
+     card never renders without its emblem, and this hands it the bundled URL — Vite's hashed
+     path, never the raw `./src/...` string, so a built bundle can't ship a dangling reference. */
+  root?.querySelectorAll<HTMLImageElement>('img.cw-star-ico').forEach((img) => {
+    img.src = telegramStarsUrl;
+  });
 
   const regOpen = document.getElementById('cw-reg-open');
   const regBack = document.getElementById('cw-reg-back');
@@ -476,28 +484,28 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     boardList.textContent = '';
     if (!board.length) {
       boardList.append(emptyRow('cwEmptyBoard'));
-      paintWait();
+      paintLeague();
       return;
     }
     for (const s of board.slice(0, LADDER_MAX)) {
       const you = !!mine && s.id === mine.id;
       boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true }));
     }
-    paintWait();
+    paintLeague();
     revealMyRow();
   }
 
-  /* ---------- the open challenger slots ---------- */
+  /* ---------- the open league note ---------- */
 
   /**
-   * One quiet invitation, and only one: while the ladder holds fewer than three channels a single
-   * open-slot card keeps the bracket alive. It is read and it carries one rival invite, but the
-   * register key above it is still the door into the ladder.
+   * One quiet statement of the rule, and only while the board is still short: Channel Wars is a
+   * single open weekly ladder, so a newcomer is told exactly what entering costs — register the
+   * channel and let its members bank TIQ — never that they owe some rival a fight. The note
+   * retires itself the moment three channels are on the board and the ladder speaks for itself.
    */
-  function paintWait(): void {
-    const wait = document.getElementById('cw-wait');
-    if (!wait) return;
-    wait.hidden = getWarRanking().length >= 3;
+  function paintLeague(): void {
+    if (!leagueNote) return;
+    leagueNote.hidden = getWarRanking().length >= 3;
   }
 
   /**
@@ -1116,13 +1124,6 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   joinBtn?.addEventListener('click', () => { void onJoin(); });
   inviteBtn?.addEventListener('click', () => { rally(); });
-  document.getElementById('cw-wait-invite')?.addEventListener('click', () => {
-    impact('light');
-    /* One rival door, two honest destinations: a fighter rallies their own channel, and a player
-       without one is handed the register pane that puts a channel in the war. */
-    if (getMySquad()) rally();
-    else openRegister();
-  });
 
   regOpen?.addEventListener('click', () => { impact('light'); openRegister(); });
   regBack?.addEventListener('click', () => { impact('light'); closeRegister(); });
