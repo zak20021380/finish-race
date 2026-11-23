@@ -24,22 +24,23 @@ import explosionMp3 from './assets/sounds/explosion.mp3';
 import defeatM4a from './assets/sounds/defeat.m4a';
 
 /** The base gain for one step: warm in the mix, never the loudest thing in the room. */
-const MOVE_GAIN = 0.65;
+const MOVE_GAIN = 0.68;
 
 /** The human's own step at full; a rival's sits behind it rather than under the player's hand. */
 export const RIVAL_MOVE_GAIN = 0.55;
 
 /**
- * One detonation: a subterranean boom that owns the mix without clipping it — a touch below full
- * scale, so the blasts of a four-ball table can stack over a step trail and still leave headroom.
+ * One detonation: a subterranean boom that owns the mix without clipping it — trimmed from full
+ * scale so the blasts of a four-ball table can stack over a step trail and still leave headroom for
+ * the ambient bed underneath.
  */
-const EXPLOSION_GAIN = 0.9;
+const EXPLOSION_GAIN = 0.75;
 
 /**
- * The defeat fanfare: the result screen's one long voice on a loss. A touch under full scale so the
- * settlement's count-up still reads underneath it.
+ * The defeat fanfare: the result screen's one long voice on a loss. Trimmed so the settlement's
+ * count-up still reads underneath it and the bed can breathe beneath both.
  */
-const DEFEAT_GAIN = 0.9;
+const DEFEAT_GAIN = 0.75;
 
 /** How long the fanfare's own tail gets when the capsule lets go: a fade, never a cut. */
 const DEFEAT_FADE_S = 0.35;
@@ -259,7 +260,7 @@ export function playReward(): void {
       osc.frequency.value = freq;
       const gain = c.createGain();
       gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.26, at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.24, at + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.34);
       osc.connect(gain).connect(mixOf(c));
       osc.onended = () => { osc.disconnect(); gain.disconnect(); };

@@ -54,11 +54,12 @@ import { onSettings, settings } from './settings';
 const BGM_URL = new URL('./assets/sounds/bgm.mp3', import.meta.url).href;
 
 /**
- * The ambient mix. Warm enough to be heard under the board, quiet enough that `move.wav`,
- * `explosion.mp3`, `swoosh.mp3`, the victory fanfare and the defeat fanfare all stay clearly in
- * front of it — the bed is atmosphere, never a competitor.
+ * The ambient mix. Noticeably clearer than the first pass — the minimal piano underscore is heard
+ * under the board without taking it over. The gameplay voices were trimmed to match, so
+ * `move.wav`, `explosion.mp3`, `swoosh.mp3`, the victory fanfare and the defeat fanfare still stay
+ * clearly in front of it: the bed is atmosphere, never a competitor.
  */
-const TARGET_VOLUME = 0.22;
+const TARGET_VOLUME = 0.44;
 
 /** Ramp up when the bed starts or comes back; ramp down when it is switched off. */
 const FADE_IN_MS = 500;

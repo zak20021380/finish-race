@@ -32,32 +32,32 @@ const SCHEDULE_LEAD_S = 0.03;
 const MOVE_GAP_MS = 40;
 
 /**
- * The laugh, one voice among the race's: loud enough to carry over a step trail, a touch under the
- * blast's full scale so a stacked chorus of taps still leaves the master its headroom.
+ * The laugh, one voice among the race's: loud enough to carry over a step trail, trimmed from full
+ * scale so a stacked chorus of taps still leaves the master — and the bed under it — headroom.
  */
-const LAUGH_GAIN = 0.8;
+const LAUGH_GAIN = 0.7;
 
 /**
- * The growl: the laugh's sibling — a touch above it because a grunt carries less than a laugh
- * at the same level, still under full scale so the blast keeps its headroom.
+ * The growl: the laugh's sibling — a touch above it because a grunt carries less than a laugh at
+ * the same level, still trimmed enough that the blast keeps its headroom.
  */
-const ANGRY_GAIN = 0.85;
+const ANGRY_GAIN = 0.72;
 
 /** Hammering the "Grrr!" pod must not stack into a stutter: one growl per this many milliseconds. */
 const ANGRY_GAP_MS = 150;
 
 /**
- * The clash swoosh: the VS cards landing on the crest, a touch under full scale so it owns the
+ * The clash swoosh: the VS cards landing on the crest, trimmed like the step trail so it owns the
  * moment without out-shouting the blast it replaces.
  */
-const SWOOSH_GAIN = 0.9;
+const SWOOSH_GAIN = 0.68;
 
 /**
- * The victory fanfare: the result screen's one long voice. A touch under full scale so the
- * count-up underneath it still reads, and it fades rather than cuts when the screen lets go, so
- * the tail never clicks or bleeds under an ad.
+ * The victory fanfare: the result screen's one long voice. Trimmed so the count-up underneath it
+ * still reads and the bed under both, and it fades rather than cuts when the screen lets go, so the
+ * tail never clicks or bleeds under an ad.
  */
-const VICTORY_GAIN = 0.9;
+const VICTORY_GAIN = 0.75;
 const VICTORY_FADE_S = 0.22;
 
 /** Where the volume lives. The mute half is `settings.sound`, persisted by `settings.ts`. */
@@ -324,7 +324,7 @@ function detonate(ctx: AudioContext, master: AudioNode, when: number, level: num
     osc.frequency.exponentialRampToValueAtTime(BOOM_SUB_FLOOR_HZ, when + BOOM_SUB_S);
     const sub = ctx.createGain();
     sub.gain.setValueAtTime(0.0001, when);
-    sub.gain.exponentialRampToValueAtTime(0.85 * peak, when + 0.014);
+    sub.gain.exponentialRampToValueAtTime(0.72 * peak, when + 0.014);
     sub.gain.exponentialRampToValueAtTime(0.0001, when + BOOM_SUB_S);
     osc.connect(sub).connect(master);
     osc.onended = () => { osc.disconnect(); sub.disconnect(); };
@@ -343,7 +343,7 @@ function detonate(ctx: AudioContext, master: AudioNode, when: number, level: num
     lp.frequency.exponentialRampToValueAtTime(BOOM_FILTER_FLOOR_HZ, when + BOOM_NOISE_S);
     const crunch = ctx.createGain();
     crunch.gain.setValueAtTime(0.0001, when);
-    crunch.gain.exponentialRampToValueAtTime(0.6 * peak, when + 0.01);
+    crunch.gain.exponentialRampToValueAtTime(0.5 * peak, when + 0.01);
     crunch.gain.exponentialRampToValueAtTime(0.0001, when + BOOM_NOISE_S);
     src.connect(lp).connect(crunch).connect(master);
     src.onended = () => { src.disconnect(); lp.disconnect(); crunch.disconnect(); };
