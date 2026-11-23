@@ -1855,36 +1855,67 @@
 
           <div class="pane shop-pane">
 
-            <!-- the sole offer: the live VIP subscription centerpiece. Crown crest, plan
-                 tiers, the perks checklist and the Telegram Stars CTA — nothing else. -->
-              <!-- the flagship: obsidian-and-gold centerpiece, centered in the pane. The head
-                   is a centred crest stack — crown, name, one promise — so no empty gutter
-                   is left beside it in any script, RTL included. -->
-              <section class="vip-flag" id="shop-vip" aria-labelledby="shop-vip-title">
-                <div class="vip-flag-head">
-                  <span class="vip-flag-crest" aria-hidden="true">
-                    <svg class="vip-flag-crest-svg" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
-                  </span>
-                  <div class="vip-flag-copy">
-                    <h2 class="vip-flag-title" id="shop-vip-title">Obsidian VIP</h2>
-                    <p class="vip-flag-sub" data-i18n="shopVipSub">Every VIP perk, live the moment your Stars land.</p>
-                  </div>
+            <!-- the sole offer: the Royal Obsidian & 24K Gold VIP centerpiece. Crown medallion,
+                 three live Stars tiers, a 2x2 perk bento and the beveled gold checkout.
+                 Every number is a <bdi dir="ltr"> island; the Stars mark is the exact
+                 telegram_stars.png asset, never a glyph. -->
+            <section class="shop-vip" id="shop-vip" aria-labelledby="shop-vip-title">
+              <!-- the Shop's crisp perk vectors — chat, shield+heart, double chevron and gem
+                   bolt — plus the shared faceted crown medallion. No emoji, no glyph star. -->
+              <svg class="shop-sprite" aria-hidden="true" focusable="false" width="0" height="0">
+                <defs>
+                  <symbol id="shop-i-chat" viewBox="0 0 24 24">
+                    <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20.4 11.6a7.8 7.8 0 0 1-7.8 7.8H5.4L3 21.8V11.6a7.8 7.8 0 0 1 7.8-7.8h1.8a7.8 7.8 0 0 1 7.8 7.8Z" />
+                      <path d="M8.6 10.4h7M8.6 13.8h4.6" />
+                    </g>
+                  </symbol>
+                  <symbol id="shop-i-heal" viewBox="0 0 24 24">
+                    <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2.9 19 5.5v5.2c0 4.4-2.9 7.7-7 9.2-4.1-1.5-7-4.8-7-9.2V5.5Z" />
+                      <path d="M12 15.4c-1.7-1.1-3.1-2.4-3.1-3.9a1.9 1.9 0 0 1 3.4-1.1 1.9 1.9 0 0 1 3.4 1.1c0 1.5-1.4 2.8-3.7 3.9Z" fill="currentColor" stroke="none" />
+                    </g>
+                  </symbol>
+                  <symbol id="shop-i-boost" viewBox="0 0 24 24">
+                    <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5.4 12.4 12 5.8l6.6 6.6" />
+                      <path d="M5.4 18.2 12 11.6l6.6 6.6" />
+                    </g>
+                  </symbol>
+                  <symbol id="shop-i-gem" viewBox="0 0 24 24">
+                    <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2.6 21 9.4 12 21.4 3 9.4Z" />
+                      <path d="M3 9.4h18M7.6 9.4 12 2.6l4.4 6.8L12 21.4Z" opacity=".65" />
+                      <path d="M13.4 7.8 9.9 13h2.9l-.7 3.7 3.6-5.1h-2.9Z" fill="currentColor" stroke="none" />
+                    </g>
+                  </symbol>
+                </defs>
+              </svg>
+
+              <header class="shop-vip-head">
+                <span class="shop-vip-crest" aria-hidden="true">
+                  <svg class="shop-vip-crown" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
+                </span>
+                <div class="shop-vip-copy">
+                  <h2 class="shop-vip-title" id="shop-vip-title">Obsidian VIP</h2>
+                  <p class="shop-vip-sub" data-i18n="shopVipSub">Every VIP perk, live the moment your Stars land.</p>
                 </div>
+              </header>
 
-                <p class="vip-flag-active" id="shop-vip-active" hidden>
-                  <span class="vip-flag-active-dot" aria-hidden="true"></span>
-                  <span id="shop-vip-active-t"></span>
-                </p>
+              <p class="shop-vip-active" id="shop-vip-active" hidden>
+                <span class="shop-vip-active-dot" aria-hidden="true"></span>
+                <span id="shop-vip-active-t"></span>
+              </p>
 
-                <div class="vip-flag-tiers" id="shop-vip-tiers" role="radiogroup" aria-label="Obsidian VIP plans"></div>
+              <div class="shop-vip-tiers" id="shop-vip-tiers" role="radiogroup" aria-label="Obsidian VIP plans"></div>
 
-                <ul class="vip-flag-perks" id="shop-vip-perks"></ul>
+              <ul class="shop-vip-perks" id="shop-vip-perks"></ul>
 
-                <button class="vip-flag-cta" id="shop-vip-cta" type="button">
-                  <span class="vip-flag-cta-t" id="shop-vip-cta-t"></span>
-                </button>
-                <p class="vip-flag-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
-              </section>
+              <button class="shop-vip-cta" id="shop-vip-cta" type="button">
+                <span class="shop-vip-cta-t" id="shop-vip-cta-t"></span>
+              </button>
+              <p class="shop-vip-status" id="shop-vip-status" role="status" aria-live="polite" hidden></p>
+            </section>
           </div>
         </section>
 

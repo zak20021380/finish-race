@@ -46130,3 +46130,498 @@ html[data-lang="ar"] .chips[data-team="true"] .team-badge {
   font-family: 'Vazirmatn', system-ui, sans-serif;
   letter-spacing: 0;
 }
+
+/* ==========================================================================
+   SHOP · ROYAL OBSIDIAN & 24K GOLD VIP — one viewport, zero tracks.
+   Every selector below is scoped to #s-shop or a .shop-* class, so no other
+   screen inherits this paint. No backdrop-filter, no infinite keyframes: one
+   static metallic plate, one contact shadow, and transform-free states.
+   ========================================================================== */
+
+/* No browser scrollbar on the tab or any inner container. The pane still scrolls
+   on an unusually short phone, but no track or thumb is ever painted. */
+#s-shop,
+#s-shop * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#s-shop::-webkit-scrollbar,
+#s-shop *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#s-shop {
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  gap: 6px;
+  padding-bottom: 0;
+}
+#s-shop .shop-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 4px 10px 6px;
+  overflow: visible;
+}
+
+#s-shop .shop-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ---- the obsidian plate: 1.5px gold edge + double-bevel inner rim ---- */
+#s-shop .shop-vip {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 16px 15px;
+  border-radius: 24px;
+  border: 1.5px solid rgba(246, 200, 94, 0.45);
+  background:
+    radial-gradient(circle at 50% -10%, rgba(246, 200, 94, 0.22) 0%, rgba(246, 200, 94, 0.05) 42%, transparent 70%),
+    linear-gradient(170deg, #181613 0%, #0f1118 52%, #090b10 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 179, 0.30),
+    0 18px 40px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  color-scheme: dark;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+#s-shop .shop-vip::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: 0;
+  border-radius: 19px;
+  border: 1px solid rgba(246, 200, 94, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.10);
+  pointer-events: none;
+}
+#s-shop .shop-vip > :not(.shop-sprite) {
+  position: relative;
+  z-index: 1;
+}
+#s-shop #shop-vip { cursor: default; }
+#s-shop .shop-vip-tier,
+#s-shop .shop-vip-cta { cursor: pointer; }
+
+/* ---- crown medallion head ---- */
+#s-shop .shop-vip-head {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  text-align: start;
+}
+#s-shop .shop-vip-crest {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 248, 220, 0.22), rgba(246, 200, 94, 0.08) 52%, rgba(12, 12, 10, 0.9) 100%);
+  border: 1.5px solid rgba(246, 200, 94, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 214, 0.35),
+    inset 0 0 0 4px rgba(246, 200, 94, 0.06),
+    0 8px 20px rgba(0, 0, 0, 0.55),
+    0 0 0 3px rgba(246, 200, 94, 0.08);
+}
+#s-shop .shop-vip-crown {
+  display: block;
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+#s-shop .shop-vip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+#s-shop .shop-vip-title {
+  margin: 0;
+  min-width: 0;
+  font-size: clamp(19px, 5.6vw, 23px);
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  background: linear-gradient(168deg, #fff8e0 6%, #f6d68d 40%, #d8a63a 66%, #ffe9ae 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #f6d68d;
+}
+#s-shop .shop-vip-sub {
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #a7afbe;
+}
+
+/* ---- the active status pill: emerald glass under a gold hairline ---- */
+#s-shop .shop-vip-active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: center;
+  margin: 0;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.18) 0%, rgba(246, 200, 94, 0.10) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #d6f5e6;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+#s-shop .shop-vip-active[hidden] { display: none; }
+#s-shop .shop-vip-active-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.16);
+}
+
+/* ---- three elevated tier cards ---- */
+#s-shop .shop-vip-tiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 0;
+}
+#s-shop .shop-vip-tier {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 5px 9px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.018) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #b9c1d1;
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease,
+              box-shadow 0.16s ease;
+}
+#s-shop .shop-vip-tier:hover { border-color: rgba(246, 200, 94, 0.36); }
+#s-shop .shop-vip-tier:focus-visible { outline: 2px solid #f6c85e; outline-offset: 2px; }
+#s-shop .shop-vip-tier.is-selected {
+  border-color: #f6c85e;
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.18) 0%, rgba(246, 200, 94, 0.04) 100%);
+  color: #ffefc6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 208, 0.18),
+    0 6px 18px rgba(246, 200, 94, 0.16);
+}
+#s-shop .shop-vip-tier-days {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #9aa4b8;
+}
+#s-shop .shop-vip-tier.is-selected .shop-vip-tier-days { color: #f0d69b; }
+#s-shop .shop-vip-tier-unit {
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+#s-shop .shop-vip-tier-price {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.15;
+  color: #f8dfa4;
+}
+
+/* The exact telegram_stars.png asset — never a glyph, generic SVG star or emoji. */
+#s-shop .shop-star-ico {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  vertical-align: middle;
+  flex-shrink: 0;
+  display: inline-block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+}
+
+/* ---- top pills: the hero crown and the long-term saving ---- */
+#s-shop .shop-vip-tier-badge,
+#s-shop .shop-vip-tier-tag {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#s-shop .shop-vip-tier-badge {
+  background: linear-gradient(180deg, #ffe6a3 0%, #e5a932 100%);
+  border: 1px solid rgba(255, 246, 220, 0.6);
+  color: #1c1508;
+  box-shadow: 0 4px 10px -6px rgba(245, 196, 81, 0.9);
+}
+#s-shop .shop-vip-tier-tag {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.30) 0%, rgba(16, 185, 129, 0.16) 100%);
+  border: 1px solid rgba(246, 200, 94, 0.45);
+  color: #7df0c2;
+  box-shadow: 0 4px 10px -7px rgba(16, 185, 129, 0.9);
+}
+
+/* ---- the 2x2 luxury perk bento ---- */
+#s-shop .shop-vip-perks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#s-shop .shop-vip-perk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(246, 200, 94, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+#s-shop .shop-vip-perk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+#s-shop .shop-vip-perk-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.16), rgba(246, 200, 94, 0.05));
+  border: 1px solid rgba(246, 200, 94, 0.22);
+  color: #f6c85e;
+}
+#s-shop .shop-vip-perk-svg { width: 15px; height: 15px; }
+#s-shop .shop-vip-perk-label {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #e6eaf2;
+  overflow-wrap: anywhere;
+}
+#s-shop .shop-vip-perk-val {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 200, 94, 0.24);
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.20), rgba(246, 200, 94, 0.08));
+  color: #ffdf9a;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+/* ---- the 24K beveled gold checkout ---- */
+#s-shop .shop-vip-cta {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 50px;
+  min-height: 50px;
+  padding: 0 12px;
+  border-radius: 15px;
+  border: 1px solid rgba(120, 78, 10, 0.38);
+  background: linear-gradient(180deg, #ffe38e 0%, #f5c351 50%, #d4961e 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.65),
+    0 8px 22px rgba(245, 195, 81, 0.28);
+  color: #141008;
+  font: inherit;
+  font-size: clamp(12.5px, 3.5vw, 14px);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition: filter 0.16s ease, transform 0.16s ease;
+}
+/* one static specular sheen: no keyframe ever runs in the Shop */
+#s-shop .shop-vip-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(105deg, transparent 36%, rgba(255, 255, 255, 0.28) 50%, transparent 64%);
+  pointer-events: none;
+}
+#s-shop .shop-vip-cta > * { position: relative; z-index: 1; }
+#s-shop .shop-vip-cta:active {
+  background: linear-gradient(180deg, #f7d377 0%, #e8b445 50%, #c48617 100%);
+  transform: translateY(1px);
+}
+#s-shop .shop-vip-cta:disabled { cursor: default; opacity: 0.68; transform: none; }
+#s-shop .shop-vip-cta-t {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+#s-shop .shop-vip-cta-label { min-width: 0; }
+
+/* ---- the checkout note, led by the exact Stars mark ---- */
+#s-shop .shop-vip-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(246, 200, 94, 0.22);
+  background: rgba(246, 200, 94, 0.08);
+  color: #f0d59a;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+#s-shop .shop-vip-status[hidden] { display: none; }
+#s-shop .shop-vip-status:empty { display: none; }
+#s-shop .shop-vip-status-t { min-width: 0; }
+
+/* ---- joined scripts: the card speaks Vazirmatn, the figures never mirror ---- */
+html[data-lang="fa"] #s-shop .shop-vip,
+html[data-lang="ar"] #s-shop .shop-vip {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+html[data-lang="fa"] #s-shop .shop-vip-title,
+html[data-lang="ar"] #s-shop .shop-vip-title { line-height: 1.5; }
+html[data-lang="fa"] #s-shop .shop-vip-sub,
+html[data-lang="ar"] #s-shop .shop-vip-sub { line-height: 1.7; }
+html[data-lang="fa"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag),
+html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { letter-spacing: 0; }
+
+/* ---- one-screen compaction ---- */
+@media (max-width: 400px) {
+  #s-shop .shop-vip { gap: 9px; padding: 15px 13px; border-radius: 22px; }
+  #s-shop .shop-vip-tier { padding: 13px 4px 8px; }
+  #s-shop .shop-vip-tier-price { font-size: 20px; }
+  #s-shop .shop-vip-perk { padding: 8px 9px; }
+  #s-shop .shop-vip-perk-label { font-size: 10.5px; }
+  #s-shop .shop-vip-perk-val { font-size: 10px; padding: 2px 6px; }
+}
+@media (max-width: 350px) {
+  #s-shop .shop-vip-head { grid-template-columns: 46px minmax(0, 1fr); gap: 9px; }
+  #s-shop .shop-vip-crest { width: 46px; height: 46px; }
+  #s-shop .shop-vip-crown { width: 26px; height: 26px; }
+  #s-shop .shop-vip-title { font-size: 18px; }
+  #s-shop .shop-vip-sub { font-size: 10px; }
+  #s-shop .shop-vip-tier-days { font-size: 11px; }
+  #s-shop .shop-vip-tier-unit { font-size: 9.5px; }
+  #s-shop .shop-vip-tier-price { font-size: 18px; gap: 4px; }
+  #s-shop .shop-vip-perk-label { font-size: 10px; }
+  #s-shop .shop-vip-tier-badge,
+  #s-shop .shop-vip-tier-tag { font-size: 8px; padding: 2px 5px; }
+}
+@media (max-height: 700px) {
+  #s-shop .shop-vip { gap: 8px; padding: 13px 13px; }
+  #s-shop .shop-vip-crest { width: 48px; height: 48px; }
+  #s-shop .shop-vip-crown { width: 27px; height: 27px; }
+  #s-shop .shop-vip-tiers { margin-top: 7px; }
+  #s-shop .shop-vip-tier { padding: 12px 4px 8px; }
+  #s-shop .shop-vip-perk { padding: 8px 9px; gap: 4px; }
+  #s-shop .shop-vip-perk-ico { width: 22px; height: 22px; }
+  #s-shop .shop-vip-perk-svg { width: 14px; height: 14px; }
+  #s-shop .shop-vip-cta { height: 48px; min-height: 48px; }
+}
+@media (max-height: 620px) {
+  #s-shop .shop-pane { justify-content: flex-start; padding-top: 2px; }
+  #s-shop .shop-vip { gap: 7px; padding: 11px 11px; border-radius: 20px; }
+  #s-shop .shop-vip::before { inset: 4px; border-radius: 16px; }
+  #s-shop .shop-vip-head { grid-template-columns: 44px minmax(0, 1fr); gap: 9px; }
+  #s-shop .shop-vip-crest { width: 44px; height: 44px; }
+  #s-shop .shop-vip-crown { width: 25px; height: 25px; }
+  #s-shop .shop-vip-title { font-size: 18px; }
+  #s-shop .shop-vip-tiers { margin-top: 6px; }
+  #s-shop .shop-vip-tier { padding: 11px 4px 7px; gap: 3px; }
+  #s-shop .shop-vip-tier-price { font-size: 18px; }
+  #s-shop .shop-vip-tier-badge,
+  #s-shop .shop-vip-tier-tag { top: -8px; }
+  #s-shop .shop-vip-perk { padding: 7px 8px; gap: 3px; }
+  #s-shop .shop-vip-perk-ico { width: 20px; height: 20px; border-radius: 7px; }
+  #s-shop .shop-vip-perk-svg { width: 13px; height: 13px; }
+  #s-shop .shop-vip-perk-label { font-size: 10px; }
+  #s-shop .shop-vip-perk-val { font-size: 9.5px; padding: 1px 6px; }
+  #s-shop .shop-vip-cta { height: 46px; min-height: 46px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #s-shop .shop-vip-tier,
+  #s-shop .shop-vip-cta { transition: none; }
+}

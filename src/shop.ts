@@ -1,11 +1,14 @@
 /**
- * shop.ts — the Shop: the VIP subscription ONLY, as one centered card.
+ * shop.ts — the Shop: the VIP subscription ONLY, as one centered Royal Obsidian & 24K Gold card.
  *
  * There is no carousel, no coming-soon shelf and no other item: the screen is the single
- * Obsidian VIP centerpiece. Every price comes from the VIP tiers the Worker serves (via
- * premium.ts), and the one checkout is `purchaseVip()` — the same verified Telegram Stars
- * flow the VIP sheet uses. The card scrolls vertically with the screen (overflow-x hidden,
- * overflow-y auto in CSS); nothing horizontal remains to swipe, drag or snap.
+ * VIP centerpiece. Every price comes from the VIP tiers the Worker serves (via premium.ts), and
+ * the one checkout is `purchaseVip()` — the same verified Telegram Stars flow the VIP sheet uses.
+ *
+ * The screen is compacted to a single mobile viewport: a crown medallion head, a 3-column tier
+ * row, a 2x2 perk bento and the gold CTA. Its scrollbars are hidden in CSS, so nothing shows a
+ * browser track even on a short phone. Every figure is a Latin `<bdi dir="ltr">` island and every
+ * Stars mark is the exact `telegram_stars.png` asset — no glyph, sprite star or emoji.
  */
 import { profile } from './storage';
 import { setBalance } from './coin';
@@ -16,6 +19,7 @@ import {
   type ShopVipTier,
 } from './premium';
 import { VIP_HERO_PLAN, type VipPlanId } from '../shared/vip';
+import telegramStarsUrl from './assets/images/telegram_stars.png';
 import type { Sheets } from './sheets';
 
 export interface ShopApi {
@@ -30,13 +34,13 @@ export interface Shop {
 
 const $ = <T extends HTMLElement>(id: string): T | null => document.getElementById(id) as T | null;
 
-/** The four promises, each a title and a value pill; `ltr` pins 4/4, +50% and ×2.
- *  Every row wears the same gold check vector (#i-check): a vertical checklist, not tiles. */
-const PERKS: ReadonlyArray<{ label: string; value: string; ltr: boolean }> = [
-  { label: 'shopPerkChat', value: 'shopPerkChatVal', ltr: false },
-  { label: 'shopPerkRecovery', value: 'shopPerkRecoveryVal', ltr: true },
-  { label: 'shopPerkBoost', value: 'shopPerkBoostVal', ltr: true },
-  { label: 'shopPerkDouble', value: 'shopPerkDoubleVal', ltr: true },
+/** The four promises: label, value pill, and the crisp inline vector that leads each tile.
+ *  `ltr` pins 4/4, +50% and ×2 so no RTL locale can mirror a figure. */
+const PERKS: ReadonlyArray<{ label: string; value: string; ltr: boolean; ico: string }> = [
+  { label: 'shopPerkChat', value: 'shopPerkChatVal', ltr: false, ico: '#shop-i-chat' },
+  { label: 'shopPerkRecovery', value: 'shopPerkRecoveryVal', ltr: true, ico: '#shop-i-heal' },
+  { label: 'shopPerkBoost', value: 'shopPerkBoostVal', ltr: true, ico: '#shop-i-boost' },
+  { label: 'shopPerkDouble', value: 'shopPerkDoubleVal', ltr: true, ico: '#shop-i-gem' },
 ];
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] => {
@@ -54,12 +58,21 @@ const bdi = (text: string): HTMLElement => {
   return node;
 };
 
-/** The Telegram Star as a crisp inline vector SVG (#i-star-3d, the gem-cut gold star) —
- *  never a glyph, sprite or emoji. Rides every price row and the gold CTA. */
-function starIcon(cls = 'tg-star-icon'): SVGSVGElement {
-  return svg('#i-star-3d', cls);
+/** The exact Telegram Stars logo, bundled and hashed by Vite — never a glyph, sprite or emoji.
+ *  It rides all three plan cards, the gold CTA and the checkout status banner. */
+function starIcon(cls = 'shop-star-ico'): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = cls;
+  img.src = telegramStarsUrl;
+  img.alt = '';
+  img.width = 17;
+  img.height = 17;
+  img.decoding = 'async';
+  img.setAttribute('aria-hidden', 'true');
+  return img;
 }
 
+/** A crisp inline vector from the Shop's own symbol set (crown, chat, shield, chevrons, gem). */
 function svg(href: string, cls: string): SVGSVGElement {
   const NS = 'http://www.w3.org/2000/svg';
   const node = document.createElementNS(NS, 'svg');
@@ -81,7 +94,6 @@ function write(root: HTMLElement, template: string, values: Record<string, strin
 }
 
 export function createShop(api: ShopApi): Shop {
-  const chip = $<HTMLElement>('shop-balance');
   const coins = $<HTMLElement>('shop-coins');
   const tierRow = $<HTMLElement>('shop-vip-tiers');
   const perks = $<HTMLUListElement>('shop-vip-perks');
@@ -99,18 +111,10 @@ export function createShop(api: ShopApi): Shop {
   let statusKey = '';
   let mounted = false;
 
-  /** The flagship's name is split once at paint time so only the Latin "VIP" wears the gold
-   *  foil while the rest of the title stays crisp cream — in every script, RTL included. */
+  /** The flagship's localized name. The whole title wears the metallic-gold foil in CSS. */
   function paintTitle(): void {
     const host = $<HTMLElement>('shop-vip-title');
-    if (!host) return;
-    host.replaceChildren();
-    for (const part of t('shopVipTitle').split(/(VIP)/g)) {
-      if (!part) continue;
-      host.append(part === 'VIP'
-        ? el('span', 'vip-flag-title-vip', part)
-        : document.createTextNode(part));
-    }
+    if (host) host.textContent = t('shopVipTitle');
   }
 
   const planOf = (): ShopVipTier | null => tiers.find((tier) => tier.id === selected) ?? tiers[0] ?? null;
@@ -119,7 +123,7 @@ export function createShop(api: ShopApi): Shop {
   function clearStatus(): void {
     statusKey = '';
     if (!status) return;
-    status.textContent = '';
+    status.replaceChildren();
     status.hidden = true;
   }
 
@@ -135,24 +139,25 @@ export function createShop(api: ShopApi): Shop {
     tiersKey = tierSignature();
     tierRow.setAttribute('aria-label', t('vipPlansLabel'));
     tierRow.replaceChildren(...tiers.map((tier) => {
-      const button = el('button', 'vip-flag-tier');
+      const button = el('button', 'shop-vip-tier');
       button.type = 'button';
       button.dataset.plan = tier.id;
       button.setAttribute('role', 'radio');
       button.setAttribute('aria-checked', String(tier.id === selected));
       button.setAttribute('aria-label', `${t('shopVipKicker')} · ${tier.days} ${t('vipPlanUnitDays')} · ${tier.stars}`);
-      if (tier.id === VIP_HERO_PLAN) button.append(el('span', 'vip-flag-tier-badge', t('vipPlanProRibbon')));
+      /* the hero tier wears the crown pill; the long term wears its emerald savings badge */
+      if (tier.id === VIP_HERO_PLAN) button.append(el('span', 'shop-vip-tier-badge', t('vipPlanProRibbon')));
       if (tier.id === '90d') {
-        const tag = el('span', 'vip-flag-tier-tag');
+        const tag = el('span', 'shop-vip-tier-tag');
         tag.append(bdi(t('vipPlanGrandTag')));
         button.append(tag);
       }
 
-      const days = el('span', 'vip-flag-tier-days');
-      days.append(bdi(String(tier.days)), el('span', 'vip-flag-tier-unit', t('vipPlanUnitDays')));
-      const price = el('span', 'vip-flag-tier-price');
-      /* the vector Telegram Star rides the price row at its own crisp size in every locale */
-      price.append(bdi(String(tier.stars)), starIcon());
+      const days = el('span', 'shop-vip-tier-days');
+      days.append(bdi(String(tier.days)), el('span', 'shop-vip-tier-unit', t('vipPlanUnitDays')));
+      const price = el('span', 'shop-vip-tier-price');
+      /* the exact Telegram Stars PNG rides the price row at its own crisp size */
+      price.append(starIcon(), bdi(String(tier.stars)));
 
       button.append(days, price);
       return button;
@@ -162,21 +167,33 @@ export function createShop(api: ShopApi): Shop {
   function paintPerks(): void {
     if (!perks) return;
     /* The four promises are pure translated copy: a language that has not moved, and a plan
-       snapshot that has not moved, owe the list no rebuild. */
+       snapshot that has not moved, owe the grid no rebuild. */
     const key = PERKS.map((perk) => `${t(perk.label)}\u0001${t(perk.value)}`).join('|');
     if (key === perksKey) return;
     perksKey = key;
     perks.replaceChildren(...PERKS.map((perk) => {
-      const row = el('li', 'vip-flag-perk');
-      const mark = el('span', 'vip-flag-perk-ico');
-      mark.append(svg('#i-check', 'vip-flag-perk-svg'));
-      const label = el('span', 'vip-flag-perk-label', t(perk.label));
-      const value = el('span', 'vip-flag-perk-val');
+      const tile = el('li', 'shop-vip-perk');
+      const top = el('span', 'shop-vip-perk-top');
+      const mark = el('span', 'shop-vip-perk-ico');
+      mark.append(svg(perk.ico, 'shop-vip-perk-svg'));
+      const value = el('span', 'shop-vip-perk-val');
       if (perk.ltr) value.append(bdi(t(perk.value)));
       else value.textContent = t(perk.value);
-      row.append(mark, label, value);
-      return row;
+      top.append(mark, value);
+      tile.append(top, el('span', 'shop-vip-perk-label', t(perk.label)));
+      return tile;
     }));
+  }
+
+  /** The checkout note: the exact Stars mark followed by the localized result sentence. */
+  function paintStatus(): void {
+    if (!status) return;
+    status.hidden = !statusKey;
+    if (!statusKey) {
+      status.replaceChildren();
+      return;
+    }
+    status.replaceChildren(starIcon(), el('span', 'shop-vip-status-t', t(statusKey)));
   }
 
   function paint(): void {
@@ -191,30 +208,31 @@ export function createShop(api: ShopApi): Shop {
       }
     }
 
-    for (const button of tierRow?.querySelectorAll<HTMLButtonElement>('.vip-flag-tier') ?? []) {
+    for (const button of tierRow?.querySelectorAll<HTMLButtonElement>('.shop-vip-tier') ?? []) {
       const on = button.dataset.plan === selected;
       button.classList.toggle('is-selected', on);
       button.setAttribute('aria-checked', String(on));
     }
 
-    if (!cta || !ctaText) return;
-    cta.disabled = busy || tiers.length === 0;
-    cta.classList.toggle('is-busy', busy);
-    ctaText.replaceChildren();
-    const plan = planOf();
-    if (busy) ctaText.textContent = t('vipCtaBusy');
-    else if (plan) {
-      write(ctaText, t(active ? 'shopVipRenew' : 'shopVipCta'), {
-        days: String(plan.days),
-        price: String(plan.stars),
-      });
-      ctaText.append(starIcon());
+    if (cta && ctaText) {
+      cta.disabled = busy || tiers.length === 0;
+      cta.classList.toggle('is-busy', busy);
+      ctaText.replaceChildren();
+      const plan = planOf();
+      if (busy) ctaText.append(el('span', 'shop-vip-cta-label', t('vipCtaBusy')));
+      else if (plan) {
+        /* The sentence is one inline span so its words and its <bdi> figures flow as normal
+           text; the exact Stars mark follows it as the second flex item. */
+        const label = el('span', 'shop-vip-cta-label');
+        write(label, t(active ? 'shopVipRenew' : 'shopVipCta'), {
+          days: String(plan.days),
+          price: String(plan.stars),
+        });
+        ctaText.append(label, starIcon());
+      }
     }
 
-    if (status) {
-      status.hidden = !statusKey;
-      status.textContent = statusKey ? t(statusKey) : '';
-    }
+    paintStatus();
   }
 
   /** Re-read the admin's tiers; a failed read keeps the sheet already on screen. The read itself
@@ -247,7 +265,9 @@ export function createShop(api: ShopApi): Shop {
     impact('light');
     void purchaseVip(plan.id).then((result) => {
       busy = false;
-      /* A confirmed (or preview) pass earns its toast inside premium.ts, never here. */
+      /* A confirmed (or preview) pass earns its toast inside premium.ts, never here. The
+         entitlement change already repainted the badge; paint once more now that `busy` is
+         false so the CTA immediately reads "extend" with the updated price. */
       if (result === 'paid' || result === 'preview') {
         paint();
         syncPlans();
@@ -275,7 +295,7 @@ export function createShop(api: ShopApi): Shop {
       const target = ev.target;
       if (!(target instanceof Element)) return;
 
-      const tier = target.closest<HTMLElement>('.vip-flag-tier');
+      const tier = target.closest<HTMLElement>('.shop-vip-tier');
       if (tier && tierRow?.contains(tier)) {
         const id = tier.dataset.plan as VipPlanId | undefined;
         if (id && id !== selected && !busy) {
