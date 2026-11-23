@@ -44958,6 +44958,59 @@ html[data-lang="ar"] :is(.sqv-title, .sqv-sub, .sqv-toggle, .sqv-hint, .sqv-err)
   white-space: nowrap;
   letter-spacing: .01em;
 }
+.fr-filters {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+.fr-filter {
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.fr-filter:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .05); color: var(--ink); }
+.fr-filter:active { transform: translateY(1px); }
+.fr-filter:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.fr-filter[data-fr-filter="all"][aria-pressed="true"] {
+  background: rgba(246, 200, 94, .14);
+  border-color: rgba(246, 200, 94, .38);
+  color: #f6c85e;
+}
+.fr-filter[data-fr-filter="most_wins"][aria-pressed="true"] {
+  background: rgba(16, 185, 129, .16);
+  border-color: rgba(16, 185, 129, .42);
+  color: #34d399;
+}
+.fr-filter[data-fr-filter="most_losses"][aria-pressed="true"] {
+  background: rgba(244, 63, 94, .16);
+  border-color: rgba(244, 63, 94, .42);
+  color: #fb7185;
+}
+.fr-filter-ic { flex: none; width: 14px; height: 14px; }
+.fr-filter-label { min-width: 0; overflow-wrap: anywhere; }
 .frm-status {
   flex: none;
   margin: 0;
@@ -45080,29 +45133,56 @@ html[data-lang="ar"] :is(.sqv-title, .sqv-sub, .sqv-toggle, .sqv-hint, .sqv-err)
 .fr-h2h {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10.5px;
-  font-weight: 900;
+  gap: 6px;
+  flex-wrap: nowrap;
+  margin-top: 4px;
   font-variant-numeric: tabular-nums lining-nums;
-  color: var(--ink-soft);
 }
-.fr-wl { color: var(--ink); }
-.fr-dot { opacity: .45; }
-.fr-rate { color: #9fe6ff; }
+.fr-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.fr-stat-w {
+  background: rgba(16, 185, 129, .13);
+  border: 1px solid rgba(16, 185, 129, .28);
+  color: #34d399;
+}
+.fr-stat-l {
+  background: rgba(244, 63, 94, .13);
+  border: 1px solid rgba(244, 63, 94, .28);
+  color: #fb7185;
+}
+.fr-stat-rate {
+  background: rgba(255, 255, 255, .05);
+  color: #e2e8f0;
+  font-weight: 900;
+}
+.fr-stat-rate.is-good { color: #34d399; }
 .fr-bar {
-  display: block;
+  display: flex;
+  direction: ltr;
   width: 100%;
   height: 4px;
+  margin-top: 6px;
   overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: rgba(244, 63, 94, .38);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
 }
-.fr-bar-w {
+.fr-bar-w,
+.fr-bar-l {
   display: block;
+  flex: none;
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
 }
+.fr-bar-w { background: #10b981; }
+.fr-bar-l { background: #f43f5e; }
 .fr-acts { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
 .fr-chal {
   min-height: 30px;
@@ -45141,6 +45221,13 @@ html[data-lang="ar"] :is(.sqv-title, .sqv-sub, .sqv-toggle, .sqv-hint, .sqv-err)
 }
 .fr-del:hover:not(:active) { color: var(--danger); background: rgba(244, 63, 94, .1); }
 .fr-del:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+@media (max-width: 360px) {
+  .fr-card { gap: 8px; padding: 9px 10px; }
+  .fr-ava { width: 34px; height: 34px; }
+  .fr-acts { gap: 4px; }
+  .fr-chal { min-height: 28px; padding: 0 8px; }
+  .fr-del { width: 28px; height: 28px; }
+}
 
 /* ---- the empty state ---- */
 .frm-empty {
@@ -45183,6 +45270,11 @@ html:lang(fa) .fr-rivals,
 html:lang(ar) .fr-rivals { direction: rtl; }
 html:lang(fa) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag, .frm-tg-pick-t),
 html:lang(ar) :is(.fr-rivals-t, .fr-rivals-s, .frm-title, .frm-sub, .frm-empty-t, .fr-name, .fr-tag, .frm-tg-pick-t) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+html:lang(fa) :is(.fr-filter-label, .fr-stat),
+html:lang(ar) :is(.fr-filter-label, .fr-stat) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }

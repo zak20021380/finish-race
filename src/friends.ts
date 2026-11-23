@@ -16,7 +16,7 @@
  */
 import { adoptUserStorageKey, readJson, writeJson } from './storage';
 import { createModal, type ModalHandle } from './modal';
-import { onLang, t } from './settings';
+import { lang, onLang, t, type LangCode } from './settings';
 import { impact, openTelegramShare, roomShareUrl, startParam, tgInitData, tgUser } from './telegram';
 import { workerUrl } from './adminApi';
 import { copyText, createRoomCode, openInviteRoom } from './gamemodes';
@@ -120,13 +120,31 @@ function persist(): void {
 /** A record appears when it was pinned by hand, or when the history itself qualifies it. */
 const surfaced = (rec: FriendRecord): boolean => !rec.dismissed && (rec.pinned || rec.matches > 1);
 
-/** The rows the sheet prints: pinned first, then the freshest rivalry. */
-function visibleRows(): FriendRecord[] {
-  return roster()
-    .filter(surfaced)
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned)
+type FriendFilter = 'all' | 'most_wins' | 'most_losses';
+let friendFilter: FriendFilter = 'all';
+
+const winRateOf = (rec: FriendRecord): number => rec.matches > 0 ? rec.wins / rec.matches : 0;
+
+/** The rows the sheet prints: pinned first by default, or ranked by the chosen record. */
+function visibleRows(filter: FriendFilter = friendFilter): FriendRecord[] {
+  const rows = roster().filter(surfaced);
+  if (filter === 'most_wins') {
+    return rows.sort((a, b) => b.wins - a.wins
+      || winRateOf(b) - winRateOf(a)
+      || Number(b.pinned) - Number(a.pinned)
       || b.lastPlayedAt - a.lastPlayedAt
       || a.name.localeCompare(b.name));
+  }
+  if (filter === 'most_losses') {
+    return rows.sort((a, b) => b.losses - a.losses
+      || b.matches - a.matches
+      || Number(b.pinned) - Number(a.pinned)
+      || b.lastPlayedAt - a.lastPlayedAt
+      || a.name.localeCompare(b.name));
+  }
+  return rows.sort((a, b) => Number(b.pinned) - Number(a.pinned)
+    || b.lastPlayedAt - a.lastPlayedAt
+    || a.name.localeCompare(b.name));
 }
 
 /** One-match opponents the player can add in a single tap. */
@@ -194,6 +212,30 @@ const $ = <T extends HTMLElement>(id: string): T | null => document.getElementBy
 /** Every numeral this module writes is Latin and tabular: no locale formatting anywhere. */
 const latin = (n: number): string => String(Math.max(0, Math.floor(n)));
 
+const FILTER_COPY: Record<LangCode, Record<FriendFilter, string>> = {
+  en: { all: 'All', most_wins: 'Most Wins', most_losses: 'Most Losses' },
+  fa: { all: 'همه', most_wins: 'بیشترین برد', most_losses: 'بیشترین باخت' },
+  ru: { all: 'Все', most_wins: 'Больше побед', most_losses: 'Больше поражений' },
+  ar: { all: 'الكل', most_wins: 'الأكثر فوزاً', most_losses: 'الأكثر خسارة' },
+  es: { all: 'Todos', most_wins: 'Más victorias', most_losses: 'Más derrotas' },
+};
+
+const FILTER_ARIA: Record<LangCode, string> = {
+  en: 'Sort friends by record',
+  fa: 'مرتب‌سازی دوستان بر اساس آمار',
+  ru: 'Сортировка друзей по статистике',
+  ar: 'ترتيب الأصدقاء حسب الإحصائيات',
+  es: 'Ordenar amigos por estadísticas',
+};
+
+const STAT_LABELS: Record<LangCode, { wins: string; losses: string }> = {
+  en: { wins: 'W', losses: 'L' },
+  fa: { wins: 'برد', losses: 'باخت' },
+  ru: { wins: 'В', losses: 'П' },
+  ar: { wins: 'ف', losses: 'خ' },
+  es: { wins: 'V', losses: 'D' },
+};
+
 /** The letter a photo-less avatar wears. */
 function monogram(name: string): string {
   const chars = Array.from((name || '?').trim());
@@ -237,6 +279,21 @@ function paintCopy(): void {
   }
   const input = $<HTMLInputElement>('fr-input');
   if (input) input.setAttribute('aria-label', t('frAddPlaceholder'));
+  paintFilters();
+}
+
+function paintFilters(): void {
+  const bar = $('fr-filters');
+  if (!bar) return;
+  const copy = FILTER_COPY[lang] ?? FILTER_COPY.en;
+  bar.setAttribute('aria-label', FILTER_ARIA[lang] ?? FILTER_ARIA.en);
+  for (const button of bar.querySelectorAll<HTMLButtonElement>('[data-fr-filter]')) {
+    const key = button.dataset.frFilter as FriendFilter | undefined;
+    if (!key || !(key in copy)) continue;
+    button.setAttribute('aria-pressed', String(key === friendFilter));
+    const label = button.querySelector<HTMLElement>('[data-fr-filter-label]');
+    if (label) label.textContent = copy[key];
+  }
 }
 
 function paintEntry(): void {
@@ -301,32 +358,52 @@ function rowNode(rec: FriendRecord): HTMLLIElement {
 
   const record = document.createElement('span');
   record.className = 'fr-h2h';
-  const wl = document.createElement('bdi');
-  wl.className = 'fr-wl';
-  wl.dir = 'ltr';
-  wl.textContent = fill('frRecord', { w: latin(rec.wins), l: latin(rec.losses) });
-  wl.setAttribute('aria-label', fill('frH2hAria', {
+  record.setAttribute('role', 'img');
+  record.setAttribute('aria-label', fill('frH2hAria', {
     w: latin(rec.wins), l: latin(rec.losses), n: latin(rec.matches),
   }));
-  const dot = document.createElement('span');
-  dot.className = 'fr-dot';
-  dot.setAttribute('aria-hidden', 'true');
-  dot.textContent = '·';
-  const rate = document.createElement('bdi');
-  rate.className = 'fr-rate';
-  rate.dir = 'ltr';
-  const pct = rec.matches > 0 ? Math.round((rec.wins / rec.matches) * 100) : 0;
-  rate.textContent = `${latin(pct)}%`;
-  record.append(wl, dot, rate);
+  const labels = STAT_LABELS[lang] ?? STAT_LABELS.en;
+
+  const wins = document.createElement('span');
+  wins.className = 'fr-stat fr-stat-w';
+  const winsLabel = document.createElement('span');
+  winsLabel.textContent = labels.wins;
+  const winsValue = document.createElement('bdi');
+  winsValue.dir = 'ltr';
+  winsValue.textContent = latin(rec.wins);
+  wins.append(winsLabel, winsValue);
+
+  const losses = document.createElement('span');
+  losses.className = 'fr-stat fr-stat-l';
+  const lossesLabel = document.createElement('span');
+  lossesLabel.textContent = labels.losses;
+  const lossesValue = document.createElement('bdi');
+  lossesValue.dir = 'ltr';
+  lossesValue.textContent = latin(rec.losses);
+  losses.append(lossesLabel, lossesValue);
+
+  const pct = Math.round(winRateOf(rec) * 100);
+  const rate = document.createElement('span');
+  rate.className = 'fr-stat fr-stat-rate';
+  if (pct >= 50 && rec.matches > 0) rate.classList.add('is-good');
+  const rateValue = document.createElement('bdi');
+  rateValue.dir = 'ltr';
+  rateValue.textContent = `${latin(pct)}%`;
+  rate.append(rateValue);
+  record.append(wins, losses, rate);
   mid.append(record);
 
   const bar = document.createElement('span');
   bar.className = 'fr-bar';
   bar.setAttribute('aria-hidden', 'true');
+  const total = rec.wins + rec.losses;
   const win = document.createElement('i');
   win.className = 'fr-bar-w';
-  win.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  bar.append(win);
+  win.style.width = `${total > 0 ? (rec.wins / total) * 100 : 0}%`;
+  const loss = document.createElement('i');
+  loss.className = 'fr-bar-l';
+  loss.style.width = `${total > 0 ? (rec.losses / total) * 100 : 0}%`;
+  bar.append(win, loss);
   mid.append(bar);
 
   li.append(mid);
@@ -872,6 +949,17 @@ export function initFriends(): void {
   root.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
+    const filter = target.closest<HTMLButtonElement>('[data-fr-filter]');
+    if (filter) {
+      event.preventDefault();
+      const next = filter.dataset.frFilter as FriendFilter | undefined;
+      if (!next || next === friendFilter) return;
+      friendFilter = next;
+      impact('light');
+      paintFilters();
+      paintList();
+      return;
+    }
     const remove = target.closest<HTMLElement>('[data-fr-remove]');
     if (remove) {
       event.preventDefault();
