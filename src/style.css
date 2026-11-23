@@ -36318,8 +36318,9 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-sheet [hidden] { display: none !important; }
 
 /* ---- the two views: the hub and the admin door share one column ----
-   One flow, read top to bottom: header, prize, rankings, league note, action bar. Nothing is
-   pushed apart with `space-between`, so no section leaves a gap behind it. */
+   One flow, read top to bottom: header, prize, rankings, action bar. Nothing is
+   pushed apart with `space-between`, so no section leaves a gap behind it, and the action bar
+   closes the same 14px rhythm the sections above it keep. */
 .cw-main {
   flex: 0 1 auto;
   min-height: 0;
@@ -36585,11 +36586,13 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
   margin: 4px 0 10px;
 }
 .cw-board-t {
+  flex: 1 1 auto;
   margin: 0;
   min-width: 0;
   font-size: 11px;
@@ -36600,8 +36603,9 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The one register key of the sheet: a gold-outlined pill. Its `+` is a separate LTR run so it
-   never jumps to the other end of a Persian label. */
+/* The one register key of the sheet: a gold-outlined pill that never wraps onto a second line
+   beside the section title. Its `+` is a separate LTR run so it never jumps to the other end of
+   a Persian label. */
 .cw-reg {
   appearance: none;
   flex: none;
@@ -36619,6 +36623,7 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   font-weight: 800;
   letter-spacing: .01em;
   color: var(--cw-gold-hi);
+  white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background var(--motion-fast), transform var(--motion-fast);
@@ -36654,86 +36659,58 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-sheet .cw-list::-webkit-scrollbar-thumb { background: rgba(233, 192, 115, .38); border-radius: 999px; }
 .cw-sheet .cw-list::-webkit-scrollbar-thumb:hover { background: rgba(233, 192, 115, .66); }
 
-/* ---- the open league note: a statement of the rule, not a seat waiting for a rival ----
-   Solid hairline and a trophy, never the dashed bracket of an empty slot. It is the shortest
-   honest answer to "how do I get on this board" while the board is still short. */
-.cw-league {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  margin: 10px 0 0;
-  padding: 11px 13px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(233, 192, 115, .07) 0%, rgba(233, 192, 115, .02) 100%);
-  box-shadow: inset 0 0 0 1px rgba(233, 192, 115, .16);
-}
-.cw-league[hidden] { display: none; }
-.cw-league-ico {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: rgba(233, 192, 115, .1);
-  box-shadow: inset 0 0 0 1px rgba(233, 192, 115, .2);
-  color: var(--cw-gold);
-}
-.cw-league-ico .ico { width: 16px; height: 16px; }
-.cw-league-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.cw-league-t {
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.3;
-  font-weight: 800;
-  letter-spacing: .01em;
-  color: var(--cw-gold-hi);
-  overflow-wrap: anywhere;
-}
-.cw-league-sub {
-  min-width: 0;
-  font-size: 10.5px;
-  line-height: 1.45;
-  font-weight: 600;
-  color: var(--text-dim);
-  overflow-wrap: anywhere;
-}
-
-/* ---- one ladder row: rank + crest, a two-line identity, score + chevron ----
-   Four rock-solid columns: a fixed medal, a fixed avatar, the flexible identity, and the score.
+/* ---- one ladder row: a collision-proof two-tier e-sports card ----
+   Exactly two clusters: the leading run — rank crest, avatar, a two-line identity — soaks up
+   every spare pixel and truncates at each level, while the trailing run — the stacked TIQ
+   readout and the door in — never shrinks. The `YOUR TEAM` pill therefore can never collide
+   with the score on a narrow phone; the identity narrows and the figures keep their width.
    In RTL the whole row flips while every code inside keeps its own direction. */
 .cw-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
   min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, .07);
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 16px;
-  background: linear-gradient(180deg, #141821 0%, #0f131a 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, .02) 100%);
   transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
 }
 /* A tappable row says so: a rim that warms under the thumb, and a press that actually gives. */
 .cw-row.is-inspectable,
 .cw-row[data-select] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.cw-row.is-inspectable:hover {
-  background: linear-gradient(180deg, #182131 0%, #10151d 100%);
-  border-color: rgba(245, 196, 81, .22);
+.cw-row.is-inspectable:hover:not(.is-you) {
+  border-color: rgba(246, 200, 94, .26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .075) 0%, rgba(255, 255, 255, .03) 100%);
 }
 .cw-row.is-inspectable:active { transform: scale(.988); }
+/* The player's own channel: an emerald-gold rim over a warm corner bloom, so the card already
+   reads as yours before the `YOUR TEAM` pill is parsed. The hover state only warms the rim:
+   it never repaints over the identity the card is wearing. */
 .cw-row.is-you {
-  border-color: rgba(245, 196, 81, .32);
-  background: linear-gradient(180deg, #171b24 0%, #10131a 100%);
-  box-shadow: inset 0 1px 0 rgba(245, 196, 81, .08);
+  border-color: rgba(246, 200, 94, .36);
+  background:
+    radial-gradient(120% 150% at 0% 0%, rgba(246, 200, 94, .1) 0%, rgba(246, 200, 94, 0) 62%),
+    linear-gradient(135deg, rgba(246, 200, 94, .08) 0%, rgba(16, 185, 129, .06) 50%, rgba(15, 20, 30, .92) 100%);
 }
+.cw-row.is-you:hover { border-color: rgba(246, 200, 94, .48); }
 .cw-row.is-selected {
   border-color: rgba(125, 235, 255, .38);
-  background: linear-gradient(180deg, rgba(125, 235, 255, .1) 0%, rgba(125, 235, 255, .02) 100%), #10131a;
+  background: linear-gradient(180deg, rgba(125, 235, 255, .1) 0%, rgba(125, 235, 255, .02) 100%);
 }
+/* The leading cluster. `min-width: 0` at every level is what lets it shrink instead of pushing
+   the score column out of the card. */
+.cw-row-lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* The rank crest: a rounded-square medal. Gold, silver and bronze are the prizes; every other
+   place is a quiet slate chip, so the podium still sorts the eye before the number does. */
 .cw-rank {
   flex: none;
   flex-shrink: 0;
@@ -36742,11 +36719,12 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, .06);
+  background: #141C29;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: -.02em;
   color: #9AA8BD;
   direction: ltr;
@@ -36754,20 +36732,21 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-rank.is-none { color: var(--text-dim); opacity: .7; font-size: 13px; }
 .cw-rank.is-1 {
-  background: linear-gradient(180deg, #F7DC98 0%, #C99A34 100%);
-  color: #2A1B05;
-  box-shadow: inset 0 1px 0 rgba(255, 252, 240, .6);
+  background: #f6c85e;
+  color: #141008;
+  box-shadow: inset 0 1px 0 rgba(255, 252, 240, .55);
 }
 .cw-rank.is-2 {
-  background: linear-gradient(180deg, #E4EAF2 0%, #97A5B8 100%);
-  color: #1B2432;
+  background: #cfd8e3;
+  color: #141B26;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6);
 }
 .cw-rank.is-3 {
-  background: linear-gradient(180deg, #F0AE72 0%, #B4682E 100%);
-  color: #2B1607;
-  box-shadow: inset 0 1px 0 rgba(255, 235, 214, .5);
+  background: #dd8a4a;
+  color: #1C0F06;
+  box-shadow: inset 0 1px 0 rgba(255, 235, 214, .45);
 }
+/* The channel face: a perfect circle inside a crisp 1.5px ring, never a soft glow. */
 .cw-av {
   position: relative;
   flex-shrink: 0;
@@ -36778,12 +36757,12 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   border-radius: 50%;
   overflow: hidden;
   background: linear-gradient(180deg, hsl(var(--cw-hue, 210) 40% 30%) 0%, hsl(var(--cw-hue, 210) 42% 19%) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .14);
 }
-/* The champion and the player's own channel wear a fine gold ring. */
+/* The champion and the player's own channel wear the fine gold ring. */
 .cw-row.is-lead .cw-av,
 .cw-row.is-you .cw-av {
-  box-shadow: 0 0 0 2px rgba(245, 196, 81, .5), inset 0 0 0 1px rgba(255, 255, 255, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(246, 200, 94, .42);
 }
 .cw-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cw-av-img[hidden] { display: none; }
@@ -36794,8 +36773,8 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   color: rgba(255, 255, 255, .92);
   text-transform: uppercase;
 }
-/* The middle column takes all the slack. Line 1 is one clean title with an ellipsis; line 2 carries
-   the member count and the one tag that matters. `min-width: 0` at every level lets it truncate. */
+/* The two-line identity stack. Line 1 is one clean title with an ellipsis; line 2 carries the
+   member count and the one tag that matters, in a single non-wrapping run. */
 .cw-row-id {
   flex: 1 1 auto;
   min-width: 0;
@@ -36814,10 +36793,10 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
-  font-size: 14.5px;
+  font-size: 13.5px;
   line-height: 1.25;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 800;
+  color: #f8fafc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -36827,23 +36806,29 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-row-meta {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  flex-wrap: nowrap;
   min-width: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.3;
   font-weight: 600;
   color: #8D9AAD;
 }
+/* The count is the only thing on the line allowed to clip: the pill beside it never does. */
 .cw-row-members {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   unicode-bidi: isolate;
 }
 
-/* The score column is one horizontal run: figure, TIQ mark, then the door. */
+/* The trailing cluster: the stacked readout, then the door in. It never shrinks. */
 .cw-row-side {
-  flex: none;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -36851,20 +36836,44 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   min-width: 0;
   margin-inline-start: 0;
 }
-.cw-row-pts {
-  display: inline-flex;
-  align-items: baseline;
+/* The readout is stacked on purpose: the figure owns the line and `TIQ` labels it beneath, so a
+   five-figure total is as wide as its digits and never as wide as the word after them. */
+.cw-row-score {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.cw-row-score-n {
+  font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
   font-size: 14px;
-  line-height: 1.1;
-  font-weight: 800;
+  line-height: 1.2;
+  font-weight: 900;
   color: #f6c85e;
   white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
-.cw-row-pts .cw-tiq { color: inherit; }
-.cw-row-pts:not(.is-zero) .cw-tiq-u { color: #f6c85e; filter: none; }
-.cw-row-pts.is-zero { color: var(--text-dim); }
-.cw-row-pts.is-zero .cw-tiq-u { color: var(--text-dim); filter: none; }
+.cw-row-score-u {
+  font-family: var(--font-numeric);
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: rgba(246, 200, 94, .72);
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.cw-row-score.is-zero .cw-row-score-n { color: var(--text-dim); }
+.cw-row-score.is-zero .cw-row-score-u { color: rgba(148, 163, 184, .7); }
 /* The chevron is a real key, not a painted hint: a keyboard reaches the inspector through it,
    and it is the one element inside the row that is not the row's own tap target. */
 .cw-row-go {
@@ -36885,10 +36894,13 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   -webkit-tap-highlight-color: transparent;
   transition: color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
 }
-.cw-row-go .cw-row-go-ico { width: 13px; height: 13px; }
+.cw-row-go .cw-row-go-ico { width: 13px; height: 13px; opacity: .55; }
 .cw-row-go:hover { color: var(--cw-gold-hi); background: rgba(233, 192, 115, .1); }
+.cw-row-go:hover .cw-row-go-ico { opacity: 1; }
 .cw-row-go:active { transform: scale(.9); }
 .cw-row:hover .cw-row-go { color: var(--cw-gold-ink); }
+/* A chevron points the way the text reads: mirrored wherever the row is right-to-left. */
+[dir="rtl"] .cw-sheet .cw-row-go .cw-row-go-ico { transform: scaleX(-1); }
 .cw-pill {
   flex: none;
   display: inline-flex;
@@ -36906,8 +36918,23 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
   text-transform: uppercase;
   color: var(--cw-mint);
 }
-/* The inline team tag: the same pill, riding the metadata line beside the member count. */
-.cw-you-pill { height: auto; padding: 2px 8px; font-size: 10px; letter-spacing: .04em; }
+/* The inline team tag: the same pill, riding the metadata line beside the member count. It keeps
+   its full width at any zoom, which is why the count next to it is the run that truncates. */
+.cw-you-pill {
+  flex-shrink: 0;
+  height: auto;
+  padding: 2px 7px;
+  border: 1px solid rgba(16, 185, 129, .42);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .16);
+  box-shadow: none;
+  font-size: 9.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: #34d399;
+  white-space: nowrap;
+}
 .cw-sel {
   appearance: none;
   flex: none;
@@ -36966,7 +36993,7 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 }
 .cw-pick[hidden] { display: none; }
 /* One surface at a time: the ladder steps aside for its own picker, never behind it. */
-.cw-board.is-picking > :is(.cw-board-head, #cw-board-list, #cw-league) { display: none; }
+.cw-board.is-picking > :is(.cw-board-head, #cw-board-list) { display: none; }
 .cw-pick-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cw-pick-t {
   min-width: 0;
@@ -37065,6 +37092,9 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .cw-verify-btn:active { transform: scale(.97); }
 
 .cw-actions { display: flex; align-items: stretch; gap: 10px; margin-top: 14px; min-width: 0; }
+/* The membership prompt is an insert, not a permanent row: with no prompt above it, the action
+   bar simply closes the sheet's own column rhythm — no orphaned half-gap under the ladder. */
+.cw-foot .cw-verify[hidden] + .cw-actions { margin-top: 0; }
 .cw-actions .cw-cta { flex: 1 1 auto; min-width: 0; }
 .cw-cta {
   --d: 3px;
@@ -37614,8 +37644,8 @@ html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { 
 .mm-stakes-c b[hidden] { display: none; }
 
 /* ---- right-to-left: the prose turns, the numbers and handles never do ---- */
-html[data-lang="fa"] .cw-sheet :is(.cw-prize-eyebrow, .cw-prize-sub, .cw-prize-unit, .cw-league-t, .cw-league-sub, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title),
-html[data-lang="ar"] .cw-sheet :is(.cw-prize-eyebrow, .cw-prize-sub, .cw-prize-unit, .cw-league-t, .cw-league-sub, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title) {
+html[data-lang="fa"] .cw-sheet :is(.cw-prize-eyebrow, .cw-prize-sub, .cw-prize-unit, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title),
+html[data-lang="ar"] .cw-sheet :is(.cw-prize-eyebrow, .cw-prize-sub, .cw-prize-unit, .cw-board-t, .cw-sec-lbl, .cw-reg, .cw-reg-btn, .cw-verify-t, .cw-verify-btn, .cw-l, .cw-err, .cw-empty, .cw-pick-t, .cw-linkcard-copy, .cw-back, .cw-stat-k, .cw-stat-lbl, .cw-detail-note, .cw-hero-name, .cw-fighter-name, .cw-hero-rank.is-none, .cw-row-title) {
   font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   direction: rtl;
   letter-spacing: 0;
@@ -37630,8 +37660,8 @@ html[data-lang="ar"] .cw-sheet :is(.cw-title, .cw-detail-title, .cw-cta-t b, .cw
 /* ---- native Persian/Arabic type: no Latin tracking, no uppercase, no Latin face ----
    Applied everywhere inside the hub, the inspector and the register pane. The `!important`
    outranks the tracked/uppercased Latin styles those elements share with English. */
-html[data-lang="fa"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-prize-sub, .cw-prize-eyebrow, .cw-prize-unit, .cw-league-t, .cw-league-sub, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k),
-html[data-lang="ar"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-prize-sub, .cw-prize-eyebrow, .cw-prize-unit, .cw-league-t, .cw-league-sub, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k) {
+html[data-lang="fa"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-prize-sub, .cw-prize-eyebrow, .cw-prize-unit, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k),
+html[data-lang="ar"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-detail-title, .cw-sec-lbl, .cw-board-t, .cw-reg, .cw-reg-btn, .cw-pill, .cw-you-pill, .cw-cta, .cw-cta-t b, .cw-invite, .cw-invite-btn, .cw-stat-lbl, .cw-stat-k, .cw-row-title, .cw-row-members, .cw-prize-sub, .cw-prize-eyebrow, .cw-prize-unit, .cw-l, .cw-verify-t, .cw-verify-btn, .cw-sel, .cw-back, .cw-pick-t, .cw-detail-note, .cw-linkcard-copy, .cw-linkcard-k) {
   font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   letter-spacing: 0 !important;
   text-transform: none;
@@ -37642,13 +37672,13 @@ html[data-lang="ar"] :is(#channel-war-modal, #cw-detail) :is(.cw-title, .cw-deta
   text-transform: none;
 }
 /* Persian and Arabic ascenders need a taller line box than Latin caps do. */
-html[data-lang="fa"] .cw-sheet :is(.cw-prize-amount, .cw-row-title, .cw-cta-t b, .cw-verify-t, .cw-league-t),
-html[data-lang="ar"] .cw-sheet :is(.cw-prize-amount, .cw-row-title, .cw-cta-t b, .cw-verify-t, .cw-league-t) {
+html[data-lang="fa"] .cw-sheet :is(.cw-prize-amount, .cw-row-title, .cw-cta-t b, .cw-verify-t),
+html[data-lang="ar"] .cw-sheet :is(.cw-prize-amount, .cw-row-title, .cw-cta-t b, .cw-verify-t) {
   line-height: 1.55;
 }
 /* A score, a rank and the clock are codes: they never take the prose's direction. The member
    count is prose (`2 عضو`) and stays `dir="auto"`, so it reads count-first in Persian. */
-.cw-sheet :is(.cw-row-pts, .cw-rank, .cw-prize-clock bdi, .cw-hero-handle, .cw-linkcard-v) {
+.cw-sheet :is(.cw-row-score, .cw-rank, .cw-prize-clock bdi, .cw-hero-handle, .cw-linkcard-v) {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -37658,8 +37688,8 @@ html[data-lang="fa"] .cw-sheet .cw-row,
 html[data-lang="ar"] .cw-sheet .cw-row { direction: rtl; }
 html[data-lang="fa"] .cw-sheet .cw-row-side,
 html[data-lang="ar"] .cw-sheet .cw-row-side { align-items: center; }
-html[data-lang="fa"] .cw-sheet .cw-row-pts,
-html[data-lang="ar"] .cw-sheet .cw-row-pts { direction: ltr; }
+html[data-lang="fa"] .cw-sheet .cw-row-score,
+html[data-lang="ar"] .cw-sheet .cw-row-score { direction: ltr; }
 /* The inspector flips the same way: the crest leads on the right, the roster's place column
    follows the reading direction, and every figure inside keeps its own. */
 html[data-lang="fa"] .cw-sheet :is(.cw-hero, .cw-fighter),
@@ -37669,34 +37699,24 @@ html[data-lang="ar"] .cw-sheet .cw-hero-id { align-items: flex-start; }
 html[data-lang="fa"] .cw-sheet .cw-row-go .ico,
 html[data-lang="ar"] .cw-sheet .cw-row-go .ico { transform: scaleX(-1); }
 /* The chrome around the ladder is prose: it flips, and the close key follows it. */
-html[data-lang="fa"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-league, .cw-actions, .cw-verify-row, .cw-linkcard),
-html[data-lang="ar"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-league, .cw-actions, .cw-verify-row, .cw-linkcard) {
+html[data-lang="fa"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-actions, .cw-verify-row, .cw-linkcard),
+html[data-lang="ar"] .cw-sheet :is(.cw-head, .cw-board-head, .cw-prize, .cw-actions, .cw-verify-row, .cw-linkcard) {
   direction: rtl;
 }
 html[data-lang="fa"] .cw-sheet .cw-back .ico,
 html[data-lang="ar"] .cw-sheet .cw-back .ico { transform: scaleX(-1); }
 
-/* ---- the narrow and the short ends of the phone range ---- */
+/* ---- the narrow and the short ends of the phone range ----
+   The ladder card itself keeps its designed metrics at every width: its leading cluster is the
+   run that truncates, so a 320px phone loses a few characters of a title, never a collision. */
 @media (max-width: 360px) {
   .sheet.cw-sheet { gap: 8px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
-  .cw-row { gap: 10px; padding: 10px 12px; }
-  .cw-rank { width: 30px; height: 30px; font-size: 10.5px; }
-  .cw-av { width: 38px; height: 38px; }
-  .cw-av-t { font-size: 11px; }
-  .cw-row-title { font-size: 13px; }
-  .cw-row-side { gap: 6px; }
-  .cw-row-pts { font-size: 13px; }
-  .cw-row-go { width: 20px; }
-  .cw-reg { padding: 0 7px; font-size: 9px; }
+  .cw-reg { padding: 0 10px; font-size: 10px; }
   .cw-cta { height: 46px; min-height: 46px; padding: 0 12px; }
   .cw-cta-t b { font-size: 12.5px; }
   .cw-invite { min-width: 96px; height: 46px; padding: 0 12px; gap: 6px; font-size: 10px; }
   .cw-prize { padding: 12px 14px; }
   .cw-prize-amount { font-size: 18px; }
-  .cw-league { gap: 8px; padding: 9px 11px; }
-  .cw-league-ico { width: 26px; height: 26px; }
-  .cw-league-t { font-size: 11px; }
-  .cw-league-sub { font-size: 9.5px; }
   .cw-hero { gap: 9px; padding: 9px; }
   .cw-hero-av { width: 44px; height: 44px; }
   .cw-hero-mark { font-size: 15px; }

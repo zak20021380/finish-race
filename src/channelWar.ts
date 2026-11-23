@@ -57,45 +57,33 @@ const LADDER_MAX = 20;
 const PICK_MAX = 6;
 
 /* The bounty header's own micro-copy. It lives here, beside the surface that reads it, so the
-   Championship card can carry a stronger voice without reaching into the shared dictionary.
-   `leagueTitle`/`leagueSub` are the open-league note: the war is one weekly ladder anyone may
-   register into, so the only call to action it ever makes is "register and climb". */
-type CwCopyKey = 'eyebrow' | 'unit' | 'sub' | 'leagueTitle' | 'leagueSub';
+   Championship card can carry a stronger voice without reaching into the shared dictionary. */
+type CwCopyKey = 'eyebrow' | 'unit' | 'sub';
 const CW_COPY: Record<LangCode, Record<CwCopyKey, string>> = {
   en: {
     eyebrow: '1ST PLACE BOUNTY',
     unit: 'STARS',
     sub: 'Winner-takes-all · Top 10 squad contributors split the prize',
-    leagueTitle: 'Weekly Channel League',
-    leagueSub: 'Register your channel and climb with TIQ',
   },
   fa: {
     eyebrow: 'جایزه قهرمانی',
     unit: 'استارز',
     sub: 'برنده همه را می‌برد · ده مشارکت‌کننده برتر جایزه تیم را تقسیم می‌کنند',
-    leagueTitle: 'لیگ هفتگی کانال‌ها',
-    leagueSub: 'کانال خودت را ثبت کن و امتیاز TIQ جمع کن',
   },
   ru: {
     eyebrow: 'ПРИЗОВОЙ ФОНД',
     unit: 'ЗВЁЗД',
     sub: 'Победитель забирает всё · Топ-10 участников отряда делят приз',
-    leagueTitle: 'Недельная лига каналов',
-    leagueSub: 'Зарегистрируй свой канал и поднимайся с TIQ',
   },
   ar: {
     eyebrow: 'جائزة المركز الأول',
     unit: 'نجوم',
     sub: 'الفائز يأخذ كل شيء · أفضل عشرة مساهمين في الفريق يتقاسمون الجائزة',
-    leagueTitle: 'دوري القنوات الأسبوعي',
-    leagueSub: 'سجّل قناتك واصعد بنقاط TIQ',
   },
   es: {
     eyebrow: 'RECOMPENSA DEL 1.er PUESTO',
     unit: 'ESTRELLAS',
     sub: 'El ganador se lo lleva todo · Los 10 mejores del escuadrón reparten el premio',
-    leagueTitle: 'Liga semanal de canales',
-    leagueSub: 'Registra tu canal y sube con TIQ',
   },
 };
 const AVATAR_HUES = [198, 210, 232, 262, 288, 318, 24, 42, 158, 174];
@@ -123,6 +111,31 @@ function warClock(ms: number): string {
 
 const membersLabel = (n: number): string =>
   n <= 0 ? t('cwNoMembers') : n === 1 ? t('cwMemberOne') : t('cwMembers').replace('{n}', String(n));
+
+/**
+ * The member count, with every Latin figure isolated in its own LTR run.
+ *
+ * The count is a code, and the word after it is prose: in Arabic or Persian the sentence runs
+ * right-to-left while `4` must still read left-to-right and never swap places with its noun.
+ */
+function memberRun(n: number): HTMLElement {
+  const host = document.createElement('span');
+  host.className = 'cw-row-members';
+  host.setAttribute('dir', 'auto');
+  const text = membersLabel(n);
+  let cut = 0;
+  for (const found of text.matchAll(/[0-9][0-9,]*/g)) {
+    const at = found.index ?? 0;
+    if (at > cut) host.append(text.slice(cut, at));
+    const num = document.createElement('bdi');
+    num.setAttribute('dir', 'ltr');
+    num.textContent = found[0];
+    host.append(num);
+    cut = at + found[0].length;
+  }
+  if (cut < text.length) host.append(text.slice(cut));
+  return host;
+}
 
 /** One inline monochrome glyph. Every icon in this sheet is drawn, never typed. */
 function icon(id: string, cls = 'ico'): SVGSVGElement {
@@ -253,7 +266,6 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const clock = document.getElementById('cw-countdown');
   const prizeRule = document.getElementById('cw-prize-rule');
   const boardList = document.getElementById('cw-board-list');
-  const leagueNote = document.getElementById('cw-league');
   const liveRegion = document.getElementById('cw-live-region');
 
   /* The Championship mark is the real Telegram Stars asset. The markup carries the element so the
@@ -358,12 +370,13 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   /**
-   * One ladder row: rank + crest, a spacious two-line identity, Channel TIQ, and the door in.
+   * One ladder row: a collision-proof two-tier card — a leading cluster (rank crest, avatar, the
+   * two-line identity) that owns every spare pixel, and a trailing cluster (the stacked Channel
+   * TIQ readout and the door in) that never shrinks. Because the identity can truncate at every
+   * level, the `YOUR TEAM` pill can never collide with the score on a narrow phone.
    *
-   * The identity owns the whole middle column so a bilingual title can breathe on one clean line;
-   * the member count and the one tag that matters share the quieter line beneath it. In an RTL
-   * locale the flex row lays these out right-to-left, while `<bdi dir="auto">` keeps every dynamic
-   * name and title bidi-contained — no mixed-script word gets chewed up mid-clip.
+   * In an RTL locale the flex row lays these out right-to-left, while `<bdi dir="auto">` keeps
+   * every dynamic name and title bidi-contained — no mixed-script word gets chewed up mid-clip.
    *
    * `inspectable` makes the whole row a pointer target and gives it a real chevron key, so a
    * keyboard reaches the same place a thumb does. `selectable` turns the row into a choice in the
@@ -374,11 +387,15 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     opts: { you: boolean; selectable: boolean; inspectable?: boolean },
   ): HTMLLIElement {
     const tiq = warPointsOf(s);
+    const scored = tiq > 0;
     const li = document.createElement('li');
-    li.className = `cw-row${opts.you ? ' is-you' : ''}${tiq > 0 && s.rank === 1 ? ' is-lead' : ''}${picked === s.id ? ' is-selected' : ''}`;
+    li.className = `cw-row${opts.you ? ' is-you' : ''}${scored && s.rank === 1 ? ' is-lead' : ''}${picked === s.id ? ' is-selected' : ''}`;
+
+    /* The leading cluster: everything that identifies the channel, in one shrinkable run. */
+    const lead = document.createElement('span');
+    lead.className = 'cw-row-lead';
 
     const rank = document.createElement('bdi');
-    const scored = tiq > 0;
     rank.className = `cw-rank${scored ? (s.rank <= 3 ? ` is-${s.rank}` : '') : ' is-none'}`;
     rank.setAttribute('dir', 'ltr');
     /* A channel nobody has scored for has no place to defend yet: it reads as a dash, never #4. */
@@ -415,11 +432,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
        and no orphaned separator dot: the title owns line one and the inspector owns the handle. */
     const meta = document.createElement('span');
     meta.className = 'cw-row-meta';
-    const crew = document.createElement('span');
-    crew.className = 'cw-row-members';
-    crew.setAttribute('dir', 'auto');
-    crew.textContent = membersLabel(s.members);
-    meta.append(crew);
+    meta.append(memberRun(s.members));
 
     if (opts.you) {
       const pill = document.createElement('span');
@@ -427,7 +440,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       pill.textContent = t('cwYourTeam');
       meta.append(pill);
     } else if (opts.selectable) {
-      /* The choice key rides the metadata line so the score column stays one clean row. */
+      /* The choice key rides the metadata line so the score column stays one clean readout. */
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cw-sel';
@@ -438,13 +451,23 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       meta.append(btn);
     }
     id.append(nameLine, meta);
+    lead.append(rank, av, id);
 
+    /* The trailing cluster: a stacked readout — the figure over its unit — then the door in. */
     const side = document.createElement('span');
     side.className = 'cw-row-side';
-    const ptsEl = document.createElement('b');
-    ptsEl.className = `cw-row-pts${scored ? '' : ' is-zero'}`;
-    ptsEl.append(tiqFigure(tiq));
-    side.append(ptsEl);
+    const score = document.createElement('span');
+    score.className = `cw-row-score${scored ? '' : ' is-zero'}`;
+    const value = document.createElement('bdi');
+    value.className = 'cw-row-score-n';
+    value.setAttribute('dir', 'ltr');
+    value.textContent = tiqLabel(tiq);
+    const unit = document.createElement('span');
+    unit.className = 'cw-row-score-u';
+    unit.setAttribute('dir', 'ltr');
+    unit.textContent = t('cwPts');
+    score.append(value, unit);
+    side.append(score);
 
     if (opts.inspectable) {
       li.dataset.detail = s.id;
@@ -459,7 +482,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       side.append(go);
     }
 
-    li.append(rank, av, id, side);
+    li.append(lead, side);
     return li;
   }
 
@@ -484,28 +507,13 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     boardList.textContent = '';
     if (!board.length) {
       boardList.append(emptyRow('cwEmptyBoard'));
-      paintLeague();
       return;
     }
     for (const s of board.slice(0, LADDER_MAX)) {
       const you = !!mine && s.id === mine.id;
       boardList.append(buildRow(s, { you, selectable: canSelect && !you, inspectable: true }));
     }
-    paintLeague();
     revealMyRow();
-  }
-
-  /* ---------- the open league note ---------- */
-
-  /**
-   * One quiet statement of the rule, and only while the board is still short: Channel Wars is a
-   * single open weekly ladder, so a newcomer is told exactly what entering costs — register the
-   * channel and let its members bank TIQ — never that they owe some rival a fight. The note
-   * retires itself the moment three channels are on the board and the ladder speaks for itself.
-   */
-  function paintLeague(): void {
-    if (!leagueNote) return;
-    leagueNote.hidden = getWarRanking().length >= 3;
   }
 
   /**
