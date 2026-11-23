@@ -45671,6 +45671,57 @@ html.reduced-motion .frm-scrim { transition: none; }
 .crowd-toast-name { font-weight: 800; unicode-bidi: isolate; }
 .crowd-toast-txt { min-width: 0; overflow-wrap: anywhere; }
 
+/* ---- 3a. the kickoff banner ----
+   One announcement as the board settles: `N fans backed <seat> to win!`. It floats just under the
+   crowd-odds rail (header 44px + the screen gap + the card's top pad + the rail's own ~52px), sits
+   above the board's top rows for 2.8s, and owns no tap: `pointer-events: none`, no scrim, no
+   `backdrop-filter`. Obsidian face in both themes — it is an announcement, not a surface — with a
+   gold coin mark and a single emerald hairline under it. */
+.crowd-kickoff {
+  position: absolute;
+  z-index: 17;
+  top: calc(44px + var(--gap) + var(--pad-card-t) + 52px);
+  inset-inline: 0;
+  width: fit-content;
+  max-width: min(92%, 380px);
+  margin: 0 auto;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(246, 200, 94, .32);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #191d25 0%, #0b0e14 100%);
+  color: #f8fafc;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: start;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -1px 0 rgba(16, 185, 129, .34),
+    0 14px 28px -18px rgba(0, 0, 0, .95);
+  pointer-events: none;             /* never blocks a board tap */
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  transition: opacity 200ms ease, transform 200ms ease, visibility 200ms;
+}
+.crowd-kickoff.is-on {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+}
+.crowd-kickoff-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #f6c85e;
+}
+.crowd-kickoff-ico svg { width: 15px; height: 15px; display: block; }
+.crowd-kickoff-txt { min-width: 0; overflow-wrap: anywhere; }
+.crowd-kickoff-txt bdi { unicode-bidi: isolate; }
+
 /* ---- 4. the live crowd & predictions sheet — an e-sports arena board ----
    A dark obsidian card whose face is driven by local custom properties, so the same board reads
    correctly on the porcelain theme without a single hardcoded ink. Structure: drag grip, LIVE
@@ -45975,20 +46026,36 @@ html.reduced-motion .frm-scrim { transition: none; }
   line-height: 1.25;
   color: var(--cs-ink);
 }
-/* the subtle inline gender pill beside the handle: Venus or Mars, the same mark as the badge */
+/* the inline gender badge beside the handle: the same Venus/Mars mark as the avatar corner, plus
+   the word itself, so the gender is legible at a glance on a phone instead of hiding in a glyph.
+   `direction: ltr` keeps the mark leading in every shell language; the word is its own <bdi>. */
 .crowd-gpill {
   flex: none;
-  width: 14px;
-  height: 14px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1.5px 5px 1.5px 4px;
+  border-radius: 999px;
+  direction: ltr;
+  font-size: 9px;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.3;
+  letter-spacing: .01em;
+  white-space: nowrap;
 }
-.crowd-gpill.is-f { color: #f472b6; background: rgba(244, 114, 182, .14); }
-.crowd-gpill.is-m { color: #38bdf8; background: rgba(56, 189, 248, .14); }
+.crowd-gpill.is-f {
+  background: rgba(244, 114, 182, 0.16);
+  border: 1px solid rgba(244, 114, 182, 0.38);
+  color: #f9a8d4;
+}
+.crowd-gpill.is-m {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  color: #7dd3fc;
+}
+.crowd-gpill-ico { flex: none; display: block; width: 10px; height: 10px; }
+.crowd-gpill-ico svg { width: 10px; height: 10px; display: block; }
+.crowd-gpill-txt { display: block; unicode-bidi: isolate; }
 .crowd-vip {
   flex: none;
   padding: 1px 4px;
@@ -46037,19 +46104,22 @@ html.reduced-motion .frm-scrim { transition: none; }
 }
 
 /* the sheet listens for the active UI direction, not the document's */
-html[data-lang="fa"] :is(.crowd-toast, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter),
-html[data-lang="ar"] :is(.crowd-toast, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter) {
+html[data-lang="fa"] :is(.crowd-toast, .crowd-kickoff, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter, .crowd-gpill),
+html[data-lang="ar"] :is(.crowd-toast, .crowd-kickoff, .crowd-sheet-title, .crowd-support, .crowd-empty, .crowd-filter, .crowd-gpill) {
   letter-spacing: 0;
 }
 html[data-lang="fa"] .crowd-sheet-title,
 html[data-lang="ar"] .crowd-sheet-title { direction: rtl; }
+/* the kickoff banner carries a whole sentence: read it right-to-left, number first, coin leading */
+html[data-lang="fa"] .crowd-kickoff,
+html[data-lang="ar"] .crowd-kickoff { direction: rtl; }
 /* the head-to-head box stays LTR-locked, so its own copy never mirrors the two camps */
 html[data-lang="fa"] .crowd-h2h-name,
 html[data-lang="ar"] .crowd-h2h-name { letter-spacing: 0; }
 
 /* ---- the lesson owns the board: no audience chrome over its choreography ---- */
-body.tutorial-live :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-sheet),
-body.tut-match :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-sheet) {
+body.tutorial-live :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-kickoff, .crowd-sheet),
+body.tut-match :is(.crowd-pill, .crowd-bar, .crowd-toast, .crowd-kickoff, .crowd-sheet) {
   display: none !important;
 }
 
@@ -46095,6 +46165,17 @@ html[data-theme="light"] .crowd-support.is-red { color: #b01438; }
 html[data-theme="light"] .crowd-support.is-blue { color: #1f45b5; }
 html[data-theme="light"] .crowd-av.is-f { color: #be185d; }
 html[data-theme="light"] .crowd-av.is-m { color: #0369a1; }
+/* the gender badge keeps its rose/sky identity on porcelain, at a tint that still reads */
+html[data-theme="light"] .crowd-gpill.is-f {
+  background: rgba(219, 39, 119, .10);
+  border-color: rgba(219, 39, 119, .30);
+  color: #be185d;
+}
+html[data-theme="light"] .crowd-gpill.is-m {
+  background: rgba(2, 132, 199, .10);
+  border-color: rgba(2, 132, 199, .28);
+  color: #0369a1;
+}
 html[data-theme="light"] .crowd-count { color: #0B3B30; }
 html[data-theme="light"] .crowd-eye { color: #0F9D72; }
 html[data-theme="light"] .crowd-dot {
@@ -46106,6 +46187,7 @@ html[data-theme="light"] .crowd-dot {
 html.reduced-motion .crowd-bar-fill,
 html.reduced-motion .crowd-bar,
 html.reduced-motion .crowd-toast,
+html.reduced-motion .crowd-kickoff,
 html.reduced-motion .crowd-pill,
 html.reduced-motion .crowd-h2h-fill,
 html.reduced-motion .crowd-filter,
@@ -46114,6 +46196,7 @@ html.reduced-motion .crowd-sheet-close { transition: none; }
   .crowd-bar-fill,
   .crowd-bar,
   .crowd-toast,
+  .crowd-kickoff,
   .crowd-pill,
   .crowd-h2h-fill,
   .crowd-filter,

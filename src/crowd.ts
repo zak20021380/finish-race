@@ -13,11 +13,20 @@
  * metric that can be random is re-rolled per match — head count (7..58), the female/male mix, the
  * support split, each fan's side roll, the list order (Fisher–Yates) and the simulated stake.
  *
+ * The house is alive for the whole race, not just on a big play. Every committed action flips a
+ * couple of fans toward the side the board favours (a wall or a mine flips more than a routine
+ * turn), a few new faces arrive or leave, and a 3.5s ambient tick keeps one pledge or one seat
+ * moving while both players are still thinking. The odds rail therefore breathes by itself.
+ *
+ * A match also opens with one brief kickoff banner — how many fans backed seat 1 — which is
+ * pointer-transparent, auto-dismissing and owned by the same module.
+ *
  * Design constraints that are part of the contract:
  *   · no `backdrop-filter`, no looping `@keyframes` — the arena's compositor belongs to the canvas;
  *   · at most ONE floating reaction pill exists at any moment (a second reaction retargets it);
  *   · every rendered number is Latin `0-9` inside a `<bdi dir="ltr">`, so RTL never mirrors a score;
  *   · every name is isolated in a `<bdi dir="auto">`, so a handle never reorders its sentence;
+ *   · a gender reads as a word beside the Venus/Mars mark, never as a bare glyph;
  *   · icons are inline SVG, never emoji.
  *
  * The DOM is static (`index.html`, inside `#s-game`); this module only reads it by id, fills it and
@@ -165,6 +174,11 @@ interface CrowdCopy {
   p2: string;
   /** a spectator row's own caption: `Backing {name}` */
   fan: string;
+  /** the inline gender badge's word, printed beside the Venus / Mars mark */
+  girl: string;
+  boy: string;
+  /** the kickoff banner: `{n}` fans backed `{name}` to win */
+  kickoff: string;
   wall: string[];
   mine: string[];
   near: string[];
@@ -185,6 +199,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
     spectators: 'Spectators',
     p1: 'Player 1', p2: 'Player 2',
     fan: 'Backing {name}',
+    girl: 'Girl', boy: 'Boy',
+    kickoff: '{n} fans backed {name} to win!',
     wall: ['Clutch wall by {name}!', 'That wall shut {name} down!', 'Smart block — no way through for {name}!'],
     mine: ['Boom — right on {name}!', 'The mine caught {name}!', 'That trap was brutal on {name}!'],
     near: ['{name} is one step from FINISH!', 'So close for {name}!', "Don't blink — {name} is on the final stretch!"],
@@ -202,6 +218,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
     spectators: 'تماشاگران',
     p1: 'بازیکن 1', p2: 'بازیکن 2',
     fan: 'حمایت از {name}',
+    girl: 'دختر', boy: 'پسر',
+    kickoff: '{n} تماشاگر روی برد {name} شرط بستن!',
     wall: ['عجب دیواری برای {name} بست!', 'این دیوار مسیر {name} رو بست!', 'دفاع حساب‌شده روی {name}!'],
     mine: ['مین کار خودش رو کرد روی {name}!', 'ترکید — مستقیم روی {name}!', 'این تله برای {name} بی‌رحمانه بود!'],
     near: ['{name} فقط دو قدم تا خط پایان!', '{name} خیلی نزدیک شد!', 'نفس‌ها برای {name} حبس شد!'],
@@ -219,6 +237,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
     spectators: 'Зрители',
     p1: 'Игрок 1', p2: 'Игрок 2',
     fan: 'За {name}',
+    girl: 'Девушка', boy: 'Парень',
+    kickoff: '{n} зрителей поставили на победу {name}!',
     wall: ['Отличный блок от {name}!', 'Эта стена остановила {name}!', 'Умная защита — {name} не пройдёт!'],
     mine: ['Мина сработала — {name} попался!', 'Бум — прямо по {name}!', 'Жёсткая ловушка для {name}!'],
     near: ['{name} в одном шаге от ФИНИША!', 'Совсем рядом для {name}!', 'Не моргай — {name} на финишной прямой!'],
@@ -236,6 +256,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
     spectators: 'الجمهور',
     p1: 'اللاعب 1', p2: 'اللاعب 2',
     fan: 'دعم {name}',
+    girl: 'بنت', boy: 'ولد',
+    kickoff: '{n} مشجعاً راهنوا على فوز {name}!',
     wall: ['سدٌّ حاسم من {name}!', 'هذا السد أوقف {name}!', 'دفاع ذكي — لا مرور لـ {name}!'],
     mine: ['اللغم انفجر — {name} في الفخ!', 'بووم — مباشرة على {name}!', 'فخ قاسٍ لـ {name}!'],
     near: ['{name} على خطوة من النهاية!', 'قريب جداً لـ {name}!', 'لا ترمش — {name} في اللفة الأخيرة!'],
@@ -253,6 +275,8 @@ const COPY: Record<LangCode, CrowdCopy> = {
     spectators: 'Espectadores',
     p1: 'Jugador 1', p2: 'Jugador 2',
     fan: 'A por {name}',
+    girl: 'Chica', boy: 'Chico',
+    kickoff: '{n} fans apostaron por la victoria de {name}!',
     wall: ['¡Muro decisivo de {name}!', '¡Ese muro frenó a {name}!', '¡Bloqueo inteligente — {name} no pasa!'],
     mine: ['¡La mina atrapó a {name}!', '¡Bum — directo a {name}!', '¡Vaya trampa para {name}!'],
     near: ['¡{name} a un paso de la META!', '¡Muy cerca para {name}!', '¡No parpadees — {name} en la recta final!'],
@@ -333,19 +357,39 @@ const GENDER_ICON: Record<Gender, string> = {
 /** Mount a gender badge (15×15 dark disc) into `host`. */
 function paintGenderBadge(host: HTMLElement, gender: Gender): void {
   host.className = `crowd-gbadge is-${gender}`;
-  /* A trusted constant, never host or user text: the only innerHTML in this module. */
+  /* A trusted constant, never host or user text: `GENDER_ICON` / `KICKOFF_ICON` are the only
+     markup this module ever writes with innerHTML. */
   host.innerHTML = GENDER_ICON[gender];
 }
+
+/* ---------- the kickoff mark ----------
+ * A gold coin struck with a three-head crowd, drawn inline at 16px so it stays crisp at any DPR.
+ * Same contract as the gender marks: a fixed path string, `currentColor`, never an asset. */
+const KICKOFF_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
+  + '<circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+  + '<circle cx="6.1" cy="6.2" r="1.5" fill="currentColor"/>'
+  + '<path d="M3.4 11.1c0-1.5 1.2-2.3 2.7-2.3s2.7.8 2.7 2.3Z" fill="currentColor"/>'
+  + '<circle cx="10.6" cy="6.9" r="1.15" fill="currentColor" opacity=".62"/>'
+  + '<path d="M8.7 11.1c0-1.1.85-1.75 1.9-1.75s1.9.65 1.9 1.75Z" fill="currentColor" opacity=".62"/>'
+  + '</svg>';
 
 /* ---------- the live simulation ---------- */
 let match: MatchCrowd | null = null;
 let filter: Filter = 'all';
 let toastTimer = 0;
+let kickoffShowTimer = 0;
+let kickoffHideTimer = 0;
+let ambientTimer = 0;
 let lastReactionAt = -Infinity;
 let lastFocus: HTMLElement | null = null;
 
 const REACTION_GAP_MS = 3400;
 const TOAST_MS = 2600;
+/* The kickoff banner lands once the board is actually on screen, then clears itself. */
+const KICKOFF_DELAY_MS = 350;
+const KICKOFF_MS = 2800;
+/* The house never stands still: one pledge or one seat moves on this beat. */
+const AMBIENT_MS = 3500;
 
 /* The house band. A match rolls its own head count inside it; joins and leaves stay inside it. */
 const MIN_SEATS = 7;
@@ -399,6 +443,8 @@ interface CrowdUi {
   redFill: HTMLElement;
   blueFill: HTMLElement;
   toast: HTMLElement;
+  /** the brief kickoff banner: how many fans backed seat 1 */
+  kickoff: HTMLElement;
   sheet: HTMLElement;
   sheetTitle: HTMLElement;
   sheetLive: HTMLElement;
@@ -439,6 +485,7 @@ function resolveUi(): CrowdUi | null {
   const redFill = byId('crowd-fill-red');
   const blueFill = byId('crowd-fill-blue');
   const toast = byId('crowd-toast');
+  const kickoff = byId('crowd-kickoff');
   const sheet = byId('crowd-sheet');
   const sheetTitle = byId('crowd-sheet-title');
   const sheetLive = byId('crowd-sheet-live');
@@ -462,17 +509,17 @@ function resolveUi(): CrowdUi | null {
   /* The screen can be booted without this chrome (headless probes, a host that strips it):
      no refs means no painting, and every hook below is a no-op instead of a throw. */
   if (!pill || !count || !live || !bar || !title || !redName || !blueName || !redPct || !bluePct
-    || !redStake || !blueStake || !redFill || !blueFill || !toast || !sheet || !sheetTitle
-    || !sheetLive || !sheetCount || !sheetViewers || !list || !empty || !closeBtn || !scrim
-    || !h2hRedName || !h2hBlueName || !h2hRedFans || !h2hBlueFans || !h2hRedStake || !h2hBlueStake
-    || !h2hRedFill || !h2hBlueFill || !filterAll || !filterP1 || !filterP2) {
+    || !redStake || !blueStake || !redFill || !blueFill || !toast || !kickoff || !sheet
+    || !sheetTitle || !sheetLive || !sheetCount || !sheetViewers || !list || !empty || !closeBtn
+    || !scrim || !h2hRedName || !h2hBlueName || !h2hRedFans || !h2hBlueFans || !h2hRedStake
+    || !h2hBlueStake || !h2hRedFill || !h2hBlueFill || !filterAll || !filterP1 || !filterP2) {
     return null;
   }
   ui = {
     pill, count, live, bar, title, redName, blueName, redPct, bluePct, redStake, blueStake,
-    redFill, blueFill, toast, sheet, sheetTitle, sheetLive, sheetCount, sheetViewers, list, empty,
-    closeBtn, scrim, h2hRedName, h2hBlueName, h2hRedFans, h2hBlueFans, h2hRedStake, h2hBlueStake,
-    h2hRedFill, h2hBlueFill, filters: [filterAll, filterP1, filterP2],
+    redFill, blueFill, toast, kickoff, sheet, sheetTitle, sheetLive, sheetCount, sheetViewers,
+    list, empty, closeBtn, scrim, h2hRedName, h2hBlueName, h2hRedFans, h2hBlueFans, h2hRedStake,
+    h2hBlueStake, h2hRedFill, h2hBlueFill, filters: [filterAll, filterP1, filterP2],
   };
   wire(ui);
   return ui;
@@ -562,10 +609,15 @@ function fanRow(fan: Fan): HTMLLIElement {
   const top = document.createElement('span');
   top.className = 'crowd-mid-top';
   top.append(bdiNode(fan.handle, 'ltr', 'crowd-handle'));
+  /* the gender badge: the same Venus/Mars mark as the avatar corner, plus a plain word, so a
+     spectator's gender reads at a glance on a phone instead of hiding in a 9px glyph */
   const gPill = document.createElement('span');
   gPill.className = `crowd-gpill is-${fan.gender}`;
-  gPill.textContent = fan.gender === 'f' ? '♀' : '♂';
-  gPill.setAttribute('aria-hidden', 'true');
+  const gMark = document.createElement('span');
+  gMark.className = 'crowd-gpill-ico';
+  gMark.setAttribute('aria-hidden', 'true');
+  gMark.innerHTML = GENDER_ICON[fan.gender];
+  gPill.append(gMark, bdiNode(fan.gender === 'f' ? c.girl : c.boy, 'auto', 'crowd-gpill-txt'));
   top.append(gPill);
   if (fan.stake >= 500) {
     const vip = document.createElement('span');
@@ -709,6 +761,8 @@ function wire(refs: CrowdUi): void {
     if (!ui?.sheet.hidden) renderSheet();
     /* A toast on screen belongs to the previous language: take it down rather than mix tongues. */
     hideToast();
+    /* The kickoff banner is copy, not state: redraw it in the new language while it is up. */
+    if (ui?.kickoff.classList.contains('is-on')) showKickoff();
   });
 }
 
@@ -747,26 +801,174 @@ function showToast(
   }, TOAST_MS);
 }
 
+/* ---------- the kickoff banner ----------
+ * One announcement per match, right as the board settles: how many of this house backed seat 1.
+ * It is pointer-transparent, it never opens anything, and it takes itself down after 2.8s. */
+function clearKickoff(): void {
+  window.clearTimeout(kickoffShowTimer);
+  window.clearTimeout(kickoffHideTimer);
+  kickoffShowTimer = 0;
+  kickoffHideTimer = 0;
+  if (ui) ui.kickoff.classList.remove('is-on');
+}
+
+function showKickoff(): void {
+  const refs = ui;
+  if (!refs || !match) return;
+  const c = copy();
+  const [ca] = campCounts(match.fans);
+  const icon = document.createElement('span');
+  icon.className = 'crowd-kickoff-ico';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = KICKOFF_ICON;
+  const text = document.createElement('span');
+  text.className = 'crowd-kickoff-txt';
+  text.append(templateNodes(
+    c.kickoff,
+    { n: formatNum(ca), name: campName(0) },
+    ['n'],
+    ['name'],
+  ));
+  refs.kickoff.replaceChildren(icon, text);
+  refs.kickoff.classList.add('is-on');
+}
+
+/** Arm the kickoff banner: a short settle delay (the board must be visible first), then 2.8s on. */
+function scheduleKickoff(): void {
+  clearKickoff();
+  kickoffShowTimer = window.setTimeout(() => {
+    kickoffShowTimer = 0;
+    showKickoff();
+    kickoffHideTimer = window.setTimeout(() => {
+      kickoffHideTimer = 0;
+      if (ui) ui.kickoff.classList.remove('is-on');
+    }, KICKOFF_MS);
+  }, KICKOFF_DELAY_MS);
+}
+
+/* ---------- the ambient tick ----------
+ * The house breathes even while both players think: one pledge or one seat moves every 3.5s.
+ * Cleared by `closeCrowd()`, so no timer ever outlives its match. */
+function startAmbient(): void {
+  stopAmbient();
+  ambientTimer = window.setInterval(ambientTick, AMBIENT_MS);
+}
+
+function stopAmbient(): void {
+  window.clearInterval(ambientTimer);
+  ambientTimer = 0;
+}
+
+function ambientTick(): void {
+  if (!match) {
+    stopAmbient();
+    return;
+  }
+  const roll = rnd();
+  if (roll < 0.4) {
+    /* a single fan changes their mind — the cheapest visible head-count move */
+    liveShift(null, 1);
+    return;
+  }
+  if (roll < 0.75) {
+    bumpPledge();
+    return;
+  }
+  driftCount();
+}
+
 /* ---------- the simulation ---------- */
 /**
- * Move a little undecided (or already-wandering) support toward `leader`. Returns the first fan who
- * switched, so the caller can quote their stake in the reaction line.
+ * Flip up to `max` fans to `target`, preferring the undecided and the ones who already wandered
+ * once, then filling from the camp's settled regulars. Never empties a camp: a filter that can
+ * only ever show an empty board is a broken filter. Returns the first fan who switched, so the
+ * caller can quote their stake in the reaction line.
  */
-function shiftSupport(leader: Camp, max: number): Fan | null {
+function shiftSupport(target: Camp, max: number): Fan | null {
   if (!match) return null;
-  const undecided = match.fans.filter((f) => !f.decided && f.camp !== leader);
-  const wandering = match.fans.filter((f) => f.bandwagon && f.camp !== leader);
-  const pool = [...undecided, ...shuffle(wandering)];
+  const [ca, cb] = campCounts(match.fans);
+  const other: Camp = target === 0 ? 1 : 0;
+  const movable = Math.max(0, (other === 0 ? ca : cb) - 1);
+  const want = Math.min(max, movable);
+  if (want <= 0) return null;
+
+  const pool = match.fans.filter((f) => f.camp === other);
+  const willing = pool.filter((f) => !f.decided || f.bandwagon);
+  const regulars = pool.filter((f) => f.decided && !f.bandwagon);
+  const order = [...shuffle(willing), ...shuffle(regulars)];
   let first: Fan | null = null;
-  for (let i = 0; i < Math.min(max, pool.length); i++) {
-    const fan = pool[i]!;
-    fan.camp = leader;
+  for (let i = 0; i < want; i++) {
+    const fan = order[i];
+    if (!fan) break;
+    fan.camp = target;
+    fan.sideKey = match.teamMode ? (target === 0 ? 'A' : 'B') : (target === 0 ? 'p1' : 'p2');
     fan.decided = true;
     fan.bandwagon = true;
     if (!first) first = fan;
   }
   if (first) paint();
   return first;
+}
+
+/** One new face in the house, on the side the room is already leaning toward. */
+function addFans(count: number): number {
+  if (!match) return 0;
+  const [ca, cb] = campCounts(match.fans);
+  const room = MAX_SEATS - (ca + cb);
+  if (room <= 0) return 0;
+  const n = Math.min(count, room);
+  const camp: Camp = ca === cb ? (rnd() < 0.5 ? 0 : 1) : (ca > cb ? 0 : 1);
+  const used = new Set(match.fans.map((f) => f.handle));
+  for (let i = 0; i < n; i++) {
+    const gender: Gender = rnd() < match.femaleShare ? 'f' : 'm';
+    const handle = makeHandle(gender, used);
+    used.add(handle);
+    match.fans.push(makeFan(handle, gender, camp, match.teamMode));
+  }
+  return n;
+}
+
+/** One fan tops up or trims their pledge: the coin totals move, the head count does not. */
+function bumpPledge(): boolean {
+  if (!match || match.fans.length === 0) return false;
+  const fan = match.fans[pickIndex(match.fans.length)];
+  if (!fan) return false;
+  const at = STAKES.indexOf(fan.stake);
+  const step = rnd() < 0.5 ? -1 : 1;
+  const next = STAKES[Math.min(STAKES.length - 1, Math.max(0, at + step))];
+  if (next === undefined || next === fan.stake) return false;
+  fan.stake = next;
+  paint();
+  return true;
+}
+
+/** The camp a beat should drift toward: the board's leader, weighted by how split the house still
+ *  is. Bandwagon pressure fades as one side sweeps the room, so the rail hovers and breathes
+ *  instead of ratcheting to its 94/6 clamp and dying there. */
+function driftTarget(leader: Camp | null): Camp {
+  const lead = leader ?? leadingCamp();
+  const [ca, cb] = match ? campCounts(match.fans) : [0, 0];
+  const total = ca + cb;
+  const imbalance = total > 0 ? Math.abs(ca - cb) / total : 0;
+  const p = Math.max(0.16, 0.8 - imbalance * 0.7);
+  return rnd() < p ? lead : (lead === 0 ? 1 : 0);
+}
+
+/** One beat of crowd movement: 1..`max` fans flip, and on a minority of beats the house itself
+ *  changes shape (one or two fresh arrivals, or one spectator calling it a night). The flip count
+ *  is capped at ~9% of the house, so a 7-seat room never swings like a 58-seat one. */
+function liveShift(leader: Camp | null, max: number): Fan | null {
+  if (!match) return null;
+  const cap = Math.max(1, Math.min(max, Math.round(match.fans.length * 0.09)));
+  const switched = shiftSupport(driftTarget(leader), cap);
+  const roll = rnd();
+  if (roll < 0.14) {
+    addFans(rnd() < 0.35 ? 2 : 1);
+    paint();
+  } else if (roll < 0.24) {
+    driftCount();
+  }
+  return switched;
 }
 
 /** +/- one spectator, quietly, and only inside the believable band. */
@@ -781,9 +983,7 @@ function driftCount(): boolean {
   /* arrive on the side the room is already leaning toward, weighted by head count */
   const camp: Camp = ca === cb ? (rnd() < 0.5 ? 0 : 1) : (ca > cb ? 0 : 1);
   if (add) {
-    const used = new Set(match.fans.map((f) => f.handle));
-    const gender: Gender = rnd() < match.femaleShare ? 'f' : 'm';
-    match.fans.push(makeFan(makeHandle(gender, used), gender, camp, match.teamMode));
+    addFans(1);
   } else {
     const idx = match.fans.findIndex((f) => f.camp === camp);
     if (idx < 0) return false;
@@ -793,19 +993,28 @@ function driftCount(): boolean {
   return true;
 }
 
-/** A strategic play: bandwagon movement first, then (throttled) one localized live reaction. */
+/** A strategic play: a wide bandwagon swing first, then (throttled) one localized live reaction.
+ *  A wall or a mine moves the room harder than a routine turn or a near-finish tease. */
 function bigPlay(type: 'wall' | 'mine' | 'near', leader: Camp | null): void {
   if (!match) return;
   const target = leader ?? leadingCamp();
-  const switched = shiftSupport(target, type === 'wall' ? 1 : rnd() < 0.5 ? 1 : 2);
+  const budget = type === 'near' ? 2 : 2 + pickIndex(3); /* wall / mine: 2..4 */
+  const switched = liveShift(target, budget);
   const now = performance.now();
   if (now - lastReactionAt < REACTION_GAP_MS) return;
   const c = copy();
 
-  /* A fresh switcher quotes their stake about half the time; the rest are pure crowd noise. */
+  /* A fresh switcher quotes their stake about half the time; the rest are pure crowd noise.
+     The line names the camp the fan actually moved to, which is usually — not always — the
+     side the play favours. */
   if (switched && rnd() < 0.5) {
     lastReactionAt = now;
-    showToast(switched, c.back, { n: formatNum(switched.stake), name: campName(target) }, ['name']);
+    showToast(
+      switched,
+      c.back,
+      { n: formatNum(switched.stake), name: campName(switched.camp) },
+      ['name'],
+    );
     return;
   }
   const pool = type === 'wall' ? c.wall : type === 'mine' ? c.mine : c.near;
@@ -886,13 +1095,17 @@ export function initMatchCrowd(setup: CrowdSetup = {}): void {
   refs.bar.setAttribute('aria-expanded', 'false');
   hideToast();
   paint();
+  /* The board is on screen from here: announce the house, then keep it breathing. */
+  scheduleKickoff();
+  startAmbient();
 }
 
 /**
  * The one lifecycle hook `main.ts` calls after committed play.
  *
  * `leader` is the camp the board currently favours (0 = crimson, 1 = cyan), or null when the race
- * is level. The hook never touches the rules: it only moves simulated fans and paints the pill.
+ * is level. Every beat moves the room: a wall or a mine swings it hardest, a near-finish teases it,
+ * and a routine turn nudges a single fan. The hook never touches the rules.
  */
 export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null): void {
   if (!match) return;
@@ -907,10 +1120,10 @@ export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null):
       bigPlay('near', leader);
       break;
     case 'turn':
-      if (rnd() < 0.1) driftCount();
+      liveShift(leader, 1);
       break;
     case 'move':
-      if (rnd() < 0.06) driftCount();
+      liveShift(leader, rnd() < 0.5 ? 1 : 2);
       break;
   }
 }
@@ -918,6 +1131,8 @@ export function onCrowdEvent(type: CrowdEventType, leader: 0 | 1 | null = null):
 /** End the simulation: hide the chrome, close the sheet, drop every timer. Idempotent. */
 export function closeCrowd(): void {
   hideToast();
+  clearKickoff();
+  stopAmbient();
   closeSheet(false);
   match = null;
   filter = 'all';
