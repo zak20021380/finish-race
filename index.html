@@ -3444,6 +3444,12 @@
                 <h2 class="vm-title" id="ci-title">تورنمنت هفتگی</h2>
                 <p class="vm-sub" id="ci-sub">جایزه <bdi dir="ltr">50</bdi> استارز برای <bdi dir="ltr">3</bdi> نفر اول هفته</p>
               </span>
+              <!-- the live field: every enrolled seat of this week, a Latin figure in its own LTR run -->
+              <span class="ci-players" id="ci-players-pill" role="status">
+                <svg class="ci-players-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
+                <bdi dir="ltr" id="ci-players-n">0</bdi>
+                <span class="ci-players-u" id="ci-players-u">شرکت‌کننده</span>
+              </span>
             </header>
 
             <!-- PINNED: the personal scoreboard, the payout, and the two ways to score.
@@ -3452,9 +3458,19 @@
               <div class="ci-sum">
                 <div class="ci-sum-stats">
                   <span class="ci-sum-total"><bdi dir="ltr" id="ci-my-wins">0</bdi> <span class="ci-sum-u" id="ci-my-wins-u">برد</span></span>
-                  <span class="ci-sum-src" id="ci-sum-src">دوستان <bdi dir="ltr">0</bdi> <i>•</i> ربات <bdi dir="ltr">0</bdi></span>
+                  <span class="ci-sum-src" id="ci-sum-src">دوستان <bdi dir="ltr">0</bdi> <i>•</i> هوش مصنوعی <bdi dir="ltr">0</bdi></span>
                 </div>
                 <span class="ci-rank" id="ci-my-rank">بدون رتبه</span>
+                <!-- automatic enrollment: an emerald-gold status once seated, a free one-tap key
+                     until this seat has synced into the live week -->
+                <span class="ci-seat" id="ci-seat-on" hidden>
+                  <svg class="ci-seat-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-check" /></svg>
+                  <span id="ci-seat-on-t">عضو فعال تورنمنت</span>
+                </span>
+                <button class="ci-seat is-cta" type="button" id="ci-seat-join" hidden>
+                  <svg class="ci-seat-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-plus" /></svg>
+                  <span id="ci-seat-join-t">شرکت رایگان در تورنمنت</span>
+                </button>
               </div>
 
               <button class="ci-claim" type="button" id="ci-claim-cta" hidden>
@@ -3465,7 +3481,7 @@
               <div class="ci-launch">
                 <button class="ci-launch-btn is-gold" type="button" id="ci-bot-cta">
                   <svg class="ci-launch-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bot" /></svg>
-                  <span class="ci-launch-t" id="ci-bot-t">بازی با ربات سخت</span>
+                  <span class="ci-launch-t" id="ci-bot-t">دوئل با هوش مصنوعی</span>
                 </button>
                 <button class="ci-launch-btn is-mint" type="button" id="ci-friend-cta">
                   <svg class="ci-launch-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-users" /></svg>
@@ -3530,7 +3546,7 @@
                     </span>
                     <span class="ci-rule-txt">
                       <b class="ci-rule-t" id="ci-r2-t">شمارش نامحدود بردها</b>
-                      <span class="ci-rule-b" id="ci-r2-b">هر برد آنلاین مقابل دوستان و هر برد مقابل ربات در حالت سخت (Hard) بدون سقف محدودیت به امتیاز هفتگی شما اضافه می‌شود.</span>
+                      <span class="ci-rule-b" id="ci-r2-b">هر برد آنلاین مقابل دوستان و هر برد در دوئل با هوش مصنوعی بدون سقف محدودیت به امتیاز هفتگی شما اضافه می‌شود.</span>
                     </span>
                   </li>
                   <li class="ci-rule" data-tone="cyan">

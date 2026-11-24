@@ -127,6 +127,8 @@ export interface ChallengeBoard {
   contenders: number;
   /** The board's full population: every participant of the live week. */
   totalParticipants: number;
+  /** True when the reader himself holds a live seat on this week's board. */
+  isEnrolled: boolean;
 }
 
 /** Why a report or a claim was refused. Every value maps to one localised line on the card. */
@@ -356,6 +358,9 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
   )));
   const mine = rows.find((row) => row.id === selfId) ?? null;
   const at = live.findIndex((row) => row.id === selfId);
+  /* Every verified seat is enrolled automatically: the reader holds a row whenever he is on the
+     live field, and a guest (whose card carries no Telegram id) can never hold one. */
+  const isEnrolled = at >= 0;
   return {
     rows: live.map((row, index) => ({
       position: index + 1,
@@ -371,6 +376,7 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
     hardBotWins: mine ? mine.hardBotWins : 0,
     contenders: live.length,
     totalParticipants: live.length,
+    isEnrolled,
   };
 }
 
@@ -487,6 +493,7 @@ export function challengeView(
     leaderboard: board.rows,
     contenders: board.contenders,
     totalParticipants: board.totalParticipants,
+    isEnrolled: board.isEnrolled,
     stars: CHALLENGE_STARS,
     maxWinners: MAX_WINNERS,
     maxWinsPerFriend: MAX_WINS_PER_FRIEND,

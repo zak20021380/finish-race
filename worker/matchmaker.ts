@@ -11232,6 +11232,41 @@ export class MatchmakerDO {
     return entry;
   }
 
+  /**
+   * The handle a stored card prints, resolved from the room's own registry: a verified
+   * `@username` always outranks a display name, and a seat with neither prints its Telegram id.
+   */
+  private challengeHandleFor(playerId: string, tgId: string): string {
+    const record = this.players.get(playerId);
+    const username = (record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
+    if (username) return `@${username}`;
+    const name = (record?.name ?? '').trim().slice(0, 40);
+    return name || tgId;
+  }
+
+  /**
+   * Automatic enrollment: every authenticated Telegram seat that touches the hub (a home-screen
+   * read, a leaderboard read, an explicit join) or finishes a 1v1 is registered on the live week's
+   * participant table at zero wins. The card is created on first sight and rolled with the window.
+   */
+  private enrollChallenge(playerId: string, tgId: string, now: number): ChallengeEntry | null {
+    if (!/^[0-9]{1,20}$/.test(tgId)) return null;
+    const existing = this.challengeEntries.get(playerId);
+    if (existing) {
+      rollChallengeEntry(existing, now);
+      if (existing.tgId !== tgId) {
+        existing.tgId = tgId;
+        existing.handle = this.challengeHandleFor(playerId, tgId);
+        existing.updatedAt = now;
+      }
+      return existing;
+    }
+    const entry = newChallengeEntry(playerId, tgId, this.challengeHandleFor(playerId, tgId), now);
+    this.challengeEntries.set(entry.id, entry);
+    this.trimChallenge(now);
+    return entry;
+  }
+
   /** Drop cards from closed windows, then the coldest rows, so the ledger stays bounded. */
   private trimChallenge(now: number): void {
     for (const [id, entry] of this.challengeEntries) {
@@ -11351,28 +11386,19 @@ export class MatchmakerDO {
     const now = Date.now();
     /* A settle that lands before this credit: a win can never be added to last week's card. */
     if (this.settleChallenge(now)) this.persistChallenge();
-    const record = this.players.get(winnerId);
-    let entry = this.challengeEntries.get(winnerId);
-    if (!entry) {
-      const username = (record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
-      entry = newChallengeEntry(
-        winnerId,
-        winnerTg,
-        username ? `@${username}` : (record?.name || winnerTg),
-        now,
-      );
-      this.challengeEntries.set(winnerId, entry);
-    } else if (!entry.tgId) {
-      entry.tgId = winnerTg;
-      entry.handle = (record?.username ?? '').trim() ? `@${(record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32)}` : (record?.name || winnerTg);
-    }
-    const refusal = applyFriendWin(entry, now, {
+    /* Automatic enrollment on a completed 1v1: both verified seats join the live week, even when
+       the loss is all the loser takes from this board. Neither can be a guest (both ids verified). */
+    const entry = this.enrollChallenge(winnerId, winnerTg, now);
+    this.enrollChallenge(loserId, loserTg, now);
+    if (!entry) return;
+    applyFriendWin(entry, now, {
       matchId,
       opponentTgId: loserTg,
       durationSec,
       moves,
     });
-    if (!refusal) this.persistChallenge();
+    /* Written even when the win itself was refused: the loser's enrollment is still a new seat. */
+    this.persistChallenge();
   }
 
   /** The challenge's HTTP surface. Every counter here is the room's, never the body's. */
@@ -11401,16 +11427,26 @@ export class MatchmakerDO {
 
     if (url.pathname === '/api/challenge/me') {
       if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      /* The home screen's own read is an enrollment door: a verified seat that lands on the hub
+         is registered on the live week immediately. Only a first sighting or a week roll is
+         written, so the steady read stays a read. */
+      const seen = this.challengeEntries.get(who.playerId) ?? null;
+      const week = seen ? seen.windowStart : -1;
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
+      if (!seen || entry.windowStart !== week) this.persistChallenge();
       return json(view(entry, { auth: who.guest ? 'guest' : 'telegram' }), 200, CHALLENGE_CORS);
     }
 
     /* The live weekly board. A guest may read it; only a verified seat can hold a place on it. */
     if (url.pathname === '/api/challenge/leaderboard') {
       if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      /* A leaderboard read is an enrollment door too: the reader joins the field he is reading. */
+      const seen = this.challengeEntries.get(who.playerId) ?? null;
+      const week = seen ? seen.windowStart : -1;
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
+      if (!seen || entry.windowStart !== week) this.persistChallenge();
       const board = this.challengeBoardFor(entry, now);
       const claimable = this.challengeClaimable(entry.id, now);
       return json({
@@ -11422,6 +11458,8 @@ export class MatchmakerDO {
         hardBotWins: entry.hardBotWins,
         totalWins: board.totalWins,
         contenders: board.contenders,
+        totalParticipants: board.totalParticipants,
+        isEnrolled: board.isEnrolled,
         windowStart: entry.windowStart,
         windowEnd: entry.windowEnd,
         endsInMs: Math.max(0, entry.windowEnd - now),
@@ -11434,6 +11472,16 @@ export class MatchmakerDO {
 
     /* A guest seat may look at the card, but the two tracks and the prize need a verified player. */
     if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+
+    /* One-tap enrollment: the hub's free join key. It registers this verified seat on the live
+       week at zero wins (the write is idempotent) and answers with the full card + the field. */
+    if (url.pathname === '/api/challenge/join') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      this.trimChallenge(now);
+      this.persistChallenge();
+      return json(view(entry, { ok: true, isEnrolled: true }), 200, CHALLENGE_CORS);
+    }
 
     if (url.pathname === '/api/challenge/start') {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
