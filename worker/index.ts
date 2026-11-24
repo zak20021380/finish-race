@@ -428,6 +428,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* The 7-Day Dual-Track Challenge: the hero card's counters, the Hard AI start ticket and the
+     first-to-complete claim. The room proves the caller's signed initData itself and owns both
+     tracks — a win on either one is never credited from a request body. */
+  if (url.pathname.startsWith('/api/challenge/')) {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   if (url.pathname === '/ws/matchmake') {
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);

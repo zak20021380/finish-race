@@ -95,6 +95,12 @@ import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralCon
 import { referralBinding, type ReferralBindingPayload } from './referrals';
 import { relicShelter } from '../shared/relic';
 import {
+  CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
+  CHALLENGE_TICKET_TTL_MS, applyFriendWin, applyHardBotWin, challengeView, challengeWindowAt, claimChallenge,
+  issueBotTicket, newChallengeEntry, readChallengeState, rollChallengeEntry,
+  type ChallengeEntry, type ChallengeWinner,
+} from './challenge';
+import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
 import countryRegistry from '../src/data/countries.json';
@@ -3036,6 +3042,18 @@ const VAULT_CORS: Record<string, string> = {
   'cache-control': 'no-store',
 };
 
+/**
+ * The 7-Day Dual-Track Challenge: same token-authenticated door as the vault, so a split host
+ * needs the same wildcard origin and the same no-store lease on every counter read.
+ */
+const CHALLENGE_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, x-guest-id, x-detour-dev-player',
+  'access-control-max-age': '86400',
+  'cache-control': 'no-store',
+};
+
 /** Never either goal: 15 verified matches (any opponent) AND 5 Hard AI wins, both inside 72h. */
 function vaultQuestTargetReached(quest: VaultFriendQuest): boolean {
   return quest.matchesCount >= REFERRAL_CONFIG.QUEST_MIN_MATCHES
@@ -3234,6 +3252,10 @@ export class MatchmakerDO {
   /** All vault access shares this commit queue, including admin actions and reads. */
   private vaultSerial: Promise<void> = Promise.resolve();
   private vaultLoaded = false;
+  /* ---- the 7-Day Dual-Track Challenge: counters, one-shot tickets and the winner lock ---- */
+  private challengeEntries = new Map<string, ChallengeEntry>();
+  private challengeWinner: ChallengeWinner | null = null;
+  private challengeLoaded = false;
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
   /** Every race still being played, by match id. */
@@ -3440,6 +3462,21 @@ export class MatchmakerDO {
               this.trimFriendLinks(Date.now());
             }
           } catch { /* an unreadable ledger starts empty: the next acceptance rebuilds it */ }
+          /* The 7-Day Challenge rides its own key and try for the same reason: a corrupt window
+             must never keep the room's registry, vault or alarm from coming up. */
+          try {
+            const state = readChallengeState(await storage.get<unknown>(CHALLENGE_KEY));
+            const now = Date.now();
+            for (const entry of state.entries) {
+              if (now - entry.updatedAt > CHALLENGE_KEEP_MS) continue;
+              rollChallengeEntry(entry, now);
+              this.challengeEntries.set(entry.id, entry);
+            }
+            if (state.winner && now - state.winner.claimedAt <= CHALLENGE_KEEP_MS) {
+              this.challengeWinner = state.winner;
+            }
+            this.challengeLoaded = true;
+          } catch { /* a corrupt scorecard starts empty; a claim still re-proves 20 / 20 */ }
           this.seedRoles();
           /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
              are forgotten and written back before the first directory or leaderboard read. */
@@ -3652,6 +3689,16 @@ export class MatchmakerDO {
           : await this.starsPayout(request);
       } catch (err) {
         return json({ ok: false, error: 'vault_failed', hint: reasonOf(err) }, 500, VAULT_CORS);
+      }
+    }
+    /* The 7-Day Dual-Track Challenge: the card's counters, the Hard AI start ticket and the
+       first-to-complete claim. Identity is proven from the signed initData inside, exactly like
+       the vault above; nothing here trusts a name, a handle or a duration from the body. */
+    if (url.pathname.startsWith('/api/challenge/')) {
+      try {
+        return await this.challenge(request, url);
+      } catch (err) {
+        return json({ ok: false, error: 'challenge_failed', hint: reasonOf(err) }, 500, CHALLENGE_CORS);
       }
     }
     /* The relic-duel mailbox: a challenge filed while its target was away is read here on the
@@ -10609,6 +10656,23 @@ export class MatchmakerDO {
     if (humans.length > 1) {
       this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium, id: m.id })));
     }
+    /* The 7-Day Challenge's friend track. Only a real two-person 1v1 counts, and only when the
+       winning chair is still held by its person: a bot backfill or a substitute seat is a
+       practice board, never a friend win. */
+    if (live.members.length === 2 && winner >= 0 && winner < 2) {
+      const champion = live.members[winner];
+      const rival = live.members[winner === 0 ? 1 : 0];
+      if (champion && rival && this.roomPvpSeat(live, winner) && this.roomPvpSeat(live, rival.seat)) {
+        this.creditChallengeFriendWin(
+          champion.id,
+          rival.id,
+          Math.max(0, Math.round((Date.now() - live.startedAt) / 1000)),
+          live.driver?.state.turn ?? 0,
+          live.matchId,
+          false,
+        );
+      }
+    }
     return tiqDeltas;
   }
   /**
@@ -11083,7 +11147,7 @@ export class MatchmakerDO {
        it, and both records are flushed with the match counters they already ride. */
     this.adjustTiq(race.seats[leaver].id, -FORFEIT_TIQ);
     this.adjustTiq(other.id, WIN_TIQ);
-    this.settle(race, leaver === 0 ? 1 : 0);
+    this.settle(race, leaver === 0 ? 1 : 0, true);
     if (ladderBefore) this.rankOvertakes(ladderBefore, { [other.id]: WIN_TIQ });
     this.deliver(other, JSON.stringify(why === 'RESIGN'
       ? { type: 'RESIGN', side: leaver }
@@ -11095,7 +11159,7 @@ export class MatchmakerDO {
    * the directory. The room is the one authority that saw every move, so the win/loss counts are
    * recorded here — a client can claim anything, but only the board it played decides.
    */
-  private settle(race: Race, winner: number | null = null): void {
+  private settle(race: Race, winner: number | null = null, forfeit = false): void {
     if (race.over) return;
     race.over = true;
     this.races.delete(race.matchId);
@@ -11113,6 +11177,241 @@ export class MatchmakerDO {
          no bot can hold a `Race` seat, so every win here is a verified PvP win. */
       this.verdict(seat.id, winner === null ? null : seat.side === winner, true);
     }
+    /* The 7-Day Challenge's friend track is the room's own settlement, not a client report:
+       one credited win per real 1v1 board, with the room's elapsed time and turn count. */
+    if (winner !== null) {
+      const champion = race.seats[winner];
+      const rival = race.seats[race.seats.length - 1 - winner];
+      if (champion && rival) {
+        this.creditChallengeFriendWin(
+          champion.id,
+          rival.id,
+          Math.max(0, Math.round((Date.now() - race.startedAt) / 1000)),
+          race.state.turn,
+          race.matchId,
+          forfeit,
+        );
+      }
+    }
+  }
+
+  /* ---------- the 7-Day Dual-Track Challenge: 20 friend wins + 20 Hard AI wins ---------- */
+
+  /**
+   * The public handle the winner lock prints. The registry's verified `@username` always wins over
+   * anything the client could have posted; a player without one prints their verified Telegram id.
+   */
+  private challengeHandle(who: PlayerAuth): string {
+    const record = this.players.get(who.playerId);
+    const username = (record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
+    if (username) return `@${username}`;
+    const name = (who.name || record?.name || '').trim().slice(0, 40);
+    return name || who.tgId;
+  }
+
+  /** This player's scorecard for the current window, created and rolled on first touch. */
+  private challengeEntry(who: PlayerAuth, now: number): ChallengeEntry {
+    const existing = this.challengeEntries.get(who.playerId);
+    if (existing) {
+      rollChallengeEntry(existing, now);
+      if (who.tgId && existing.tgId !== who.tgId) {
+        existing.tgId = who.tgId;
+        existing.handle = this.challengeHandle(who);
+        existing.updatedAt = now;
+      }
+      return existing;
+    }
+    const entry = newChallengeEntry(who.playerId, who.tgId, this.challengeHandle(who), now);
+    this.challengeEntries.set(entry.id, entry);
+    this.trimChallenge(now);
+    return entry;
+  }
+
+  /** Drop cards from closed windows, then the coldest rows, so the ledger stays bounded. */
+  private trimChallenge(now: number): void {
+    for (const [id, entry] of this.challengeEntries) {
+      if (now - entry.updatedAt > CHALLENGE_KEEP_MS) this.challengeEntries.delete(id);
+    }
+    const over = this.challengeEntries.size - CHALLENGE_PLAYERS_MAX;
+    if (over <= 0) return;
+    const rows = [...this.challengeEntries.values()].sort((a, b) => a.updatedAt - b.updatedAt);
+    for (let i = 0; i < over; i += 1) {
+      const row = rows[i];
+      if (row) this.challengeEntries.delete(row.id);
+    }
+  }
+
+  private challengeSnapshot(): { entries: ChallengeEntry[]; winner: ChallengeWinner | null } {
+    return {
+      entries: [...this.challengeEntries.values()].map((entry) => ({
+        ...entry,
+        winsByOpponent: { ...entry.winsByOpponent },
+        tickets: { ...entry.tickets },
+        botReceipts: [...entry.botReceipts],
+        friendReceipts: [...entry.friendReceipts],
+      })),
+      winner: this.challengeWinner,
+    };
+  }
+
+  /** Write-behind: a card read never waits on storage, and a failed put never breaks a settle. */
+  private persistChallenge(): void {
+    if (!this.challengeLoaded) return;
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      void storage.put(CHALLENGE_KEY, structuredClone(this.challengeSnapshot())).catch(() => undefined);
+    } catch { /* a storage that refuses the write leaves the in-memory card readable */ }
+  }
+
+  /** A one-shot Hard AI ticket: 128 bits of Latin base36, never derived from a player field. */
+  private challengeTicket(): string {
+    const draw = new Uint32Array(4);
+    crypto.getRandomValues(draw);
+    return [...draw].map((n) => n.toString(36).padStart(7, '0')).join('');
+  }
+
+  /**
+   * Credit a friend win the room itself settled. Called from both settlement paths, so a win is
+   * counted once, off the room's clock and the room's turn count — never from a result payload.
+   * Both seats must be distinct verified Telegram accounts; a forfeit must clear 60 seconds.
+   */
+  private creditChallengeFriendWin(
+    winnerId: string,
+    loserId: string,
+    durationSec: number,
+    moves: number,
+    matchId: string,
+    forfeit: boolean,
+  ): void {
+    if (!this.challengeLoaded) return;
+    const winnerTg = chatIdOf(winnerId);
+    const loserTg = chatIdOf(loserId);
+    if (!/^[0-9]{1,20}$/.test(winnerTg) || !/^[0-9]{1,20}$/.test(loserTg)) return;
+    if (winnerTg === loserTg) return;
+    if (forfeit && durationSec < CHALLENGE_FORFEIT_MIN_SECONDS) return;
+    const now = Date.now();
+    const record = this.players.get(winnerId);
+    let entry = this.challengeEntries.get(winnerId);
+    if (!entry) {
+      const username = (record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
+      entry = newChallengeEntry(
+        winnerId,
+        winnerTg,
+        username ? `@${username}` : (record?.name || winnerTg),
+        now,
+      );
+      this.challengeEntries.set(winnerId, entry);
+    } else if (!entry.tgId) {
+      entry.tgId = winnerTg;
+      entry.handle = (record?.username ?? '').trim() ? `@${(record?.username ?? '').trim().replace(/^@+/, '').slice(0, 32)}` : (record?.name || winnerTg);
+    }
+    const refusal = applyFriendWin(entry, now, {
+      matchId,
+      opponentTgId: loserTg,
+      durationSec,
+      moves,
+    });
+    if (!refusal) this.persistChallenge();
+  }
+
+  /** The challenge's HTTP surface. Every counter here is the room's, never the body's. */
+  private async challenge(request: Request, url: URL): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CHALLENGE_CORS });
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
+    if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, CHALLENGE_CORS);
+    const now = Date.now();
+    /* The winner lock is scoped to THIS window: a claim from last week never blocks this week's
+       first finisher, and the card only ever names the round's winner. The internal player id
+       stays in the room — the payload carries the public handle only. */
+    const winnerNow = (): ChallengeWinner | null => {
+      const held = this.challengeWinner;
+      if (!held) return null;
+      const window = challengeWindowAt(now);
+      if (held.claimedAt < window.start) {
+        this.challengeWinner = null;
+        this.persistChallenge();
+        return null;
+      }
+      return held;
+    };
+    const withWinner = (entry: ChallengeEntry, extra: Record<string, unknown> = {}): Record<string, unknown> => {
+      const held = winnerNow();
+      return {
+        ...challengeView(entry, now),
+        ...extra,
+        winner: held ? { handle: held.handle, tgId: held.tgId, claimedAt: held.claimedAt } : null,
+        winnerSelf: held?.id === entry.id,
+      };
+    };
+
+    if (url.pathname === '/api/challenge/me') {
+      if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      this.trimChallenge(now);
+      return json(withWinner(entry, { auth: who.guest ? 'guest' : 'telegram' }), 200, CHALLENGE_CORS);
+    }
+
+    /* A guest seat may look at the card, but the two tracks and the prize need a verified player. */
+    if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+
+    if (url.pathname === '/api/challenge/start') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      const ticket = issueBotTicket(entry, now, this.challengeTicket());
+      this.persistChallenge();
+      return json({
+        ok: true,
+        ticket,
+        issuedAt: now,
+        expiresAt: now + CHALLENGE_TICKET_TTL_MS,
+        ...withWinner(entry),
+      }, 200, CHALLENGE_CORS);
+    }
+
+    if (url.pathname === '/api/challenge/report') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const body = await readBody(request);
+      const entry = this.challengeEntry(who, now);
+      const refusal = applyHardBotWin(entry, now, {
+        ticket: typeof body.ticket === 'string' ? body.ticket.slice(0, 64) : '',
+        won: body.won === true,
+        moves: typeof body.moves === 'number' && Number.isFinite(body.moves) ? body.moves : 0,
+        difficulty: typeof body.difficulty === 'string' ? body.difficulty.slice(0, 16) : '',
+        format: typeof body.format === 'string' ? body.format.slice(0, 16) : '',
+      });
+      if (!refusal) this.persistChallenge();
+      return json(withWinner(entry, {
+        ok: !refusal,
+        credited: !refusal,
+        error: refusal,
+      }), refusal ? 400 : 200, CHALLENGE_CORS);
+    }
+
+    if (url.pathname === '/api/challenge/claim') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      const refusal = claimChallenge(entry, now, winnerNow());
+      if (!refusal) {
+        /* The first claim is the winner lock: it pins the verified Telegram id and handle. */
+        if (!this.challengeWinner) {
+          this.challengeWinner = {
+            id: entry.id,
+            tgId: entry.tgId,
+            handle: entry.handle,
+            claimedAt: entry.claimedAt,
+          };
+        }
+        this.persistChallenge();
+      }
+      return json(withWinner(entry, {
+        ok: !refusal,
+        error: refusal,
+      }), refusal ? 400 : 200, CHALLENGE_CORS);
+    }
+
+    return json({ ok: false, error: 'not_found' }, 404, CHALLENGE_CORS);
   }
 
   /* ---------- the Stars Vault: only the quest verify door advances progress ---------- */

@@ -37,6 +37,22 @@ import { channelWarAppLink, telegramShareLink } from '../shared/config';
    glyph, a sprite star or a typed emoji. Vite fingerprints it, so the path is never dangling. */
 import telegramStarsUrl from './assets/images/telegram_stars.png';
 
+/**
+ * The Channel Wars switch. The tournament is PARKED, not deleted: every sheet, endpoint and
+ * registry row stays here for a future re-enable, while the poster, the floating shield, the
+ * invite link and every enlistment door read this one flag and stay shut.
+ */
+export const CHANNEL_WARS_ENABLED = false;
+
+/** The one line the parked hub says if it is ever reached (a stale link, a cached tap). */
+const WARS_OFF_NOTE: Record<LangCode, string> = {
+  fa: 'چالش کانال‌ها موقتاً غیرفعال است • به زودی برمی‌گردد',
+  en: 'Channel Wars is paused • Back soon',
+  ru: 'Channel Wars приостановлен • Скоро вернётся',
+  ar: 'تحدي القنوات متوقف مؤقتاً • يعود قريباً',
+  es: 'Channel Wars está en pausa • Vuelve pronto',
+};
+
 export interface ChannelWarApi {
   sheets: Sheets;
   /** The war queue. `channel_war` is what puts the war identity on the matchmaking stage. */
@@ -1770,6 +1786,10 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   }
 
   function openRegister(prefill = ''): void {
+    if (!CHANNEL_WARS_ENABLED) {
+      showToast(WARS_OFF_NOTE[lang] ?? WARS_OFF_NOTE.en);
+      return;
+    }
     view = 'register';
     setRegError('');
     if (regDone) regDone.hidden = true;
@@ -1953,6 +1973,12 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
 
   const hub: ChannelWarHub = {
     open(prefill = '') {
+      if (!CHANNEL_WARS_ENABLED) {
+        /* Parked: every door that used to raise the hub says so once and stays shut. */
+        notify('warning');
+        showToast(WARS_OFF_NOTE[lang] ?? WARS_OFF_NOTE.en);
+        return;
+      }
       if (!root) { api.openFriends(); return; }
       const handle = prefill ? cleanHandle(prefill) : '';
       const known = handle
@@ -2056,6 +2082,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   /* A rally link is a prompt, not an enrolment: it raises the hub with the channel already
      selected, and the Join key is still the only thing that puts a player on a roster. */
   window.addEventListener('detour:channel-war-invite', (event) => {
+    if (!CHANNEL_WARS_ENABLED) return;
     const handle = (event as CustomEvent<{ handle?: string }>).detail?.handle ?? '';
     if (handle) hub.open(handle);
   });

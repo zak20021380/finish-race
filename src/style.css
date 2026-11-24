@@ -26035,8 +26035,6 @@ html.reduced-motion .slide-cta-go { transition: none; }
   border: 1px solid rgba(251, 191, 36, .34);
   background:
     linear-gradient(180deg, rgba(76, 54, 14, .6) 0%, rgba(24, 22, 20, .55) 52%, rgba(10, 13, 20, .82) 100%);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  backdrop-filter: blur(12px) saturate(1.1);
   font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -46916,3 +46914,463 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   #s-shop .shop-vip-tier,
   #s-shop .shop-vip-cta { transition: none; }
 }
+
+/* ============================================================================================
+   SLIDE 0 — THE 7-DAY DUAL-TRACK CHALLENGE (20 friend wins + 20 Hard AI wins → 50 Stars)
+
+   The hero opener. One obsidian plate, a 24K gold prize lockup, two progress meters (emerald-
+   cyan for friends, struck gold for the Hard AI track) and the two launch keys. No blur, no
+   infinite keyframes, no cartoon glyphs: the only picture is the authentic Telegram Stars PNG
+   (mounted by src/main.ts) over a static engraved stage.
+
+   Geometry is the carousel's own: the card keeps the 34px pager lane and the 12px/14px inset
+   the poster beside it uses, so inserting it as slide 0 cannot move the Play dock by a pixel.
+   The inner column fills the padded box and pins the action row to the bottom, so any spare
+   height on a tall phone reads as deliberate air above the keys.
+   ============================================================================================ */
+.car-card.carousel-slide-challenge {
+  position: relative;
+  isolation: isolate;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 12px 14px 36px;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  border-top: 1px solid rgba(255, 218, 133, .2);
+  background:
+    radial-gradient(92% 62% at 50% -8%, rgba(251, 191, 36, .16), rgba(251, 191, 36, 0) 60%),
+    radial-gradient(70% 52% at 4% 104%, rgba(16, 185, 129, .10), rgba(16, 185, 129, 0) 72%),
+    linear-gradient(180deg, #171F2E 0%, #111827 54%, #0A0F18 100%);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, .34),
+    inset 0 1px 0 rgba(255, 239, 196, .10),
+    inset 0 0 0 1px rgba(251, 191, 36, .14),
+    inset 0 0 44px rgba(0, 0, 0, .38);
+}
+/* one static specular pass and a gold hairline rim — the same metal language as the poster */
+.car-card.carousel-slide-challenge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, transparent 20%, rgba(255, 243, 198, .07) 29%, rgba(255, 243, 198, .015) 36%, transparent 45%),
+    radial-gradient(128% 108% at 50% 44%, transparent 48%, rgba(2, 5, 10, .58) 100%);
+}
+.car-card.carousel-slide-challenge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(142deg,
+    rgba(255, 232, 166, .55) 0%,
+    rgba(196, 129, 31, .22) 26%,
+    rgba(13, 18, 28, 0) 50%,
+    rgba(16, 185, 129, .16) 76%,
+    rgba(255, 245, 205, .34) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.car-card.carousel-slide-challenge > * { position: relative; z-index: 1; }
+.car-card.carousel-slide-challenge > .chal-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- header: the weekly badge and the live window, never a second headline ---- */
+.chal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 22px;
+}
+.car-card.carousel-slide-challenge .car-kicker::before { content: none; display: none; }
+.chal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 9px 4px 7px;
+  border-radius: 7px;
+  border: 1px solid rgba(251, 191, 36, .3);
+  background: linear-gradient(180deg, rgba(120, 78, 16, .34) 0%, rgba(20, 27, 45, .72) 100%);
+  color: #F8E7B4;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16);
+}
+.chal-badge-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+}
+.chal-badge-ico svg { display: block; width: 10px; height: 10px; color: #2A1A05; fill: currentColor; }
+.chal-badge-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-clock {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(251, 191, 36, .3);
+  background: linear-gradient(180deg, rgba(76, 54, 14, .5) 0%, rgba(16, 20, 30, .82) 100%);
+  color: #FFDF8A;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16), 0 2px 6px rgba(0, 0, 0, .3);
+}
+.chal-clock bdi { display: block; }
+.chal-clock-ico { flex: none; width: 12px; height: 12px; color: #FBBF24; fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* ---- the prize lockup: the authentic Star at 44px, the number in struck gold ---- */
+.chal-prize {
+  /* The prize lockup owns the card's flexible middle: the Star, the number and the one-line
+     brief sit centred in whatever height the fixed slide leaves, so the meters and the two hands
+     stay pinned as one block at the bottom instead of drifting apart. */
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px 0 4px;
+}
+.chal-star-stage {
+  position: relative;
+  flex: none;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+.chal-star-stage::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 200, 70, .32) 0%, rgba(255, 170, 40, .13) 48%, rgba(150, 82, 12, .05) 66%, rgba(251, 191, 36, 0) 78%);
+  box-shadow: inset 0 0 0 1px rgba(255, 222, 145, .13);
+  pointer-events: none;
+  z-index: 0;
+}
+.chal-star-img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .45));
+}
+.chal-prize-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.chal-prize-v {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #FFFDF3 0%, #FFF2BC 22%, #FFD666 42%, #FFB224 62%, #E8890C 82%, #A95305 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #FCD34D;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: .5px rgba(124, 45, 18, .4);
+}
+.chal-prize-v > span { font-size: 15px; font-weight: 900; letter-spacing: 0; }
+.chal-prize-sub {
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.38;
+  letter-spacing: .005em;
+  color: #C9D3E4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  display: block;
+  /* two lines of the compactest leading any locale uses; a third is clipped, never pushed into
+     the meters (the copy is authored to fit inside two lines) */
+  max-height: 3.1em;
+  overflow: hidden;
+}
+
+/* ---- the two meters: one emerald-cyan, one struck gold, each with a real counter ---- */
+.chal-meters { flex: none; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.chal-meter { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.chal-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.chal-meter-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: #E7EDF7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chal-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.chal-dot.is-friend { background: linear-gradient(180deg, #34D399 0%, #06B6D4 100%); box-shadow: 0 0 6px rgba(16, 185, 129, .55); }
+.chal-dot.is-bot { background: linear-gradient(180deg, #FDE68A 0%, #E8890C 100%); box-shadow: 0 0 6px rgba(251, 191, 36, .5); }
+.chal-meter-v {
+  flex: none;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #F8FAFC;
+  white-space: nowrap;
+}
+.chal-meter-v b { font-weight: 900; color: #FFF7DA; }
+.chal-meter-goal { color: rgba(203, 213, 225, .6); }
+.chal-bar {
+  position: relative;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .04);
+  overflow: hidden;
+}
+.chal-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  transition: width 260ms cubic-bezier(.2, .9, .3, 1);
+}
+.chal-fill.is-friend {
+  background: linear-gradient(90deg, #059669 0%, #10B981 46%, #22D3EE 100%);
+  box-shadow: 0 0 8px rgba(16, 185, 129, .45);
+}
+.chal-fill.is-bot {
+  background: linear-gradient(90deg, #B45309 0%, #F59E0B 52%, #FDE68A 100%);
+  box-shadow: 0 0 8px rgba(251, 191, 36, .4);
+}
+.chal-hint {
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: .01em;
+  color: #8593A8;
+}
+
+/* ---- the two hands: Hard AI in struck gold, the friend invite in cyan-lit glass ---- */
+.chal-ctas {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 0;
+  padding-top: 2px;
+}
+.chal-cta {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.chal-cta-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-cta-ico { flex: none; width: 16px; height: 16px; }
+.chal-cta-gold {
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 55%, #D97706 100%);
+  color: #1E1303;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 2px 8px rgba(0, 0, 0, .35);
+}
+.chal-cta-gold .chal-cta-ico { color: #1E1303; fill: currentColor; }
+.chal-cta-glass {
+  border: 1px solid rgba(34, 211, 238, .4);
+  background: linear-gradient(180deg, rgba(8, 51, 68, .62) 0%, rgba(9, 22, 34, .72) 100%);
+  color: #D7F7FF;
+  box-shadow: inset 0 1px 0 rgba(165, 243, 252, .16), 0 2px 8px rgba(0, 0, 0, .3);
+}
+.chal-cta-glass .chal-cta-ico { color: #67E8F9; fill: currentColor; }
+.chal-cta:hover { filter: brightness(1.05); }
+.chal-cta:active { transform: scale(.98); filter: none; }
+.chal-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- the claim: both meters complete, the prize becomes one glowing key ---- */
+.chal-claim {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #FFF7CC 0%, #FDE68A 26%, #F59E0B 66%, #B45309 100%);
+  color: #241503;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .015em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    0 0 0 1px rgba(255, 232, 166, .4),
+    0 6px 18px rgba(245, 158, 11, .32),
+    0 2px 6px rgba(0, 0, 0, .4);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.chal-claim-ico { flex: none; width: 20px; height: 20px; color: #7C2D12; }
+.chal-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-claim:hover { filter: brightness(1.04); }
+.chal-claim:active { transform: scale(.985); filter: none; }
+.chal-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.car-card.carousel-slide-challenge .chal-ctas[hidden],
+.car-card.carousel-slide-challenge .chal-claim[hidden] { display: none; }
+
+/* ---- the parked poster: the last slide stays for a future re-enable, inert and muted ---- */
+.car-card.carousel-slide-tournament.is-dormant {
+  opacity: .62;
+  pointer-events: none;
+  filter: saturate(.55);
+}
+.car-card.carousel-slide-tournament.is-dormant *,
+.car-card.carousel-slide-tournament.is-dormant *::before,
+.car-card.carousel-slide-tournament.is-dormant *::after { animation: none !important; }
+.tour-cta.tour-cta-off {
+  background: linear-gradient(180deg, rgba(51, 65, 85, .9) 0%, rgba(30, 41, 59, .96) 100%);
+  color: #CBD5E1;
+  border: 1px solid rgba(148, 163, 184, .3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  cursor: not-allowed;
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+.tour-cta-off .tour-cta-ico { color: #94A3B8; }
+.tour-admin-off { cursor: not-allowed; }
+/* The floating Channel War shield belongs to a live tournament: parked means gone. */
+html[data-channel-wars="off"] #iv-war { display: none !important; }
+
+/* ---- Persian / Arabic: the script keeps its own tracking, digits stay Latin ---- */
+html[data-lang="fa"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-meter-k, .chal-hint, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-cta, .chal-claim),
+html[data-lang="ar"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-meter-k, .chal-hint, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-cta, .chal-claim) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+/* the two reading rows mirror: the Star, the meter dots and the counters sit at the reading
+   start while every figure keeps its own LTR isolation */
+html[data-lang="fa"] :is(.chal-head, .chal-prize, .chal-meter-top, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub, .chal-hint),
+html[data-lang="ar"] :is(.chal-head, .chal-prize, .chal-meter-top, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub, .chal-hint) {
+  direction: rtl;
+}
+html[data-lang="fa"] .chal-prize-sub { line-height: 1.5; }
+html[data-lang="fa"] .chal-hint { line-height: 1.45; }
+html[data-lang="ar"] .chal-prize-sub { line-height: 1.55; }
+html[data-lang="ru"] .chal-cta,
+html[data-lang="es"] .chal-cta { font-size: 11.5px; }
+
+/* ---- the 320px floor: the two keys stack their labels, the prize keeps its Star ---- */
+@media (max-width: 350px) {
+  .car-card.carousel-slide-challenge { padding-left: 10px; padding-right: 10px; }
+  .chal-prize { gap: 8px; }
+  .chal-star-stage { width: 46px; height: 46px; }
+  .chal-star-img { width: 40px; height: 40px; }
+  .chal-prize-v { font-size: 22px; }
+  .chal-prize-v > span { font-size: 13px; }
+  .chal-prize-sub { font-size: 9.5px; }
+  .chal-cta { min-height: 40px; padding: 0 8px; font-size: 11.5px; gap: 4px; }
+  .chal-cta-ico { width: 14px; height: 14px; }
+  .chal-claim { font-size: 12.5px; min-height: 42px; }
+}
+
+/* ---- shorter columns: give back air, never the copy ---- */
+@media (max-height: 760px) {
+  .chal-prize { padding: 0; }
+  .chal-prize-v { font-size: 23px; }
+}
+@media (max-height: 680px) {
+  .car-card.carousel-slide-challenge > .chal-inner { gap: 7px; }
+  .chal-meters { gap: 6px; }
+  .chal-star-stage { width: 46px; height: 46px; }
+  .chal-star-img { width: 40px; height: 40px; }
+  .chal-prize-v { font-size: 22px; }
+  .chal-prize-sub { font-size: 10px; }
+  .chal-cta { min-height: 40px; }
+  .chal-claim { min-height: 42px; }
+}
+@media (max-height: 620px) {
+  .car-card.carousel-slide-challenge { padding-top: 10px; padding-bottom: 32px; }
+  .car-card.carousel-slide-challenge > .chal-inner { gap: 6px; }
+  .chal-head { min-height: 20px; }
+  .chal-badge { padding: 3px 8px 3px 6px; font-size: 9.5px; }
+  .chal-clock { height: 20px; font-size: 9.5px; }
+  .chal-prize { gap: 8px; }
+  .chal-star-stage { width: 40px; height: 40px; }
+  .chal-star-stage::before { inset: -4px; }
+  .chal-star-img { width: 34px; height: 34px; }
+  .chal-prize-v { font-size: 20px; }
+  .chal-prize-sub { font-size: 9.5px; line-height: 1.34; -webkit-line-clamp: 2; }
+  .chal-meters { gap: 5px; }
+  .chal-meter { gap: 2px; }
+  .chal-meter-k { font-size: 10.5px; }
+  .chal-bar { height: 6px; }
+  .chal-hint { font-size: 9px; }
+  .chal-cta { min-height: 38px; font-size: 12px; }
+  .chal-claim { min-height: 40px; font-size: 13px; }
+}
+@media (max-height: 600px) {
+  .car-card.carousel-slide-challenge > .chal-inner { gap: 5px; }
+  .chal-prize-sub { -webkit-line-clamp: 1; font-size: 9.5px; }
+  .chal-hint { display: none; }
+  .chal-cta { min-height: 36px; }
+  .chal-claim { min-height: 38px; }
+}
+
+/* reduced motion: the fills settle instead of sliding, and nothing else moves at all */
+html.reduced-motion .chal-fill,
+html.reduced-motion .chal-cta,
+html.reduced-motion .chal-claim { transition: none; }
+

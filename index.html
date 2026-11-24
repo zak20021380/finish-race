@@ -1295,63 +1295,72 @@
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
               <div class="carousel-track" id="home-carousel-track">
-              <!-- Slide 0 — the Channel War. Prepended, never a replacement:
-                   Nations Cup and The Mind Ladder keep their own markup, one index
-                   further along, so all three coexist in the same track.
-                   Pure winner-takes-all: the #1 channel takes the whole 200★ vault. -->
-              <article class="car-card carousel-slide-tournament" data-slide="0" data-index="0" aria-label="Channel War — winner takes all, 200 Star jackpot">
-                <div class="car-head tour-head">
-                  <span class="car-kicker tour-kicker">
-                    <span class="tour-star-pod" aria-hidden="true"><svg class="tour-star-ico" viewBox="0 0 56 56" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg></span>
-                    <span class="tour-title" data-i18n="carouselChannelWarTitle">CHANNEL WAR</span>
-                  </span>
-                  <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
-                </div>
-
-                <!-- one centered reward stage: the authentic Telegram Stars PNG
-                     (bundled by Vite, src set in home.ts) floats above the jackpot
-                     and its rule, all on the same vertical axis -->
-                <div class="tour-hero">
-                  <span class="tour-star-stage" aria-hidden="true">
-                    <img class="tour-star-img" id="tour-star-img" alt="" width="64" height="64" decoding="async" draggable="false" />
-                  </span>
-                  <div class="tour-vault">
-                    <span class="tour-vault-v" data-i18n="carouselWarStarsPrize">200 STARS</span>
-                    <span class="tour-vault-sub">
-                      <span data-i18n="carouselWarSubtitle">🏆 Winner-takes-all · Top 10 squad heroes share the bounty</span>
+              <!-- SLIDE 0 — the 7-Day Dual-Track Challenge, the hero opener:
+                   20 friend wins + 20 Hard AI wins inside one 7-day window for 50 Stars.
+                   The live counters, the countdown and both hands are painted by
+                   src/main.ts from /api/challenge/me; the markup ships a Persian
+                   baseline so no frame ever renders an empty card. -->
+              <article class="car-card carousel-slide-challenge" data-slide="0" data-index="0" aria-label="7-Day Challenge — 20 friend wins + 20 Hard AI wins for 50 Stars">
+                <div class="chal-inner">
+                  <div class="car-head chal-head">
+                    <span class="car-kicker chal-badge">
+                      <span class="chal-badge-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bolt" /></svg></span>
+                      <span class="chal-badge-t" id="chal-badge-t">چالش هفتگی</span>
+                    </span>
+                    <span class="chal-clock">
+                      <svg class="chal-clock-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-clock" /></svg>
+                      <bdi dir="ltr" id="chal-countdown">6d 23h</bdi>
                     </span>
                   </div>
+
+                  <div class="chal-prize">
+                    <span class="chal-star-stage" aria-hidden="true">
+                      <img class="chal-star-img" id="chal-star-img" alt="" width="44" height="44" decoding="async" draggable="false" />
+                    </span>
+                    <div class="chal-prize-txt">
+                      <span class="chal-prize-v"><bdi dir="ltr">50</bdi> <span id="chal-prize-u">استارز</span></span>
+                      <span class="chal-prize-sub" id="chal-sub">اولین نفری که 20 برد دوستانه و 20 برد ربات سخت بگیره برنده‌ست!</span>
+                    </div>
+                  </div>
+
+                  <div class="chal-meters">
+                    <div class="chal-meter">
+                      <div class="chal-meter-top">
+                        <span class="chal-meter-k"><i class="chal-dot is-friend" aria-hidden="true"></i><span id="chal-friend-k">برد مقابل دوستان</span></span>
+                        <bdi class="chal-meter-v" dir="ltr"><b id="chal-friend-v">0</b> / <span class="chal-meter-goal">20</span></bdi>
+                      </div>
+                      <div class="chal-bar" id="chal-friend-bar" role="progressbar" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
+                        <i class="chal-fill is-friend" id="chal-friend-fill"></i>
+                      </div>
+                      <span class="chal-hint" id="chal-friend-hint">حداکثر 3 برد از هر دوست</span>
+                    </div>
+
+                    <div class="chal-meter">
+                      <div class="chal-meter-top">
+                        <span class="chal-meter-k"><i class="chal-dot is-bot" aria-hidden="true"></i><span id="chal-bot-k">برد مقابل ربات سخت</span></span>
+                        <bdi class="chal-meter-v" dir="ltr"><b id="chal-bot-v">0</b> / <span class="chal-meter-goal">20</span></bdi>
+                      </div>
+                      <div class="chal-bar" id="chal-bot-bar" role="progressbar" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
+                        <i class="chal-fill is-bot" id="chal-bot-fill"></i>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="chal-ctas" id="chal-ctas">
+                    <button class="chal-cta chal-cta-gold" type="button" id="chal-bot-cta">
+                      <svg class="chal-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bot" /></svg>
+                      <span class="chal-cta-t" id="chal-bot-t">ربات سخت</span>
+                    </button>
+                    <button class="chal-cta chal-cta-glass" type="button" id="chal-friend-cta">
+                      <svg class="chal-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-users" /></svg>
+                      <span class="chal-cta-t" id="chal-friend-t">دعوت و بازی با دوست</span>
+                    </button>
+                  </div>
+                  <button class="chal-claim" type="button" id="chal-claim-cta" hidden>
+                    <svg class="chal-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                    <span class="chal-claim-t" id="chal-claim-t">ثبت و دریافت 50 استارز</span>
+                  </button>
                 </div>
-
-                <!-- the reigning channel: a compact obsidian throne plaque with a gold
-                     hairline. Two segments — a crown and its dimmed kicker, then the
-                     live handle in bright gold. With no holder the kicker and the dare
-                     swap in from the same nodes, so the plaque never disagrees with the
-                     ranking feed. -->
-                <div class="tour-hud is-unclaimed" id="tour-champion-plaque">
-                  <span class="tour-leader-tag">
-                    <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
-                    <span class="tour-leader-k" id="tour-leader-kicker">DEFENDING:</span>
-                  </span>
-                  <span class="tour-leader-sep" aria-hidden="true">·</span>
-                  <b class="tour-leader-h" id="tour-leader-handle" dir="ltr">Seize First Blood</b>
-                </div>
-
-                <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
-                  <svg class="tour-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-swords" /></svg>
-                  <span class="tour-cta-t" data-i18n="carouselCtaFight">FIGHT FOR YOUR CHANNEL</span>
-                </button>
-
-                <!-- the growth door: channel / group admins enlist their community so
-                     its members can compete — a Telegram bot-admin deeplink, not a route.
-                     A quiet glass key: one primary action per card. -->
-                <button class="tour-admin" type="button" id="home-tournament-admin">
-                  <span class="tour-admin-pod" aria-hidden="true">
-                    <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
-                  </span>
-                  <span class="tour-admin-t" data-i18n="carouselCtaEnlist">CHANNEL ADMIN? ENLIST HERE</span>
-                  <span class="tour-admin-chev" aria-hidden="true">›</span>
-                </button>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">
                 <!-- one inner column: header on top, standings in the band, foot pinned -->
@@ -1449,12 +1458,69 @@
                   </div>
                 </div>
               </article>
+              <!-- SLIDE 3 — the Channel War poster, PARKED (CHANNEL_WARS_ENABLED = false).
+                   The markup, the hub sheet and every Worker endpoint stay for a future
+                   re-enable; this slide is inert (pointer-events: none, opacity .62) and its
+                   gold key is a slate note now. It is the very last slide, never the opener. -->
+              <article class="car-card carousel-slide-tournament is-dormant" data-slide="3" data-index="3" aria-disabled="true" aria-label="Channel War — winner takes all, 200 Star jackpot">
+                <div class="car-head tour-head">
+                  <span class="car-kicker tour-kicker">
+                    <span class="tour-star-pod" aria-hidden="true"><svg class="tour-star-ico" viewBox="0 0 56 56" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg></span>
+                    <span class="tour-title" data-i18n="carouselChannelWarTitle">CHANNEL WAR</span>
+                  </span>
+                  <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
+                </div>
+
+                <!-- one centered reward stage: the authentic Telegram Stars PNG
+                     (bundled by Vite, src set in home.ts) floats above the jackpot
+                     and its rule, all on the same vertical axis -->
+                <div class="tour-hero">
+                  <span class="tour-star-stage" aria-hidden="true">
+                    <img class="tour-star-img" id="tour-star-img" alt="" width="64" height="64" decoding="async" draggable="false" />
+                  </span>
+                  <div class="tour-vault">
+                    <span class="tour-vault-v" data-i18n="carouselWarStarsPrize">200 STARS</span>
+                    <span class="tour-vault-sub">
+                      <span data-i18n="carouselWarSubtitle">Winner-takes-all · Top 10 squad heroes share the bounty</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- the reigning channel: a compact obsidian throne plaque with a gold
+                     hairline. Two segments — a crown and its dimmed kicker, then the
+                     live handle in bright gold. With no holder the kicker and the dare
+                     swap in from the same nodes, so the plaque never disagrees with the
+                     ranking feed. -->
+                <div class="tour-hud is-unclaimed" id="tour-champion-plaque">
+                  <span class="tour-leader-tag">
+                    <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
+                    <span class="tour-leader-k" id="tour-leader-kicker">DEFENDING:</span>
+                  </span>
+                  <span class="tour-leader-sep" aria-hidden="true">·</span>
+                  <b class="tour-leader-h" id="tour-leader-handle" dir="ltr">Seize First Blood</b>
+                </div>
+                <span class="tour-cta tour-cta-off" id="home-tournament-off" role="note" aria-disabled="true">
+                  <svg class="tour-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-lock" /></svg>
+                  <span class="tour-cta-t" id="home-tournament-off-t">موقتاً غیرفعال • به زودی</span>
+                </span>
+
+                <!-- the growth door: channel / group admins enlist their community so
+                     its members can compete — a Telegram bot-admin deeplink, not a route.
+                     A quiet glass key: one primary action per card. -->
+                <span class="tour-admin tour-admin-off" aria-disabled="true">
+                  <span class="tour-admin-pod" aria-hidden="true">
+                    <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  </span>
+                  <span class="tour-admin-t" data-i18n="carouselCtaEnlist">CHANNEL ADMIN? ENLIST HERE</span>
+                </span>
+              </article>
               </div>
             </div>
             <div class="car-dots" id="home-dots" role="tablist" aria-label="Highlight pages">
-              <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1 — Channel War"></button>
+              <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1 — 50 Stars Challenge"></button>
               <button class="dot" type="button" data-dot="1" role="tab" aria-selected="false" aria-label="Page 2 — Nations Cup"></button>
               <button class="dot" type="button" data-dot="2" role="tab" aria-selected="false" aria-label="Page 3 — The Mind Ladder"></button>
+              <button class="dot" type="button" data-dot="3" role="tab" aria-selected="false" aria-label="Page 4 — Channel War (paused)"></button>
             </div>
           </div>
 
