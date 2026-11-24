@@ -6926,8 +6926,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">50</bdi> استارز',
     rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> <i>•</i> هوش مصنوعی <bdi dir="ltr">{botWins}</bdi>',
     players: 'شرکت‌کننده',
-    enrolled: 'عضو فعال تورنمنت',
-    join: 'شرکت رایگان در تورنمنت',
+    enrolled: 'فعال',
+    join: 'شرکت رایگان',
     joinOk: 'در تورنمنت هفتگی ثبت شدی؛ موفق باشی!',
     joinFail: 'ثبت در تورنمنت ممکن نشد؛ دوباره تلاش کنید',
     rules: [
@@ -6981,8 +6981,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> AI <bdi dir="ltr">{botWins}</bdi>',
     players: 'Players',
-    enrolled: 'Enrolled • Active',
-    join: 'Join Tournament Free',
+    enrolled: 'Active',
+    join: 'Join Free',
     joinOk: 'You are in the weekly tournament — good luck!',
     joinFail: 'Could not join the tournament — try again',
     rules: [
@@ -7036,8 +7036,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> <i>•</i> ИИ <bdi dir="ltr">{botWins}</bdi>',
     players: 'Участники',
-    enrolled: 'В турнире • активен',
-    join: 'Участвовать бесплатно',
+    enrolled: 'Активен',
+    join: 'Участвовать',
     joinOk: 'Вы в недельном турнире — удачи!',
     joinFail: 'Не удалось зарегистрироваться — попробуйте ещё раз',
     rules: [
@@ -7091,8 +7091,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">50</bdi> ستارز',
     rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> <i>•</i> الذكاء الاصطناعي <bdi dir="ltr">{botWins}</bdi>',
     players: 'مشارك',
-    enrolled: 'مشارك • نشط',
-    join: 'انضم إلى البطولة مجاناً',
+    enrolled: 'نشط',
+    join: 'انضم مجاناً',
     joinOk: 'تم تسجيلك في البطولة الأسبوعية — حظاً موفقاً!',
     joinFail: 'تعذّر الانضمام إلى البطولة — حاول مرة أخرى',
     rules: [
@@ -7146,8 +7146,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> <i>•</i> IA <bdi dir="ltr">{botWins}</bdi>',
     players: 'Jugadores',
-    enrolled: 'Inscrito • Activo',
-    join: 'Unirse gratis al torneo',
+    enrolled: 'Activo',
+    join: 'Unirse gratis',
     joinOk: '¡Ya estás en el torneo semanal — buena suerte!',
     joinFail: 'No se pudo unir al torneo — inténtalo de nuevo',
     rules: [
@@ -7401,12 +7401,13 @@ function paintChallengeCard(): void {
 /**
  * One contender row of the Royal E-Sports ladder, built as nodes:
  *
- *   start — a sculpted rank emblem (a 32px metallic shield on the podium, a 28px obsidian pill for
- *           the field), the LTR-sealed public handle, the Top-3 prize badge and the YOU pill;
- *   end   — one stacked stat capsule: the bold weekly total above the muted source split.
+ *   start — a sculpted 36px rank crest, then a two-line stack: the LTR-sealed public handle with
+ *           its YOU badge over the muted source split;
+ *   end   — the tabular weekly total, with the Top-3 prize tag beneath it.
  *
- * The handle is text, every figure is a Latin bdi run, and no authored markup carries a handle.
- * The only vector here is the podium shield itself: a crisp inline path, never a cartoon glyph.
+ * The wide dark stat box that used to sit inside the row is gone, so the handle owns the width it
+ * needs and a long at-name is never clipped. The handle is text, every figure is a Latin bdi run,
+ * and no authored markup carries a handle.
  */
 function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const copy = challengeCopy();
@@ -7418,54 +7419,54 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const start = document.createElement('div');
   start.className = 'ci-row-start';
 
+  /* The emblem: one 36px crest, the rank a Latin figure in its centre. */
   const rank = document.createElement('span');
   rank.className = 'ci-row-rank';
-  if (row.position <= 3) {
-    /* The podium emblem: one struck shield, the rank seated in its centre. */
-    rank.innerHTML = '<svg class="ci-rank-shield" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
-      + '<path d="M12 2.4 19.9 5.4v5.9c0 4.9-3.2 8.6-7.9 10.2-4.7-1.6-7.9-5.3-7.9-10.2V5.4Z" /></svg>';
-    rank.append(challengeBdi(String(row.position)));
-  } else {
-    const hash = document.createElement('span');
-    hash.className = 'ci-rank-hash';
-    hash.setAttribute('aria-hidden', 'true');
-    hash.textContent = '#';
-    rank.append(hash, challengeBdi(String(row.position)));
-  }
+  rank.append(challengeBdi(String(row.position)));
+
+  const info = document.createElement('div');
+  info.className = 'ci-row-info';
+
+  const top = document.createElement('div');
+  top.className = 'ci-row-top';
 
   /* The public handle is one LTR-sealed run, so its at-sign can never flip sides in RTL. */
   const handle = document.createElement('bdi');
   handle.setAttribute('dir', 'ltr');
   handle.className = 'ci-row-handle';
   handle.textContent = challengeHandleText(row.handle);
+  top.append(handle);
 
-  start.append(rank, handle);
-
-  if (row.position <= 3) {
-    const prize = document.createElement('span');
-    prize.className = 'ci-row-prize';
-    prize.innerHTML = copy.prizeTag;
-    start.append(prize);
-  }
   if (row.isMe === true) {
     const you = document.createElement('span');
     you.className = 'ci-you';
     you.textContent = copy.you;
-    start.append(you);
+    top.append(you);
   }
 
-  const end = document.createElement('div');
-  end.className = 'ci-row-end';
-  const total = document.createElement('span');
-  total.className = 'ci-row-w';
-  total.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
   const sub = document.createElement('span');
   sub.className = 'ci-row-sub';
   /* Authored copy plus two integers: nothing here can carry a handle into markup. */
   sub.innerHTML = copy.rowSub
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
-  end.append(total, sub);
+
+  info.append(top, sub);
+  start.append(rank, info);
+
+  const end = document.createElement('div');
+  end.className = 'ci-row-end';
+  const total = document.createElement('span');
+  total.className = 'ci-row-w';
+  total.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
+  end.append(total);
+
+  if (row.position <= 3) {
+    const prize = document.createElement('span');
+    prize.className = 'ci-row-prize';
+    prize.innerHTML = copy.prizeTag;
+    end.append(prize);
+  }
 
   item.append(start, end);
   return item;

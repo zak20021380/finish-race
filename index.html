@@ -3455,22 +3455,27 @@
             <!-- PINNED: the personal scoreboard, the payout, and the two ways to score.
                  Everything here used to live on the poster; the board below only ranks. -->
             <section class="ci-pin" aria-label="Your weekly scoreboard">
+              <!-- One single-line telemetry strip: rank, weekly total and the source split on the
+                   start side, the live enrolment state pinned to the end side. It replaced the
+                   tall two-row card so the board below owns the vertical space instead. -->
               <div class="ci-sum">
-                <div class="ci-sum-stats">
+                <div class="ci-sum-start">
+                  <span class="ci-rank" id="ci-my-rank">بدون رتبه</span>
                   <span class="ci-sum-total"><bdi dir="ltr" id="ci-my-wins">0</bdi> <span class="ci-sum-u" id="ci-my-wins-u">برد</span></span>
                   <span class="ci-sum-src" id="ci-sum-src">دوستان <bdi dir="ltr">0</bdi> <i>•</i> هوش مصنوعی <bdi dir="ltr">0</bdi></span>
                 </div>
-                <span class="ci-rank" id="ci-my-rank">بدون رتبه</span>
-                <!-- automatic enrollment: an emerald-gold status once seated, a free one-tap key
+                <!-- automatic enrollment: an emerald live dot once seated, a free one-tap key
                      until this seat has synced into the live week -->
-                <span class="ci-seat" id="ci-seat-on" hidden>
-                  <svg class="ci-seat-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-check" /></svg>
-                  <span id="ci-seat-on-t">عضو فعال تورنمنت</span>
-                </span>
-                <button class="ci-seat is-cta" type="button" id="ci-seat-join" hidden>
-                  <svg class="ci-seat-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-plus" /></svg>
-                  <span id="ci-seat-join-t">شرکت رایگان در تورنمنت</span>
-                </button>
+                <div class="ci-sum-end">
+                  <span class="ci-seat" id="ci-seat-on" hidden>
+                    <span class="ci-seat-dot" aria-hidden="true"></span>
+                    <span id="ci-seat-on-t">فعال</span>
+                  </span>
+                  <button class="ci-seat is-cta" type="button" id="ci-seat-join" hidden>
+                    <svg class="ci-seat-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-plus" /></svg>
+                    <span id="ci-seat-join-t">شرکت رایگان</span>
+                  </button>
+                </div>
               </div>
 
               <button class="ci-claim" type="button" id="ci-claim-cta" hidden>
@@ -3488,13 +3493,16 @@
                   <span class="ci-launch-t" id="ci-friend-t">دعوت و بازی با دوست</span>
                 </button>
               </div>
-              <p class="ci-launch-hint" id="ci-friend-hint">حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست</p>
-              <!-- the quiet second door under the mint key: no room is created here, the existing
-                   Friends & Rivals list is raised directly so an in-app challenge goes out from it -->
-              <button class="ci-rivals" type="button" id="ci-rivals-cta">
-                <svg class="ci-rivals-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
-                <span class="ci-rivals-t" id="ci-rivals-t">انتخاب مستقیم از لیست دوستان و رقبا</span>
-              </button>
+              <!-- the cap note and the second door share one balanced row instead of stacking -->
+              <div class="ci-note-row">
+                <p class="ci-launch-hint" id="ci-friend-hint">حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست</p>
+                <!-- the quiet second door: no room is created here, the existing Friends & Rivals
+                     list is raised directly so an in-app challenge goes out from it -->
+                <button class="ci-rivals" type="button" id="ci-rivals-cta">
+                  <svg class="ci-rivals-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
+                  <span class="ci-rivals-t" id="ci-rivals-t">انتخاب مستقیم از لیست دوستان و رقبا</span>
+                </button>
+              </div>
             </section>
 
             <div class="ci-tabs" role="tablist" aria-label="Tournament board and rules">
