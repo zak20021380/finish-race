@@ -1,4 +1,4 @@
-/* arena.css — the board's mount and the three beats it calls out.
+/* arena.css — the board's mount and the one beat it calls out.
    Presentation only: nothing here changes the grid, the canvas or a rule. */
 
 /* The slab is a ring, not a bezel: it is drawn outside the board's own box, so the playfield
@@ -118,28 +118,8 @@
   filter: blur(.5px);
 }
 
-/* WALL — a dark clay key with a neon tick */
-.callout.is-wall .co-in {
-  color: #D9FBFF;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #233246 0%, #131C29 100%);
-  box-shadow:
-    0 0 0 1px rgba(103, 232, 249, .55),
-    0 0 16px -2px rgba(34, 211, 238, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .12);
-}
-.co-tick {
-  width: 13px;
-  height: 13px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  color: #67E8F9;
-  filter: drop-shadow(0 0 5px rgba(34, 211, 238, .9));
-}
+/* WALL has no pill: a placement speaks through the board's toast and its own sound, and the
+   floating badge that used to sit over the grid was only ever in the way of the next tap. */
 
 /* reduced motion: the callouts only fade — no scale, no rotation */
 @media (prefers-reduced-motion: reduce) {

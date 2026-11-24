@@ -1,11 +1,15 @@
 /**
- * callouts.ts — the board's three beats, spoken in the DOM instead of on the canvas.
+ * callouts.ts — the board's blast beat, spoken in the DOM instead of on the canvas.
  *
- * A mine going off and a wall landing already have a line in the board's toast; this overlay gives
- * them a 1.2s mark over the grid as well, without touching `render.ts` or the turn loop. It is a
- * separate module entry (index.html loads it beside `main.ts`), so the race code stays completely
- * unaware of it: it watches the DOM the HUD already writes — the "Mine!" note and each chip's
- * wall count.
+ * A mine going off already has a line in the board's toast; this overlay gives it a 1.2s mark over
+ * the grid as well, without touching `render.ts` or the turn loop. It is a separate module entry
+ * (index.html loads it beside `main.ts`), so the race code stays completely unaware of it: it
+ * watches the DOM the HUD already writes — the "Mine!" note.
+ *
+ * WALLS ARE SILENT HERE. A placement has its own board toast and its own sound; a floating badge
+ * on top of that only ever stood in the way of the next tap, so no wall beat exists at all — not
+ * for the local player, not for a teammate, not for an opponent. Nothing in this module reads a
+ * wall count, and no wall markup is ever written into the layer.
  *
  * NEVER OVER A BALL, and never by looking at one. The board is a canvas, and reading it back
  * (`getImageData`) flushed the GPU pipeline on the frame the explosion was queued — the single
@@ -22,9 +26,9 @@ import './arena.css';
 import { pieceOverlaps } from './boardpieces';
 import { stageOverlaps } from './staging';
 
-/** Each callout lives for this long, then fades out. */
+/** The callout lives for this long, then fades out. */
 const SHOW_MS = 1200;
-/** One more callout of the same kind inside this window is the same event repainting. */
+/** One more callout inside this window is the same event repainting. */
 const REPEAT_MS = 250;
 /** Daylight a callout keeps from a pawn's own footprint, in css px. */
 const BALL_CLEAR = 4;
@@ -33,8 +37,6 @@ const BALL_CLEAR = 4;
  * beat that missed its own frame must be dropped rather than raised over a board that has moved on.
  */
 const PLACE_MAX_LATE_MS = 600;
-
-type Kind = 'mine' | 'wall';
 
 interface Spot { x: number; y: number }
 
@@ -51,15 +53,9 @@ const SPOTS: readonly Spot[] = [
 /** The same slot on the other half of the board: the flip a staged mine forces on the beat. */
 const flip = (s: Spot): Spot => ({ x: s.x, y: 1 - s.y });
 
-const TICK = '<svg class="co-tick" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
-  + '<path d="M5.4 12.6 10 17.2l8.6-9.4" /></svg>';
-
 /** Still first-party markup: no player string ever reaches this overlay. */
-const MARKUP: Record<Kind, string> = {
-  mine: '<span class="co-in"><span class="co-burst" aria-hidden="true"></span>'
-    + '<b class="co-t">MINE!</b></span>',
-  wall: `<span class="co-in">${TICK}<b class="co-t">WALL</b></span>`,
-};
+const MARKUP = '<span class="co-in"><span class="co-burst" aria-hidden="true"></span>'
+  + '<b class="co-t">MINE!</b></span>';
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi);
 
@@ -74,7 +70,7 @@ function boot(): void {
   layer.appendChild(box);
 
   let hideTimer = 0;
-  const lastAt: Record<Kind, number> = { mine: 0, wall: 0 };
+  let lastAt = 0;
 
   /**
    * The first slot with no pawn under it and no staged mine beside it.
@@ -103,25 +99,25 @@ function boot(): void {
   }
 
   let placeRaf = 0;
-  let queued: Kind | null = null;
+  let queued = false;
   let queuedAt = 0;
 
   /**
-   * Raise a callout — the WRITE half only: the class and the copy, nothing measured.
+   * Raise the blast callout — the WRITE half only: the class and the copy, nothing measured.
    *
    * This runs inside a MutationObserver microtask, i.e. on the tick the detonation was queued. A
    * `getBoundingClientRect()` or an `offsetWidth` here would force the style and layout work that
    * the first explosion frame is waiting behind, so placement is a separate pass on the next
    * animation frame — the same split `placeNote()` makes for the board's toast.
    */
-  function show(kind: Kind): void {
+  function show(): void {
     const now = Date.now();
-    if (now - lastAt[kind] < REPEAT_MS) return;
-    lastAt[kind] = now;
+    if (now - lastAt < REPEAT_MS) return;
+    lastAt = now;
     window.clearTimeout(hideTimer);
-    box.className = `callout is-${kind}`;
-    box.innerHTML = MARKUP[kind];
-    queued = kind;
+    box.className = 'callout is-mine';
+    box.innerHTML = MARKUP;
+    queued = true;
     queuedAt = now;
     if (!placeRaf) placeRaf = requestAnimationFrame(place);
   }
@@ -132,9 +128,9 @@ function boot(): void {
    */
   function place(): void {
     placeRaf = 0;
-    const kind = queued;
-    queued = null;
-    if (!kind) return;
+    const pending = queued;
+    queued = false;
+    if (!pending) return;
     if (Date.now() - queuedAt > PLACE_MAX_LATE_MS) return;   // the beat is stale: drop it
     const spot = pick();
     if (!spot) return;
@@ -148,27 +144,9 @@ function boot(): void {
   const note = document.getElementById('note');
   if (note) {
     const mineWatch = new MutationObserver(() => {
-      if ((note.textContent ?? '').startsWith('Mine!')) show('mine');
+      if ((note.textContent ?? '').startsWith('Mine!')) show();
     });
     mineWatch.observe(note, { childList: true, characterData: true, subtree: true });
-  }
-
-  /* ---- WALL: a chip's ammo strip only ever counts down when its owner puts one up ---- */
-  const wallCount = (badge: HTMLElement): number => {
-    const raw = badge.querySelector('.wall-n')?.textContent ?? '';
-    const n = Number.parseInt(raw, 10);
-    return Number.isFinite(n) ? n : -1;
-  };
-  for (let p = 0; p < 4; p++) {
-    const badge = document.getElementById(`walls-${p}`);
-    if (!badge) continue;
-    let seen = wallCount(badge);
-    const watch = new MutationObserver(() => {
-      const next = wallCount(badge);
-      if (seen >= 0 && next >= 0 && next < seen) show('wall');
-      seen = next;
-    });
-    watch.observe(badge, { childList: true, characterData: true, subtree: true });
   }
 }
 
