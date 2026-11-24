@@ -86,7 +86,7 @@ import { mineStage, setCapsuleStage, setMineStage, STAGE_CLEAR } from './staging
 import { setPieceBoxes, type PieceBox } from './boardpieces';
 import {
   detonation, impact, initTelegram, inviteChannelWarHandle, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
-  onBackPress, shatterImpact, startParam, tgInitData, tgUser,
+  onBackPress, roomShareUrl, shatterImpact, startParam, tgInitData, tgUser,
 } from './telegram';
 import { applyFlagSupport } from './countries';
 import {
@@ -6851,6 +6851,14 @@ interface ChallengeCopy {
   unranked: string;
   botCta: string;
   friendCta: string;
+  /** The tournament mint key's own challenge line, carried verbatim by the room's invite. */
+  duelShare: string;
+  /** The brand-new 1v1 lobby's caption while the invited rival's chair is still empty. */
+  duelWaiting: string;
+  /** Confirmation once that room's invite has left the device for Telegram's picker. */
+  duelArmed: string;
+  /** The quiet second door under the mint key: the Friends & Rivals list, no room minted. */
+  rivalsLink: string;
   /** The hub's payout banner: the rank token is replaced with a Latin number. */
   claim: string;
   /** The poster's slim claim label: the rank token is replaced with a Latin number. */
@@ -6898,6 +6906,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     unranked: 'بدون رتبه',
     botCta: 'دوئل با هوش مصنوعی',
     friendCta: 'دعوت و بازی با دوست',
+    duelShare: 'بیا دوئل تورنمنت ۵۰ استارز! اتاق ۱ به ۱ آماده‌ست، ببینم کی می‌بره!',
+    duelWaiting: 'اتاق دوئل تورنمنت آماده‌ست؛ منتظر ورود رقیب...',
+    duelArmed: 'اتاق آماده شد؛ لینک دعوت راهی تلگرام شد.',
+    rivalsLink: 'انتخاب مستقیم از لیست دوستان و رقبا',
     claim: 'ثبت و دریافت <bdi dir="ltr">50</bdi> استارز • مقام #<bdi dir="ltr">{rank}</bdi>',
     claimShort: 'دریافت جایزه <bdi dir="ltr">50</bdi> استارز (مقام #<bdi dir="ltr">{rank}</bdi>)',
     enter: 'ورود به تورنمنت <bdi dir="ltr">50</bdi> استارز',
@@ -6949,6 +6961,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     unranked: 'UNRANKED',
     botCta: 'AI Duel',
     friendCta: 'Invite & Play Friend',
+    duelShare: 'Join my 1v1 duel for the 50 Stars Weekly Tournament! Room is ready!',
+    duelWaiting: 'Your tournament duel room is ready — waiting for the rival…',
+    duelArmed: 'Room ready — the invite is on its way to Telegram.',
+    rivalsLink: 'Or challenge directly from Friends & Rivals',
     claim: 'Claim <bdi dir="ltr">50</bdi> Stars • Rank #<bdi dir="ltr">{rank}</bdi>',
     claimShort: 'Claim <bdi dir="ltr">50</bdi>-Star prize (Rank #<bdi dir="ltr">{rank}</bdi>)',
     enter: 'Enter <bdi dir="ltr">50</bdi> Stars Tournament',
@@ -7000,6 +7016,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     unranked: 'БЕЗ МЕСТА',
     botCta: 'Дуэль с ИИ',
     friendCta: 'Играть с другом',
+    duelShare: 'Заходи в дуэль 1 на 1 за 50 Stars в недельном турнире! Комната готова!',
+    duelWaiting: 'Дуэльная комната турнира готова — ждём соперника…',
+    duelArmed: 'Комната готова — приглашение отправлено в Telegram.',
+    rivalsLink: 'Или выбрать из списка друзей и соперников',
     claim: 'Получить <bdi dir="ltr">50</bdi> Stars • место #<bdi dir="ltr">{rank}</bdi>',
     claimShort: 'Забрать <bdi dir="ltr">50</bdi> Stars (место #<bdi dir="ltr">{rank}</bdi>)',
     enter: 'Войти в турнир на <bdi dir="ltr">50</bdi> Stars',
@@ -7051,6 +7071,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     unranked: 'بدون ترتيب',
     botCta: 'مبارزة الذكاء الاصطناعي',
     friendCta: 'العب مع صديق',
+    duelShare: 'ادخل تحدي 1 ضد 1 في بطولة 50 ستارز الأسبوعية! الغرفة جاهزة!',
+    duelWaiting: 'غرفة مبارزة البطولة جاهزة — بانتظار الخصم...',
+    duelArmed: 'الغرفة جاهزة — وصلت الدعوة إلى تلغرام.',
+    rivalsLink: 'أو اختر مباشرة من قائمة الأصدقاء والمنافسين',
     claim: 'استلم <bdi dir="ltr">50</bdi> ستارز • المرتبة #<bdi dir="ltr">{rank}</bdi>',
     claimShort: 'استلم جائزة <bdi dir="ltr">50</bdi> ستارز (المرتبة #<bdi dir="ltr">{rank}</bdi>)',
     enter: 'دخول بطولة <bdi dir="ltr">50</bdi> ستارز',
@@ -7102,6 +7126,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     unranked: 'SIN PUESTO',
     botCta: 'Duelo con IA',
     friendCta: 'Jugar con un amigo',
+    duelShare: '¡Únete a mi duelo 1v1 por el Torneo Semanal de 50 Stars! ¡Sala lista!',
+    duelWaiting: 'Tu sala de duelo del torneo está lista — esperando al rival…',
+    duelArmed: 'Sala lista — la invitación ya va a Telegram.',
+    rivalsLink: 'O desafía directo desde Amigos y Rivales',
     claim: 'Reclamar <bdi dir="ltr">50</bdi> Stars • puesto #<bdi dir="ltr">{rank}</bdi>',
     claimShort: 'Reclamar premio de <bdi dir="ltr">50</bdi> Stars (puesto #<bdi dir="ltr">{rank}</bdi>)',
     enter: 'Entrar al Torneo de <bdi dir="ltr">50</bdi> Stars',
@@ -7289,6 +7317,7 @@ function paintChallengeTelemetry(): void {
   challengeSetHTML('ci-friend-hint', copy.friendHint);
   challengeSetText('ci-bot-t', copy.botCta);
   challengeSetText('ci-friend-t', copy.friendCta);
+  challengeSetText('ci-rivals-t', copy.rivalsLink);
   challengeSetText('ci-my-wins', String(total));
   /* The summary strip's muted breakdown: two Latin integers inside their own LTR runs. */
   challengeSetHTML('ci-sum-src', copy.rowSub
@@ -7640,6 +7669,40 @@ async function claimChallengePrize(): Promise<void> {
   }
 }
 
+/**
+ * The tournament hub's mint key: ONE tap closes the hub, mints the private 1v1 room on the spot and
+ * seats the host in its waiting lobby — the generic Create sheet and the format step are
+ * both skipped — then hands that same room's own invite link to Telegram's picker, pre-filled with
+ * the tournament challenge line.
+ *
+ * It reuses the friends pipeline end to end: `duelInvite.throwDuelChallenge` mints a four-digit
+ * code, opens the very lobby the drawer opens (its host seat, its live code, its `Copy Link` and
+ * `Invite` keys) and only then calls `openTelegramShare`. No second socket and no second protocol
+ * exist for this door. The link is the room's own invite deep link (`?startapp=room_<code>`), so a
+ * friend who taps it lands in the lobby ready to play instead of on a second accept key.
+ *
+ * A share sheet the player closes is not an error: the room was minted before the link left the
+ * device, so they are already standing in the live 1v1 waiting room, exactly where the standard
+ * copy/share controls are. A shell that cannot open a drawer is handed the standard friends door
+ * rather than a dead tap. Only this key takes this path — the home Play with Friends flow, its hub
+ * and its 1v1/2v2 selection never run through here.
+ */
+function startTournamentDuel(): void {
+  const copy = challengeCopy();
+  challengeSheet?.close();
+  const thrown = throwDuelChallenge({
+    /* The room invite, not the post-race duel door: same room, same seat, one less tap for the
+       friend who receives it. */
+    link: (code, text) => roomShareUrl(code, text),
+    text: copy.duelShare,
+    waiting: copy.duelWaiting,
+    armed: copy.duelArmed,
+  });
+  /* No drawer to seat the host in (a maintenance lock, a shell still booting): the tap is still
+     answered, by the standard friends door that owns the same room. */
+  if (!thrown) menu.openFriends();
+}
+
 /** The poster's one key and the hub's segmented switcher, wired once. */
 function wireChallengeSheet(): void {
   const root = document.getElementById('challenge-info-modal');
@@ -7691,12 +7754,23 @@ function initChallengeCard(): void {
     challengeSheet?.close();
     startGame({ difficulty: 'hard', sizes: [1, 1], quiet: true });
   });
+  /* The tournament's Invite & Play Friend key is the 1-tap door: it mints the private 1v1 room,
+     seats the host in it and shares its invite in one gesture. The home Play with Friends flow is
+     untouched — this listener exists only on the element inside #challenge-info-modal. */
   const friendCta = document.getElementById('ci-friend-cta');
   friendCta?.addEventListener('click', () => {
     impact('light');
+    /* A guest can still host the room; only the crediting needs a verified Telegram seat. */
     if (challengeView?.auth === 'guest') showToast(challengeCopy().guest, 'warning', 3400);
+    startTournamentDuel();
+  });
+  /* The secondary door: nobody's room is minted, the existing Friends & Rivals list is raised
+     directly so an in-app challenge goes out from there. */
+  const rivalsCta = document.getElementById('ci-rivals-cta');
+  rivalsCta?.addEventListener('click', () => {
+    impact('light');
     challengeSheet?.close();
-    menu.openFriends();
+    openFriendsRivals();
   });
   const claim = document.getElementById('ci-claim-cta');
   claim?.addEventListener('click', () => { void claimChallengePrize(); });

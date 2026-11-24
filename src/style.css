@@ -47617,6 +47617,47 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
 }
 .ci-launch-hint bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #9AA7BB; }
 
+/* ---- the quiet second door under the caption: the Friends & Rivals list, no room minted.
+   A flat cyan link, one static hairline of nothing else — no scrim, no blur, no motion beyond
+   the colour it settles into. It inherits the pane's own RTL direction on fa/ar. ---- */
+.ci-rivals {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  margin: -2px 0 0;
+  padding: 3px 8px;
+  /* a comfortable thumb target under 11.5px type, still flat and shadowless */
+  min-height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #38bdf8;
+  text-align: center;
+  cursor: pointer;
+  transition: color var(--motion-fast);
+}
+.ci-rivals-ico {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-rivals-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-rivals:hover { color: #7DD3FC; }
+.ci-rivals:active { color: #BAE6FD; }
+.ci-rivals:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
 /* ---- the segmented switcher ---- */
 .ci-tabs {
   flex: none;
