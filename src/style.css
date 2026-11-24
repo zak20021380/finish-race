@@ -4532,46 +4532,30 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 
-/* ---- identity card (compact): the obsidian glass HUD dock ----
-   One horizontal row — avatar hero · identity · wallet. Every sub-surface on the dock
-   (wallet capsule, bell key, squad bar, VIP pill, rank tag) now shares one frosted-glass
-   recipe so the row reads as a single object instead of five competing boxes.
-   No backdrop-filter anywhere: the face is opaque, so the GPU never re-samples behind it. */
-/* 58px obsidian glass dock: one calm surface, three columns, no competing boxes.
-   Flat frosted face + a single hairline rim; depth comes from one soft ambient drop. */
+/* ---- Home identity: one calm surface, two clear levels ----
+   The name owns the first row; squad and balances share the second. The avatar and
+   notification key bridge both rows, so no control competes with the player name. */
 .id-card.id-compact {
   position: relative;
   flex: none;
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) clamp(118px, 35%, 150px) 36px;
+  grid-template-rows: 26px 30px;
   align-items: center;
-  justify-content: space-between;
   column-gap: 8px;
-  height: 58px;
-  min-height: 58px;
+  row-gap: 4px;
+  min-height: 80px;
   box-sizing: border-box;
-  padding: 7px 8px;
-  border-radius: 16px;
-  background: linear-gradient(163deg, #161F2E 0%, #101825 100%);
-  background-color: #101825;
+  padding: 9px 10px;
+  border-radius: 18px;
+  background: #111a28;
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
-    0 8px 20px -8px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  overflow: visible;                   /* the shield crest may overhang the face */
+    0 8px 20px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: visible;
   min-width: 0;
   max-width: 100%;
-}
-.id-card.id-compact::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  /* a single cool key light from the top-left, held at low alpha so the face stays matte */
-  background:
-    radial-gradient(120% 150% at 4% -40%, rgba(148, 197, 255, 0.08) 0%, rgba(148, 197, 255, 0) 55%),
-    radial-gradient(110% 140% at 102% 150%, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 60%);
-  pointer-events: none;
 }
 /* legacy two-row scaffolding is gone with the old markup — never show it */
 .id-card.id-compact .id-row,
@@ -4594,6 +4578,10 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex: none;
   position: relative;
   z-index: 1;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: center;
+  justify-self: center;
   width: 44px;
   height: 44px;
   padding: 0;
@@ -4616,13 +4604,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  /* the puffy clay rim the disc sits in: one ambient drop, a soft top-left inner
-     glow where the key light lands, and a deep bottom-right inset pooling under it */
   box-shadow:
-    0 3px 8px rgba(0, 0, 0, .5),
-    inset 2px 3px 6px rgba(255, 255, 255, .16),
-    inset -3px -4px 7px rgba(0, 0, 0, .58),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
+    0 3px 8px rgba(0, 0, 0, .45),
+    inset 0 0 0 1px rgba(255, 255, 255, .09);
 }
 .id-ring {
   position: absolute;
@@ -4645,7 +4629,6 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   stroke-linecap: round;
   stroke-dasharray: 138.23;
   stroke-dashoffset: 138.23;
-  filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.35));
   transition: stroke-dashoffset var(--motion-med);
 }
 .id-card .id-avatar.avatar {
@@ -4658,12 +4641,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   overflow: hidden;
   border: 0;
   background: radial-gradient(circle at 30% 25%, #60A5FA 0%, #2563EB 55%, #1D4ED8 100%);
-  /* puffy clay rim: light trapped inside the top-left, a deep pool in the bottom-right */
   box-shadow:
-    inset 1px 2px 4px rgba(255, 255, 255, .42),
-    inset -3px -4px 7px rgba(2, 6, 23, .6),
     inset 0 0 0 1px rgba(2, 6, 23, .55),
-    0 3px 7px rgba(0, 0, 0, .5);
+    0 2px 5px rgba(0, 0, 0, .45);
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -4690,8 +4670,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   border-radius: 0;
   background: none;
   pointer-events: none;
-  /* embossed token: a hard drop that seats it on the rim, with a restrained face bloom */
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(56, 189, 248, .28));
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
 }
 .id-lvl-crest {
   position: absolute;
@@ -4719,25 +4698,20 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   color: #fff;
   text-shadow: 0 1px 1px rgba(2, 6, 23, .95), 0 0 4px rgba(125, 211, 252, .3);
 }
-/* COL 2, TEXT — name on top, squad badge underneath.
-   No overflow on the column itself: both rows carry vertical tap bands that reach
-   past the row box, and a clip here would silently shrink them to the visible face. */
-.id-mid {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
+/* The wrappers hand their children directly to the card grid. */
+.id-card.id-compact .id-mid,
+.id-card.id-compact .id-side {
+  display: contents;
 }
 .id-name-row {
+  grid-column: 2 / 4;
+  grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   max-width: 100%;
-  height: 17px;
+  height: 26px;
 }
 .id-name-btn {
   appearance: none;
@@ -4770,12 +4744,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .id-name {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: -0.012em;
-  line-height: 1.15;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
   color: #F8FAFC;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4800,94 +4773,84 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 /* the code stays in the DOM for state/aria only — html.no-flags would otherwise reveal it */
 .id-flag .flag-code,
 html.no-flags .id-flag .flag-code { display: none; }
-/* Squad: one frosted micro-bar on the dock's own glass recipe. Content-sized (align-self)
-   so the pill hugs its emblem, capped at 100% so a long handle still ellipsises. */
+/* Squad is a quiet text action on the second level, not another card inside the card. */
 .id-team {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 0;
   font: inherit;
   position: relative;
   z-index: 1;
-  align-self: flex-start;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: 21px;
-  height: 21px;
-  padding: 0 8px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 2px;
   margin: 0;
   cursor: pointer;
-  border-radius: 9999px;
+  border-radius: 8px;
   text-align: start;
   color: #A9B7CA;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: none;
-  transition: transform var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
+  background: transparent;
+  transition: background var(--motion-fast), color var(--motion-fast);
 }
 .id-team::after {
   content: "";
   position: absolute;
-  inset: -5px 0 -6px 0;
+  inset: -2px 0;
 }
 .id-team:focus-visible {
   outline: 3px solid var(--brand-2);
   outline-offset: 1px;
 }
 .id-team:hover:not(:active) {
-  transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, .16);
-  background: rgba(255, 255, 255, 0.07);
+  color: #D7E1EF;
+  background: rgba(255, 255, 255, .045);
 }
-/* the bar lifts its rim instead of sinking into clay */
 .id-team:active {
-  transform: translateY(1px) scale(.98);
-  background: rgba(255, 255, 255, 0.02);
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, .02);
 }
-/* mini clan emblem: a 13px cyan-beveled chip, lit from above, so it reads as a crest */
 .id-team-av.squad-avatar {
-  width: 13px;
-  height: 13px;
-  min-width: 13px;
-  font-size: 8px;
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .35) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(180deg, #22D3EE 0%, #0E7490 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(8, 47, 73, .85),
-    inset 0 1px 0 rgba(255, 255, 255, .45),
-    0 1px 2px rgba(0, 0, 0, .55);
-  color: #04222E;
-  font-weight: 900;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  font-size: 9px;
+  border-radius: 5px;
+  background: #0E7490;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .22);
+  color: #E0F2FE;
+  font-weight: 800;
   line-height: 1;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .28);
 }
 .id-team-ico.chip-ico {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   flex: none;
   color: var(--brand-ink);
 }
-/* ONE inline run directly after the icon: team name ellipsizes, " · #1" never shrinks. */
 .id-team-line {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   display: flex;
   align-items: center;
-  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
 }
 .id-team-t {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   line-height: 1.3;
   color: #A9B7CA;
@@ -4896,20 +4859,17 @@ html.no-flags .id-flag .flag-code { display: none; }
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-/* Warm gold hairline micro-pill: the rank is a reward tag, not a second caption. */
 .id-team-rank {
   flex: none;
   display: inline-flex;
   align-items: center;
-  margin-inline-start: 2px;
+  margin-inline-start: 3px;
   padding: 0 4px;
-  border: 1px solid rgba(245, 158, 11, .2);
-  border-radius: 9999px;
+  border-radius: 5px;
   background: rgba(245, 158, 11, .08);
-  box-shadow: none;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.4;
   color: #FBBF24;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -4918,77 +4878,59 @@ html.no-flags .id-flag .flag-code { display: none; }
 .id-team.bound .id-team-ico { display: none; }
 .id-team:not(.bound) .id-team-av { display: none; }
 .id-team:not(.bound) .id-team-t { color: var(--ink-soft); }
-.id-team:not(.bound) { padding-inline-start: 9px; }
-/* COL 3, ACTIONS */
-.id-side {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* THE DUAL CURRENCY DOCK — one obsidian capsule, two currencies.
-   The wallet spends (warm gold), the rating ranks (cold cyan), and a 1px hairline is the
-   only thing between them: no second rim, no second shadow, so the row keeps reading as a
-   single object. Every numeral is tabular and every width is capped, so a 6-digit wallet
-   still cannot push the identity column off a 320px phone. Symmetric padding plus `gap`
-   mean a `dir="rtl"` ancestor flips the two partitions with no extra rule. */
+.id-team:not(.bound) { padding-inline-start: 2px; }
+/* Balances sit directly on the card: two equal readings, one hairline, no nested capsule. */
 .id-coin.coin-pill {
   --d: 0px;
-  flex: none;
-  display: inline-flex;
+  appearance: none;
+  position: relative;
+  grid-column: 3;
+  grid-row: 2;
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) 1px minmax(0, max-content);
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  min-height: 34px;
-  max-height: 34px;
-  max-width: 136px;
-  padding: 4px 9px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, .09);
-  /* subtle dark glass: one lit top edge over an opaque obsidian face (no live blur) */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 62%),
-    rgba(15, 23, 42, .85);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
   color: #F5D98F;
-  font-size: 12px;
+  font: inherit;
+  font-size: 12.5px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0;
-  font-variant-numeric: tabular-nums;  /* Latin digits, fixed advance, no jitter */
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
-  overflow: visible;                   /* its own box clips the ::after tap band otherwise */
-  position: relative;
-  transition:
-    transform var(--motion-fast),
-    border-color var(--motion-fast),
-    background var(--motion-fast);
+  overflow: visible;
+  transition: background var(--motion-fast);
 }
 .id-coin.coin-pill::after {
   content: "";
   position: absolute;
-  inset: -6px 0;
+  inset: -2px 0;
 }
-.id-coin.coin-pill:hover:not(:active) {
-  border-color: rgba(255, 255, 255, .16);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .075) 0%, rgba(255, 255, 255, 0) 62%),
-    rgba(15, 23, 42, .9);
-}
-.id-coin.coin-pill:active {
-  transform: translateY(1px) scale(.98);
-  background: rgba(15, 23, 42, .7);
-}
-/* one partition = one currency: icon + reading, never wider than its share of the dock */
+.id-coin.coin-pill:hover:not(:active) { background: rgba(255, 255, 255, .04); }
+.id-coin.coin-pill:active { background: rgba(255, 255, 255, .02); }
+.id-coin.coin-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
 .hud-dock-part {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 4px;
   min-width: 0;
 }
-/* the seam. It is a flex child, so it stays centred when the row mirrors. */
 .hud-dock-sep {
   flex: none;
   width: 1px;
@@ -4999,6 +4941,9 @@ html.no-flags .id-flag .flag-code { display: none; }
 .hud-dock-n {
   display: block;
   min-width: 0;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: inherit;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -5006,27 +4951,14 @@ html.no-flags .id-flag .flag-code { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the wallet: crisp warm numerals on one soft seat, no bloom */
-.hud-dock-part #p-coins {
-  color: #F5D98F;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .55);
-}
-/* the rating: a cold tactical readout — ice-cyan digits, violet brain, no warm bleed,
-   so coins and TIQ never read as the same number twice */
+.hud-dock-part #p-coins { color: #F5D98F; }
 .hud-dock-tiq-ico {
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   color: #A78BFA;
-  filter: drop-shadow(0 0 4px rgba(167, 139, 250, .45));
 }
-#hud-tiq {
-  color: #7DEBFF;
-  text-shadow:
-    0 0 6px rgba(125, 235, 255, .38),
-    0 1px 1px rgba(0, 0, 0, .6);
-}
-/* a rating that moved gets one short pulse — the wallet counts up, the rank stamps */
+#hud-tiq { color: #7DEBFF; }
 @keyframes hud-dock-bump {
   0%   { transform: none; }
   32%  { transform: translateY(-1px) scale(1.07); }
@@ -5034,82 +4966,130 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .hud-dock-n.is-bump { animation: hud-dock-bump .44s cubic-bezier(.2, .9, .3, 1.4); }
 html.reduced-motion .hud-dock-n.is-bump { animation: none; }
-/* 3D milled coin: a crisp seat under the face, no halo. */
 .id-coin.coin-pill .coin {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   flex: none;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4));
 }
-/* Bell: a 34px circular dark-glass key on the avatar's radius family, unread pip on the rim. */
+/* A restrained status tag; the crown carries the recognition without a glowing pill. */
+.id-card.id-compact .home-vip {
+  height: 24px;
+  max-width: 96px;
+  padding: 0 7px;
+  gap: 4px;
+  border: 1px solid rgba(245, 158, 11, .18);
+  border-radius: 7px;
+  background: rgba(245, 158, 11, .055);
+  box-shadow: none;
+  color: #F3D98F;
+  font-size: 10px;
+  letter-spacing: .02em;
+}
+.id-card.id-compact .home-vip::after { display: none; }
+.id-card.id-compact .home-vip.is-active {
+  border-color: rgba(245, 158, 11, .3);
+  background: rgba(245, 158, 11, .1);
+}
+.id-card.id-compact .home-vip-crown { width: 11px; height: 11px; }
+.id-card.id-compact .home-vip-t { text-overflow: ellipsis; }
+.id-card.id-compact .home-vip-d {
+  padding-inline-start: 4px;
+  border-inline-start: 1px solid rgba(245, 158, 11, .2);
+  color: #FFE7A8;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+/* Bell: one quiet ghost key, with the unread pip carrying the only warm accent. */
 .id-bell.icon-btn.xs {
   --d: 0px;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
+  position: relative;
+  grid-column: 4;
+  grid-row: 1 / 3;
+  align-self: center;
+  justify-self: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, .08);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(255, 255, 255, .025);
+  box-shadow: none;
   color: #C7D3E8;
   transition: transform .2s var(--bounce), background var(--motion-fast), border-color var(--motion-fast);
 }
-.id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -5px; }
-.id-bell.icon-btn.xs .ico { width: 17px; height: 17px; }
+.id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -4px; }
+.id-bell.icon-btn.xs .ico { width: 18px; height: 18px; }
 .id-bell.icon-btn.xs:hover:not(:active) {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, .16);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .06);
 }
-/* the key sinks under the glass rather than pooling clay */
 .id-bell.icon-btn.xs:active {
-  transform: translateY(1px) scale(.96);
-  background: rgba(255, 255, 255, 0.02);
+  transform: translateY(1px);
+  background: rgba(255, 255, 255, .02);
 }
-/* Unread state now paints warm: the numeric badge + amber glow live with the
-   other notification styles (see NOTIFICATIONS below), not as a flat dot. */
-/* profile header owns the settings gear now */
+.id-bell.icon-btn.xs:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 #profile-settings { flex: none; }
-/* 320px is a real floor. Below 380 the columns and the action pair close in one step and
-   the capsule drops a point — that is what buys the identity column its breathing room.
-   max-width only binds when a balance is genuinely long, so a 4-digit wallet still fits. */
+
+@media (max-width: 430px) {
+  .id-card.id-compact .home-vip-d { display: none; }
+}
 @media (max-width: 380px) {
-  .id-card.id-compact { column-gap: 6px; }
-  .id-side { gap: 6px; }
-  .id-coin.coin-pill {
-    max-width: 116px;
-    gap: 4px;
-    padding: 4px 7px;
-    font-size: 11px;
-    height: 32px;
-    min-height: 32px;
-    max-height: 32px;
+  .id-card.id-compact {
+    grid-template-columns: 42px minmax(0, 1fr) clamp(110px, 34%, 132px) 34px;
+    column-gap: 6px;
+    padding-inline: 8px;
   }
+  .id-name { font-size: 14px; }
+  .id-name-row { gap: 6px; }
+  .id-card.id-compact .home-vip { max-width: 82px; padding-inline: 6px; }
+  .id-team { gap: 4px; }
+  .id-coin.coin-pill { gap: 3px; font-size: 12px; }
+  .hud-dock-part { gap: 3px; }
+  .hud-dock-tiq-ico { width: 13px; height: 13px; }
+  .id-coin.coin-pill .coin { width: 14px; height: 14px; }
+  .id-bell.icon-btn.xs { width: 34px; height: 34px; min-width: 34px; min-height: 34px; }
+}
+@media (max-width: 340px) {
+  .id-card.id-compact {
+    grid-template-columns: 40px minmax(0, 1fr) 102px 32px;
+    column-gap: 6px;
+    padding-inline: 8px;
+  }
+  .id-name { font-size: 13px; letter-spacing: -0.02em; }
+  .id-name-row { gap: 5px; }
+  .id-card.id-compact .home-vip {
+    justify-content: center;
+    width: 28px;
+    max-width: 28px;
+    padding: 0;
+    gap: 0;
+  }
+  .id-card.id-compact .home-vip-t,
+  .id-card.id-compact .home-vip-d { display: none; }
+  .id-card.id-compact .home-vip-crown { width: 12px; height: 12px; }
+  .id-team { font-size: 11px; }
+  .id-team.bound .id-team-av,
+  .id-team:not(.bound) .id-team-ico { display: none; }
+  .id-team-t { font-size: 11px; }
+  .id-team-rank { margin-inline-start: 2px; padding-inline: 2px; font-size: 10px; }
+  .id-coin.coin-pill { gap: 2px; padding-inline: 0; font-size: 11.5px; }
   .hud-dock-part { gap: 2px; }
   .hud-dock-tiq-ico { width: 12px; height: 12px; }
   .id-coin.coin-pill .coin { width: 13px; height: 13px; }
-  /* the name gives up a point before the dock does: 8 glyphs still fit at 360 */
-  .id-name { font-size: 13.5px; }
-  .id-name-row { gap: 5px; }
   .id-bell.icon-btn.xs { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
 }
-/* The 320px floor: the dock keeps both readings and the bell keeps its target, so the
-   identity column pays in padding and a half-step of type instead of in overflow.
-   The VIP pill is scoped through the card because its own 374px block lands later in
-   this file — the dock must never win that fight by source order alone. */
-@media (max-width: 340px) {
-  .id-card.id-compact { column-gap: 4px; padding-inline: 6px; }
-  .id-side { gap: 4px; }
-  .id-coin.coin-pill { max-width: 106px; gap: 3px; padding: 4px 6px; font-size: 10.5px; }
-  .hud-dock-part { gap: 2px; }
-  .hud-dock-tiq-ico { width: 11px; height: 11px; }
-  .id-coin.coin-pill .coin { width: 12px; height: 12px; }
-  .id-name { font-size: 12px; letter-spacing: -0.02em; }
-  .id-name-row { gap: 3px; }
-  .id-card.id-compact .home-vip { padding-inline: 4px; gap: 2px; font-size: 7px; }
-  .id-card.id-compact .home-vip-crown { width: 8px; height: 8px; }
-  .id-bell.icon-btn.xs { width: 30px; height: 30px; min-width: 30px; min-height: 30px; }
+@media (max-height: 660px) {
+  .id-card.id-compact {
+    grid-template-rows: 24px 26px;
+    min-height: 72px;
+    padding-block: 8px;
+  }
+  .id-name-row { height: 24px; }
+  .id-team { height: 26px; min-height: 26px; }
+  .id-coin.coin-pill { height: 28px; min-height: 28px; max-height: 28px; }
 }
 
 /* ---- highlights: one composited track, three identical fixed slides ----
