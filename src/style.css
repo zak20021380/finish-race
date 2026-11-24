@@ -48209,7 +48209,11 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
 }
 #home-id-card #home-notifs .notif-badge[hidden] { display: none; }
 
-/* ---- Tier 2: two equal, separately sculpted currency modules ---- */
+/* ---- Tier 2: two equal, separately sculpted currency modules ----
+   The wrapper spans the full card width on a 2-column grid; the single #coin-btn
+   tap target stretches across both columns and lays the two sculpted modules out
+   side by side. Each module owns its own gradient, hairline border and padding, so
+   the label group (flex-shrink: 0) and the tabular value (nowrap) can never collide. */
 #home-id-card .id-side {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -48223,72 +48227,70 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   --d: 0px;
   appearance: none;
   position: relative;
-  grid-column: auto;
+  grid-column: 1 / -1;
   grid-row: auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   width: 100%;
   min-width: 0;
   max-width: none;
   height: auto;
-  min-height: 36px;
+  min-height: 0;
   max-height: none;
-  padding: 6px 10px;
-  border: 1px solid rgba(246, 200, 94, 0.24);
+  padding: 0;
+  border: 0;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.09) 0%, rgba(10, 13, 20, 0.65) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.08);
-  color: #F6C85E;
+  background: none;
+  box-shadow: none;
+  color: inherit;
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 900;
   line-height: 1;
   letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
 }
-#home-id-card #coin-btn.id-coin.coin-pill::before,
-#home-id-card #coin-btn.id-coin.coin-pill::after {
-  content: "";
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  width: 1px;
-  background: rgba(246, 200, 94, 0.18);
-  pointer-events: none;
-}
-#home-id-card #coin-btn.id-coin.coin-pill::before { left: 50%; }
-#home-id-card #coin-btn.id-coin.coin-pill::after { display: none; }
-#home-id-card #coin-btn.id-coin.coin-pill:hover:not(:active) { background: linear-gradient(180deg, rgba(246, 200, 94, 0.13) 0%, rgba(10, 13, 20, 0.72) 100%); }
 #home-id-card #coin-btn.id-coin.coin-pill:active { transform: scale(0.985); }
 #home-id-card #coin-btn.id-coin.coin-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 #home-id-card .hud-dock-part {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+#home-id-card .hud-dock-part.hud-dock-coins {
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.10) 0%, rgba(10, 13, 20, 0.72) 100%);
+  border: 1px solid rgba(246, 200, 94, 0.25);
+}
+#home-id-card .hud-dock-part.hud-dock-tiq {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.10) 0%, rgba(10, 13, 20, 0.72) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 #home-id-card .hud-dock-copy {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   min-width: 0;
 }
 #home-id-card .hud-dock-label {
+  position: static;
   min-width: 0;
   color: #CBD5E1;
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
 }
 #home-id-card .hud-dock-n {
   display: block;
-  justify-self: end;
+  flex: 0 1 auto;
   min-width: 0;
   direction: ltr;
   unicode-bidi: isolate;
@@ -48315,7 +48317,6 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   flex: none;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
 }
-#home-id-card .hud-dock-sep { display: none; }
 
 /* Keep both balances readable on narrow phones; names never carry a fixed width cap. */
 @media (max-width: 430px) {
@@ -48324,7 +48325,8 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   #home-id-card .id-name-row { gap: 5px; }
   #home-id-card .home-vip-d { display: none; }
   #home-id-card .id-side { gap: 6px; }
-  #home-id-card #coin-btn.id-coin.coin-pill { padding-inline: 8px; gap: 6px; }
+  #home-id-card #coin-btn.id-coin.coin-pill { gap: 6px; }
+  #home-id-card .hud-dock-part { padding-inline: 8px; }
   #home-id-card .hud-dock-copy { gap: 4px; }
 }
 @media (max-width: 375px) {
@@ -48336,7 +48338,8 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   #home-id-card .id-avatar.avatar { left: 5px; top: 5px; width: 38px; height: 38px; }
   #home-id-card #home-notifs.id-bell.icon-btn.xs { width: 38px; height: 38px; min-width: 38px; min-height: 38px; }
   #home-id-card .id-side { gap: 5px; }
-  #home-id-card #coin-btn.id-coin.coin-pill { padding-inline: 7px; }
+  #home-id-card #coin-btn.id-coin.coin-pill { gap: 5px; }
+  #home-id-card .hud-dock-part { padding-inline: 7px; }
   #home-id-card .hud-dock-copy { gap: 3px; }
   #home-id-card .hud-dock-label { font-size: 9.5px; }
   #home-id-card .hud-dock-n { font-size: 12.5px; }
@@ -48348,7 +48351,8 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   #home-id-card .home-vip-crown { width: 10px; height: 10px; }
   #home-id-card .id-team { gap: 4px; }
   #home-id-card .id-team-line { gap: 4px; }
-  #home-id-card #coin-btn.id-coin.coin-pill { padding-inline: 6px; gap: 5px; }
+  #home-id-card #coin-btn.id-coin.coin-pill { gap: 5px; }
+  #home-id-card .hud-dock-part { padding-inline: 6px; }
   #home-id-card .hud-dock-copy { gap: 3px; }
   #home-id-card .hud-dock-n { font-size: 12px; }
 }
@@ -48356,5 +48360,5 @@ html[data-lang="fa"] #home-id-card .home-vip-d {
   #home-id-card.id-card.id-compact { gap: 7px; padding-block: 9px; }
   #home-id-card .id-mid { gap: 3px; }
   #home-id-card .id-side { padding-top: 7px; }
-  #home-id-card #coin-btn.id-coin.coin-pill { min-height: 34px; padding-block: 5px; }
+  #home-id-card .hud-dock-part { min-height: 34px; }
 }
