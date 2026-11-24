@@ -160,6 +160,23 @@ function afterPaint(fn: () => void, timeout = 600): void {
   }));
 }
 
+/**
+ * Finish the frame that is already on screen before any synchronous work begins. rAF's callback
+ * runs *before* the paint, so the trailing 16ms macrotask is the first point at which the human's
+ * move is actually composited — the bot then reasons in the gap after it instead of stealing the
+ * tail of the slide. A hidden WebView parks rAF entirely, so it resolves at once there, and a
+ * guard timeout keeps a stalled rAF from ever stranding a turn.
+ */
+function yieldToPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (document.hidden) { resolve(); return; }
+    let done = false;
+    const go = (): void => { if (done) return; done = true; resolve(); };
+    requestAnimationFrame(() => window.setTimeout(go, 16));
+    window.setTimeout(go, 200);
+  });
+}
+
 /* The Command Center's chunk, fetched on first use. Declared here rather than beside its mount
    below for the same reason the render-loop state is: a settled race reaches `recordRace` through
    `showOverlay`, and a `const` read from its temporal dead zone would abort the result screen. */
@@ -1359,10 +1376,17 @@ const makeBot = (d: Difficulty | ((seat: Player) => Difficulty)): Opponent => ({
   think: (s, full, hold) => {
     const level = typeof d === 'function' ? d(s.turn) : d;
     const debut = onboardingActive();
-    return new Promise<Action | null>((res) => setTimeout(() => {
-      const natural = botAction(s, level);
-      res(debut ? onboardingRivalAction(full, localSide, natural, hold) : natural);
-    }, botThinkMs(level)));
+    return new Promise<Action | null>((res) => {
+      window.setTimeout(() => {
+        /* One committed frame first: Hard's wall sweep is synchronous and must never land on the
+           same frame as the player's slide. The think delay is unchanged — only the yield point
+           moves, to just after the browser has painted. */
+        void yieldToPaint().then(() => {
+          const natural = botAction(s, level);
+          res(debut ? onboardingRivalAction(full, localSide, natural, hold) : natural);
+        });
+      }, botThinkMs(level));
+    });
   },
 });
 
@@ -7897,9 +7921,17 @@ function initChallengeCard(): void {
   wireChallengeSheet();
   paintChallengeCard();
   paintChallengeClock();
-  window.setInterval(paintChallengeClock, 1000);
+  /* The clock is one text write per second, never an HTML rebuild. It is non-essential while a
+     match owns the compositor and idle entirely in a hidden WebView — coming back repaints it
+     immediately, so a throttled tab can never leave a stale countdown behind. */
+  window.setInterval(() => {
+    if (document.hidden || router.current === 'game') return;
+    paintChallengeClock();
+  }, 1000);
   onLang(() => { paintChallengeCard(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshChallengeCard(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { paintChallengeClock(); void refreshChallengeCard(); }
+  });
   /* A slow reconcile while Home is on screen: friend wins move on the room's side, so the card
      must not need a reload to catch up. */
   window.setInterval(() => {

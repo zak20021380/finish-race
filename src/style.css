@@ -4598,6 +4598,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   box-shadow:
     0 8px 20px -12px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  contain: layout style paint;   /* the two-tier HUD invalidates nothing outside its own card */
   overflow: visible;
   min-width: 0;
   max-width: 100%;
@@ -5226,13 +5227,14 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   padding: var(--s4);
   padding-bottom: 30px;             /* dots live 8px from the bottom edge inside this reserve */
   overflow: hidden;
+  contain: layout style paint;   /* a slide's reflow/repaint never escapes into its neighbours */
   border-radius: var(--r-panel);
   background: var(--clay-face);
   /* soft, tight drop: low-alpha 0 8px 20px so no clipped edge reads as a band */
   box-shadow: 0 8px 20px rgba(0, 0, 0, .25), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   transform: none;
   transform-origin: center;
-  transition: box-shadow var(--motion-med), background var(--motion-med);
+  /* the active slide paints the identical surface: no paint-property transition to pay for */
 }
 .car-card > * { flex: none; }
 .car-card.is-active {
@@ -48002,6 +48004,7 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   border-radius: 15px;
   background: linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(15, 18, 26, .88) 100%);
   overflow: hidden;
+  contain: layout style paint;   /* long leaderboards scroll without repainting their siblings */
 }
 /* #1 — 24K Sovereign Gold */
 .ci-row[data-place="1"] {
