@@ -46916,17 +46916,17 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 }
 
 /* ============================================================================================
-   SLIDE 0 — THE 7-DAY DUAL-TRACK CHALLENGE (20 friend wins + 20 Hard AI wins → 50 Stars)
+   SLIDE 0 — THE WEEKLY TOURNAMENT POSTER (minimal, centred, 24K gold)
 
-   The hero opener. One obsidian plate, a 24K gold prize lockup, two progress meters (emerald-
-   cyan for friends, struck gold for the Hard AI track) and the two launch keys. No blur, no
-   infinite keyframes, no cartoon glyphs: the only picture is the authentic Telegram Stars PNG
-   (mounted by src/main.ts) over a static engraved stage.
+   Three focal elements and nothing else: the gold crown over the live window on the top edge,
+   the spotlighted Star above the 50-Star headline in the middle, and ONE key at the foot that
+   opens the tournament hub. No blur, no infinite keyframes, no cartoon glyphs: the only picture
+   is the authentic Telegram Stars PNG (mounted by src/main.ts) inside a sculpted halo ring.
 
    Geometry is the carousel's own: the card keeps the 34px pager lane and the 12px/14px inset
-   the poster beside it uses, so inserting it as slide 0 cannot move the Play dock by a pixel.
-   The inner column fills the padded box and pins the action row to the bottom, so any spare
-   height on a tall phone reads as deliberate air above the keys.
+   the poster beside it uses, so the card's --slide-h box — and the Play dock under it — never
+   moves by a pixel. The inner column fills the padded box, so any spare height on a tall phone
+   reads as deliberate air around the spotlight.
    ============================================================================================ */
 .car-card.carousel-slide-challenge {
   position: relative;
@@ -46939,7 +46939,7 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   border-top: 1px solid rgba(255, 218, 133, .2);
   background:
     radial-gradient(92% 62% at 50% -8%, rgba(251, 191, 36, .16), rgba(251, 191, 36, 0) 60%),
-    radial-gradient(70% 52% at 4% 104%, rgba(16, 185, 129, .10), rgba(16, 185, 129, 0) 72%),
+    radial-gradient(70% 52% at 4% 104%, rgba(16, 185, 129, .08), rgba(16, 185, 129, 0) 72%),
     linear-gradient(180deg, #171F2E 0%, #111827 54%, #0A0F18 100%);
   box-shadow:
     0 12px 26px rgba(0, 0, 0, .34),
@@ -46986,8 +46986,9 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   gap: 8px;
 }
 
-/* ---- header: the weekly badge and the live window, never a second headline ---- */
-.chal-head {
+/* ---- the top edge: the crown on one side, the live window on the other. Never a third item. ---- */
+.chal-top {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -46995,46 +46996,54 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   min-width: 0;
   min-height: 22px;
 }
-.car-card.carousel-slide-challenge .car-kicker::before { content: none; display: none; }
-.chal-badge {
+.chal-crown {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 4px 9px 4px 7px;
-  border-radius: 7px;
-  border: 1px solid rgba(251, 191, 36, .3);
-  background: linear-gradient(180deg, rgba(120, 78, 16, .34) 0%, rgba(20, 27, 45, .72) 100%);
+  padding: 3px 10px 3px 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(246, 200, 94, .34);
+  background: linear-gradient(180deg, rgba(120, 78, 16, .34) 0%, rgba(20, 27, 45, .74) 100%);
   color: #F8E7B4;
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .1em;
+  font-weight: 900;
+  letter-spacing: .08em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16);
 }
-.chal-badge-ico {
+.chal-crown-pod {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFF0BC 0%, #F5C351 52%, #C98A18 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 1px 4px rgba(0, 0, 0, .4);
 }
-.chal-badge-ico svg { display: block; width: 10px; height: 10px; color: #2A1A05; fill: currentColor; }
-.chal-badge-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-crown-ico {
+  display: block;
+  width: 11px;
+  height: 11px;
+  color: #2A1A05;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chal-crown-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chal-clock {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 22px;
-  padding: 0 8px;
+  padding: 0 9px;
   border-radius: var(--radius-pill);
   border: 1px solid rgba(251, 191, 36, .3);
   background: linear-gradient(180deg, rgba(76, 54, 14, .5) 0%, rgba(16, 20, 30, .82) 100%);
@@ -47049,357 +47058,257 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 .chal-clock bdi { display: block; }
 .chal-clock-ico { flex: none; width: 12px; height: 12px; color: #FBBF24; fill: none; stroke: currentColor; stroke-width: 2; }
 
-/* ---- the utility strip's two micro keys: a gold trophy for the board, a slate document for
-   the rules. Both ride the clock's own 22px line, so the card's fixed --slide-h height — and the
-   Play dock under it — never moves by a pixel. ---- */
-.chal-tools {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.chal-tool {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 7px;
-  border: 1px solid rgba(251, 191, 36, .32);
-  border-radius: 7px;
-  background: linear-gradient(180deg, rgba(76, 54, 14, .52) 0%, rgba(16, 20, 30, .84) 100%);
-  color: #FFE7A6;
-  font: inherit;
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: .01em;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16), 0 2px 6px rgba(0, 0, 0, .3);
-  transition: transform var(--motion-fast), filter var(--motion-fast);
-}
-.chal-tool-ico {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.chal-tool-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.chal-tool-rules {
-  color: #CBD5E1;
-  border-color: rgba(148, 163, 184, .34);
-  background: linear-gradient(180deg, rgba(51, 65, 85, .5) 0%, rgba(13, 18, 28, .84) 100%);
-}
-.chal-tool-rules .chal-tool-ico { color: #FCD34D; }
-.chal-tool:hover { filter: brightness(1.08); }
-.chal-tool:active { transform: scale(.96); filter: none; }
-.chal-tool:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
-
-/* ---- the prize lockup: the authentic Star at 44px, the number in struck gold ---- */
-.chal-prize {
-  /* The prize lockup owns the card's flexible middle: the Star, the number and the one-line
-     brief sit centred in whatever height the fixed slide leaves, so the meters and the two hands
-     stay pinned as one block at the bottom instead of drifting apart. */
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: 0;
-  padding: 2px 0 4px;
-}
-.chal-star-stage {
+/* ---- the royal spotlight: a warm radial glow behind a sculpted halo ring, the authentic
+   Star inside it, the prize in struck gold right below, then the one-line hook. ---- */
+.chal-hero {
   position: relative;
-  flex: none;
-  width: 50px;
-  height: 50px;
-  display: grid;
-  place-items: center;
-  isolation: isolate;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 2px 0;
+  text-align: center;
 }
-.chal-star-stage::before {
+.chal-hero::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 200, 70, .32) 0%, rgba(255, 170, 40, .13) 48%, rgba(150, 82, 12, .05) 66%, rgba(251, 191, 36, 0) 78%);
-  box-shadow: inset 0 0 0 1px rgba(255, 222, 145, .13);
+  inset: -16% -10% -8%;
   pointer-events: none;
-  z-index: 0;
+  background: radial-gradient(50% 44% at 50% 32%, rgba(246, 200, 94, .15) 0%, rgba(246, 200, 94, .05) 46%, rgba(246, 200, 94, 0) 74%);
 }
-.chal-star-img {
+.chal-halo {
   position: relative;
   z-index: 1;
-  display: block;
-  width: 44px;
-  height: 44px;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .45));
+  flex: none;
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(246, 200, 94, 0.55);
+  background: radial-gradient(circle, rgba(246, 200, 94, 0.28) 0%, rgba(246, 200, 94, 0.04) 72%);
+  box-shadow: 0 0 32px rgba(246, 200, 94, 0.28);
 }
-.chal-prize-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.chal-prize-v {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  font-size: 25px;
+.chal-star-img {
+  display: block;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, .45));
+}
+.chal-title {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 100%;
+  font-size: 28px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.1;
   letter-spacing: .01em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  background: linear-gradient(180deg, #FFFDF3 0%, #FFF2BC 22%, #FFD666 42%, #FFB224 62%, #E8890C 82%, #A95305 100%);
+  background: linear-gradient(180deg, #FFFDF3 0%, #FFF2BC 20%, #FFD666 42%, #FFB224 62%, #E8890C 82%, #A95305 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: #FCD34D;
   -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: .5px rgba(124, 45, 18, .4);
+  text-shadow: 0 2px 16px rgba(246, 200, 94, 0.35);
 }
-.chal-prize-v > span { font-size: 15px; font-weight: 900; letter-spacing: 0; }
-/* the podium lockup: one 24K-gold pill that states exactly who the Stars go to */
+.chal-title > span { font-size: 20px; font-weight: 900; letter-spacing: 0; }
 .chal-podium-pill {
-  align-self: flex-start;
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   max-width: 100%;
-  padding: 2px 7px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(251, 191, 36, .45);
-  background: linear-gradient(180deg, rgba(120, 74, 12, .55) 0%, rgba(28, 20, 8, .82) 100%);
+  border: 1px solid rgba(246, 200, 94, .42);
+  background: linear-gradient(180deg, rgba(120, 74, 12, .52) 0%, rgba(24, 18, 8, .84) 100%);
   color: #FFE7A6;
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.3;
   letter-spacing: .01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .2), 0 1px 4px rgba(0, 0, 0, .35);
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .18), 0 1px 4px rgba(0, 0, 0, .35);
 }
 .chal-podium-pill bdi { font-weight: 900; color: #FFD666; }
-.chal-prize-sub {
-  min-width: 0;
+.chal-hook {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 100%;
+  padding: 0 4px;
   font-size: 10.5px;
   font-weight: 700;
-  line-height: 1.38;
+  line-height: 1.5;
   letter-spacing: .005em;
   color: #C9D3E4;
   text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
-  display: block;
-  /* two lines of the compactest leading any locale uses; a third is clipped, never pushed into
-     the meters (the copy is authored to fit inside two lines) */
+  text-wrap: balance;
+  /* two lines of the compactest leading any locale uses; a third is clipped, never pushed
+     into the foot (the copy is authored to fit inside two lines) */
   max-height: 3.1em;
   overflow: hidden;
 }
 
-/* ---- the live telemetry: one dark-glass plate — this week's UNLIMITED total and live rank on
-   the left, the two sources on the right. There are no bars any more: the race has no ceiling to
-   draw, so the figure itself is the meter. ---- */
-.chal-telemetry {
-  flex: none;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.06fr);
-  gap: 8px;
-  padding: 7px 9px;
-  border-radius: 13px;
-  background: linear-gradient(180deg, rgba(19, 26, 40, .9) 0%, rgba(8, 12, 20, .92) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(251, 191, 36, .16),
-    inset 0 1px 0 rgba(255, 241, 192, .07),
-    0 2px 8px rgba(0, 0, 0, .3);
-  min-width: 0;
-}
-.chal-tel { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.chal-tel.is-src {
-  justify-content: center;
-  gap: 4px;
-  padding-inline-start: 9px;
-  border-inline-start: 1px solid rgba(148, 163, 184, .16);
-}
-.chal-tel-k {
-  min-width: 0;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  line-height: 1.1;
-  text-transform: uppercase;
-  color: #8593A8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chal-tel-main { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
-.chal-tel-v {
-  min-width: 0;
-  max-width: 100%;
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: #FFF7DA;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chal-tel-u { flex: none; font-size: 10px; font-weight: 900; color: #C9D3E4; white-space: nowrap; }
-.chal-rank {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  height: 15px;
-  padding: 0 6px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(16, 185, 129, .38);
-  background: linear-gradient(180deg, rgba(6, 78, 59, .62) 0%, rgba(6, 24, 24, .74) 100%);
-  color: #A7F3D0;
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: inset 0 1px 0 rgba(167, 243, 208, .16);
-}
-.chal-rank bdi { font-weight: 900; }
-.chal-rank.is-none {
-  color: #94A3B8;
-  border-color: rgba(148, 163, 184, .28);
-  background: linear-gradient(180deg, rgba(51, 65, 85, .5) 0%, rgba(13, 18, 28, .7) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
-}
-.chal-src {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
-  color: #E7EDF7;
-  white-space: nowrap;
-}
-.chal-src-k { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.chal-src-v {
-  flex: none;
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: #FFF7DA;
-}
-.chal-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
-.chal-dot.is-friend { background: linear-gradient(180deg, #34D399 0%, #06B6D4 100%); box-shadow: 0 0 6px rgba(16, 185, 129, .55); }
-.chal-dot.is-bot { background: linear-gradient(180deg, #FDE68A 0%, #E8890C 100%); box-shadow: 0 0 6px rgba(251, 191, 36, .5); }
-.chal-src-hint bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #9AA7BB; }
-.chal-src-hint {
-  min-width: 0;
-  font-size: 8.5px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: .01em;
-  color: #8593A8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---- the two hands: Hard AI in struck gold, the friend invite in cyan-lit glass ---- */
-.chal-ctas {
+/* ---- the foot: the slim claim label (only when a podium from last week is unclaimed) over
+   the card's one key. ---- */
+.chal-foot {
   flex: none;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
-  margin-top: 0;
-  padding-top: 2px;
 }
-.chal-cta {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 42px;
-  display: inline-flex;
+.chal-claim {
+  width: 100%;
+  height: 30px;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 0 10px;
-  border: 0;
-  border-radius: 12px;
+  border: 1px solid rgba(255, 232, 166, .5);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(120, 74, 12, .6) 0%, rgba(28, 20, 8, .9) 100%);
+  color: #FFE7A6;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .01em;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 192, .2),
+    0 0 16px rgba(245, 158, 11, .3);
   transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-.chal-cta-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.chal-cta-ico { flex: none; width: 16px; height: 16px; }
-.chal-cta-gold {
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 55%, #D97706 100%);
-  color: #1E1303;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 2px 8px rgba(0, 0, 0, .35);
-}
-.chal-cta-gold .chal-cta-ico { color: #1E1303; fill: currentColor; }
-.chal-cta-glass {
-  border: 1px solid rgba(34, 211, 238, .4);
-  background: linear-gradient(180deg, rgba(8, 51, 68, .62) 0%, rgba(9, 22, 34, .72) 100%);
-  color: #D7F7FF;
-  box-shadow: inset 0 1px 0 rgba(165, 243, 252, .16), 0 2px 8px rgba(0, 0, 0, .3);
-}
-.chal-cta-glass .chal-cta-ico { color: #67E8F9; fill: currentColor; }
-.chal-cta:hover { filter: brightness(1.05); }
-.chal-cta:active { transform: scale(.98); filter: none; }
-.chal-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-/* ---- the claim: a champion of the week that just closed collects here, while the two hands
-   below stay live all week. A static glow — no keyframes, so the card still paints at 60fps. ---- */
-.chal-claim {
+.chal-claim-ico { flex: none; width: 15px; height: 15px; }
+.chal-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-claim-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.chal-claim:hover { filter: brightness(1.08); }
+.chal-claim:active { transform: scale(.985); filter: none; }
+.chal-claim:disabled { opacity: .7; cursor: default; filter: none; transform: none; }
+.chal-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chal-enter {
   width: 100%;
-  min-height: 38px;
-  display: flex;
+  height: 46px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 0;
+  gap: 7px;
   padding: 0 12px;
   border: 0;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #FFF7CC 0%, #FDE68A 26%, #F59E0B 66%, #B45309 100%);
-  color: #241503;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffe494 0%, #f5c351 50%, #d4961e 100%);
+  color: #141008;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
-  letter-spacing: .015em;
+  letter-spacing: .01em;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    0 0 0 1px rgba(255, 232, 166, .48),
-    0 0 18px rgba(245, 158, 11, .45),
-    0 2px 8px rgba(0, 0, 0, .42);
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 20px rgba(245, 195, 81, 0.28);
   transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-.chal-claim-ico { flex: none; width: 18px; height: 18px; color: #7C2D12; }
-.chal-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.chal-claim-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
-.chal-claim:hover { filter: brightness(1.04); }
-.chal-claim:active { transform: scale(.985); filter: none; }
-.chal-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.car-card.carousel-slide-challenge .chal-ctas[hidden],
+.chal-enter-ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chal-enter-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-enter-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.chal-enter:hover { filter: brightness(1.05); }
+.chal-enter:active { transform: scale(.985); filter: none; }
+.chal-enter:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .car-card.carousel-slide-challenge .chal-claim[hidden] { display: none; }
+/* a claim gives back its 36px out of the spotlight instead of squeezing the key */
+.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) { gap: 6px; }
+.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) .chal-hero { gap: 4px; }
+.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) .chal-halo { width: 62px; height: 62px; }
+.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) .chal-star-img { width: 46px; height: 46px; }
+
+/* ---- Persian / Arabic: the script keeps its own tracking, digits stay Latin ---- */
+html[data-lang="fa"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t),
+html[data-lang="ar"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+/* the two reading rows mirror; every figure keeps its own LTR isolation */
+html[data-lang="fa"] :is(.chal-top, .chal-hero, .chal-foot, .chal-enter, .chal-claim, .chal-crown, .chal-podium-pill),
+html[data-lang="ar"] :is(.chal-top, .chal-hero, .chal-foot, .chal-enter, .chal-claim, .chal-crown, .chal-podium-pill) {
+  direction: rtl;
+}
+html[data-lang="fa"] .chal-hook { line-height: 1.62; }
+html[data-lang="ar"] .chal-hook { line-height: 1.66; }
+html[data-lang="ru"] .chal-enter,
+html[data-lang="es"] .chal-enter { font-size: 12.5px; }
+
+/* ---- the 320px floor: the crown gives its words away before the clock loses a digit ---- */
+@media (max-width: 380px) {
+  .chal-crown { padding: 3px 4px; gap: 0; }
+  .chal-crown-t { display: none; }
+  .chal-title { font-size: 25px; }
+  .chal-title > span { font-size: 18px; }
+  .chal-hook { font-size: 9.5px; }
+  .chal-enter { font-size: 12px; }
+  .chal-enter-t { font-size: 12px; }
+}
+@media (max-width: 350px) {
+  .car-card.carousel-slide-challenge { padding-left: 10px; padding-right: 10px; }
+  .chal-halo { width: 62px; height: 62px; }
+  .chal-star-img { width: 46px; height: 46px; }
+  .chal-title { font-size: 23px; }
+  .chal-podium-pill { font-size: 8.5px; padding: 2px 8px; }
+  .chal-enter { height: 44px; border-radius: 13px; }
+  .chal-claim { font-size: 10px; }
+}
+
+/* ---- shorter columns: give back air, never the copy ---- */
+@media (max-height: 680px) {
+  .chal-hero { gap: 4px; }
+  .chal-halo { width: 62px; height: 62px; }
+  .chal-star-img { width: 46px; height: 46px; }
+  .chal-title { font-size: 25px; }
+  .chal-hook { font-size: 9.5px; line-height: 1.45; }
+}
+@media (max-height: 600px) {
+  .car-card.carousel-slide-challenge { padding-top: 10px; padding-bottom: 32px; }
+  .car-card.carousel-slide-challenge > .chal-inner { gap: 5px; }
+  .chal-top { min-height: 20px; }
+  .chal-clock { height: 20px; font-size: 9.5px; }
+  .chal-hero { gap: 3px; }
+  .chal-halo { width: 56px; height: 56px; }
+  .chal-star-img { width: 42px; height: 42px; }
+  .chal-title { font-size: 22px; }
+  .chal-title > span { font-size: 16px; }
+  .chal-hook { font-size: 9px; line-height: 1.4; max-height: 2.8em; }
+  .chal-enter { height: 42px; font-size: 12px; }
+  .chal-claim { height: 28px; }
+}
+
+/* reduced motion: nothing slides, and the keys settle instead of scaling */
+html.reduced-motion .chal-enter,
+html.reduced-motion .chal-claim { transition: none; }
 
 /* ---- the parked poster: the last slide stays for a future re-enable, inert and muted ---- */
 .car-card.carousel-slide-tournament.is-dormant {
@@ -47421,154 +47330,242 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 }
 .tour-cta-off .tour-cta-ico { color: #94A3B8; }
 .tour-admin-off { cursor: not-allowed; }
-/* The floating Channel War shield belongs to a live tournament: parked means gone. */
-html[data-channel-wars="off"] #iv-war { display: none !important; }
-
-/* ---- Persian / Arabic: the script keeps its own tracking, digits stay Latin ---- */
-html[data-lang="fa"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-tool-t, .chal-tel-k, .chal-src-k, .chal-src-hint, .chal-rank, .chal-podium-pill, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-tool, .chal-cta, .chal-claim),
-html[data-lang="ar"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-tool-t, .chal-tel-k, .chal-src-k, .chal-src-hint, .chal-rank, .chal-podium-pill, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-tool, .chal-cta, .chal-claim) {
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-}
-/* the two reading rows mirror: the Star, the meter dots and the counters sit at the reading
-   start while every figure keeps its own LTR isolation */
-html[data-lang="fa"] :is(.chal-head, .chal-prize, .chal-prize-txt, .chal-podium-pill, .chal-telemetry, .chal-tel, .chal-src, .chal-rank, .chal-tools, .chal-tool, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub),
-html[data-lang="ar"] :is(.chal-head, .chal-prize, .chal-prize-txt, .chal-podium-pill, .chal-telemetry, .chal-tel, .chal-src, .chal-rank, .chal-tools, .chal-tool, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub) {
-  direction: rtl;
-}
-html[data-lang="fa"] .chal-prize-sub { line-height: 1.5; }
-html[data-lang="ar"] .chal-prize-sub { line-height: 1.55; }
-html[data-lang="ru"] .chal-cta,
-html[data-lang="es"] .chal-cta { font-size: 11.5px; }
-
-/* ---- the 320px floor: the two keys stack their labels, the prize keeps its Star ---- */
-@media (max-width: 350px) {
-  .car-card.carousel-slide-challenge { padding-left: 10px; padding-right: 10px; }
-  .chal-prize { gap: 8px; }
-  .chal-star-stage { width: 46px; height: 46px; }
-  .chal-star-img { width: 40px; height: 40px; }
-  .chal-prize-v { font-size: 22px; }
-  .chal-prize-v > span { font-size: 13px; }
-  .chal-prize-sub { font-size: 9.5px; }
-  .chal-cta { min-height: 40px; padding: 0 8px; font-size: 11.5px; gap: 4px; }
-  .chal-cta-ico { width: 14px; height: 14px; }
-  .chal-claim { font-size: 12.5px; min-height: 36px; }
-}
-
-/* ---- shorter columns: give back air, never the copy ---- */
-@media (max-height: 760px) {
-  .chal-prize { padding: 0; }
-  .chal-prize-v { font-size: 23px; }
-}
-@media (max-height: 680px) {
-  .car-card.carousel-slide-challenge > .chal-inner { gap: 7px; }
-  .chal-telemetry { gap: 6px; }
-  .chal-star-stage { width: 46px; height: 46px; }
-  .chal-star-img { width: 40px; height: 40px; }
-  .chal-prize-v { font-size: 22px; }
-  .chal-prize-sub { font-size: 10px; }
-  .chal-cta { min-height: 40px; }
-  .chal-claim { min-height: 36px; }
-}
-@media (max-height: 620px) {
-  .car-card.carousel-slide-challenge { padding-top: 10px; padding-bottom: 32px; }
-  .car-card.carousel-slide-challenge > .chal-inner { gap: 6px; }
-  .chal-head { min-height: 20px; }
-  .chal-badge { padding: 3px 8px 3px 6px; font-size: 9.5px; }
-  .chal-clock { height: 20px; font-size: 9.5px; }
-  .chal-prize { gap: 8px; }
-  .chal-star-stage { width: 40px; height: 40px; }
-  .chal-star-stage::before { inset: -4px; }
-  .chal-star-img { width: 34px; height: 34px; }
-  .chal-prize-v { font-size: 20px; }
-  .chal-prize-sub { font-size: 9.5px; line-height: 1.34; -webkit-line-clamp: 2; }
-  .chal-telemetry { gap: 5px; padding: 5px 7px; }
-  .chal-cta { min-height: 38px; font-size: 12px; }
-  .chal-claim { min-height: 34px; font-size: 13px; }
-}
-@media (max-height: 600px) {
-  .car-card.carousel-slide-challenge > .chal-inner { gap: 5px; }
-  .chal-prize-sub { -webkit-line-clamp: 1; font-size: 9.5px; }
-  .chal-src-hint { display: none; }
-  .chal-cta { min-height: 36px; }
-  .chal-claim { min-height: 38px; }
-}
-
-/* reduced motion: nothing slides, and the keys settle instead of scaling */
-html.reduced-motion .chal-cta,
-html.reduced-motion .chal-claim,
-html.reduced-motion .chal-tool { transition: none; }
-
-/* ---- the tool strip owns the header on a phone: the kicker shrinks to its gold bolt medallion
-   before either key or the 7-day clock loses a word. The long Latin and Cyrillic kickers yield
-   first, every kicker yields on the narrowest phones. Inside a claim the card gives back five
-   pixels of air instead of squeezing the prize lockup. ---- */
-.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) { gap: 5px; }
-@media (max-width: 480px) {
-  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-badge {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    gap: 0;
-    justify-content: center;
-  }
-  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-badge-t { display: none; }
-  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-head { gap: 6px; }
-}
-@media (max-width: 380px) {
-  .chal-badge {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    gap: 0;
-    justify-content: center;
-  }
-  .chal-badge-t { display: none; }
-  .chal-head { gap: 6px; }
-}
-/* ---- the narrow floor and the short columns: the two micro keys keep their labels, the 7-day
-   chip gives its words away first, and the telemetry compresses to its figures ---- */
-@media (max-width: 350px) {
-  .chal-badge { padding: 4px 6px; }
-  .chal-badge-t { display: none; }
-  .chal-tool { padding: 0 5px; font-size: 9px; gap: 3px; }
-  .chal-tool-ico { width: 11px; height: 11px; }
-  .chal-telemetry { padding: 6px 7px; gap: 6px; }
-  .chal-tel-v { font-size: 18px; }
-  .chal-src { font-size: 9.5px; }
-  .chal-src-v { font-size: 10.5px; }
-  .chal-podium-pill { font-size: 8px; padding: 2px 6px; }
-}
-@media (max-height: 620px) {
-  .chal-tool { height: 20px; font-size: 9px; }
-  .chal-clock { height: 20px; font-size: 9.5px; }
-  .chal-telemetry { padding: 5px 8px; }
-  .chal-tel-v { font-size: 17px; }
-  .chal-rank { height: 14px; font-size: 8.5px; }
-  .chal-src { font-size: 9.5px; }
-  .chal-src-v { font-size: 10.5px; }
-  .chal-src-hint { display: none; }
-  .chal-claim { min-height: 34px; font-size: 12px; }
-  .chal-podium-pill { font-size: 8px; }
+/* The floating Channel War shield belongs to a live tournament: parked means gone.
+   `html[data-channel-wars]` is stamped by src/main.ts from the module's one flag before the
+   first paint, so the badge can never flash on a parked build. The rule covers the floating
+   hero shield, its in-board strip (#iv-war) and any legacy corner key in one place — a parked
+   tournament owns no pixel of the home hero. */
+html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, .war-shield-fab, [data-war-shield]) {
+  display: none !important;
 }
 
 /* ============================================================================================
-   CHALLENGE LEADERBOARD & RULES SHEET — slide #1's two banner keys
+   TOURNAMENT COMMAND HUB — the poster's one key
 
-   One obsidian-and-24K-gold bottom sheet, two segments: the live weekly board (a three-crest
-   podium over a scrollable, hidden-scrollbar Top-30 list) and the transparent rules guide (four
-   engraved cards). Static gradients and hairlines only — no backdrop-filter, no keyframes — so
-   the sheet rises over the same 60fps budget as the vault. Every figure is Latin and wrapped in
-   <bdi dir="ltr"> by src/main.ts; nothing here depends on a font's own digits.
+   One obsidian-and-24K-gold bottom sheet that owns everything the poster no longer carries:
+   the pinned personal scoreboard, the payout claim, the two quick-launch keys, then a
+   two-tab switcher over the live weekly board (three-crest podium + hidden-scrollbar Top-30
+   list) and the transparent rules guide (four engraved cards). Static gradients and hairlines
+   only — no backdrop-filter, no keyframes — so the sheet rises over the same 60fps budget as
+   the vault. Every figure is Latin and wrapped in <bdi dir="ltr"> by src/main.ts.
    ============================================================================================ */
 #challenge-info-modal .ci-sheet {
-  max-height: 88vh;
-  max-height: 88dvh;
+  max-height: 90vh;
+  max-height: 90dvh;
   gap: 8px;
   padding: 16px 14px calc(14px + env(safe-area-inset-bottom));
 }
 #challenge-info-modal .ci-sheet .vault-modal-x { top: 9px; inset-inline-end: 9px; background: rgba(255, 255, 255, .06); color: #F8E7B4; }
 #challenge-info-modal .ci-body { justify-content: flex-start; gap: 8px; min-height: 0; }
+
+/* ---- the pinned scoreboard: rank + weekly total on one line, the two sources below ---- */
+.ci-pin {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ci-tel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(19, 26, 40, .94) 0%, rgba(8, 12, 20, .95) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(246, 200, 94, .18),
+    inset 0 1px 0 rgba(255, 241, 192, .07),
+    0 2px 10px rgba(0, 0, 0, .3);
+}
+.ci-tel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.ci-rank {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  max-width: 62%;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(16, 185, 129, .4);
+  background: linear-gradient(180deg, rgba(6, 78, 59, .62) 0%, rgba(6, 24, 24, .76) 100%);
+  color: #A7F3D0;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(167, 243, 208, .16);
+}
+.ci-rank.is-none {
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, .28);
+  background: linear-gradient(180deg, rgba(51, 65, 85, .5) 0%, rgba(13, 18, 28, .72) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.ci-tel-total { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ci-tel-k {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: #8593A8;
+  white-space: nowrap;
+}
+.ci-tel-v { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+.ci-tel-v bdi {
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #FFF7DA;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.ci-tel-u { font-size: 9.5px; font-weight: 900; color: #C9D3E4; white-space: nowrap; }
+.ci-tel-src { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ci-src {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: rgba(15, 21, 32, .72);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: #E7EDF7;
+  white-space: nowrap;
+}
+.ci-src.is-friend { box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .26); }
+.ci-src.is-bot { box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .26); }
+.ci-src-k { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #9AA7BB; }
+.ci-src-v {
+  flex: none;
+  margin-inline-start: auto;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #FFF7DA;
+}
+.ci-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.ci-dot.is-friend { background: linear-gradient(180deg, #34D399 0%, #06B6D4 100%); box-shadow: 0 0 6px rgba(16, 185, 129, .55); }
+.ci-dot.is-bot { background: linear-gradient(180deg, #FDE68A 0%, #E8890C 100%); box-shadow: 0 0 6px rgba(251, 191, 36, .5); }
+
+/* ---- the payout: a champion of the week that just closed collects here ---- */
+.ci-claim {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #FFF7CC 0%, #FDE68A 24%, #F59E0B 66%, #B45309 100%);
+  color: #241503;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: .015em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    0 0 0 1px rgba(255, 232, 166, .48),
+    0 0 18px rgba(245, 158, 11, .42),
+    0 2px 8px rgba(0, 0, 0, .4);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.ci-claim[hidden] { display: none; }
+.ci-claim-ico { flex: none; width: 17px; height: 17px; }
+.ci-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-claim-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-claim:hover { filter: brightness(1.04); }
+.ci-claim:active { transform: scale(.985); filter: none; }
+.ci-claim:disabled { opacity: .7; cursor: default; filter: none; transform: none; }
+.ci-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- the two quick launches moved off the poster: struck gold and cyan-lit glass ---- */
+.ci-launch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.ci-launch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.ci-launch-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-launch-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-launch-btn.is-gold {
+  background: linear-gradient(180deg, #FFE494 0%, #F5C351 52%, #D4961E 100%);
+  color: #141008;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -2px 0 rgba(120, 74, 12, .32),
+    0 6px 16px rgba(245, 195, 81, .24);
+}
+.ci-launch-btn.is-mint {
+  border: 1px solid rgba(45, 212, 191, .42);
+  background: linear-gradient(180deg, rgba(6, 58, 58, .74) 0%, rgba(8, 26, 38, .88) 100%);
+  color: #D6FFF7;
+  box-shadow:
+    inset 0 1px 0 rgba(153, 246, 228, .16),
+    inset 0 -2px 0 rgba(2, 6, 12, .4),
+    0 4px 12px rgba(0, 0, 0, .3);
+}
+.ci-launch-btn.is-mint .ci-launch-ico { color: #5EEAD4; }
+.ci-launch-btn:hover { filter: brightness(1.05); }
+.ci-launch-btn:active { transform: scale(.98); filter: none; }
+.ci-launch-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.ci-launch-hint {
+  margin: -2px 0 0;
+  text-align: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: .01em;
+  color: #8593A8;
+}
+.ci-launch-hint bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #9AA7BB; }
 
 /* ---- the segmented switcher ---- */
 .ci-tabs {
@@ -47756,7 +47753,7 @@ html.reduced-motion .chal-tool { transition: none; }
 }
 .ci-row.is-me {
   background: linear-gradient(180deg, rgba(9, 46, 38, .84) 0%, rgba(9, 17, 22, .88) 100%);
-  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .55), 0 0 12px -5px rgba(16, 185, 129, .6);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .55), inset 0 0 0 2px rgba(246, 200, 94, .16), 0 0 12px -5px rgba(16, 185, 129, .6);
 }
 .ci-row-rank {
   display: grid;
@@ -47882,23 +47879,33 @@ html.reduced-motion .chal-tool { transition: none; }
 .ci-rule-b bdi { font-weight: 900; color: #FCD34D; }
 
 /* ---- Persian and Arabic: the script gives up its tracking, never its own digits ---- */
-html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty),
-html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty) {
+html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty, .ci-rank, .ci-tel-k, .ci-tel-u, .ci-src, .ci-launch-btn, .ci-launch-hint, .ci-claim),
+html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty, .ci-rank, .ci-tel-k, .ci-tel-u, .ci-src, .ci-launch-btn, .ci-launch-hint, .ci-claim) {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
+html[data-lang="fa"] :is(.ci-pin, .ci-tel, .ci-tel-top, .ci-tel-src, .ci-src, .ci-launch, .ci-launch-btn, .ci-claim, .ci-row, .ci-row-sub),
+html[data-lang="ar"] :is(.ci-pin, .ci-tel, .ci-tel-top, .ci-tel-src, .ci-src, .ci-launch, .ci-launch-btn, .ci-claim, .ci-row, .ci-row-sub) {
+  direction: rtl;
+}
 html[data-lang="fa"] .ci-rule-b,
 html[data-lang="ar"] .ci-rule-b { line-height: 1.85; }
-html.reduced-motion .ci-tab { transition: none; }
+html.reduced-motion .ci-tab,
+html.reduced-motion .ci-claim,
+html.reduced-motion .ci-launch-btn { transition: none; }
 @media (max-width: 350px) {
   .ci-tab { font-size: 10.5px; gap: 4px; }
   .ci-tab-ico { width: 12px; height: 12px; }
   .ci-crest { width: 24px; height: 24px; font-size: 10px; }
   .ci-pod { padding: 7px 3px 6px; }
   .ci-rule { padding: 8px; gap: 7px; }
+  .ci-launch-btn { font-size: 10px; height: 42px; padding: 0 6px; gap: 4px; }
+  .ci-launch-ico { width: 13px; height: 13px; }
 }
 @media (max-height: 680px) {
-  #challenge-info-modal .ci-sheet { max-height: 92vh; max-height: 92dvh; }
+  #challenge-info-modal .ci-sheet { max-height: 94vh; max-height: 94dvh; padding-top: 14px; }
+  .ci-tel { padding: 7px 10px; gap: 6px; }
+  .ci-launch-btn { height: 42px; }
   .ci-pod { padding: 6px 3px 6px; }
   .ci-rule { padding: 8px 9px; }
 }

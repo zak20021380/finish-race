@@ -44,6 +44,16 @@ import telegramStarsUrl from './assets/images/telegram_stars.png';
  */
 export const CHANNEL_WARS_ENABLED = false;
 
+/**
+ * The document-level projection of that one flag. `html[data-channel-wars]` is what the stylesheet
+ * reads to keep the floating shield (and the in-board war strip) out of a parked build; index.html
+ * ships the attribute `off`, so the shield can never flash before this runs, and this is the only
+ * writer that can ever turn it back on.
+ */
+export function applyChannelWarsFlag(): void {
+  document.documentElement.dataset.channelWars = CHANNEL_WARS_ENABLED ? 'on' : 'off';
+}
+
 /** The one line the parked hub says if it is ever reached (a stale link, a cached tap). */
 const WARS_OFF_NOTE: Record<LangCode, string> = {
   fa: 'چالش کانال‌ها موقتاً غیرفعال است • به زودی برمی‌گردد',

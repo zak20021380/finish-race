@@ -38,7 +38,7 @@ import { showMarkupToast, showRoyalToast, showToast } from './toast';
 import { getMySquad, WAR_LOSS, WAR_WIN } from './squads';
 import { awardWarPoints } from './squadRegister';
 import { channelWarHandleOf } from '../shared/config';
-import { CHANNEL_WARS_ENABLED } from './channelWar';
+import { CHANNEL_WARS_ENABLED, applyChannelWarsFlag } from './channelWar';
 import { workerUrl } from './adminApi';
 import { createModal, type ModalHandle } from './modal';
 import telegramStarsUrl from './assets/images/telegram_stars.png';
@@ -6838,9 +6838,11 @@ interface ChallengeRule {
 }
 
 interface ChallengeCopy {
+  /** The crown label on the poster's top edge. */
   badge: string;
   prizeUnit: string;
-  sub: string;
+  /** The poster's one-line hook, under the headline. */
+  hook: string;
   podium: string;
   totalK: string;
   winsWord: string;
@@ -6852,15 +6854,16 @@ interface ChallengeCopy {
   unranked: string;
   botCta: string;
   friendCta: string;
-  /** The payout key: the rank token is replaced with a Latin number. */
+  /** The hub's payout banner: the rank token is replaced with a Latin number. */
   claim: string;
+  /** The poster's slim claim label: the rank token is replaced with a Latin number. */
+  claimShort: string;
+  /** The poster's one key. */
+  enter: string;
   claimDone: string;
   claimOk: string;
   claimFail: string;
   guest: string;
-  /** The two banner keys. */
-  rankKey: string;
-  rulesKey: string;
   boardTab: string;
   rulesTab: string;
   sheetTitle: string;
@@ -6876,35 +6879,35 @@ interface ChallengeCopy {
 }
 
 /* All five languages live here, beside the card's own paint, because none of these lines belong in
-   the global string table: this slide and its sheet are the only surfaces that say them. Every
+   the global string table: this poster and its hub are the only surfaces that say them. Every
    numeral is a Latin digit wrapped in an LTR <bdi>, in every language, so no font can re-shape a
    score and no bidi run can swap a rank. */
 const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   fa: {
-    badge: 'چالش هفتگی',
+    badge: 'تورنمنت هفتگی',
     prizeUnit: 'استارز',
-    sub: 'تا پایان تایمر بیشترین برد رو بیار! <bdi dir="ltr">3</bdi> نفر اول جدول نفری <bdi dir="ltr">50</bdi> استارز می‌برن!',
-    podium: 'برای <bdi dir="ltr">3</bdi> نفر اول هفته',
+    hook: 'بیشترین برد این هفته رو بیار و جزو <bdi dir="ltr">3</bdi> نفر اول جایزه بگیر!',
+    podium: 'جایزه <bdi dir="ltr">3</bdi> نفر اول هفته',
     totalK: 'مجموع هفتگی',
     winsWord: 'برد',
     friendK: 'دوستان:',
     botK: 'ربات سخت:',
-    friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد/دوست',
+    friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست',
     rank: 'رتبه #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'بدون رتبه',
-    botCta: 'ربات سخت',
+    botCta: 'بازی با ربات سخت',
     friendCta: 'دعوت و بازی با دوست',
-    claim: 'دریافت <bdi dir="ltr">50</bdi> استارز (مقام #<bdi dir="ltr">{rank}</bdi>)',
+    claim: 'ثبت و دریافت <bdi dir="ltr">50</bdi> استارز • مقام #<bdi dir="ltr">{rank}</bdi>',
+    claimShort: 'دریافت جایزه <bdi dir="ltr">50</bdi> استارز (مقام #<bdi dir="ltr">{rank}</bdi>)',
+    enter: 'ورود به تورنمنت <bdi dir="ltr">50</bdi> استارز',
     claimDone: '<bdi dir="ltr">50</bdi> استارز ثبت شد',
     claimOk: 'درخواست <bdi dir="ltr">50</bdi> استارز شما ثبت شد',
     claimFail: 'ثبت درخواست ممکن نشد؛ دوباره تلاش کنید',
     guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
-    rankKey: 'رتبه‌بندی',
-    rulesKey: 'قوانین',
-    boardTab: 'رتبه‌بندی هفته',
+    boardTab: 'رتبه‌بندی زنده',
     rulesTab: 'قوانین و شرایط',
-    sheetTitle: 'چالش هفتگی',
-    sheetSub: 'رتبه‌بندی زنده و قوانین جایزه',
+    sheetTitle: 'تورنمنت هفتگی',
+    sheetSub: 'جایزه <bdi dir="ltr">50</bdi> استارز برای <bdi dir="ltr">3</bdi> نفر اول هفته',
     you: 'شما',
     free: 'جایگاه آزاد',
     empty: 'هنوز هیچ بردی ثبت نشده؛ اولین نفر این هفته باش!',
@@ -6931,80 +6934,80 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     warsOff: 'موقتاً غیرفعال • به زودی',
   },
   en: {
-    badge: '7-DAY CHALLENGE',
+    badge: 'WEEKLY TOURNAMENT',
     prizeUnit: 'STARS',
-    sub: 'Rack up the most wins before the timer ends — Top <bdi dir="ltr">3</bdi> win <bdi dir="ltr">50</bdi> Stars each!',
+    hook: 'Rack up the most wins this week to claim a Top-<bdi dir="ltr">3</bdi> prize!',
     podium: 'TOP <bdi dir="ltr">3</bdi> THIS WEEK • <bdi dir="ltr">50</bdi> STARS EACH',
     totalK: 'WEEKLY TOTAL',
     winsWord: 'wins',
     friendK: 'Friends:',
     botK: 'Hard Bot:',
-    friendHint: 'Max <bdi dir="ltr">3</bdi> wins/friend',
+    friendHint: 'Max <bdi dir="ltr">3</bdi> wins from each friend',
     rank: 'RANK #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'UNRANKED',
     botCta: 'Play Hard Bot',
-    friendCta: 'Play with Friend',
-    claim: 'Claim <bdi dir="ltr">50</bdi> Stars (Rank #<bdi dir="ltr">{rank}</bdi>)',
+    friendCta: 'Invite & Play Friend',
+    claim: 'Claim <bdi dir="ltr">50</bdi> Stars • Rank #<bdi dir="ltr">{rank}</bdi>',
+    claimShort: 'Claim <bdi dir="ltr">50</bdi>-Star prize (Rank #<bdi dir="ltr">{rank}</bdi>)',
+    enter: 'Enter <bdi dir="ltr">50</bdi> Stars Tournament',
     claimDone: '<bdi dir="ltr">50</bdi> Stars claimed',
     claimOk: 'Your <bdi dir="ltr">50</bdi>-Star claim is recorded',
     claimFail: 'Could not record the claim — try again',
     guest: 'Open this Mini App inside Telegram to compete',
-    rankKey: 'Rankings',
-    rulesKey: 'Rules',
-    boardTab: 'Weekly Rankings',
+    boardTab: 'Live Rankings',
     rulesTab: 'Rules & Terms',
-    sheetTitle: '7-Day Challenge',
-    sheetSub: 'Live standings and prize rules',
+    sheetTitle: 'Weekly Tournament',
+    sheetSub: 'Top <bdi dir="ltr">3</bdi> this week win <bdi dir="ltr">50</bdi> Stars each',
     you: 'YOU',
     free: 'OPEN SLOT',
-    empty: 'No wins on the board yet — be the first this week!',
+    empty: 'No wins yet — be the first this week!',
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Bot <bdi dir="ltr">{botWins}</bdi>',
     rules: [
       {
-        t: 'Top <bdi dir="ltr">3</bdi> of the week',
-        b: 'When the <bdi dir="ltr">7</bdi>-day timer ends, the <bdi dir="ltr">3</bdi> players with the highest total wins each receive <bdi dir="ltr">50</bdi> Telegram Stars.',
+        t: 'Top-<bdi dir="ltr">3</bdi> weekly payout',
+        b: 'When the <bdi dir="ltr">7</bdi>-day timer ends, the <bdi dir="ltr">3</bdi> players with the highest win totals each receive <bdi dir="ltr">50</bdi> Telegram Stars.',
       },
       {
-        t: 'Unlimited wins count',
-        b: 'Every online win against a friend and every win against the Hard Bot adds to your weekly score with no cap at all.',
+        t: 'Unlimited weekly wins',
+        b: 'Every online win against a friend and every win against the Hard bot adds to your weekly score with no ceiling.',
       },
       {
-        t: 'The friend anti-collusion cap',
-        b: 'To block collusion, at most <bdi dir="ltr">3</bdi> wins count from each friend during the week; play new friends to score more.',
+        t: 'Anti-farming friend cap',
+        b: 'To prevent collusion, at most <bdi dir="ltr">3</bdi> wins from each friend count per week; play new friends to score more.',
       },
       {
-        t: 'What makes a win count',
-        b: 'Only real <bdi dir="ltr">1v1</bdi> games lasting at least <bdi dir="ltr">45</bdi> seconds with at least <bdi dir="ltr">10</bdi> valid moves are counted.',
+        t: 'How a match is verified',
+        b: 'Only real <bdi dir="ltr">1v1</bdi> games lasting at least <bdi dir="ltr">45</bdi> seconds with <bdi dir="ltr">10</bdi> or more valid moves are counted.',
       },
     ],
     warsOff: 'Paused • Back soon',
   },
   ru: {
-    badge: '7-ДНЕВНЫЙ ВЫЗОВ',
-    prizeUnit: 'ЗВЁЗД',
-    sub: 'Набери больше всех побед за неделю — Топ-<bdi dir="ltr">3</bdi> получат по <bdi dir="ltr">50</bdi> Stars каждый!',
+    badge: 'НЕДЕЛЬНЫЙ ТУРНИР',
+    prizeUnit: 'STARS',
+    hook: 'Набери больше всех побед за неделю и войди в Топ-<bdi dir="ltr">3</bdi>!',
     podium: 'ТОП-<bdi dir="ltr">3</bdi> НЕДЕЛИ • <bdi dir="ltr">50</bdi> STARS КАЖДОМУ',
     totalK: 'ИТОГО ЗА НЕДЕЛЮ',
     winsWord: 'побед',
     friendK: 'Друзья:',
     botK: 'Сложный бот:',
-    friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед/друг',
+    friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед от друга',
     rank: 'МЕСТО #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'БЕЗ МЕСТА',
     botCta: 'Сложный бот',
     friendCta: 'Играть с другом',
-    claim: 'Получить <bdi dir="ltr">50</bdi> Stars (место #<bdi dir="ltr">{rank}</bdi>)',
+    claim: 'Получить <bdi dir="ltr">50</bdi> Stars • место #<bdi dir="ltr">{rank}</bdi>',
+    claimShort: 'Забрать <bdi dir="ltr">50</bdi> Stars (место #<bdi dir="ltr">{rank}</bdi>)',
+    enter: 'Войти в турнир на <bdi dir="ltr">50</bdi> Stars',
     claimDone: '<bdi dir="ltr">50</bdi> Stars получены',
     claimOk: 'Заявка на <bdi dir="ltr">50</bdi> Stars принята',
     claimFail: 'Не удалось отправить заявку — попробуйте ещё раз',
     guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
-    rankKey: 'Рейтинг',
-    rulesKey: 'Правила',
-    boardTab: 'Рейтинг недели',
+    boardTab: 'Живой рейтинг',
     rulesTab: 'Правила и условия',
-    sheetTitle: '7-дневный вызов',
-    sheetSub: 'Живой рейтинг и правила приза',
+    sheetTitle: 'Недельный турнир',
+    sheetSub: 'Топ-<bdi dir="ltr">3</bdi> недели получают по <bdi dir="ltr">50</bdi> Stars',
     you: 'ВЫ',
     free: 'СВОБОДНОЕ МЕСТО',
     empty: 'Побед пока нет — стань первым на этой неделе!',
@@ -7031,30 +7034,30 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     warsOff: 'Приостановлено • Скоро вернётся',
   },
   ar: {
-    badge: 'تحدي 7 أيام',
-    prizeUnit: 'نجوم',
-    sub: 'حقق أكبر عدد من الانتصارات هذا الأسبوع — أول <bdi dir="ltr">3</bdi> في الترتيب يربح كل منهم <bdi dir="ltr">50</bdi> ستارز!',
+    badge: 'البطولة الأسبوعية',
+    prizeUnit: 'ستارز',
+    hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع وكن ضمن أول <bdi dir="ltr">3</bdi> فائزين!',
     podium: 'أول <bdi dir="ltr">3</bdi> هذا الأسبوع • <bdi dir="ltr">50</bdi> ستارز لكل منهم',
     totalK: 'مجموع الأسبوع',
     winsWord: 'انتصار',
     friendK: 'الأصدقاء:',
     botK: 'الروبوت الصعب:',
-    friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات/صديق',
+    friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات من كل صديق',
     rank: 'الترتيب #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'بدون ترتيب',
     botCta: 'الروبوت الصعب',
     friendCta: 'العب مع صديق',
-    claim: 'استلم <bdi dir="ltr">50</bdi> ستارز (المرتبة #<bdi dir="ltr">{rank}</bdi>)',
+    claim: 'استلم <bdi dir="ltr">50</bdi> ستارز • المرتبة #<bdi dir="ltr">{rank}</bdi>',
+    claimShort: 'استلم جائزة <bdi dir="ltr">50</bdi> ستارز (المرتبة #<bdi dir="ltr">{rank}</bdi>)',
+    enter: 'دخول بطولة <bdi dir="ltr">50</bdi> ستارز',
     claimDone: 'تم تسجيل <bdi dir="ltr">50</bdi> ستارز',
     claimOk: 'تم تسجيل طلب <bdi dir="ltr">50</bdi> ستارز',
     claimFail: 'تعذّر تسجيل الطلب — حاول مرة أخرى',
     guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
-    rankKey: 'الترتيب',
-    rulesKey: 'القوانين',
-    boardTab: 'ترتيب الأسبوع',
+    boardTab: 'الترتيب المباشر',
     rulesTab: 'القوانين والشروط',
-    sheetTitle: 'تحدي 7 أيام',
-    sheetSub: 'الترتيب الحيّ وقوانين الجائزة',
+    sheetTitle: 'البطولة الأسبوعية',
+    sheetSub: 'جائزة <bdi dir="ltr">50</bdi> ستارز لأول <bdi dir="ltr">3</bdi> هذا الأسبوع',
     you: 'أنت',
     free: 'مقعد متاح',
     empty: 'لا انتصارات بعد — كن الأول هذا الأسبوع!',
@@ -7081,30 +7084,30 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     warsOff: 'متوقف مؤقتاً • يعود قريباً',
   },
   es: {
-    badge: 'RETO DE 7 DÍAS',
-    prizeUnit: 'ESTRELLAS',
-    sub: '¡Consigue la mayor cantidad de victorias de la semana — el Top <bdi dir="ltr">3</bdi> gana <bdi dir="ltr">50</bdi> Stars cada uno!',
+    badge: 'TORNEO SEMANAL',
+    prizeUnit: 'STARS',
+    hook: '¡Consigue más victorias esta semana y entra al Top <bdi dir="ltr">3</bdi>!',
     podium: 'TOP <bdi dir="ltr">3</bdi> SEMANAL • <bdi dir="ltr">50</bdi> STARS CADA UNO',
     totalK: 'TOTAL SEMANAL',
     winsWord: 'victorias',
     friendK: 'Amigos:',
     botK: 'Bot difícil:',
-    friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias/amigo',
+    friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias por amigo',
     rank: 'PUESTO #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'SIN PUESTO',
     botCta: 'Jugar vs bot difícil',
     friendCta: 'Jugar con un amigo',
-    claim: 'Reclamar <bdi dir="ltr">50</bdi> Stars (puesto #<bdi dir="ltr">{rank}</bdi>)',
+    claim: 'Reclamar <bdi dir="ltr">50</bdi> Stars • puesto #<bdi dir="ltr">{rank}</bdi>',
+    claimShort: 'Reclamar premio de <bdi dir="ltr">50</bdi> Stars (puesto #<bdi dir="ltr">{rank}</bdi>)',
+    enter: 'Entrar al Torneo de <bdi dir="ltr">50</bdi> Stars',
     claimDone: '<bdi dir="ltr">50</bdi> Stars reclamadas',
     claimOk: 'Tu solicitud de <bdi dir="ltr">50</bdi> Stars quedó registrada',
     claimFail: 'No se pudo registrar la solicitud — inténtalo de nuevo',
     guest: 'Abre este Mini App dentro de Telegram para competir',
-    rankKey: 'Ranking',
-    rulesKey: 'Reglas',
-    boardTab: 'Ranking semanal',
+    boardTab: 'Ranking en vivo',
     rulesTab: 'Reglas y condiciones',
-    sheetTitle: 'Reto de 7 días',
-    sheetSub: 'Clasificación en vivo y reglas del premio',
+    sheetTitle: 'Torneo semanal',
+    sheetSub: 'El Top <bdi dir="ltr">3</bdi> gana <bdi dir="ltr">50</bdi> Stars cada uno',
     you: 'TÚ',
     free: 'PUESTO LIBRE',
     empty: 'Aún no hay victorias — ¡sé el primero esta semana!',
@@ -7250,54 +7253,74 @@ function paintChallengeClock(): void {
   }
 }
 
-/** Paint every label, the live total + rank, the source split and the payout key. */
-function paintChallengeCard(): void {
+/** Every label the poster prints, in the reader's language. */
+function paintChallengeLabels(): void {
   const copy = challengeCopy();
   challengeSetText('chal-badge-t', copy.badge);
   challengeSetText('chal-prize-u', copy.prizeUnit);
-  challengeSetHTML('chal-sub', copy.sub);
+  challengeSetHTML('chal-hook', copy.hook);
   challengeSetHTML('chal-podium-pill', copy.podium);
-  challengeSetText('chal-total-k', copy.totalK);
-  challengeSetText('chal-total-u', copy.winsWord);
-  challengeSetText('chal-friend-k', copy.friendK);
-  challengeSetText('chal-bot-k', copy.botK);
-  challengeSetHTML('chal-friend-hint', copy.friendHint);
-  challengeSetText('chal-bot-t', copy.botCta);
-  challengeSetText('chal-friend-t', copy.friendCta);
-  challengeSetText('chal-rank-t', copy.rankKey);
-  challengeSetText('chal-rules-t', copy.rulesKey);
+  challengeSetHTML('chal-enter-t', copy.enter);
   challengeSetText('home-tournament-off-t', copy.warsOff);
+}
 
+/**
+ * The hub's pinned scoreboard: live rank, weekly total, both sources — and the two payout keys,
+ * the hub's banner and the poster's slim label, which are the same claim one tap apart.
+ */
+function paintChallengeTelemetry(): void {
+  const copy = challengeCopy();
   const view = challengeView;
   const friend = challengeCount(view?.friendWins);
   const bot = challengeCount(view?.hardBotWins);
   const total = typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : friend + bot;
   const position = typeof view?.myPosition === 'number' ? challengeCount(view.myPosition) : 0;
 
-  challengeSetText('chal-total-v', String(total));
-  challengeSetText('chal-friend-v', String(friend));
-  challengeSetText('chal-bot-v', String(bot));
+  challengeSetText('ci-total-k', copy.totalK);
+  challengeSetText('ci-my-wins-u', copy.winsWord);
+  challengeSetText('ci-friend-k', copy.friendK);
+  challengeSetText('ci-bot-k', copy.botK);
+  challengeSetHTML('ci-friend-hint', copy.friendHint);
+  challengeSetText('ci-bot-t', copy.botCta);
+  challengeSetText('ci-friend-t', copy.friendCta);
+  challengeSetText('ci-my-wins', String(total));
+  challengeSetText('ci-friend-v', String(friend));
+  challengeSetText('ci-bot-v', String(bot));
 
-  const rankPill = document.getElementById('chal-rank-pill');
-  if (rankPill) {
+  const rank = document.getElementById('ci-my-rank');
+  if (rank) {
     const ranked = position > 0;
-    challengeSetHTML('chal-rank-pill', ranked ? copy.rank.replace('{rank}', String(position)) : copy.unranked);
-    rankPill.classList.toggle('is-none', !ranked);
+    challengeSetHTML('ci-my-rank', ranked ? copy.rank.replace('{rank}', String(position)) : copy.unranked);
+    rank.classList.toggle('is-none', !ranked);
   }
 
-  /* A champion of the week that just closed collects here — and keeps both keys below, because
-     those two ways to score are live all week, in every state. Once the room stamps the payout the
-     key is gone for good, so nothing gold is left on the card that cannot be pressed. */
+  /* A champion of the week that just closed collects here. Once the room stamps the payout both
+     keys are gone for good, so nothing gold is left on screen that cannot be pressed. */
   const claimableRank = typeof view?.claimableRank === 'number' ? challengeCount(view.claimableRank) : 0;
-  const claim = document.getElementById('chal-claim-cta') as HTMLButtonElement | null;
-  if (claim) {
-    claim.hidden = claimableRank === 0;
+  const banner = document.getElementById('ci-claim-cta') as HTMLButtonElement | null;
+  if (banner) {
+    banner.hidden = claimableRank === 0;
     if (claimableRank > 0) {
-      challengeSetHTML('chal-claim-t', copy.claim.replace('{rank}', String(claimableRank)));
-      claim.disabled = challengeClaimBusy;
-      claim.setAttribute('aria-disabled', String(challengeClaimBusy));
+      challengeSetHTML('ci-claim-t', copy.claim.replace('{rank}', String(claimableRank)));
+      banner.disabled = challengeClaimBusy;
+      banner.setAttribute('aria-disabled', String(challengeClaimBusy));
     }
   }
+  const poster = document.getElementById('chal-claim-cta') as HTMLButtonElement | null;
+  if (poster) {
+    poster.hidden = claimableRank === 0;
+    if (claimableRank > 0) {
+      challengeSetHTML('chal-claim-t', copy.claimShort.replace('{rank}', String(claimableRank)));
+      poster.disabled = challengeClaimBusy;
+      poster.setAttribute('aria-disabled', String(challengeClaimBusy));
+    }
+  }
+}
+
+/** Paint every label, the live figures and both payout keys. */
+function paintChallengeCard(): void {
+  paintChallengeLabels();
+  paintChallengeTelemetry();
 
   /* The parked poster's localized subtitle still opens with a trophy glyph from the old design:
      the dormant slide keeps its line, never the cartoon. */
@@ -7404,7 +7427,7 @@ function paintChallengeRules(): void {
 function paintChallengeSheetLabels(): void {
   const copy = challengeCopy();
   challengeSetText('ci-title', copy.sheetTitle);
-  challengeSetText('ci-sub', copy.sheetSub);
+  challengeSetHTML('ci-sub', copy.sheetSub);
   challengeSetText('ci-tab-board-t', copy.boardTab);
   challengeSetText('ci-tab-rules-t', copy.rulesTab);
   paintChallengeRules();
@@ -7412,6 +7435,7 @@ function paintChallengeSheetLabels(): void {
 
 function paintChallengeSheet(): void {
   paintChallengeSheetLabels();
+  paintChallengeTelemetry();
   const rows = challengeBoardRows();
   paintChallengePodium(rows);
   paintChallengeList(rows);
@@ -7431,8 +7455,8 @@ function showChallengeTab(tab: 'board' | 'rules'): void {
   }
 }
 
-/** Open the board / rules sheet on one exact tab. */
-function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null): void {
+/** Open the hub on one exact tab. `focusClaim` lands the reader on the payout banner. */
+function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null, focusClaim = false): void {
   const root = document.getElementById('challenge-info-modal');
   if (!root) return;
   if (!challengeSheet) challengeSheet = createModal(root);
@@ -7440,6 +7464,12 @@ function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null)
   paintChallengeSheet();
   showChallengeTab(tab);
   challengeSheet.open(opener ?? null);
+  if (focusClaim) {
+    const claim = document.getElementById('ci-claim-cta') as HTMLButtonElement | null;
+    if (claim && !claim.hidden) {
+      try { claim.focus({ preventScroll: true }); } catch { /* nothing focusable */ }
+    }
+  }
   /* A board that was never read paints zeros; one background read fills it in place. */
   void refreshChallengeCard();
 }
@@ -7541,21 +7571,22 @@ async function claimChallengePrize(): Promise<void> {
   }
 }
 
-/** The two banner keys and the sheet's segmented switcher, wired once. */
+/** The poster's one key and the hub's segmented switcher, wired once. */
 function wireChallengeSheet(): void {
   const root = document.getElementById('challenge-info-modal');
   if (!root) return;
   challengeSheet = createModal(root);
 
-  const rankKey = document.getElementById('chal-rank-btn');
-  rankKey?.addEventListener('click', () => {
+  const enter = document.getElementById('chal-enter-cta');
+  enter?.addEventListener('click', () => {
     impact('light');
-    openChallengeSheet('board', rankKey);
+    openChallengeSheet('board', enter);
   });
-  const rulesKey = document.getElementById('chal-rules-btn');
-  rulesKey?.addEventListener('click', () => {
+  /* The slim poster label is the payout, not the board: it lands on the claim banner itself. */
+  const posterClaim = document.getElementById('chal-claim-cta');
+  posterClaim?.addEventListener('click', () => {
     impact('light');
-    openChallengeSheet('rules', rulesKey);
+    openChallengeSheet('board', posterClaim, true);
   });
 
   for (const btn of root.querySelectorAll<HTMLElement>('[data-ci-tab]')) {
@@ -7576,25 +7607,29 @@ function initChallengeCard(): void {
   if (challengeReady) return;
   challengeReady = true;
   /* The parked Channel Wars poster and its floating shield follow the module flag, one attribute
-     for the whole document. */
-  document.documentElement.dataset.channelWars = CHANNEL_WARS_ENABLED ? 'on' : 'off';
+     for the whole document. index.html ships it `off`, so a parked build never flashes the shield
+     before this line runs. */
+  applyChannelWarsFlag();
   const star = document.getElementById('chal-star-img') as HTMLImageElement | null;
   if (star) star.src = telegramStarsUrl;
 
-  const botCta = document.getElementById('chal-bot-cta');
+  /* The two quick launches live in the hub now: each closes the sheet and takes its own door. */
+  const botCta = document.getElementById('ci-bot-cta');
   botCta?.addEventListener('click', () => {
     impact('light');
     /* A guest can still play the board; only the crediting needs a verified Telegram seat. */
     if (challengeView?.auth === 'guest') showToast(challengeCopy().guest, 'warning', 3400);
+    challengeSheet?.close();
     startGame({ difficulty: 'hard', sizes: [1, 1], quiet: true });
   });
-  const friendCta = document.getElementById('chal-friend-cta');
+  const friendCta = document.getElementById('ci-friend-cta');
   friendCta?.addEventListener('click', () => {
     impact('light');
     if (challengeView?.auth === 'guest') showToast(challengeCopy().guest, 'warning', 3400);
+    challengeSheet?.close();
     menu.openFriends();
   });
-  const claim = document.getElementById('chal-claim-cta');
+  const claim = document.getElementById('ci-claim-cta');
   claim?.addEventListener('click', () => { void claimChallengePrize(); });
 
   wireChallengeSheet();
