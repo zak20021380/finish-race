@@ -6979,7 +6979,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">{stars}</bdi> استارز',
     rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> <i>•</i> هوش مصنوعی <bdi dir="ltr">{botWins}</bdi>',
     players: 'شرکت‌کننده',
-    enrolled: 'فعال',
+    enrolled: 'عضو تورنمنت',
     join: 'شرکت رایگان',
     joinOk: 'در تورنمنت هفتگی ثبت شدی؛ موفق باشی!',
     joinFail: 'ثبت در تورنمنت ممکن نشد؛ دوباره تلاش کنید',
@@ -7040,7 +7040,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> AI <bdi dir="ltr">{botWins}</bdi>',
     players: 'Players',
-    enrolled: 'Active',
+    enrolled: 'Enrolled',
     join: 'Join Free',
     joinOk: 'You are in the weekly tournament — good luck!',
     joinFail: 'Could not join the tournament — try again',
@@ -7101,7 +7101,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> <i>•</i> ИИ <bdi dir="ltr">{botWins}</bdi>',
     players: 'Участники',
-    enrolled: 'Активен',
+    enrolled: 'Участник',
     join: 'Участвовать',
     joinOk: 'Вы в недельном турнире — удачи!',
     joinFail: 'Не удалось зарегистрироваться — попробуйте ещё раз',
@@ -7162,7 +7162,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">{stars}</bdi> ستارز',
     rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> <i>•</i> الذكاء الاصطناعي <bdi dir="ltr">{botWins}</bdi>',
     players: 'مشارك',
-    enrolled: 'نشط',
+    enrolled: 'مشارك',
     join: 'انضم مجاناً',
     joinOk: 'تم تسجيلك في البطولة الأسبوعية — حظاً موفقاً!',
     joinFail: 'تعذّر الانضمام إلى البطولة — حاول مرة أخرى',
@@ -7223,7 +7223,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> <i>•</i> IA <bdi dir="ltr">{botWins}</bdi>',
     players: 'Jugadores',
-    enrolled: 'Activo',
+    enrolled: 'Inscrito',
     join: 'Unirse gratis',
     joinOk: '¡Ya estás en el torneo semanal — buena suerte!',
     joinFail: 'No se pudo unir al torneo — inténtalo de nuevo',
@@ -7261,6 +7261,12 @@ let challengeReady = false;
 let challengeSheet: ModalHandle | null = null;
 let challengeSheetTab: 'board' | 'rules' = 'board';
 let challengeBoardSig = '';
+/**
+ * The optimistic seat: painted on the join tap itself, one network round trip ahead of the room.
+ * It carries this device's own handle at zero wins, and it dissolves the moment the room's own
+ * answer confirms the enrollment — so a reload or a modal reopen finds the badge already seated.
+ */
+let challengeOptimisticSeat: ChallengeRowView | null = null;
 
 const challengeCopy = (): ChallengeCopy => CHALLENGE_COPY[lang] ?? CHALLENGE_COPY.en;
 
@@ -7322,6 +7328,16 @@ function challengeHandleText(raw: unknown): string {
   return '@' + text;
 }
 
+/** This device's own public handle, the way the room prints it: the `@username`, else the display
+ * name the Telegram seat carries (its `first_name` fallback), so the optimistic board row reads
+ * exactly like the row the room will serve for the same seat. */
+function challengeLocalHandle(): string {
+  const u = tgUser();
+  const username = (u?.username ?? '').trim().replace(/^@+/, '').slice(0, 32);
+  if (username) return '@' + username;
+  return (u?.first_name ?? '').trim().slice(0, 40) || 'me';
+}
+
 const challengeCount = (raw: unknown): number => {
   const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 0;
   return Math.max(0, n);
@@ -7353,6 +7369,13 @@ function challengeBoardRows(): ChallengeRowView[] {
       prizeStars: row.prizeStars === undefined ? challengePrizeStars(position) : challengeCount(row.prizeStars),
       isMe: row.isMe === true,
     });
+  }
+  /* The optimistic seat rides the tap itself: appended at the end of the live field (a zero-win
+     seat ranks last) and printed before any byte returns, until the room's own row replaces it. */
+  if (challengeOptimisticSeat
+    && !out.some((row) => row.isMe === true || row.handle === challengeOptimisticSeat!.handle)) {
+    const position = out.length + 1;
+    out.push({ ...challengeOptimisticSeat, position, prizeStars: challengePrizeStars(position) });
   }
   return out;
 }
@@ -7417,7 +7440,11 @@ function paintChallengeTelemetry(): void {
   const friend = challengeCount(view?.friendWins);
   const bot = challengeCount(view?.hardBotWins);
   const total = typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : friend + bot;
-  const position = typeof view?.myPosition === 'number' ? challengeCount(view.myPosition) : 0;
+  /* This seat's live rank is the row the board holds for it — the room's own answer or, one round
+     trip earlier, the optimistic seat the tap itself painted. */
+  const mineRow = challengeBoardRows().find((row) => row.isMe === true) ?? null;
+  const position = mineRow ? mineRow.position
+    : typeof view?.myPosition === 'number' ? challengeCount(view.myPosition) : 0;
 
   challengeSetText('ci-my-wins-u', copy.winsWord);
   challengeSetHTML('ci-friend-hint', copy.friendHint);
@@ -7439,9 +7466,12 @@ function paintChallengeTelemetry(): void {
 
   /* The live field: every enrolled seat of this week, one Latin figure in its own LTR run. The
      room's exact count wins; the board it shipped is the fallback. */
-  const players = typeof view?.totalParticipants === 'number'
-    ? challengeCount(view.totalParticipants)
-    : challengeBoardRows().length;
+  /* The room's exact count wins, and the board it shipped (optimistic seat included) is the
+     floor: the pill can never read one seat fewer than the rows printed beneath it. */
+  const players = Math.max(
+    typeof view?.totalParticipants === 'number' ? challengeCount(view.totalParticipants) : 0,
+    challengeBoardRows().length,
+  );
   challengeSetText('ci-players-n', String(players));
   challengeSetText('ci-players-u', copy.players);
   const field = document.getElementById('ci-players-pill');
@@ -7450,7 +7480,9 @@ function paintChallengeTelemetry(): void {
   /* Automatic enrollment's own read-out: an emerald-gold seated badge once this seat holds a live
      row, otherwise the free one-tap key that registers it. A card the room has not answered yet
      shows neither, so a guest or a slow read never sees a key that cannot work. */
-  const enrolled = view?.isEnrolled === true;
+  /* The optimistic tap holds the badge open too: between the tap and the room's answer the
+     enrollment is already true on this device, and it never flips back to the gold key. */
+  const enrolled = view?.isEnrolled === true || challengeOptimisticSeat !== null;
   const answered = !!view && view.auth !== 'guest';
   const seated = document.getElementById('ci-seat-on');
   if (seated) {
@@ -7685,6 +7717,13 @@ function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null,
 function applyChallengeView(view: ChallengeView): void {
   challengeView = view;
   if (view.auth === 'guest' || view.auth === 'telegram') challengeView.auth = view.auth;
+  /* The room's own answer outranks the tap's optimistic paint: once it confirms this seat — its
+     enrollment flag or its own row on the served board — the local placeholder dissolves into
+     the field the room shipped, and the served figures own every pill from then on. */
+  if (challengeOptimisticSeat
+    && (view.isEnrolled === true || (view.leaderboard ?? []).some((row) => row?.isMe === true))) {
+    challengeOptimisticSeat = null;
+  }
   const endsIn = typeof view.endsInMs === 'number' && Number.isFinite(view.endsInMs) ? view.endsInMs : 0;
   challengeWindowEnd = endsIn > 0 ? Date.now() + endsIn : (view.windowEnd && view.windowEnd > Date.now() ? view.windowEnd : localChallengeWindowEnd());
   if (endsIn > 0) challengeRolled = false;
@@ -7751,6 +7790,21 @@ function settleChallengeBoard(won: boolean): void {
   })();
 }
 
+/** The tap's instant paint: this verified seat joins the local board before any byte is sent. */
+function armChallengeOptimisticSeat(): void {
+  if (challengeOptimisticSeat || challengeView?.isEnrolled === true) return;
+  const rows = challengeBoardRows();
+  challengeOptimisticSeat = {
+    position: rows.length + 1,
+    handle: challengeLocalHandle(),
+    friendWins: 0,
+    hardBotWins: 0,
+    totalWins: 0,
+    prizeStars: challengePrizeStars(rows.length + 1),
+    isMe: true,
+  };
+}
+
 /**
  * The free one-tap enrollment key. The room registers this verified seat on the live week at zero
  * wins (idempotent), so the badge, the field counter and the reader's own row all appear at once.
@@ -7759,13 +7813,29 @@ async function joinChallengeTournament(): Promise<void> {
   const copy = challengeCopy();
   if (challengeJoinBusy) return;
   challengeJoinBusy = true;
+  /* Zero-latency enrollment: the emerald badge, the field pill and the seat's own board row are
+   * painted on the tap itself, one network round trip ahead of the room. The POST leaves in the
+   * same instant and its answer only reconciles what the tap already drew. */
+  armChallengeOptimisticSeat();
   paintChallengeCard();
   try {
     const view = await challengeCall('/api/challenge/join', {});
     if (view && view.isEnrolled === true) {
-      if (typeof view.totalWins === 'number') applyChallengeView(view);
+      /* The room confirmed the seat: its served board replaces the optimistic row wholesale. */
+      challengeOptimisticSeat = null;
+      applyChallengeView(view);
       showToast(copy.joinOk, 'success', 3400);
+    } else if (view) {
+      /* A refused join (a guest seat, an unauthorized call) yields the optimistic paint back to
+       * the room's own answer, so a key that cannot work is never hidden behind a fake badge.
+       * A bare error object carries no card, so the figures painted before the tap stay up. */
+      challengeOptimisticSeat = null;
+      if (typeof view.totalWins === 'number') applyChallengeView(view);
+      else paintChallengeCard();
+      showToast(copy.joinFail, 'error', 3400);
     } else {
+      /* Offline: the enrollment stays locked on this device and the follow-up /me read
+       * reconciles it the moment the network is back. */
       showToast(copy.joinFail, 'error', 3400);
     }
   } finally {

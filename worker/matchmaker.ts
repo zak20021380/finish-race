@@ -11358,6 +11358,18 @@ export class MatchmakerDO {
     } catch { /* a storage that refuses the write leaves the in-memory card readable */ }
   }
 
+  /** The enrollment doors' awaited write: the new seat is durable before its card is returned, so
+   * a reload fired the instant after the tap finds the row the tap promised. The fire-and-forget
+   * `persistChallenge` stays for the steady paths; only the doors that answer a new seat await. */
+  private async flushChallenge(): Promise<void> {
+    if (!this.challengeLoaded) return;
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      await storage.put(CHALLENGE_KEY, structuredClone(this.challengeSnapshot()));
+    } catch { /* a storage that refuses the write leaves the in-memory card readable */ }
+  }
+
   /** A one-shot Hard AI ticket: 128 bits of Latin base36, never derived from a player field. */
   private challengeTicket(): string {
     const draw = new Uint32Array(4);
@@ -11435,7 +11447,9 @@ export class MatchmakerDO {
       const week = seen ? seen.windowStart : -1;
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
-      if (!seen || entry.windowStart !== week) this.persistChallenge();
+      /* A first sighting (or a week roll) is the /me door's own enrollment: the new seat is
+         durable before the card is answered. A steady read stays a read. */
+      if (!seen || entry.windowStart !== week) await this.flushChallenge();
       return json(view(entry, { auth: who.guest ? 'guest' : 'telegram' }), 200, CHALLENGE_CORS);
     }
 
@@ -11484,7 +11498,9 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
-      this.persistChallenge();
+      /* The seat is durable before the card leaves the room: the awaited put writes the whole
+         ledger with this seat's row — handle, zero wins, this window — inside it. */
+      await this.flushChallenge();
       return json(view(entry, { ok: true, isEnrolled: true }), 200, CHALLENGE_CORS);
     }
 

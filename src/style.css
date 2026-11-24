@@ -47740,6 +47740,28 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 .ci-seat.is-cta:disabled { opacity: .7; cursor: default; filter: none; transform: none; }
 .ci-seat.is-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
+/* the enrolled badge: a locked emerald pill with a crisp check-circle — a status, never a tap
+   target, so a double-tap cannot fire the key twice and the gold key can never repaint over it */
+.ci-seat.is-on {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(16, 185, 129, 0.36);
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  pointer-events: none;
+}
+.ci-seat-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: #34d399;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* ---- the payout: a champion of the week that just closed collects here ---- */
 .ci-claim {
   width: 100%;
