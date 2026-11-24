@@ -3449,29 +3449,12 @@
             <!-- PINNED: the personal scoreboard, the payout, and the two ways to score.
                  Everything here used to live on the poster; the board below only ranks. -->
             <section class="ci-pin" aria-label="Your weekly scoreboard">
-              <div class="ci-tel">
-                <div class="ci-tel-top">
-                  <span class="ci-rank" id="ci-my-rank">بدون رتبه</span>
-                  <span class="ci-tel-total">
-                    <span class="ci-tel-k" id="ci-total-k">مجموع هفتگی</span>
-                    <span class="ci-tel-v">
-                      <bdi dir="ltr" id="ci-my-wins">0</bdi>
-                      <span class="ci-tel-u" id="ci-my-wins-u">برد</span>
-                    </span>
-                  </span>
+              <div class="ci-sum">
+                <div class="ci-sum-stats">
+                  <span class="ci-sum-total"><bdi dir="ltr" id="ci-my-wins">0</bdi> <span class="ci-sum-u" id="ci-my-wins-u">برد</span></span>
+                  <span class="ci-sum-src" id="ci-sum-src">دوستان <bdi dir="ltr">0</bdi> <i>•</i> ربات <bdi dir="ltr">0</bdi></span>
                 </div>
-                <div class="ci-tel-src">
-                  <span class="ci-src is-friend">
-                    <i class="ci-dot is-friend" aria-hidden="true"></i>
-                    <span class="ci-src-k" id="ci-friend-k">دوستان:</span>
-                    <bdi dir="ltr" class="ci-src-v" id="ci-friend-v">0</bdi>
-                  </span>
-                  <span class="ci-src is-bot">
-                    <i class="ci-dot is-bot" aria-hidden="true"></i>
-                    <span class="ci-src-k" id="ci-bot-k">ربات سخت:</span>
-                    <bdi dir="ltr" class="ci-src-v" id="ci-bot-v">0</bdi>
-                  </span>
-                </div>
+                <span class="ci-rank" id="ci-my-rank">بدون رتبه</span>
               </div>
 
               <button class="ci-claim" type="button" id="ci-claim-cta" hidden>
@@ -3518,29 +3501,8 @@
 
             <div class="ci-panels">
               <section class="ci-panel" id="ci-panel-board" role="tabpanel" aria-labelledby="ci-tab-board" data-ci-panel="board">
-                <div class="ci-podium" id="ci-podium">
-                  <div class="ci-pod" data-place="1">
-                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">1</bdi></b></span>
-                    <span class="ci-pod-handle" id="ci-pod-1-h">—</span>
-                    <span class="ci-pod-wins" id="ci-pod-1-w"><bdi dir="ltr">0</bdi> برد</span>
-                    <span class="ci-pod-prize" id="ci-pod-1-p"><bdi dir="ltr">50</bdi> استارز</span>
-                  </div>
-                  <div class="ci-pod" data-place="2">
-                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">2</bdi></b></span>
-                    <span class="ci-pod-handle" id="ci-pod-2-h">—</span>
-                    <span class="ci-pod-wins" id="ci-pod-2-w"><bdi dir="ltr">0</bdi> برد</span>
-                    <span class="ci-pod-prize" id="ci-pod-2-p"><bdi dir="ltr">50</bdi> استارز</span>
-                  </div>
-                  <div class="ci-pod" data-place="3">
-                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">3</bdi></b></span>
-                    <span class="ci-pod-handle" id="ci-pod-3-h">—</span>
-                    <span class="ci-pod-wins" id="ci-pod-3-w"><bdi dir="ltr">0</bdi> برد</span>
-                    <span class="ci-pod-prize" id="ci-pod-3-p"><bdi dir="ltr">50</bdi> استارز</span>
-                  </div>
-                </div>
-
-                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Top contenders"></ol>
-                <p class="ci-empty" id="ci-empty" hidden>هنوز هیچ بردی ثبت نشده؛ اولین نفر این هفته باش!</p>
+                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"></ol>
+                <p class="ci-empty" id="ci-empty" hidden>هنوز شرکت‌کننده‌ای در این هفته ثبت نشده؛ اولین نفر باش!</p>
               </section>
 
               <section class="ci-panel" id="ci-panel-rules" role="tabpanel" aria-labelledby="ci-tab-rules" data-ci-panel="rules" hidden>

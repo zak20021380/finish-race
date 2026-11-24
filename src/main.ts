@@ -6788,9 +6788,6 @@ document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop()
 
 const CHALLENGE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const CHALLENGE_WEEK_ANCHOR = Date.UTC(2024, 0, 1);
-/** The room's own ceiling — how many board rows it may send back. */
-const CHALLENGE_BOARD_MAX = 30;
-
 /** One row of the room's live board. The internal player id never leaves the Worker. */
 interface ChallengeRowView {
   position: number;
@@ -6812,6 +6809,7 @@ interface ChallengeView {
   myPosition?: number | null;
   leaderboard?: ChallengeRowView[];
   contenders?: number;
+  totalParticipants?: number;
   windowStart?: number;
   windowEnd?: number;
   endsInMs?: number;
@@ -6844,10 +6842,7 @@ interface ChallengeCopy {
   /** The poster's one-line hook, under the headline. */
   hook: string;
   podium: string;
-  totalK: string;
   winsWord: string;
-  friendK: string;
-  botK: string;
   friendHint: string;
   /** The live rank pill: the rank token is replaced with a Latin number. */
   rank: string;
@@ -6869,7 +6864,6 @@ interface ChallengeCopy {
   sheetTitle: string;
   sheetSub: string;
   you: string;
-  free: string;
   empty: string;
   prizeTag: string;
   /** One row's source split: the two win tokens are Latin numbers. */
@@ -6888,10 +6882,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeUnit: 'استارز',
     hook: 'بیشترین برد این هفته رو بیار و جزو <bdi dir="ltr">3</bdi> نفر اول جایزه بگیر!',
     podium: 'جایزه <bdi dir="ltr">3</bdi> نفر اول هفته',
-    totalK: 'مجموع هفتگی',
     winsWord: 'برد',
-    friendK: 'دوستان:',
-    botK: 'ربات سخت:',
     friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست',
     rank: 'رتبه #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'بدون رتبه',
@@ -6909,8 +6900,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     sheetTitle: 'تورنمنت هفتگی',
     sheetSub: 'جایزه <bdi dir="ltr">50</bdi> استارز برای <bdi dir="ltr">3</bdi> نفر اول هفته',
     you: 'شما',
-    free: 'جایگاه آزاد',
-    empty: 'هنوز هیچ بردی ثبت نشده؛ اولین نفر این هفته باش!',
+    empty: 'هنوز شرکت‌کننده‌ای در این هفته ثبت نشده؛ اولین نفر باش!',
     prizeTag: '<bdi dir="ltr">50</bdi> استارز',
     rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> <i>•</i> ربات <bdi dir="ltr">{botWins}</bdi>',
     rules: [
@@ -6938,10 +6928,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeUnit: 'STARS',
     hook: 'Rack up the most wins this week to claim a Top-<bdi dir="ltr">3</bdi> prize!',
     podium: 'TOP <bdi dir="ltr">3</bdi> THIS WEEK • <bdi dir="ltr">50</bdi> STARS EACH',
-    totalK: 'WEEKLY TOTAL',
     winsWord: 'wins',
-    friendK: 'Friends:',
-    botK: 'Hard Bot:',
     friendHint: 'Max <bdi dir="ltr">3</bdi> wins from each friend',
     rank: 'RANK #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'UNRANKED',
@@ -6959,8 +6946,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     sheetTitle: 'Weekly Tournament',
     sheetSub: 'Top <bdi dir="ltr">3</bdi> this week win <bdi dir="ltr">50</bdi> Stars each',
     you: 'YOU',
-    free: 'OPEN SLOT',
-    empty: 'No wins yet — be the first this week!',
+    empty: 'No participants yet — be the first this week!',
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Bot <bdi dir="ltr">{botWins}</bdi>',
     rules: [
@@ -6988,10 +6974,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeUnit: 'STARS',
     hook: 'Набери больше всех побед за неделю и войди в Топ-<bdi dir="ltr">3</bdi>!',
     podium: 'ТОП-<bdi dir="ltr">3</bdi> НЕДЕЛИ • <bdi dir="ltr">50</bdi> STARS КАЖДОМУ',
-    totalK: 'ИТОГО ЗА НЕДЕЛЮ',
     winsWord: 'побед',
-    friendK: 'Друзья:',
-    botK: 'Сложный бот:',
     friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед от друга',
     rank: 'МЕСТО #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'БЕЗ МЕСТА',
@@ -7009,8 +6992,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     sheetTitle: 'Недельный турнир',
     sheetSub: 'Топ-<bdi dir="ltr">3</bdi> недели получают по <bdi dir="ltr">50</bdi> Stars',
     you: 'ВЫ',
-    free: 'СВОБОДНОЕ МЕСТО',
-    empty: 'Побед пока нет — стань первым на этой неделе!',
+    empty: 'Пока нет участников — станьте первым на этой неделе!',
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Бот <bdi dir="ltr">{botWins}</bdi>',
     rules: [
@@ -7038,10 +7020,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeUnit: 'ستارز',
     hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع وكن ضمن أول <bdi dir="ltr">3</bdi> فائزين!',
     podium: 'أول <bdi dir="ltr">3</bdi> هذا الأسبوع • <bdi dir="ltr">50</bdi> ستارز لكل منهم',
-    totalK: 'مجموع الأسبوع',
     winsWord: 'انتصار',
-    friendK: 'الأصدقاء:',
-    botK: 'الروبوت الصعب:',
     friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات من كل صديق',
     rank: 'الترتيب #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'بدون ترتيب',
@@ -7059,8 +7038,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     sheetTitle: 'البطولة الأسبوعية',
     sheetSub: 'جائزة <bdi dir="ltr">50</bdi> ستارز لأول <bdi dir="ltr">3</bdi> هذا الأسبوع',
     you: 'أنت',
-    free: 'مقعد متاح',
-    empty: 'لا انتصارات بعد — كن الأول هذا الأسبوع!',
+    empty: 'لا مشاركين بعد — كن الأول هذا الأسبوع!',
     prizeTag: '<bdi dir="ltr">50</bdi> ستارز',
     rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> <i>•</i> الروبوت <bdi dir="ltr">{botWins}</bdi>',
     rules: [
@@ -7088,10 +7066,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     prizeUnit: 'STARS',
     hook: '¡Consigue más victorias esta semana y entra al Top <bdi dir="ltr">3</bdi>!',
     podium: 'TOP <bdi dir="ltr">3</bdi> SEMANAL • <bdi dir="ltr">50</bdi> STARS CADA UNO',
-    totalK: 'TOTAL SEMANAL',
     winsWord: 'victorias',
-    friendK: 'Amigos:',
-    botK: 'Bot difícil:',
     friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias por amigo',
     rank: 'PUESTO #<bdi dir="ltr">{rank}</bdi>',
     unranked: 'SIN PUESTO',
@@ -7109,8 +7084,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     sheetTitle: 'Torneo semanal',
     sheetSub: 'El Top <bdi dir="ltr">3</bdi> gana <bdi dir="ltr">50</bdi> Stars cada uno',
     you: 'TÚ',
-    free: 'PUESTO LIBRE',
-    empty: 'Aún no hay victorias — ¡sé el primero esta semana!',
+    empty: 'Aún no hay participantes — ¡sé el primero esta semana!',
     prizeTag: '<bdi dir="ltr">50</bdi> STARS',
     rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Bot <bdi dir="ltr">{botWins}</bdi>',
     rules: [
@@ -7208,7 +7182,7 @@ const challengeCount = (raw: unknown): number => {
   return Math.max(0, n);
 };
 
-/** The room's board, sanitised: 30 rows at most, every figure a non-negative integer. */
+/** The room's board, sanitised: every participant it sends, each figure a non-negative integer. */
 function challengeBoardRows(): ChallengeRowView[] {
   const rows = challengeView?.leaderboard;
   if (!Array.isArray(rows)) return [];
@@ -7225,7 +7199,6 @@ function challengeBoardRows(): ChallengeRowView[] {
       totalWins: challengeCount(row.totalWins),
       isMe: row.isMe === true,
     });
-    if (out.length >= CHALLENGE_BOARD_MAX) break;
   }
   return out;
 }
@@ -7276,16 +7249,15 @@ function paintChallengeTelemetry(): void {
   const total = typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : friend + bot;
   const position = typeof view?.myPosition === 'number' ? challengeCount(view.myPosition) : 0;
 
-  challengeSetText('ci-total-k', copy.totalK);
   challengeSetText('ci-my-wins-u', copy.winsWord);
-  challengeSetText('ci-friend-k', copy.friendK);
-  challengeSetText('ci-bot-k', copy.botK);
   challengeSetHTML('ci-friend-hint', copy.friendHint);
   challengeSetText('ci-bot-t', copy.botCta);
   challengeSetText('ci-friend-t', copy.friendCta);
   challengeSetText('ci-my-wins', String(total));
-  challengeSetText('ci-friend-v', String(friend));
-  challengeSetText('ci-bot-v', String(bot));
+  /* The summary strip's muted breakdown: two Latin integers inside their own LTR runs. */
+  challengeSetHTML('ci-sum-src', copy.rowSub
+    .replace('{friendWins}', String(friend))
+    .replace('{botWins}', String(bot)));
 
   const rank = document.getElementById('ci-my-rank');
   if (rank) {
@@ -7333,29 +7305,11 @@ function paintChallengeCard(): void {
   if (challengeSheet?.isOpen()) paintChallengeSheet();
 }
 
-/** One podium slot: its crest, its handle, its weekly total and its Star tag — or a free seat. */
-function paintChallengePodium(rows: ChallengeRowView[]): void {
-  const copy = challengeCopy();
-  for (let place = 1; place <= 3; place += 1) {
-    const pod = document.querySelector<HTMLElement>('#ci-podium .ci-pod[data-place="' + place + '"]');
-    const handleEl = document.getElementById('ci-pod-' + place + '-h');
-    const winsEl = document.getElementById('ci-pod-' + place + '-w');
-    const prizeEl = document.getElementById('ci-pod-' + place + '-p');
-    const row = rows.find((item) => item.position === place) ?? null;
-    if (pod) pod.classList.toggle('is-free', !row);
-    if (handleEl) handleEl.textContent = row ? challengeHandleText(row.handle) : copy.free;
-    if (winsEl) {
-      winsEl.textContent = '';
-      if (row) winsEl.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
-    }
-    if (prizeEl) {
-      if (row) challengeSetHTML('ci-pod-' + place + '-p', copy.prizeTag);
-      else prizeEl.textContent = '—';
-    }
-  }
-}
-
-/** One contender row, built as nodes: the handle is text, the figures are Latin bdi runs. */
+/**
+ * One contender row, built as nodes: the rank badge, the truncated public handle, the Top-3 prize
+ * pill and the YOU tag on the start side; the muted source breakdown and the weekly total on the
+ * end side. The handle is text, every figure is a Latin bdi run, and no markup carries a handle.
+ */
 function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const copy = challengeCopy();
   const item = document.createElement('li');
@@ -7363,40 +7317,50 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   item.dataset.place = String(row.position);
   if (row.isMe === true) item.classList.add('is-me');
 
+  const start = document.createElement('div');
+  start.className = 'ci-row-start';
+
   const rank = document.createElement('span');
   rank.className = 'ci-row-rank';
-  rank.append(document.createTextNode('#'), challengeBdi(String(row.position)));
+  rank.append(challengeBdi(String(row.position)));
 
-  const main = document.createElement('div');
-  main.className = 'ci-row-main';
-  const handleLine = document.createElement('div');
-  handleLine.className = 'ci-row-handle';
   const handle = document.createElement('b');
+  handle.className = 'ci-row-handle';
   handle.textContent = challengeHandleText(row.handle);
-  handleLine.append(handle);
+
+  start.append(rank, handle);
+
+  if (row.position <= 3) {
+    const prize = document.createElement('span');
+    prize.className = 'ci-row-prize';
+    prize.innerHTML = copy.prizeTag;
+    start.append(prize);
+  }
   if (row.isMe === true) {
     const you = document.createElement('span');
     you.className = 'ci-you';
     you.textContent = copy.you;
-    handleLine.append(you);
+    start.append(you);
   }
-  const sub = document.createElement('div');
+
+  const end = document.createElement('div');
+  end.className = 'ci-row-end';
+  const sub = document.createElement('span');
   sub.className = 'ci-row-sub';
   /* Authored copy plus two integers: nothing here can carry a handle into markup. */
   sub.innerHTML = copy.rowSub
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
-  main.append(handleLine, sub);
-
   const total = document.createElement('span');
   total.className = 'ci-row-w';
   total.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
+  end.append(sub, total);
 
-  item.append(rank, main, total);
+  item.append(start, end);
   return item;
 }
 
-/** The Top-30 list. It is rebuilt only when the board, the language or the seat actually moves. */
+/** The full-participant list. It is rebuilt only when the board, the language or the seat moves. */
 function paintChallengeList(rows: ChallengeRowView[]): void {
   const list = document.getElementById('ci-list');
   const empty = document.getElementById('ci-empty');
@@ -7437,7 +7401,6 @@ function paintChallengeSheet(): void {
   paintChallengeSheetLabels();
   paintChallengeTelemetry();
   const rows = challengeBoardRows();
-  paintChallengePodium(rows);
   paintChallengeList(rows);
 }
 

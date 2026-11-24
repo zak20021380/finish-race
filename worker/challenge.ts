@@ -39,8 +39,6 @@ export const CHALLENGE_WINDOW_ANCHOR = Date.UTC(2024, 0, 1);
 export const CHALLENGE_STARS = 50;
 /** The week's podium: positions 1..3 are paid, nobody else is. */
 export const MAX_WINNERS = 3;
-/** How many contenders a public board carries (the card's live modal reads the same list). */
-export const CHALLENGE_LEADERBOARD_MAX = 30;
 /** A hard-bot win must be at least this long on the ROOM's clock. */
 export const CHALLENGE_MIN_SECONDS = 45;
 /** A friend win that came from a forfeit must clear this much of the board first. */
@@ -118,14 +116,17 @@ export interface ChallengeBoardRow {
 }
 
 export interface ChallengeBoard {
+  /** Every participant of the live week, zero wins included, in ranking order. */
   rows: ChallengeBoardRow[];
-  /** 1-based live rank of the reader, or null while they have no counted win. */
+  /** 1-based live rank of the reader, or null while they hold no seat in the live week. */
   myPosition: number | null;
   totalWins: number;
   friendWins: number;
   hardBotWins: number;
-  /** How many contenders currently hold at least one win this week. */
+  /** How many verified seats are registered in the live week (see totalParticipants). */
   contenders: number;
+  /** The board's full population: every participant of the live week. */
+  totalParticipants: number;
 }
 
 /** Why a report or a claim was refused. Every value maps to one localised line on the card. */
@@ -337,16 +338,26 @@ export function settleChallengeWeek(rows: ChallengeEntry[], now: number): Challe
   return settlements;
 }
 
-/** The live weekly board for one reader, plus their own seat on it. */
+/**
+ * The live weekly board for one reader, plus their own seat on it.
+ *
+ * Every verified Telegram seat registered in the active window is listed, even at zero wins, and
+ * there is no row cutoff: the whole participating field is returned in the one ranking order
+ * (total wins descending, then the earliest `updatedAt` — whoever reached that count first keeps
+ * the higher seat). Guest seats never participate, so they hold no row. The internal ids and the
+ * per-opponent ledger stay in the room; a row carries the public handle only.
+ */
 export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: number): ChallengeBoard {
   const window = challengeWindowAt(now);
   const live = rankContenders(rows.filter((row) => (
-    row.windowStart === window.start && row.windowEnd > now && challengeTotalWins(row) > 0
+    row.windowStart === window.start
+    && row.windowEnd > now
+    && !!row.tgId
   )));
   const mine = rows.find((row) => row.id === selfId) ?? null;
   const at = live.findIndex((row) => row.id === selfId);
   return {
-    rows: live.slice(0, CHALLENGE_LEADERBOARD_MAX).map((row, index) => ({
+    rows: live.map((row, index) => ({
       position: index + 1,
       handle: row.handle || row.tgId,
       friendWins: row.friendWins,
@@ -359,6 +370,7 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
     friendWins: mine ? mine.friendWins : 0,
     hardBotWins: mine ? mine.hardBotWins : 0,
     contenders: live.length,
+    totalParticipants: live.length,
   };
 }
 
@@ -474,6 +486,7 @@ export function challengeView(
     myPosition: board.myPosition,
     leaderboard: board.rows,
     contenders: board.contenders,
+    totalParticipants: board.totalParticipants,
     stars: CHALLENGE_STARS,
     maxWinners: MAX_WINNERS,
     maxWinsPerFriend: MAX_WINS_PER_FRIEND,
