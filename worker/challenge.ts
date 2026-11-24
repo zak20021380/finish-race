@@ -22,9 +22,10 @@
  * therefore only moved by a credited win and by a window roll — never by a read or a ticket.
  *
  * At `weekEndAt` the room locks the Top `MAX_WINNERS` contenders (`totalWins > 0`) as that week's
- * champions, each worth `CHALLENGE_STARS`. The champions claim from the card; the new week starts
- * every counter at 0. A settlement is stored per week, so a claim is paid exactly once and a late
- * boot landing on a boundary still finds the standings it has to lock.
+ * champions. The `TOTAL_PRIZE_POOL` is split across the podium by `PRIZE_BY_RANK`: 25 / 15 / 10.
+ * The champions claim from the card; the new week starts every counter at 0. A settlement is
+ * stored per week, so a claim is paid exactly once and a late boot landing on a boundary still
+ * finds the standings it has to lock.
  *
  * Windows are 7 days, aligned to a fixed Monday 00:00 UTC anchor, so the countdown a client paints
  * is the same for every player and a counter can never be farmed across a boundary.
@@ -35,8 +36,12 @@ export const CHALLENGE_DAYS = 7;
 export const CHALLENGE_WINDOW_MS = CHALLENGE_DAYS * 24 * 60 * 60 * 1000;
 /** Fixed Monday 00:00 UTC: 2024-01-01, so every 7-day cycle starts on a Monday. */
 export const CHALLENGE_WINDOW_ANCHOR = Date.UTC(2024, 0, 1);
-/** What each of the week's champions is paid. */
-export const CHALLENGE_STARS = 50;
+/** The week's total prize pool, divided across the Top 3 finishers. */
+export const TOTAL_PRIZE_POOL = 50;
+/** The exact payout for each podium rank: 25 / 15 / 10, summing to the 50-Star pool. */
+export const PRIZE_BY_RANK: Record<1 | 2 | 3, number> = { 1: 25, 2: 15, 3: 10 };
+/** Legacy alias for the pool total (50), kept for callers that print the headline. */
+export const CHALLENGE_STARS = TOTAL_PRIZE_POOL;
 /** The week's podium: positions 1..3 are paid, nobody else is. */
 export const MAX_WINNERS = 3;
 /** A hard-bot win must be at least this long on the ROOM's clock. */
@@ -112,12 +117,18 @@ export interface ChallengeBoardRow {
   friendWins: number;
   hardBotWins: number;
   totalWins: number;
+  /** The exact pool slice this position pays at week close: 25 / 15 / 10, else 0. */
+  prizeStars: number;
   isMe: boolean;
 }
 
 export interface ChallengeBoard {
   /** Every participant of the live week, zero wins included, in ranking order. */
   rows: ChallengeBoardRow[];
+  /** The week's total prize pool (50). */
+  totalPrizePool: number;
+  /** The exact payout of each podium rank (25 / 15 / 10). */
+  prizeByRank: Record<1 | 2 | 3, number>;
   /** 1-based live rank of the reader, or null while they hold no seat in the live week. */
   myPosition: number | null;
   totalWins: number;
@@ -160,6 +171,14 @@ const readStamp = (raw: unknown): number => {
   const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 0;
   return n > 0 ? n : 0;
 };
+
+/** The exact Star payout for a podium rank; 0 for every position outside the Top 3. */
+export function prizeForRank(rank: number): number {
+  if (rank === 1) return PRIZE_BY_RANK[1];
+  if (rank === 2) return PRIZE_BY_RANK[2];
+  if (rank === 3) return PRIZE_BY_RANK[3];
+  return 0;
+}
 
 /** `friendWins + hardBotWins`, uncapped for the week. */
 export const challengeTotalWins = (entry: ChallengeEntry): number =>
@@ -314,8 +333,9 @@ export function rankContenders(rows: ChallengeEntry[]): ChallengeEntry[] {
 }
 
 /**
- * Close every window that has ended: lock the finished week's Top-3 (each worth 50 Stars) and roll
- * every scorecard into the live week. Pure over the rows it is handed; the room owns the storage.
+ * Close every window that has ended: lock the finished week's Top-3 and their 25 / 15 / 10 slices
+ * of the 50-Star pool, then roll every scorecard into the live week. Pure over the rows it is
+ * handed; the room owns the storage.
  *
  * Only the week that ended at the current window's start is settled: an entry two weeks stale is
  * history and its undelivered claim is gone, which keeps the ledger from resurrecting old podiums.
@@ -334,7 +354,7 @@ export function settleChallengeWeek(rows: ChallengeEntry[], now: number): Challe
     tgId: row.tgId,
     totalWins: challengeTotalWins(row),
     claimedAt: 0,
-    stars: CHALLENGE_STARS,
+    stars: prizeForRank(at + 1),
   }));
   for (const row of rows) rollChallengeEntry(row, now);
   return settlements;
@@ -368,8 +388,11 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
       friendWins: row.friendWins,
       hardBotWins: row.hardBotWins,
       totalWins: challengeTotalWins(row),
+      prizeStars: prizeForRank(index + 1),
       isMe: row.id === selfId,
     })),
+    totalPrizePool: TOTAL_PRIZE_POOL,
+    prizeByRank: PRIZE_BY_RANK,
     myPosition: at >= 0 ? at + 1 : null,
     totalWins: mine ? challengeTotalWins(mine) : 0,
     friendWins: mine ? mine.friendWins : 0,
@@ -463,10 +486,12 @@ export function applyFriendWin(entry: ChallengeEntry, now: number, report: Frien
 export function claimSettlement(settlement: ChallengeSettlement | null, now: number): ChallengeRefusal | null {
   if (!settlement) return 'not_complete';
   if (settlement.rank < 1 || settlement.rank > MAX_WINNERS) return 'not_complete';
+  /* The rank owns the payout: 25 / 15 / 10, regardless of any stored legacy value. Normalising
+     before the state checks keeps even an already-claimed settlement's receipt exact. */
+  settlement.stars = prizeForRank(settlement.rank);
   if (now < settlement.weekEnd) return 'not_complete';
   if (settlement.claimedAt > 0) return 'already_claimed';
   settlement.claimedAt = now;
-  settlement.stars = CHALLENGE_STARS;
   return null;
 }
 
@@ -479,6 +504,7 @@ export function challengeView(
   latest: ChallengeSettlement | null,
 ): Record<string, unknown> {
   const window = challengeWindowAt(now);
+  const prizeStars = board.myPosition ? prizeForRank(board.myPosition) : 0;
   return {
     ok: true,
     tgId: entry.tgId,
@@ -494,6 +520,11 @@ export function challengeView(
     contenders: board.contenders,
     totalParticipants: board.totalParticipants,
     isEnrolled: board.isEnrolled,
+    /** The overall pool and its exact Top-3 split, so the client never hard-codes a payout. */
+    totalPrizePool: TOTAL_PRIZE_POOL,
+    prizeByRank: PRIZE_BY_RANK,
+    /** This seat's slice were the week to close at its current rank: 25 / 15 / 10, else 0. */
+    prizeStars,
     stars: CHALLENGE_STARS,
     maxWinners: MAX_WINNERS,
     maxWinsPerFriend: MAX_WINS_PER_FRIEND,
@@ -503,7 +534,7 @@ export function challengeView(
     minMoves: CHALLENGE_MIN_MOVES,
     /** The rank this player can collect for the week that just closed, or null. */
     claimableRank: claimable ? claimable.rank : null,
-    claimableStars: claimable ? CHALLENGE_STARS : 0,
+    claimableStars: claimable ? prizeForRank(claimable.rank) : 0,
     claimableWeekEnd: claimable ? claimable.weekEnd : 0,
     /** The last podium they were on, claimed or not — the card's receipt line. */
     lastRank: latest ? latest.rank : null,

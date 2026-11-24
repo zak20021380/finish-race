@@ -6772,7 +6772,7 @@ document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop()
    --------------------------------------------------------------------------------------------
    The weekly race is uncapped: every friend win and every Hard AI win inside one 7-day window
    (Monday 00:00 UTC cycles, the same clock the Worker runs) adds to a single total, and the Top 3
-   totals when the week closes take 50 Stars each. The card is markup in index.html; every live
+   totals when the week closes split one 50-Star pool 25 / 15 / 10. The card is markup in index.html; every live
    figure on it — and on its board / rules sheet — is painted here from the room's own answer.
 
    Anti-cheat is the room's, never this file's:
@@ -6795,6 +6795,8 @@ interface ChallengeRowView {
   friendWins: number;
   hardBotWins: number;
   totalWins: number;
+  /** The exact rank reward at week close: 25 / 15 / 10, 0 outside the Top 3. */
+  prizeStars?: number;
   isMe?: boolean;
 }
 
@@ -6812,6 +6814,11 @@ interface ChallengeView {
   totalParticipants?: number;
   /** True when this verified seat already holds a live row on this week's field. */
   isEnrolled?: boolean;
+  /** The 50-Star pool and its exact Top-3 split, served by the room. */
+  totalPrizePool?: number;
+  prizeByRank?: Record<string, number>;
+  /** This seat's slice at its current rank: 25 / 15 / 10, else 0. */
+  prizeStars?: number;
   windowStart?: number;
   windowEnd?: number;
   endsInMs?: number;
@@ -6821,6 +6828,7 @@ interface ChallengeView {
   friendCount?: number;
   /** The rank this seat may collect for the week that just closed, or null. */
   claimableRank?: number | null;
+  /** The exact rank prize the closed week pays: 25 / 15 / 10. */
   claimableStars?: number;
   /** The last podium this seat stood on, claimed or not. */
   lastRank?: number | null;
@@ -6859,9 +6867,9 @@ interface ChallengeCopy {
   duelArmed: string;
   /** The quiet second door under the mint key: the Friends & Rivals list, no room minted. */
   rivalsLink: string;
-  /** The hub's payout banner: the rank token is replaced with a Latin number. */
+  /** The hub's payout banner: {stars} and {rank} become Latin numbers. */
   claim: string;
-  /** The poster's slim claim label: the rank token is replaced with a Latin number. */
+  /** The poster's slim claim label: {stars} and {rank} become Latin numbers. */
   claimShort: string;
   /** The poster's one key. */
   enter: string;
@@ -6873,8 +6881,16 @@ interface ChallengeCopy {
   rulesTab: string;
   sheetTitle: string;
   sheetSub: string;
+  /** The standings rail's two column names. */
+  boardHeadStart: string;
+  boardHeadEnd: string;
+  /** The pool split strip's podium labels; the rank token is a Latin "#n" in its own bdi. */
+  tier1: string;
+  tier2: string;
+  tier3: string;
   you: string;
   empty: string;
+  /** One row's exact rank reward: {stars} becomes the Latin 25 / 15 / 10. */
   prizeTag: string;
   /** One row's source split: the two win tokens are Latin numbers. */
   rowSub: string;
@@ -6898,32 +6914,37 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   fa: {
     badge: 'تورنمنت هفتگی',
     prizeUnit: 'استارز',
-    hook: 'بیشترین برد این هفته رو بیار و جزو <bdi dir="ltr">3</bdi> نفر اول جایزه بگیر!',
-    podium: 'جایزه <bdi dir="ltr">3</bdi> نفر اول هفته',
+    hook: 'بیشترین برد این هفته رو بیار و سهمت رو از <bdi dir="ltr">50</bdi> استارز جایزه بگیر!',
+    podium: 'مجموع جوایز: <bdi dir="ltr">50</bdi> استارز • <bdi dir="ltr">3</bdi> نفر برتر',
     winsWord: 'برد',
     friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست',
-    rank: 'رتبه #<bdi dir="ltr">{rank}</bdi>',
+    rank: 'رتبه <bdi dir="ltr">#{rank}</bdi>',
     unranked: 'بدون رتبه',
     botCta: 'دوئل با هوش مصنوعی',
     friendCta: 'دعوت و بازی با دوست',
-    duelShare: 'بیا دوئل تورنمنت ۵۰ استارز! اتاق ۱ به ۱ آماده‌ست، ببینم کی می‌بره!',
+    duelShare: 'بیا دوئل تورنمنت 50 استارز! اتاق 1v1 آماده‌ست، ببینم کی می‌بره!',
     duelWaiting: 'اتاق دوئل تورنمنت آماده‌ست؛ منتظر ورود رقیب...',
     duelArmed: 'اتاق آماده شد؛ لینک دعوت راهی تلگرام شد.',
     rivalsLink: 'انتخاب مستقیم از لیست دوستان و رقبا',
-    claim: 'ثبت و دریافت <bdi dir="ltr">50</bdi> استارز • مقام #<bdi dir="ltr">{rank}</bdi>',
-    claimShort: 'دریافت جایزه <bdi dir="ltr">50</bdi> استارز (مقام #<bdi dir="ltr">{rank}</bdi>)',
-    enter: 'ورود به تورنمنت <bdi dir="ltr">50</bdi> استارز',
-    claimDone: '<bdi dir="ltr">50</bdi> استارز ثبت شد',
-    claimOk: 'درخواست <bdi dir="ltr">50</bdi> استارز شما ثبت شد',
+    claim: 'ثبت و دریافت <bdi dir="ltr">{stars}</bdi> استارز • مقام <bdi dir="ltr">#{rank}</bdi>',
+    claimShort: 'دریافت <bdi dir="ltr">{stars}</bdi> استارز • مقام <bdi dir="ltr">#{rank}</bdi>',
+    enter: 'ورود به تورنمنت هفتگی',
+    claimDone: 'این جایزه قبلاً ثبت شده است',
+    claimOk: 'جایزه تورنمنت شما ثبت شد',
     claimFail: 'ثبت درخواست ممکن نشد؛ دوباره تلاش کنید',
     guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
     boardTab: 'رتبه‌بندی زنده',
     rulesTab: 'قوانین و شرایط',
     sheetTitle: 'تورنمنت هفتگی',
-    sheetSub: 'جایزه <bdi dir="ltr">50</bdi> استارز برای <bdi dir="ltr">3</bdi> نفر اول هفته',
+    sheetSub: 'مجموع جوایز <bdi dir="ltr">50</bdi> استارز • تقسیم بین <bdi dir="ltr">3</bdi> نفر برتر',
+    boardHeadStart: 'بازیکن و رتبه',
+    boardHeadEnd: 'امتیاز و جایزه',
+    tier1: '<bdi dir="ltr">#1</bdi> نفر اول',
+    tier2: '<bdi dir="ltr">#2</bdi> نفر دوم',
+    tier3: '<bdi dir="ltr">#3</bdi> نفر سوم',
     you: 'شما',
     empty: 'هنوز شرکت‌کننده‌ای در این هفته ثبت نشده؛ اولین نفر باش!',
-    prizeTag: '<bdi dir="ltr">50</bdi> استارز',
+    prizeTag: '<bdi dir="ltr">{stars}</bdi> استارز',
     rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> <i>•</i> هوش مصنوعی <bdi dir="ltr">{botWins}</bdi>',
     players: 'شرکت‌کننده',
     enrolled: 'فعال',
@@ -6933,7 +6954,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rules: [
       {
         t: 'جایزه <bdi dir="ltr">3</bdi> نفر برتر هفته',
-        b: 'در پایان تایمر <bdi dir="ltr">7</bdi> روزه، <bdi dir="ltr">3</bdi> بازیکنی که بیشترین مجموع برد را ثبت کرده باشند، نفری <bdi dir="ltr">50</bdi> استارز تلگرام برنده می‌شوند.',
+        b: 'مجموع جوایز <bdi dir="ltr">50</bdi> استارز است که در پایان هفته بین <bdi dir="ltr">3</bdi> نفر اول تقسیم می‌شود: نفر اول <bdi dir="ltr">25</bdi> استارز، نفر دوم <bdi dir="ltr">15</bdi> استارز و نفر سوم <bdi dir="ltr">10</bdi> استارز.',
       },
       {
         t: 'شمارش نامحدود بردها',
@@ -6953,11 +6974,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   en: {
     badge: 'WEEKLY TOURNAMENT',
     prizeUnit: 'STARS',
-    hook: 'Rack up the most wins this week to claim a Top-<bdi dir="ltr">3</bdi> prize!',
-    podium: 'TOP <bdi dir="ltr">3</bdi> THIS WEEK • <bdi dir="ltr">50</bdi> STARS EACH',
+    hook: 'Rack up the most wins this week to claim your share of <bdi dir="ltr">50</bdi> Stars!',
+    podium: '<bdi dir="ltr">50</bdi> STARS PRIZE POOL • TOP <bdi dir="ltr">3</bdi> WINNERS',
     winsWord: 'wins',
     friendHint: 'Max <bdi dir="ltr">3</bdi> wins from each friend',
-    rank: 'RANK #<bdi dir="ltr">{rank}</bdi>',
+    rank: 'RANK <bdi dir="ltr">#{rank}</bdi>',
     unranked: 'UNRANKED',
     botCta: 'AI Duel',
     friendCta: 'Invite & Play Friend',
@@ -6965,20 +6986,25 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     duelWaiting: 'Your tournament duel room is ready — waiting for the rival…',
     duelArmed: 'Room ready — the invite is on its way to Telegram.',
     rivalsLink: 'Or challenge directly from Friends & Rivals',
-    claim: 'Claim <bdi dir="ltr">50</bdi> Stars • Rank #<bdi dir="ltr">{rank}</bdi>',
-    claimShort: 'Claim <bdi dir="ltr">50</bdi>-Star prize (Rank #<bdi dir="ltr">{rank}</bdi>)',
-    enter: 'Enter <bdi dir="ltr">50</bdi> Stars Tournament',
-    claimDone: '<bdi dir="ltr">50</bdi> Stars claimed',
-    claimOk: 'Your <bdi dir="ltr">50</bdi>-Star claim is recorded',
+    claim: 'Claim <bdi dir="ltr">{stars}</bdi> Stars • Rank <bdi dir="ltr">#{rank}</bdi>',
+    claimShort: 'Claim <bdi dir="ltr">{stars}</bdi> Stars • Rank <bdi dir="ltr">#{rank}</bdi>',
+    enter: 'Enter the Weekly Tournament',
+    claimDone: 'This prize was already claimed',
+    claimOk: 'Your tournament prize is recorded',
     claimFail: 'Could not record the claim — try again',
     guest: 'Open this Mini App inside Telegram to compete',
     boardTab: 'Live Rankings',
     rulesTab: 'Rules & Terms',
     sheetTitle: 'Weekly Tournament',
-    sheetSub: 'Top <bdi dir="ltr">3</bdi> this week win <bdi dir="ltr">50</bdi> Stars each',
+    sheetSub: 'Total prize pool <bdi dir="ltr">50</bdi> Stars • split across the Top <bdi dir="ltr">3</bdi>',
+    boardHeadStart: 'Player & rank',
+    boardHeadEnd: 'Wins & prize',
+    tier1: '<bdi dir="ltr">#1</bdi> First',
+    tier2: '<bdi dir="ltr">#2</bdi> Second',
+    tier3: '<bdi dir="ltr">#3</bdi> Third',
     you: 'YOU',
     empty: 'No participants yet — be the first this week!',
-    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> AI <bdi dir="ltr">{botWins}</bdi>',
     players: 'Players',
     enrolled: 'Active',
@@ -6988,7 +7014,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rules: [
       {
         t: 'Top-<bdi dir="ltr">3</bdi> weekly payout',
-        b: 'When the <bdi dir="ltr">7</bdi>-day timer ends, the <bdi dir="ltr">3</bdi> players with the highest win totals each receive <bdi dir="ltr">50</bdi> Telegram Stars.',
+        b: 'The total prize pool is <bdi dir="ltr">50</bdi> Stars, split at the end of the week between the Top <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars for 1st, <bdi dir="ltr">15</bdi> for 2nd and <bdi dir="ltr">10</bdi> for 3rd.',
       },
       {
         t: 'Unlimited weekly wins',
@@ -7008,11 +7034,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   ru: {
     badge: 'НЕДЕЛЬНЫЙ ТУРНИР',
     prizeUnit: 'STARS',
-    hook: 'Набери больше всех побед за неделю и войди в Топ-<bdi dir="ltr">3</bdi>!',
-    podium: 'ТОП-<bdi dir="ltr">3</bdi> НЕДЕЛИ • <bdi dir="ltr">50</bdi> STARS КАЖДОМУ',
+    hook: 'Набери больше всех побед за неделю и раздели призовой фонд <bdi dir="ltr">50</bdi> Stars!',
+    podium: 'ПРИЗОВОЙ ФОНД <bdi dir="ltr">50</bdi> STARS • ТОП-<bdi dir="ltr">3</bdi>',
     winsWord: 'побед',
     friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед от друга',
-    rank: 'МЕСТО #<bdi dir="ltr">{rank}</bdi>',
+    rank: 'МЕСТО <bdi dir="ltr">#{rank}</bdi>',
     unranked: 'БЕЗ МЕСТА',
     botCta: 'Дуэль с ИИ',
     friendCta: 'Играть с другом',
@@ -7020,20 +7046,25 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     duelWaiting: 'Дуэльная комната турнира готова — ждём соперника…',
     duelArmed: 'Комната готова — приглашение отправлено в Telegram.',
     rivalsLink: 'Или выбрать из списка друзей и соперников',
-    claim: 'Получить <bdi dir="ltr">50</bdi> Stars • место #<bdi dir="ltr">{rank}</bdi>',
-    claimShort: 'Забрать <bdi dir="ltr">50</bdi> Stars (место #<bdi dir="ltr">{rank}</bdi>)',
-    enter: 'Войти в турнир на <bdi dir="ltr">50</bdi> Stars',
-    claimDone: '<bdi dir="ltr">50</bdi> Stars получены',
-    claimOk: 'Заявка на <bdi dir="ltr">50</bdi> Stars принята',
+    claim: 'Получить <bdi dir="ltr">{stars}</bdi> Stars • место <bdi dir="ltr">#{rank}</bdi>',
+    claimShort: 'Забрать <bdi dir="ltr">{stars}</bdi> Stars • место <bdi dir="ltr">#{rank}</bdi>',
+    enter: 'Войти в недельный турнир',
+    claimDone: 'Этот приз уже получен',
+    claimOk: 'Ваш турнирный приз записан',
     claimFail: 'Не удалось отправить заявку — попробуйте ещё раз',
     guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
     boardTab: 'Живой рейтинг',
     rulesTab: 'Правила и условия',
     sheetTitle: 'Недельный турнир',
-    sheetSub: 'Топ-<bdi dir="ltr">3</bdi> недели получают по <bdi dir="ltr">50</bdi> Stars',
+    sheetSub: 'Призовой фонд <bdi dir="ltr">50</bdi> Stars • делится между Топ-<bdi dir="ltr">3</bdi>',
+    boardHeadStart: 'Игрок и место',
+    boardHeadEnd: 'Победы и приз',
+    tier1: '<bdi dir="ltr">#1</bdi> Первое',
+    tier2: '<bdi dir="ltr">#2</bdi> Второе',
+    tier3: '<bdi dir="ltr">#3</bdi> Третье',
     you: 'ВЫ',
     empty: 'Пока нет участников — станьте первым на этой неделе!',
-    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> <i>•</i> ИИ <bdi dir="ltr">{botWins}</bdi>',
     players: 'Участники',
     enrolled: 'Активен',
@@ -7043,7 +7074,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rules: [
       {
         t: 'Приз — Топ-<bdi dir="ltr">3</bdi> недели',
-        b: 'Когда истекает <bdi dir="ltr">7</bdi>-дневный таймер, <bdi dir="ltr">3</bdi> игрока с наибольшим числом побед получают по <bdi dir="ltr">50</bdi> Telegram Stars каждый.',
+        b: 'Общий призовой фонд — <bdi dir="ltr">50</bdi> Stars; в конце недели он делится между Топ-<bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars за 1-е место, <bdi dir="ltr">15</bdi> за 2-е и <bdi dir="ltr">10</bdi> за 3-е.',
       },
       {
         t: 'Победы без ограничений',
@@ -7063,11 +7094,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   ar: {
     badge: 'البطولة الأسبوعية',
     prizeUnit: 'ستارز',
-    hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع وكن ضمن أول <bdi dir="ltr">3</bdi> فائزين!',
-    podium: 'أول <bdi dir="ltr">3</bdi> هذا الأسبوع • <bdi dir="ltr">50</bdi> ستارز لكل منهم',
+    hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع واربح حصتك من <bdi dir="ltr">50</bdi> ستارز!',
+    podium: 'مجموع الجوائز: <bdi dir="ltr">50</bdi> ستارز • أول <bdi dir="ltr">3</bdi> فائزين',
     winsWord: 'انتصار',
     friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات من كل صديق',
-    rank: 'الترتيب #<bdi dir="ltr">{rank}</bdi>',
+    rank: 'الترتيب <bdi dir="ltr">#{rank}</bdi>',
     unranked: 'بدون ترتيب',
     botCta: 'مبارزة الذكاء الاصطناعي',
     friendCta: 'العب مع صديق',
@@ -7075,20 +7106,25 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     duelWaiting: 'غرفة مبارزة البطولة جاهزة — بانتظار الخصم...',
     duelArmed: 'الغرفة جاهزة — وصلت الدعوة إلى تلغرام.',
     rivalsLink: 'أو اختر مباشرة من قائمة الأصدقاء والمنافسين',
-    claim: 'استلم <bdi dir="ltr">50</bdi> ستارز • المرتبة #<bdi dir="ltr">{rank}</bdi>',
-    claimShort: 'استلم جائزة <bdi dir="ltr">50</bdi> ستارز (المرتبة #<bdi dir="ltr">{rank}</bdi>)',
-    enter: 'دخول بطولة <bdi dir="ltr">50</bdi> ستارز',
-    claimDone: 'تم تسجيل <bdi dir="ltr">50</bdi> ستارز',
-    claimOk: 'تم تسجيل طلب <bdi dir="ltr">50</bdi> ستارز',
+    claim: 'استلم <bdi dir="ltr">{stars}</bdi> ستارز • المرتبة <bdi dir="ltr">#{rank}</bdi>',
+    claimShort: 'استلم <bdi dir="ltr">{stars}</bdi> ستارز • المرتبة <bdi dir="ltr">#{rank}</bdi>',
+    enter: 'دخول البطولة الأسبوعية',
+    claimDone: 'تم تسجيل هذه الجائزة سابقاً',
+    claimOk: 'تم تسجيل جائزة البطولة',
     claimFail: 'تعذّر تسجيل الطلب — حاول مرة أخرى',
     guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
     boardTab: 'الترتيب المباشر',
     rulesTab: 'القوانين والشروط',
     sheetTitle: 'البطولة الأسبوعية',
-    sheetSub: 'جائزة <bdi dir="ltr">50</bdi> ستارز لأول <bdi dir="ltr">3</bdi> هذا الأسبوع',
+    sheetSub: 'مجموع الجوائز <bdi dir="ltr">50</bdi> ستارز • تُقسَم على أول <bdi dir="ltr">3</bdi>',
+    boardHeadStart: 'اللاعب والترتيب',
+    boardHeadEnd: 'الانتصارات والجائزة',
+    tier1: '<bdi dir="ltr">#1</bdi> الأول',
+    tier2: '<bdi dir="ltr">#2</bdi> الثاني',
+    tier3: '<bdi dir="ltr">#3</bdi> الثالث',
     you: 'أنت',
     empty: 'لا مشاركين بعد — كن الأول هذا الأسبوع!',
-    prizeTag: '<bdi dir="ltr">50</bdi> ستارز',
+    prizeTag: '<bdi dir="ltr">{stars}</bdi> ستارز',
     rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> <i>•</i> الذكاء الاصطناعي <bdi dir="ltr">{botWins}</bdi>',
     players: 'مشارك',
     enrolled: 'نشط',
@@ -7098,7 +7134,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rules: [
       {
         t: 'جائزة أول <bdi dir="ltr">3</bdi> في الأسبوع',
-        b: 'عند انتهاء مؤقّت <bdi dir="ltr">7</bdi> أيام، يحصل <bdi dir="ltr">3</bdi> لاعبين بأعلى مجموع انتصارات على <bdi dir="ltr">50</bdi> ستارز تلغرام لكل منهم.',
+        b: 'مجموع الجوائز <bdi dir="ltr">50</bdi> ستارز ويُقسَم في نهاية الأسبوع على أول <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> ستارز للأول، <bdi dir="ltr">15</bdi> للثاني و<bdi dir="ltr">10</bdi> للثالث.',
       },
       {
         t: 'انتصارات بلا سقف',
@@ -7118,11 +7154,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   es: {
     badge: 'TORNEO SEMANAL',
     prizeUnit: 'STARS',
-    hook: '¡Consigue más victorias esta semana y entra al Top <bdi dir="ltr">3</bdi>!',
-    podium: 'TOP <bdi dir="ltr">3</bdi> SEMANAL • <bdi dir="ltr">50</bdi> STARS CADA UNO',
+    hook: '¡Consigue más victorias esta semana y gana tu parte de <bdi dir="ltr">50</bdi> Stars!',
+    podium: 'PREMIO TOTAL <bdi dir="ltr">50</bdi> STARS • TOP <bdi dir="ltr">3</bdi>',
     winsWord: 'victorias',
     friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias por amigo',
-    rank: 'PUESTO #<bdi dir="ltr">{rank}</bdi>',
+    rank: 'PUESTO <bdi dir="ltr">#{rank}</bdi>',
     unranked: 'SIN PUESTO',
     botCta: 'Duelo con IA',
     friendCta: 'Jugar con un amigo',
@@ -7130,20 +7166,25 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     duelWaiting: 'Tu sala de duelo del torneo está lista — esperando al rival…',
     duelArmed: 'Sala lista — la invitación ya va a Telegram.',
     rivalsLink: 'O desafía directo desde Amigos y Rivales',
-    claim: 'Reclamar <bdi dir="ltr">50</bdi> Stars • puesto #<bdi dir="ltr">{rank}</bdi>',
-    claimShort: 'Reclamar premio de <bdi dir="ltr">50</bdi> Stars (puesto #<bdi dir="ltr">{rank}</bdi>)',
-    enter: 'Entrar al Torneo de <bdi dir="ltr">50</bdi> Stars',
-    claimDone: '<bdi dir="ltr">50</bdi> Stars reclamadas',
-    claimOk: 'Tu solicitud de <bdi dir="ltr">50</bdi> Stars quedó registrada',
+    claim: 'Reclamar <bdi dir="ltr">{stars}</bdi> Stars • puesto <bdi dir="ltr">#{rank}</bdi>',
+    claimShort: 'Reclamar <bdi dir="ltr">{stars}</bdi> Stars • puesto <bdi dir="ltr">#{rank}</bdi>',
+    enter: 'Entrar al Torneo Semanal',
+    claimDone: 'Este premio ya fue reclamado',
+    claimOk: 'Tu premio del torneo quedó registrado',
     claimFail: 'No se pudo registrar la solicitud — inténtalo de nuevo',
     guest: 'Abre este Mini App dentro de Telegram para competir',
     boardTab: 'Ranking en vivo',
     rulesTab: 'Reglas y condiciones',
     sheetTitle: 'Torneo semanal',
-    sheetSub: 'El Top <bdi dir="ltr">3</bdi> gana <bdi dir="ltr">50</bdi> Stars cada uno',
+    sheetSub: 'Premio total <bdi dir="ltr">50</bdi> Stars • repartido entre el Top <bdi dir="ltr">3</bdi>',
+    boardHeadStart: 'Jugador y puesto',
+    boardHeadEnd: 'Victorias y premio',
+    tier1: '<bdi dir="ltr">#1</bdi> Primero',
+    tier2: '<bdi dir="ltr">#2</bdi> Segundo',
+    tier3: '<bdi dir="ltr">#3</bdi> Tercero',
     you: 'TÚ',
     empty: 'Aún no hay participantes — ¡sé el primero esta semana!',
-    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> <i>•</i> IA <bdi dir="ltr">{botWins}</bdi>',
     players: 'Jugadores',
     enrolled: 'Activo',
@@ -7153,7 +7194,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rules: [
       {
         t: 'Premio al Top <bdi dir="ltr">3</bdi> de la semana',
-        b: 'Al terminar el temporizador de <bdi dir="ltr">7</bdi> días, los <bdi dir="ltr">3</bdi> jugadores con más victorias totales reciben <bdi dir="ltr">50</bdi> Telegram Stars cada uno.',
+        b: 'El premio total es de <bdi dir="ltr">50</bdi> Stars y se reparte al final de la semana entre el Top <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars para el 1.º, <bdi dir="ltr">15</bdi> para el 2.º y <bdi dir="ltr">10</bdi> para el 3.º.',
       },
       {
         t: 'Victorias sin límite',
@@ -7246,6 +7287,14 @@ const challengeCount = (raw: unknown): number => {
   return Math.max(0, n);
 };
 
+/** The exact payout of one podium rank: the room's table wins, its own split is the fallback. */
+function challengePrizeStars(rank: number): number {
+  const table = challengeView?.prizeByRank;
+  const served = table && typeof table === 'object' ? challengeCount(table[String(rank)]) : 0;
+  if (served > 0) return served;
+  return rank === 1 ? 25 : rank === 2 ? 15 : rank === 3 ? 10 : 0;
+}
+
 /** The room's board, sanitised: every participant it sends, each figure a non-negative integer. */
 function challengeBoardRows(): ChallengeRowView[] {
   const rows = challengeView?.leaderboard;
@@ -7261,6 +7310,7 @@ function challengeBoardRows(): ChallengeRowView[] {
       friendWins: challengeCount(row.friendWins),
       hardBotWins: challengeCount(row.hardBotWins),
       totalWins: challengeCount(row.totalWins),
+      prizeStars: row.prizeStars === undefined ? challengePrizeStars(position) : challengeCount(row.prizeStars),
       isMe: row.isMe === true,
     });
   }
@@ -7362,11 +7412,16 @@ function paintChallengeTelemetry(): void {
   /* A champion of the week that just closed collects here. Once the room stamps the payout both
      keys are gone for good, so nothing gold is left on screen that cannot be pressed. */
   const claimableRank = typeof view?.claimableRank === 'number' ? challengeCount(view.claimableRank) : 0;
+  const claimableStars = typeof view?.claimableStars === 'number'
+    ? challengeCount(view.claimableStars)
+    : challengePrizeStars(claimableRank);
   const banner = document.getElementById('ci-claim-cta') as HTMLButtonElement | null;
   if (banner) {
     banner.hidden = claimableRank === 0;
     if (claimableRank > 0) {
-      challengeSetHTML('ci-claim-t', copy.claim.replace('{rank}', String(claimableRank)));
+      challengeSetHTML('ci-claim-t', copy.claim
+        .replace('{stars}', String(claimableStars))
+        .replace('{rank}', String(claimableRank)));
       banner.disabled = challengeClaimBusy;
       banner.setAttribute('aria-disabled', String(challengeClaimBusy));
     }
@@ -7375,7 +7430,9 @@ function paintChallengeTelemetry(): void {
   if (poster) {
     poster.hidden = claimableRank === 0;
     if (claimableRank > 0) {
-      challengeSetHTML('chal-claim-t', copy.claimShort.replace('{rank}', String(claimableRank)));
+      challengeSetHTML('chal-claim-t', copy.claimShort
+        .replace('{stars}', String(claimableStars))
+        .replace('{rank}', String(claimableRank)));
       poster.disabled = challengeClaimBusy;
       poster.setAttribute('aria-disabled', String(challengeClaimBusy));
     }
@@ -7401,15 +7458,13 @@ function paintChallengeCard(): void {
 /**
  * One contender row of the Royal E-Sports ladder, built as nodes:
  *
- *   start — a sculpted 36px rank crest, then a two-line stack: the LTR-sealed public handle with
- *           its YOU badge over the muted source split;
- *   end   — the tabular weekly total, with the Top-3 prize tag beneath it.
+ *   start — a sculpted 38px metallic rank medallion, then the full LTR-sealed @handle with its
+ *           YOU badge, the muted source split and a 3px race rail against the week's leader;
+ *   end   — the tabular weekly total, with that rank's exact 25 / 15 / 10 Star pill beneath it.
  *
- * The wide dark stat box that used to sit inside the row is gone, so the handle owns the width it
- * needs and a long at-name is never clipped. The handle is text, every figure is a Latin bdi run,
- * and no authored markup carries a handle.
+ * The handle is text, every figure is a Latin bdi run, and no authored markup carries a handle.
  */
-function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
+function challengeRowNode(row: ChallengeRowView, leaderWins: number): HTMLLIElement {
   const copy = challengeCopy();
   const item = document.createElement('li');
   item.className = 'ci-row';
@@ -7419,10 +7474,10 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const start = document.createElement('div');
   start.className = 'ci-row-start';
 
-  /* The emblem: one 36px crest, the rank a Latin figure in its centre. */
+  /* The medallion: one 38px coin, the whole "#1" token sealed in a single Latin run. */
   const rank = document.createElement('span');
   rank.className = 'ci-row-rank';
-  rank.append(challengeBdi(String(row.position)));
+  rank.append(challengeBdi('#' + row.position));
 
   const info = document.createElement('div');
   info.className = 'ci-row-info';
@@ -7451,7 +7506,17 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
 
-  info.append(top, sub);
+  /* The race rail: this seat's share of the leader's wins, floored at 4% so a live seat is never
+     an empty track. A zero-win field paints no rail at all. */
+  const race = document.createElement('span');
+  race.className = 'ci-row-race';
+  const raceFill = document.createElement('span');
+  raceFill.className = 'ci-row-race-fill';
+  const share = leaderWins > 0 ? Math.round((row.totalWins / leaderWins) * 100) : 0;
+  raceFill.style.width = (share > 0 ? Math.max(4, Math.min(100, share)) : 0) + '%';
+  race.append(raceFill);
+
+  info.append(top, sub, race);
   start.append(rank, info);
 
   const end = document.createElement('div');
@@ -7461,10 +7526,12 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   total.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
   end.append(total);
 
-  if (row.position <= 3) {
+  const prizeStars = row.prizeStars ?? challengePrizeStars(row.position);
+  if (row.position <= 3 && prizeStars > 0) {
     const prize = document.createElement('span');
     prize.className = 'ci-row-prize';
-    prize.innerHTML = copy.prizeTag;
+    /* Authored template plus one integer: no handle can reach this markup. */
+    prize.innerHTML = copy.prizeTag.replace('{stars}', String(prizeStars));
     end.append(prize);
   }
 
@@ -7478,13 +7545,14 @@ function paintChallengeList(rows: ChallengeRowView[]): void {
   const empty = document.getElementById('ci-empty');
   if (!list) return;
   const copy = challengeCopy();
+  const leaderWins = rows.reduce((max, row) => Math.max(max, row.totalWins), 0);
   const sig = lang + '|' + rows
-    .map((row) => [row.position, row.handle, row.friendWins, row.hardBotWins, row.totalWins, row.isMe === true ? 1 : 0].join(','))
+    .map((row) => [row.position, row.handle, row.friendWins, row.hardBotWins, row.totalWins, row.prizeStars ?? 0, row.isMe === true ? 1 : 0].join(','))
     .join(';');
   if (sig !== challengeBoardSig) {
     challengeBoardSig = sig;
     list.textContent = '';
-    for (const row of rows) list.append(challengeRowNode(row));
+    for (const row of rows) list.append(challengeRowNode(row, leaderWins));
   }
   if (empty) {
     empty.hidden = rows.length > 0;
@@ -7504,6 +7572,14 @@ function paintChallengeSheetLabels(): void {
   const copy = challengeCopy();
   challengeSetText('ci-title', copy.sheetTitle);
   challengeSetHTML('ci-sub', copy.sheetSub);
+  challengeSetText('ci-board-head-start', copy.boardHeadStart);
+  challengeSetText('ci-board-head-end', copy.boardHeadEnd);
+  challengeSetHTML('ci-prize-1-k', copy.tier1);
+  challengeSetHTML('ci-prize-2-k', copy.tier2);
+  challengeSetHTML('ci-prize-3-k', copy.tier3);
+  challengeSetText('ci-prize-1-u', copy.prizeUnit);
+  challengeSetText('ci-prize-2-u', copy.prizeUnit);
+  challengeSetText('ci-prize-3-u', copy.prizeUnit);
   challengeSetText('ci-tab-board-t', copy.boardTab);
   challengeSetText('ci-tab-rules-t', copy.rulesTab);
   paintChallengeRules();

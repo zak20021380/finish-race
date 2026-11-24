@@ -242,6 +242,18 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- Persian typography: Vazirmatn, zero Latin tracking and a calm 1.4 line box. The app
+   keeps lang="en" and switches data-lang/dir at runtime, so every spelling of the same state
+   is covered here; Latin digits inside <bdi dir="ltr"> keep their own tabular face. ---- */
+html[lang="fa"] body,
+html[data-lang="fa"] body,
+html[dir="rtl"] body,
+body[dir="rtl"] {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
 /* ---- background: a slow mesh gradient, a grain film and a vignette ----
    The blobs are radial-gradients rather than blurred circles, so nothing animated carries a
    filter: the GPU only ever moves three composited layers around. */
@@ -47374,18 +47386,20 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
   height: 88vh;
   height: 88dvh;
   max-height: 780px;
-  gap: 12px;
+  /* one rhythm for the whole sheet: title, split strip, telemetry, keys and tabs sit 10px
+     apart, so no dead band can open between the personal strip and the two launch keys */
+  gap: 10px;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
 }
 #challenge-info-modal .ci-sheet .vault-modal-x { top: 9px; inset-inline-end: 9px; background: rgba(255, 255, 255, .06); color: #F8E7B4; }
-#challenge-info-modal .ci-body { justify-content: flex-start; gap: 12px; min-height: 0; }
+#challenge-info-modal .ci-body { justify-content: flex-start; gap: 10px; min-height: 0; }
 
 /* ---- the pinned scoreboard: one flat summary strip, then the claim and the two keys ---- */
 .ci-pin {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 /* The personal telemetry: ONE horizontal line — rank, total, split, live state. */
@@ -47507,8 +47521,93 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
   color: #FFF3C4;
 }
 .ci-players-u { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#challenge-info-modal .ci-head .vm-title,
-#challenge-info-modal .ci-head .vm-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#challenge-info-modal .ci-head .vm-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the pool line is short enough to wrap to a second balanced line on a 320px WebView */
+#challenge-info-modal .ci-head .vm-sub {
+  white-space: normal;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+/* ---- the pool split: three compact podium chips in ONE row under the title. Gold, platinum
+   and bronze each own their exact tint; every figure is Latin in its own LTR run. ---- */
+.ci-prize-split {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+.ci-prize-tier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 5px;
+  border-radius: 11px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  line-height: 1.1;
+}
+.ci-prize-tier[data-rank="1"] {
+  color: #fde68a;
+  background: rgba(246, 200, 94, 0.14);
+  border: 1px solid rgba(246, 200, 94, 0.38);
+}
+.ci-prize-tier[data-rank="2"] {
+  color: #e2e8f0;
+  background: rgba(203, 213, 225, 0.10);
+  border: 1px solid rgba(203, 213, 225, 0.28);
+}
+.ci-prize-tier[data-rank="3"] {
+  color: #fdba74;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(217, 119, 6, 0.30);
+}
+.ci-prize-tier-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-prize-tier-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ci-prize-tier-k {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+  opacity: .82;
+}
+.ci-prize-tier-v {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: inherit;
+}
+.ci-prize-tier-v bdi {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
 
 /* ---- the seat: a compact emerald live dot once enrolled, a free one-tap key until synced ---- */
 .ci-seat {
@@ -47777,6 +47876,27 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
 .ci-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .ci-panel[hidden] { display: none; }
 
+/* ---- the standings rail: two quiet column names over the board ---- */
+.ci-board-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+.ci-board-head > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ci-board-head > span:last-child { text-align: end; }
+
 /* ---- every participant: one strict vertical stack, hidden scrollbar ---- */
 .ci-list {
   flex: 1 1 auto;
@@ -47850,53 +47970,78 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
   align-items: center;
   gap: 11px;
 }
-/* the sculpted rank emblem: a 36px crest, the rank a Latin run in its centre */
+/* the sculpted rank medallion: a 38px coin with a brushed metal face. The whole "#1" token is
+   one Latin run in its centre, so the hash never flips to the wrong side in RTL. */
 .ci-row-rank {
+  position: relative;
   flex-shrink: 0;
   display: inline-flex;
   direction: ltr;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   padding: 0;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, .10);
-  background: rgba(255, 255, 255, .06);
-  color: #94a3b8;
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 800;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, .30);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .20) 0%, rgba(255, 255, 255, .03) 42%, rgba(15, 23, 42, .18) 100%),
+    linear-gradient(180deg, #64748b 0%, #334155 100%);
+  color: #e2e8f0;
+  font-family: var(--font-numeric);
+  font-size: 12.5px;
+  font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .28),
+    inset 0 -2px 3px rgba(0, 0, 0, .28),
+    0 2px 6px rgba(0, 0, 0, .30);
+}
+.ci-row-rank::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .16);
+  pointer-events: none;
 }
 .ci-row-rank bdi { position: relative; z-index: 1; }
-/* #1 — luminous 24K-gold crest */
+/* #1 — 24K sovereign gold */
 .ci-row[data-place="1"] .ci-row-rank {
-  border: 0;
-  background: linear-gradient(180deg, #ffe484 0%, #d99b26 100%);
-  color: #161005;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: 0 0 14px rgba(246, 200, 94, .35), inset 0 1px 0 rgba(255, 255, 255, .45);
+  border-color: rgba(255, 232, 166, .65);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .62) 0%, rgba(255, 246, 214, .16) 40%, rgba(120, 74, 12, .12) 100%),
+    linear-gradient(180deg, #ffe484 0%, #e0a72c 58%, #a86a0d 100%);
+  color: #1a1205;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 3px rgba(90, 52, 4, .28),
+    0 0 14px rgba(246, 200, 94, .30);
 }
-/* #2 — brushed platinum-silver crest */
+/* #2 — brushed platinum silver */
 .ci-row[data-place="2"] .ci-row-rank {
-  border: 0;
-  background: linear-gradient(180deg, #f1f5f9 0%, #94a3b8 100%);
+  border-color: rgba(241, 245, 249, .62);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .20) 44%, rgba(100, 116, 139, .10) 100%),
+    linear-gradient(180deg, #f8fafc 0%, #cbd5e1 56%, #94a3b8 100%);
   color: #0f172a;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .75),
+    inset 0 -2px 3px rgba(71, 85, 105, .22),
+    0 2px 8px rgba(0, 0, 0, .28);
 }
-/* #3 — burnished bronze crest */
+/* #3 — warm burnished bronze */
 .ci-row[data-place="3"] .ci-row-rank {
-  border: 0;
-  background: linear-gradient(180deg, #fdba74 0%, #b45309 100%);
+  border-color: rgba(253, 186, 116, .55);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 237, 213, .52) 0%, rgba(255, 237, 213, .10) 44%, rgba(120, 53, 15, .18) 100%),
+    linear-gradient(180deg, #fdba74 0%, #d97706 58%, #9a3412 100%);
   color: #1c0f05;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .42),
+    inset 0 -2px 3px rgba(120, 53, 15, .25),
+    0 2px 8px rgba(0, 0, 0, .26);
 }
 /* the two-line player stack: the full handle over its muted source split */
 .ci-row-info {
@@ -47920,7 +48065,7 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.25;
   color: #f8fafc;
 }
@@ -47948,23 +48093,24 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
 .ci-row-w {
   white-space: nowrap;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1.15;
   color: #f8fafc;
 }
 .ci-row-w bdi {
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-numeric);
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+/* the exact rank reward: 24K gold, platinum silver, warm bronze — muted for everyone below */
 .ci-row-prize {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(246, 200, 94, .42);
+  border: 1px solid rgba(246, 200, 94, .38);
   background: rgba(246, 200, 94, .14);
   color: #fde68a;
   font-size: 10px;
@@ -47972,6 +48118,21 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
   line-height: 1.35;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.ci-row-prize bdi {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+.ci-row[data-place="2"] .ci-row-prize {
+  color: #e2e8f0;
+  background: rgba(203, 213, 225, 0.10);
+  border: 1px solid rgba(203, 213, 225, 0.28);
+}
+.ci-row[data-place="3"] .ci-row-prize {
+  color: #fdba74;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(217, 119, 6, 0.30);
 }
 .ci-row-sub {
   display: block;
@@ -47985,6 +48146,35 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
 }
 .ci-row-sub bdi { font-weight: 900; color: #CBD5E1; font-variant-numeric: tabular-nums; }
 .ci-row-sub i { flex: none; opacity: .55; font-style: normal; }
+/* a 3px race rail under the source split: how far this seat stands from the week's leader */
+.ci-row-race {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 3px;
+  margin-top: 1px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, .16);
+  overflow: hidden;
+}
+.ci-row-race-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(100, 116, 139, .75) 0%, rgba(148, 163, 184, .95) 100%);
+}
+.ci-row[data-place="1"] .ci-row-race-fill {
+  background: linear-gradient(90deg, #c98a18 0%, #ffe484 100%);
+}
+.ci-row[data-place="2"] .ci-row-race-fill {
+  background: linear-gradient(90deg, #94a3b8 0%, #f1f5f9 100%);
+}
+.ci-row[data-place="3"] .ci-row-race-fill {
+  background: linear-gradient(90deg, #b45309 0%, #fdba74 100%);
+}
+.ci-row.is-me .ci-row-race-fill {
+  background: linear-gradient(90deg, #10B981 0%, #6EE7B7 100%);
+}
 .ci-empty {
   flex: none;
   margin: 0;
@@ -48050,17 +48240,17 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, 
 .ci-rule-b bdi { font-weight: 900; color: #FCD34D; }
 
 /* ---- Persian and Arabic: the script gives up its tracking, never its own digits ---- */
-html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat),
-html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat) {
+html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-board-head, .ci-prize-tier, .ci-prize-tier-k, .ci-prize-tier-v, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-row-race, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat),
+html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-board-head, .ci-prize-tier, .ci-prize-tier-k, .ci-prize-tier-v, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-row-race, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat) {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
-html[data-lang="fa"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-players, .ci-players-u, .ci-seat),
-html[data-lang="ar"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-players, .ci-players-u, .ci-seat) {
+html[data-lang="fa"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-board-head, .ci-prize-split, .ci-prize-tier, .ci-prize-tier-txt, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-row-race, .ci-players, .ci-players-u, .ci-seat),
+html[data-lang="ar"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-board-head, .ci-prize-split, .ci-prize-tier, .ci-prize-tier-txt, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-row-race, .ci-players, .ci-players-u, .ci-seat) {
   direction: rtl;
 }
 html[data-lang="fa"] .ci-rule-b,
-html[data-lang="ar"] .ci-rule-b { line-height: 1.85; }
+html[data-lang="ar"] .ci-rule-b { line-height: 1.6; }
 html.reduced-motion .ci-tab,
 html.reduced-motion .ci-claim,
 html.reduced-motion .ci-launch-btn,
@@ -48074,11 +48264,14 @@ html.reduced-motion .ci-seat.is-cta { transition: none; }
   .ci-sum-src { font-size: 10px; }
   .ci-sum-total, .ci-sum-total bdi { font-size: 13.5px; }
   /* The podium badge is the next to go: the handle must stay readable. */
-  .ci-row { padding: 9px 11px; gap: 8px; }
-  .ci-row-rank { width: 32px; height: 32px; border-radius: 10px; }
-  .ci-row-prize { display: none; }
+  .ci-row { padding: 9px 10px; gap: 8px; }
   .ci-row-sub { font-size: 10px; }
   .ci-row-w, .ci-row-w bdi { font-size: 14px; }
+  /* the 38px medallion never shrinks; the split strip steps its type down instead */
+  .ci-prize-tier { gap: 4px; padding: 5px 3px; }
+  .ci-prize-tier-ico { width: 12px; height: 12px; }
+  .ci-prize-tier-k { font-size: 8.5px; }
+  .ci-prize-tier-v { font-size: 10.5px; }
   .ci-rule { padding: 8px; gap: 7px; }
   .ci-launch-btn { font-size: 10px; height: 42px; padding: 0 6px; gap: 4px; }
   .ci-launch-ico { width: 13px; height: 13px; }
@@ -48089,6 +48282,7 @@ html.reduced-motion .ci-seat.is-cta { transition: none; }
   .ci-row { padding: 9px 12px; }
   .ci-launch-btn { height: 42px; }
   .ci-rule { padding: 8px 9px; }
+  .ci-prize-tier { padding: 5px 4px; }
 }
 
 /* ==========================================================================

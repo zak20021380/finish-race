@@ -23,14 +23,24 @@
          either way, so a slow or blocked fonts CDN costs nothing but a reflow — never the arena.
          The <noscript> copy is the same stylesheet for a client running without JS. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
-        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap"
+        rel="stylesheet"
+      />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet"
       />
     </noscript>
@@ -1304,13 +1314,13 @@
               <div class="carousel-track" id="home-carousel-track">
               <!-- SLIDE 0 — THE WEEKLY TOURNAMENT POSTER, minimal and centred.
                    Three focal elements and nothing else: a gold crown over the live window on
-                   the top edge, a spotlighted Star above the 50-Star headline in the middle,
+                   the top edge, a spotlighted Star above the 50-Star pool headline in the middle,
                    and ONE key at the foot that opens the tournament hub. Every live figure
                    (countdown, prize unit, claimable rank) is painted by src/main.ts from
                    /api/challenge/me; the markup ships a Persian baseline so no frame ever
                    renders an empty card. The outer box keeps its --slide-h height, so the
                    Play dock below never shifts. -->
-              <article class="car-card carousel-slide-challenge" data-slide="0" data-index="0" aria-label="Weekly Tournament — Top 3 win 50 Stars each">
+              <article class="car-card carousel-slide-challenge" data-slide="0" data-index="0" aria-label="Weekly Tournament — 50 Stars prize pool split across the Top 3">
                 <div class="chal-inner">
                   <div class="chal-top">
                     <span class="chal-crown">
@@ -1332,8 +1342,8 @@
                       <img class="chal-star-img" id="chal-star-img" alt="" width="52" height="52" decoding="async" draggable="false" />
                     </span>
                     <h2 class="chal-title"><bdi dir="ltr">50</bdi> <span id="chal-prize-u">استارز</span></h2>
-                    <span class="chal-podium-pill" id="chal-podium-pill">جایزه <bdi dir="ltr">3</bdi> نفر اول هفته</span>
-                    <p class="chal-hook" id="chal-hook">بیشترین برد این هفته رو بیار و جزو <bdi dir="ltr">3</bdi> نفر اول جایزه بگیر!</p>
+                    <span class="chal-podium-pill" id="chal-podium-pill">مجموع جوایز: <bdi dir="ltr">50</bdi> استارز • <bdi dir="ltr">3</bdi> نفر برتر</span>
+                    <p class="chal-hook" id="chal-hook">بیشترین برد این هفته رو بیار و سهمت رو از <bdi dir="ltr">50</bdi> استارز جایزه بگیر!</p>
                   </div>
 
                   <!-- the foot: a champion of the week that just closed collects through the
@@ -1341,12 +1351,12 @@
                   <div class="chal-foot">
                     <button class="chal-claim" type="button" id="chal-claim-cta" hidden>
                       <svg class="chal-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                      <span class="chal-claim-t" id="chal-claim-t">دریافت جایزه <bdi dir="ltr">50</bdi> استارز</span>
+                      <span class="chal-claim-t" id="chal-claim-t">دریافت جایزه تورنمنت</span>
                     </button>
                     <button class="chal-enter" type="button" id="chal-enter-cta"
                       aria-haspopup="dialog" aria-controls="challenge-info-modal">
                       <svg class="chal-enter-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-cup" /></svg>
-                      <span class="chal-enter-t" id="chal-enter-t">ورود به تورنمنت <bdi dir="ltr">50</bdi> استارز</span>
+                      <span class="chal-enter-t" id="chal-enter-t">ورود به تورنمنت هفتگی</span>
                     </button>
                   </div>
                 </div>
@@ -3442,7 +3452,7 @@
               <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-medal" /></svg></span>
               <span class="vm-head-t">
                 <h2 class="vm-title" id="ci-title">تورنمنت هفتگی</h2>
-                <p class="vm-sub" id="ci-sub">جایزه <bdi dir="ltr">50</bdi> استارز برای <bdi dir="ltr">3</bdi> نفر اول هفته</p>
+                <p class="vm-sub" id="ci-sub">مجموع جوایز <bdi dir="ltr">50</bdi> استارز • تقسیم بین <bdi dir="ltr">3</bdi> نفر برتر</p>
               </span>
               <!-- the live field: every enrolled seat of this week, a Latin figure in its own LTR run -->
               <span class="ci-players" id="ci-players-pill" role="status">
@@ -3451,6 +3461,33 @@
                 <span class="ci-players-u" id="ci-players-u">شرکت‌کننده</span>
               </span>
             </header>
+
+            <!-- THE POOL SPLIT: one compact row under the title so the exact payout of every
+                 podium spot is legible before a single row is read. Gold / platinum / bronze
+                 remain distinct at a glance; the figures stay Latin inside their own LTR runs. -->
+            <div class="ci-prize-split" id="ci-prize-split" role="list" aria-label="Prize split by rank">
+              <span class="ci-prize-tier" data-rank="1" role="listitem">
+                <svg class="ci-prize-tier-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
+                <span class="ci-prize-tier-txt">
+                  <span class="ci-prize-tier-k" id="ci-prize-1-k"><bdi dir="ltr">#1</bdi> نفر اول</span>
+                  <b class="ci-prize-tier-v"><bdi dir="ltr">25</bdi> <span id="ci-prize-1-u">استارز</span></b>
+                </span>
+              </span>
+              <span class="ci-prize-tier" data-rank="2" role="listitem">
+                <svg class="ci-prize-tier-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-medal" /></svg>
+                <span class="ci-prize-tier-txt">
+                  <span class="ci-prize-tier-k" id="ci-prize-2-k"><bdi dir="ltr">#2</bdi> نفر دوم</span>
+                  <b class="ci-prize-tier-v"><bdi dir="ltr">15</bdi> <span id="ci-prize-2-u">استارز</span></b>
+                </span>
+              </span>
+              <span class="ci-prize-tier" data-rank="3" role="listitem">
+                <svg class="ci-prize-tier-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-medal" /></svg>
+                <span class="ci-prize-tier-txt">
+                  <span class="ci-prize-tier-k" id="ci-prize-3-k"><bdi dir="ltr">#3</bdi> نفر سوم</span>
+                  <b class="ci-prize-tier-v"><bdi dir="ltr">10</bdi> <span id="ci-prize-3-u">استارز</span></b>
+                </span>
+              </span>
+            </div>
 
             <!-- PINNED: the personal scoreboard, the payout, and the two ways to score.
                  Everything here used to live on the poster; the board below only ranks. -->
@@ -3480,7 +3517,7 @@
 
               <button class="ci-claim" type="button" id="ci-claim-cta" hidden>
                 <svg class="ci-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                <span class="ci-claim-t" id="ci-claim-t">ثبت و دریافت <bdi dir="ltr">50</bdi> استارز</span>
+                <span class="ci-claim-t" id="ci-claim-t">ثبت و دریافت جایزه تورنمنت</span>
               </button>
 
               <div class="ci-launch">
@@ -3531,6 +3568,11 @@
 
             <div class="ci-panels">
               <section class="ci-panel" id="ci-panel-board" role="tabpanel" aria-labelledby="ci-tab-board" data-ci-panel="board">
+                <!-- the standings rail: one quiet header that names both columns before the rows -->
+                <div class="ci-board-head" aria-hidden="true">
+                  <span id="ci-board-head-start">بازیکن و رتبه</span>
+                  <span id="ci-board-head-end">امتیاز و جایزه</span>
+                </div>
                 <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"></ol>
                 <p class="ci-empty" id="ci-empty" hidden>هنوز شرکت‌کننده‌ای در این هفته ثبت نشده؛ اولین نفر باش!</p>
               </section>
@@ -3549,7 +3591,7 @@
                     </span>
                     <span class="ci-rule-txt">
                       <b class="ci-rule-t" id="ci-r1-t">جایزه <bdi dir="ltr">3</bdi> نفر برتر هفته</b>
-                      <span class="ci-rule-b" id="ci-r1-b">در پایان تایمر <bdi dir="ltr">7</bdi> روزه، <bdi dir="ltr">3</bdi> بازیکنی که بیشترین مجموع برد را ثبت کرده باشند، نفری <bdi dir="ltr">50</bdi> استارز تلگرام برنده می‌شوند.</span>
+                      <span class="ci-rule-b" id="ci-r1-b">مجموع جوایز <bdi dir="ltr">50</bdi> استارز است که در پایان هفته بین <bdi dir="ltr">3</bdi> نفر اول تقسیم می‌شود: نفر اول <bdi dir="ltr">25</bdi> استارز، نفر دوم <bdi dir="ltr">15</bdi> استارز و نفر سوم <bdi dir="ltr">10</bdi> استارز.</span>
                     </span>
                   </li>
                   <li class="ci-rule" data-tone="mint">

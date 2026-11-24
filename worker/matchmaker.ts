@@ -97,6 +97,7 @@ import { relicShelter } from '../shared/relic';
 import {
   CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
   CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
+  PRIZE_BY_RANK, TOTAL_PRIZE_POOL, prizeForRank,
   applyFriendWin, applyHardBotWin, challengeBoard, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
   type ChallengeBoard, type ChallengeEntry, type ChallengeSettlement,
@@ -11463,10 +11464,14 @@ export class MatchmakerDO {
         windowStart: entry.windowStart,
         windowEnd: entry.windowEnd,
         endsInMs: Math.max(0, entry.windowEnd - now),
+        totalPrizePool: TOTAL_PRIZE_POOL,
+        prizeByRank: PRIZE_BY_RANK,
+        prizeStars: board.myPosition ? prizeForRank(board.myPosition) : 0,
         stars: CHALLENGE_STARS,
         maxWinners: MAX_WINNERS,
         maxWinsPerFriend: MAX_WINS_PER_FRIEND,
         claimableRank: claimable ? claimable.rank : null,
+        claimableStars: claimable ? prizeForRank(claimable.rank) : 0,
       }, 200, CHALLENGE_CORS);
     }
 
