@@ -96,9 +96,10 @@ import { referralBinding, type ReferralBindingPayload } from './referrals';
 import { relicShelter } from '../shared/relic';
 import {
   CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
-  CHALLENGE_TICKET_TTL_MS, applyFriendWin, applyHardBotWin, challengeView, challengeWindowAt, claimChallenge,
-  issueBotTicket, newChallengeEntry, readChallengeState, rollChallengeEntry,
-  type ChallengeEntry, type ChallengeWinner,
+  CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
+  applyFriendWin, applyHardBotWin, challengeBoard, challengeView, claimSettlement, issueBotTicket,
+  newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
+  type ChallengeBoard, type ChallengeEntry, type ChallengeSettlement,
 } from './challenge';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
@@ -3252,9 +3253,10 @@ export class MatchmakerDO {
   /** All vault access shares this commit queue, including admin actions and reads. */
   private vaultSerial: Promise<void> = Promise.resolve();
   private vaultLoaded = false;
-  /* ---- the 7-Day Dual-Track Challenge: counters, one-shot tickets and the winner lock ---- */
+  /* ---- the 7-Day "Most Wins" Race: counters, one-shot tickets and the weekly podium ---- */
   private challengeEntries = new Map<string, ChallengeEntry>();
-  private challengeWinner: ChallengeWinner | null = null;
+  /** The locked Top-3 of every week that has already closed, newest last. */
+  private challengeSettlements: ChallengeSettlement[] = [];
   private challengeLoaded = false;
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
@@ -3463,20 +3465,23 @@ export class MatchmakerDO {
             }
           } catch { /* an unreadable ledger starts empty: the next acceptance rebuilds it */ }
           /* The 7-Day Challenge rides its own key and try for the same reason: a corrupt window
-             must never keep the room's registry, vault or alarm from coming up. */
+             must never keep the room's registry, vault or alarm from coming up. The rows are loaded
+             BEFORE they are rolled, so a boot that lands on a week boundary still settles the week
+             that just closed instead of resetting its podium away. */
           try {
             const state = readChallengeState(await storage.get<unknown>(CHALLENGE_KEY));
             const now = Date.now();
             for (const entry of state.entries) {
               if (now - entry.updatedAt > CHALLENGE_KEEP_MS) continue;
-              rollChallengeEntry(entry, now);
               this.challengeEntries.set(entry.id, entry);
             }
-            if (state.winner && now - state.winner.claimedAt <= CHALLENGE_KEEP_MS) {
-              this.challengeWinner = state.winner;
+            for (const settlement of state.settlements) {
+              if (now - settlement.weekEnd > CHALLENGE_KEEP_MS) continue;
+              this.challengeSettlements.push(settlement);
             }
             this.challengeLoaded = true;
-          } catch { /* a corrupt scorecard starts empty; a claim still re-proves 20 / 20 */ }
+            if (this.settleChallenge(now)) this.persistChallenge();
+          } catch { /* a corrupt scorecard starts empty; a claim is proven by its settlement */ }
           this.seedRoles();
           /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
              are forgotten and written back before the first directory or leaderboard read. */
@@ -11241,7 +11246,7 @@ export class MatchmakerDO {
     }
   }
 
-  private challengeSnapshot(): { entries: ChallengeEntry[]; winner: ChallengeWinner | null } {
+  private challengeSnapshot(): { entries: ChallengeEntry[]; settlements: ChallengeSettlement[] } {
     return {
       entries: [...this.challengeEntries.values()].map((entry) => ({
         ...entry,
@@ -11250,8 +11255,61 @@ export class MatchmakerDO {
         botReceipts: [...entry.botReceipts],
         friendReceipts: [...entry.friendReceipts],
       })),
-      winner: this.challengeWinner,
+      settlements: this.challengeSettlements.map((settlement) => ({ ...settlement })),
     };
+  }
+
+  /**
+   * Close every window that has ended: lock the finished week's Top 3 as its champions, then let
+   * every scorecard start the new week at 0. Runs before any read or credit, so a counter is never
+   * rolled on its own and a podium is never lost to whoever happened to request first.
+   *
+   * Returns true when the ledger changed and the caller should write it back.
+   */
+  private settleChallenge(now: number): boolean {
+    if (!this.challengeLoaded) return false;
+    const rows = [...this.challengeEntries.values()];
+    /* An entry past its window must be rolled even when nobody scored: its card still counts. */
+    const closing = rows.some((entry) => now >= entry.windowEnd);
+    const locked = settleChallengeWeek(rows, now);
+    if (locked.length === 0) return closing;
+    for (const settlement of locked) {
+      /* A settlement is keyed by player + week: a double settle can never pay a podium twice. */
+      const seen = this.challengeSettlements.some((held) => (
+        held.id === settlement.id && held.weekStart === settlement.weekStart
+      ));
+      if (!seen) this.challengeSettlements.push(settlement);
+    }
+    if (this.challengeSettlements.length > CHALLENGE_SETTLEMENTS_MAX) {
+      this.challengeSettlements.splice(0, this.challengeSettlements.length - CHALLENGE_SETTLEMENTS_MAX);
+    }
+    return true;
+  }
+
+  /** This player's most recent unclaimed podium, or null while they have not won a week. */
+  private challengeClaimable(entryId: string, now: number): ChallengeSettlement | null {
+    let found: ChallengeSettlement | null = null;
+    for (const settlement of this.challengeSettlements) {
+      if (settlement.id !== entryId || settlement.claimedAt > 0) continue;
+      if (settlement.weekEnd > now) continue;
+      if (!found || settlement.weekEnd > found.weekEnd) found = settlement;
+    }
+    return found;
+  }
+
+  /** This player's last locked podium, claimed or not — the card's receipt line. */
+  private challengeLatestSettlement(entryId: string): ChallengeSettlement | null {
+    let found: ChallengeSettlement | null = null;
+    for (const settlement of this.challengeSettlements) {
+      if (settlement.id !== entryId) continue;
+      if (!found || settlement.weekEnd > found.weekEnd) found = settlement;
+    }
+    return found;
+  }
+
+  /** The public board plus this reader's own seat on it. Never carries an internal player id. */
+  private challengeBoardFor(entry: ChallengeEntry, now: number): ChallengeBoard {
+    return challengeBoard([...this.challengeEntries.values()], entry.id, now);
   }
 
   /** Write-behind: a card read never waits on storage, and a failed put never breaks a settle. */
@@ -11291,6 +11349,8 @@ export class MatchmakerDO {
     if (winnerTg === loserTg) return;
     if (forfeit && durationSec < CHALLENGE_FORFEIT_MIN_SECONDS) return;
     const now = Date.now();
+    /* A settle that lands before this credit: a win can never be added to last week's card. */
+    if (this.settleChallenge(now)) this.persistChallenge();
     const record = this.players.get(winnerId);
     let entry = this.challengeEntries.get(winnerId);
     if (!entry) {
@@ -11322,35 +11382,54 @@ export class MatchmakerDO {
     if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
     if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, CHALLENGE_CORS);
     const now = Date.now();
-    /* The winner lock is scoped to THIS window: a claim from last week never blocks this week's
-       first finisher, and the card only ever names the round's winner. The internal player id
-       stays in the room — the payload carries the public handle only. */
-    const winnerNow = (): ChallengeWinner | null => {
-      const held = this.challengeWinner;
-      if (!held) return null;
-      const window = challengeWindowAt(now);
-      if (held.claimedAt < window.start) {
-        this.challengeWinner = null;
-        this.persistChallenge();
-        return null;
-      }
-      return held;
-    };
-    const withWinner = (entry: ChallengeEntry, extra: Record<string, unknown> = {}): Record<string, unknown> => {
-      const held = winnerNow();
-      return {
-        ...challengeView(entry, now),
-        ...extra,
-        winner: held ? { handle: held.handle, tgId: held.tgId, claimedAt: held.claimedAt } : null,
-        winnerSelf: held?.id === entry.id,
-      };
-    };
+    /* A week that has ended is locked before anything is read or credited: the finished week's
+       Top 3 become its champions and every card starts the new week at zero. The internal player
+       id stays in the room — the payload carries the public handle only. */
+    if (this.settleChallenge(now)) this.persistChallenge();
+
+    /** One entry's full read model: counters, live rank, the board and its podium state. */
+    const view = (entry: ChallengeEntry, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+      ...challengeView(
+        entry,
+        now,
+        this.challengeBoardFor(entry, now),
+        this.challengeClaimable(entry.id, now),
+        this.challengeLatestSettlement(entry.id),
+      ),
+      ...extra,
+    });
 
     if (url.pathname === '/api/challenge/me') {
       if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
-      return json(withWinner(entry, { auth: who.guest ? 'guest' : 'telegram' }), 200, CHALLENGE_CORS);
+      return json(view(entry, { auth: who.guest ? 'guest' : 'telegram' }), 200, CHALLENGE_CORS);
+    }
+
+    /* The live weekly board. A guest may read it; only a verified seat can hold a place on it. */
+    if (url.pathname === '/api/challenge/leaderboard') {
+      if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      this.trimChallenge(now);
+      const board = this.challengeBoardFor(entry, now);
+      const claimable = this.challengeClaimable(entry.id, now);
+      return json({
+        ok: true,
+        auth: who.guest ? 'guest' : 'telegram',
+        leaderboard: board.rows,
+        myPosition: board.myPosition,
+        friendWins: entry.friendWins,
+        hardBotWins: entry.hardBotWins,
+        totalWins: board.totalWins,
+        contenders: board.contenders,
+        windowStart: entry.windowStart,
+        windowEnd: entry.windowEnd,
+        endsInMs: Math.max(0, entry.windowEnd - now),
+        stars: CHALLENGE_STARS,
+        maxWinners: MAX_WINNERS,
+        maxWinsPerFriend: MAX_WINS_PER_FRIEND,
+        claimableRank: claimable ? claimable.rank : null,
+      }, 200, CHALLENGE_CORS);
     }
 
     /* A guest seat may look at the card, but the two tracks and the prize need a verified player. */
@@ -11366,7 +11445,7 @@ export class MatchmakerDO {
         ticket,
         issuedAt: now,
         expiresAt: now + CHALLENGE_TICKET_TTL_MS,
-        ...withWinner(entry),
+        ...view(entry),
       }, 200, CHALLENGE_CORS);
     }
 
@@ -11382,7 +11461,7 @@ export class MatchmakerDO {
         format: typeof body.format === 'string' ? body.format.slice(0, 16) : '',
       });
       if (!refusal) this.persistChallenge();
-      return json(withWinner(entry, {
+      return json(view(entry, {
         ok: !refusal,
         credited: !refusal,
         error: refusal,
@@ -11392,22 +11471,16 @@ export class MatchmakerDO {
     if (url.pathname === '/api/challenge/claim') {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const entry = this.challengeEntry(who, now);
-      const refusal = claimChallenge(entry, now, winnerNow());
-      if (!refusal) {
-        /* The first claim is the winner lock: it pins the verified Telegram id and handle. */
-        if (!this.challengeWinner) {
-          this.challengeWinner = {
-            id: entry.id,
-            tgId: entry.tgId,
-            handle: entry.handle,
-            claimedAt: entry.claimedAt,
-          };
-        }
-        this.persistChallenge();
-      }
-      return json(withWinner(entry, {
+      /* The settlement is the proof: it only exists for a finished week's Top 3, so a claim needs
+         no counter and is paid exactly once, by the row itself. */
+      const settlement = this.challengeClaimable(entry.id, now);
+      const refusal = claimSettlement(settlement, now);
+      if (!refusal) this.persistChallenge();
+      return json(view(entry, {
         ok: !refusal,
         error: refusal,
+        claimedRank: settlement ? settlement.rank : null,
+        claimStars: settlement ? settlement.stars : 0,
       }), refusal ? 400 : 200, CHALLENGE_CORS);
     }
 

@@ -1298,22 +1298,47 @@
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
               <div class="carousel-track" id="home-carousel-track">
-              <!-- SLIDE 0 — the 7-Day Dual-Track Challenge, the hero opener:
-                   20 friend wins + 20 Hard AI wins inside one 7-day window for 50 Stars.
-                   The live counters, the countdown and both hands are painted by
-                   src/main.ts from /api/challenge/me; the markup ships a Persian
+              <!-- SLIDE 0 — the 7-Day "Most Wins" Race, the hero opener:
+                   unlimited wins all week, the Top 3 contenders take 50 Stars each. Every live
+                   figure (total, live rank, source breakdown, countdown) and both modal keys are
+                   painted by src/main.ts from /api/challenge/me; the markup ships a Persian
                    baseline so no frame ever renders an empty card. -->
-              <article class="car-card carousel-slide-challenge" data-slide="0" data-index="0" aria-label="7-Day Challenge — 20 friend wins + 20 Hard AI wins for 50 Stars">
+              <article class="car-card carousel-slide-challenge" data-slide="0" data-index="0" aria-label="7-Day Most Wins Race — Top 3 win 50 Stars each">
                 <div class="chal-inner">
                   <div class="car-head chal-head">
                     <span class="car-kicker chal-badge">
                       <span class="chal-badge-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bolt" /></svg></span>
                       <span class="chal-badge-t" id="chal-badge-t">چالش هفتگی</span>
                     </span>
-                    <span class="chal-clock">
-                      <svg class="chal-clock-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-clock" /></svg>
-                      <bdi dir="ltr" id="chal-countdown">6d 23h</bdi>
-                    </span>
+                    <div class="chal-tools">
+                      <!-- two glass micro keys in the utility strip: same 22px line as the clock,
+                           so the card keeps its --slide-h height and the Play dock never shifts -->
+                      <button class="chal-tool chal-tool-rank" type="button" id="chal-rank-btn"
+                        aria-haspopup="dialog" aria-controls="challenge-info-modal">
+                        <svg class="chal-tool-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M8.2 4h7.6v3.1c0 3.2-1.7 5.5-3.8 6.1-2.1-.6-3.8-2.9-3.8-6.1Z" />
+                          <path d="M8.2 5.2H6.1c-.9 0-1.6.7-1.6 1.6v.6c0 1.9 1.4 3.4 3.3 3.6" />
+                          <path d="M15.8 5.2h2.1c.9 0 1.6.7 1.6 1.6v.6c0 1.9-1.4 3.4-3.3 3.6" />
+                          <path d="M12 13.2v2.9" />
+                          <path d="M9 19.4h6" />
+                          <path d="M10.1 19.4c0-1.7.9-2.7 1.9-3.3 1 .6 1.9 1.6 1.9 3.3" />
+                        </svg>
+                        <span class="chal-tool-t" id="chal-rank-t">رتبه‌بندی</span>
+                      </button>
+                      <button class="chal-tool chal-tool-rules" type="button" id="chal-rules-btn"
+                        aria-haspopup="dialog" aria-controls="challenge-info-modal">
+                        <svg class="chal-tool-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M6.4 3.7h7.1l4 4v12.6H6.4Z" />
+                          <path d="M13.5 3.7v4.1h3.9" />
+                          <path d="M9.1 12.3l1.7 1.7 3.1-3.2" />
+                        </svg>
+                        <span class="chal-tool-t" id="chal-rules-t">قوانین</span>
+                      </button>
+                      <span class="chal-clock">
+                        <svg class="chal-clock-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-clock" /></svg>
+                        <bdi dir="ltr" id="chal-countdown">6d 23h</bdi>
+                      </span>
+                    </div>
                   </div>
 
                   <div class="chal-prize">
@@ -1322,33 +1347,43 @@
                     </span>
                     <div class="chal-prize-txt">
                       <span class="chal-prize-v"><bdi dir="ltr">50</bdi> <span id="chal-prize-u">استارز</span></span>
-                      <span class="chal-prize-sub" id="chal-sub">اولین نفری که 20 برد دوستانه و 20 برد ربات سخت بگیره برنده‌ست!</span>
+                      <span class="chal-podium-pill" id="chal-podium-pill">برای <bdi dir="ltr">3</bdi> نفر اول هفته</span>
+                      <span class="chal-prize-sub" id="chal-sub">تا پایان تایمر بیشترین برد رو بیار! <bdi dir="ltr">3</bdi> نفر اول جدول نفری <bdi dir="ltr">50</bdi> استارز می‌برن!</span>
                     </div>
                   </div>
 
-                  <div class="chal-meters">
-                    <div class="chal-meter">
-                      <div class="chal-meter-top">
-                        <span class="chal-meter-k"><i class="chal-dot is-friend" aria-hidden="true"></i><span id="chal-friend-k">برد مقابل دوستان</span></span>
-                        <bdi class="chal-meter-v" dir="ltr"><b id="chal-friend-v">0</b> / <span class="chal-meter-goal">20</span></bdi>
-                      </div>
-                      <div class="chal-bar" id="chal-friend-bar" role="progressbar" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
-                        <i class="chal-fill is-friend" id="chal-friend-fill"></i>
-                      </div>
-                      <span class="chal-hint" id="chal-friend-hint">حداکثر 3 برد از هر دوست</span>
+                  <!-- the live telemetry: this week's total + live rank, then the source split.
+                       It replaces the two fixed 0/20 bars: there is no ceiling to draw any more. -->
+                  <div class="chal-telemetry" id="chal-telemetry" role="group" aria-labelledby="chal-total-k">
+                    <div class="chal-tel is-total">
+                      <span class="chal-tel-k" id="chal-total-k">مجموع هفتگی</span>
+                      <span class="chal-tel-main">
+                        <bdi dir="ltr" class="chal-tel-v" id="chal-total-v">0</bdi>
+                        <span class="chal-tel-u" id="chal-total-u">برد</span>
+                      </span>
+                      <span class="chal-rank" id="chal-rank-pill">بدون رتبه</span>
                     </div>
-
-                    <div class="chal-meter">
-                      <div class="chal-meter-top">
-                        <span class="chal-meter-k"><i class="chal-dot is-bot" aria-hidden="true"></i><span id="chal-bot-k">برد مقابل ربات سخت</span></span>
-                        <bdi class="chal-meter-v" dir="ltr"><b id="chal-bot-v">0</b> / <span class="chal-meter-goal">20</span></bdi>
-                      </div>
-                      <div class="chal-bar" id="chal-bot-bar" role="progressbar" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
-                        <i class="chal-fill is-bot" id="chal-bot-fill"></i>
-                      </div>
+                    <div class="chal-tel is-src">
+                      <span class="chal-src is-friend">
+                        <i class="chal-dot is-friend" aria-hidden="true"></i>
+                        <span class="chal-src-k" id="chal-friend-k">دوستان:</span>
+                        <bdi dir="ltr" class="chal-src-v" id="chal-friend-v">0</bdi>
+                      </span>
+                      <span class="chal-src is-bot">
+                        <i class="chal-dot is-bot" aria-hidden="true"></i>
+                        <span class="chal-src-k" id="chal-bot-k">ربات سخت:</span>
+                        <bdi dir="ltr" class="chal-src-v" id="chal-bot-v">0</bdi>
+                      </span>
+                      <span class="chal-src-hint" id="chal-friend-hint">حداکثر <bdi dir="ltr">3</bdi> برد/دوست</span>
                     </div>
                   </div>
 
+                  <!-- a champion of the week that just closed collects here; the keys below stay
+                       live all week, so a claim never hides the two ways to score -->
+                  <button class="chal-claim" type="button" id="chal-claim-cta" hidden>
+                    <svg class="chal-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                    <span class="chal-claim-t" id="chal-claim-t">دریافت <bdi dir="ltr">50</bdi> استارز</span>
+                  </button>
                   <div class="chal-ctas" id="chal-ctas">
                     <button class="chal-cta chal-cta-gold" type="button" id="chal-bot-cta">
                       <svg class="chal-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bot" /></svg>
@@ -1359,10 +1394,6 @@
                       <span class="chal-cta-t" id="chal-friend-t">دعوت و بازی با دوست</span>
                     </button>
                   </div>
-                  <button class="chal-claim" type="button" id="chal-claim-cta" hidden>
-                    <svg class="chal-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                    <span class="chal-claim-t" id="chal-claim-t">ثبت و دریافت 50 استارز</span>
-                  </button>
                 </div>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">
@@ -3431,6 +3462,140 @@
               <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
               <span data-i18n="vaultGuideDone">Got It</span>
             </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ Challenge Leaderboard & Rules (slide #1's two banner keys) ============
+           One obsidian-and-24K-gold bottom sheet with a two-tab segmented switcher: the live
+           weekly board and the transparent rules guide. Tapping رتبه‌بندی or قوانین on the card
+           opens this exact sheet on that exact tab. Every figure is painted by src/main.ts from
+           /api/challenge/me; the markup ships a Persian baseline. Static gradients only: no
+           backdrop-filter, no keyframes, all digits Latin inside <bdi dir="ltr">. -->
+      <div class="vault-modal challenge-info" id="challenge-info-modal" hidden>
+        <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
+        <section class="vault-modal-sheet ci-sheet" role="dialog" aria-modal="true" tabindex="-1"
+                 aria-labelledby="ci-title" aria-describedby="ci-sub">
+          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <button class="vault-modal-x" type="button" id="ci-close" data-modal-close aria-label="Close">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+
+          <div class="vault-modal-body ci-body">
+            <header class="vm-head ci-head">
+              <span class="vm-head-i" aria-hidden="true"><svg class="ico"><use href="#i-medal" /></svg></span>
+              <span class="vm-head-t">
+                <h2 class="vm-title" id="ci-title">چالش هفتگی</h2>
+                <p class="vm-sub" id="ci-sub">رتبه‌بندی زنده و قوانین جایزه</p>
+              </span>
+            </header>
+
+            <div class="ci-tabs" role="tablist" aria-label="Challenge board and rules">
+              <button class="ci-tab is-on" type="button" id="ci-tab-board" role="tab"
+                      aria-selected="true" aria-controls="ci-panel-board" data-ci-tab="board">
+                <svg class="ci-tab-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M8.2 4h7.6v3.1c0 3.2-1.7 5.5-3.8 6.1-2.1-.6-3.8-2.9-3.8-6.1Z" />
+                  <path d="M8.2 5.2H6.1c-.9 0-1.6.7-1.6 1.6v.6c0 1.9 1.4 3.4 3.3 3.6" />
+                  <path d="M15.8 5.2h2.1c.9 0 1.6.7 1.6 1.6v.6c0 1.9-1.4 3.4-3.3 3.6" />
+                  <path d="M12 13.2v2.9" />
+                  <path d="M9 19.4h6" />
+                  <path d="M10.1 19.4c0-1.7.9-2.7 1.9-3.3 1 .6 1.9 1.6 1.9 3.3" />
+                </svg>
+                <span id="ci-tab-board-t">رتبه‌بندی هفته</span>
+              </button>
+              <button class="ci-tab" type="button" id="ci-tab-rules" role="tab"
+                      aria-selected="false" aria-controls="ci-panel-rules" data-ci-tab="rules">
+                <svg class="ci-tab-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M6.4 3.7h7.1l4 4v12.6H6.4Z" />
+                  <path d="M13.5 3.7v4.1h3.9" />
+                  <path d="M9.1 12.3l1.7 1.7 3.1-3.2" />
+                </svg>
+                <span id="ci-tab-rules-t">قوانین و شرایط</span>
+              </button>
+            </div>
+
+            <div class="ci-panels">
+              <section class="ci-panel" id="ci-panel-board" role="tabpanel" aria-labelledby="ci-tab-board" data-ci-panel="board">
+                <div class="ci-podium" id="ci-podium">
+                  <div class="ci-pod" data-place="1">
+                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">1</bdi></b></span>
+                    <span class="ci-pod-handle" id="ci-pod-1-h">—</span>
+                    <span class="ci-pod-wins" id="ci-pod-1-w"><bdi dir="ltr">0</bdi> برد</span>
+                    <span class="ci-pod-prize" id="ci-pod-1-p"><bdi dir="ltr">50</bdi> استارز</span>
+                  </div>
+                  <div class="ci-pod" data-place="2">
+                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">2</bdi></b></span>
+                    <span class="ci-pod-handle" id="ci-pod-2-h">—</span>
+                    <span class="ci-pod-wins" id="ci-pod-2-w"><bdi dir="ltr">0</bdi> برد</span>
+                    <span class="ci-pod-prize" id="ci-pod-2-p"><bdi dir="ltr">50</bdi> استارز</span>
+                  </div>
+                  <div class="ci-pod" data-place="3">
+                    <span class="ci-crest" aria-hidden="true"><b><bdi dir="ltr">3</bdi></b></span>
+                    <span class="ci-pod-handle" id="ci-pod-3-h">—</span>
+                    <span class="ci-pod-wins" id="ci-pod-3-w"><bdi dir="ltr">0</bdi> برد</span>
+                    <span class="ci-pod-prize" id="ci-pod-3-p"><bdi dir="ltr">50</bdi> استارز</span>
+                  </div>
+                </div>
+
+                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Top contenders"></ol>
+                <p class="ci-empty" id="ci-empty" hidden>هنوز هیچ بردی ثبت نشده؛ اولین نفر این هفته باش!</p>
+              </section>
+
+              <section class="ci-panel" id="ci-panel-rules" role="tabpanel" aria-labelledby="ci-tab-rules" data-ci-panel="rules" hidden>
+                <ol class="ci-rules" data-scroll tabindex="0" aria-label="Challenge rules">
+                  <li class="ci-rule" data-tone="gold">
+                    <span class="ci-rule-ico" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M8.2 4h7.6v3.1c0 3.2-1.7 5.5-3.8 6.1-2.1-.6-3.8-2.9-3.8-6.1Z" />
+                        <path d="M8.2 5.2H6.1c-.9 0-1.6.7-1.6 1.6v.6c0 1.9 1.4 3.4 3.3 3.6" />
+                        <path d="M15.8 5.2h2.1c.9 0 1.6.7 1.6 1.6v.6c0 1.9-1.4 3.4-3.3 3.6" />
+                        <path d="M12 13.2v2.9" /><path d="M9 19.4h6" />
+                        <path d="M10.1 19.4c0-1.7.9-2.7 1.9-3.3 1 .6 1.9 1.6 1.9 3.3" />
+                      </svg>
+                    </span>
+                    <span class="ci-rule-txt">
+                      <b class="ci-rule-t" id="ci-r1-t">جایزه <bdi dir="ltr">3</bdi> نفر برتر هفته</b>
+                      <span class="ci-rule-b" id="ci-r1-b">در پایان تایمر <bdi dir="ltr">7</bdi> روزه، <bdi dir="ltr">3</bdi> بازیکنی که بیشترین مجموع برد را ثبت کرده باشند، نفری <bdi dir="ltr">50</bdi> استارز تلگرام برنده می‌شوند.</span>
+                    </span>
+                  </li>
+                  <li class="ci-rule" data-tone="mint">
+                    <span class="ci-rule-ico" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M6.4 12c0-2.1 1.5-3.7 3.4-3.7 2.9 0 4.4 7.4 7.4 7.4 1.9 0 3.4-1.6 3.4-3.7s-1.5-3.7-3.4-3.7c-3 0-4.5 7.4-7.4 7.4-1.9 0-3.4-1.6-3.4-3.7Z" />
+                      </svg>
+                    </span>
+                    <span class="ci-rule-txt">
+                      <b class="ci-rule-t" id="ci-r2-t">شمارش نامحدود بردها</b>
+                      <span class="ci-rule-b" id="ci-r2-b">هر برد آنلاین مقابل دوستان و هر برد مقابل ربات در حالت سخت (Hard) بدون سقف محدودیت به امتیاز هفتگی شما اضافه می‌شود.</span>
+                    </span>
+                  </li>
+                  <li class="ci-rule" data-tone="cyan">
+                    <span class="ci-rule-ico" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 3l7.2 2.6v5.5c0 4.5-3 7.8-7.2 9.2-4.2-1.4-7.2-4.7-7.2-9.2V5.6Z" />
+                        <path d="M9.2 12.1l1.9 1.9 3.7-3.9" />
+                      </svg>
+                    </span>
+                    <span class="ci-rule-txt">
+                      <b class="ci-rule-t" id="ci-r3-t">قانون ضدتقلب دوستان</b>
+                      <span class="ci-rule-b" id="ci-r3-b">برای جلوگیری از تبانی، از هر دوست در طول هفته حداکثر <bdi dir="ltr">3</bdi> برد شمارش می‌شود؛ برای امتیاز بیشتر با دوستان جدید رقابت کنید.</span>
+                    </span>
+                  </li>
+                  <li class="ci-rule" data-tone="slate">
+                    <span class="ci-rule-ico" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <circle cx="12" cy="12" r="8.6" />
+                        <path d="M12 7.4V12l3.1 2" />
+                      </svg>
+                    </span>
+                    <span class="ci-rule-txt">
+                      <b class="ci-rule-t" id="ci-r4-t">شرایط تایید هر مسابقه</b>
+                      <span class="ci-rule-b" id="ci-r4-b">فقط بازی‌های <bdi dir="ltr">1v1</bdi> واقعی با مدت زمان حداقل <bdi dir="ltr">45</bdi> ثانیه و ثبت حداقل <bdi dir="ltr">10</bdi> حرکت معتبر در جدول محاسبه می‌شوند.</span>
+                    </span>
+                  </li>
+                </ol>
+              </section>
+            </div>
           </div>
         </section>
       </div>

@@ -40,6 +40,7 @@ import { awardWarPoints } from './squadRegister';
 import { channelWarHandleOf } from '../shared/config';
 import { CHANNEL_WARS_ENABLED } from './channelWar';
 import { workerUrl } from './adminApi';
+import { createModal, type ModalHandle } from './modal';
 import telegramStarsUrl from './assets/images/telegram_stars.png';
 import { mountCoins } from './coin';
 import {
@@ -6767,27 +6768,39 @@ refitBoard();
 document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop(); });
 
 /* ============================================================================================
-   THE 7-DAY DUAL-TRACK CHALLENGE — slide 0's engine
+   THE 7-DAY "MOST WINS" RACE — slide 0's engine
    --------------------------------------------------------------------------------------------
-   20 friend wins + 20 Hard AI wins inside one fixed 7-day window (Monday 00:00 UTC cycles, the
-   same clock the Worker runs) for 50 Stars, first to complete only. The card itself is markup in
-   index.html; every live figure on it is painted here from the room's own answer.
+   The weekly race is uncapped: every friend win and every Hard AI win inside one 7-day window
+   (Monday 00:00 UTC cycles, the same clock the Worker runs) adds to a single total, and the Top 3
+   totals when the week closes take 50 Stars each. The card is markup in index.html; every live
+   figure on it — and on its board / rules sheet — is painted here from the room's own answer.
 
    Anti-cheat is the room's, never this file's:
      · the Hard AI track is a one-shot ticket minted at board start, and the room only accepts a
        victory that arrives 45s later with 10+ played moves on a hard/1v1 board;
      · the friend track is written only by the room's settlement of a real 1v1 between two verified
-       Telegram accounts (45s, 10 moves, 3 wins per friend);
-     · the first completed 20/20 claims, and that claim locks the winner.
+       Telegram accounts (45s, 10 moves, 60s on a forfeit, and 3 wins per friend per week);
+     · the Top 3 are locked when the window closes, and each payout is paid exactly once.
 
    This file only reports and paints. A failed request leaves the card readable with the last
-   counters it had, and the local window clock keeps counting down.
+   figures it had, and the local window clock keeps counting down.
    ============================================================================================ */
 
 const CHALLENGE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const CHALLENGE_WEEK_ANCHOR = Date.UTC(2024, 0, 1);
+/** The room's own ceiling — how many board rows it may send back. */
+const CHALLENGE_BOARD_MAX = 30;
 
-interface ChallengeWinnerView { handle?: string; tgId?: string }
+/** One row of the room's live board. The internal player id never leaves the Worker. */
+interface ChallengeRowView {
+  position: number;
+  handle: string;
+  friendWins: number;
+  hardBotWins: number;
+  totalWins: number;
+  isMe?: boolean;
+}
+
 interface ChallengeView {
   ok?: boolean;
   error?: string;
@@ -6795,122 +6808,326 @@ interface ChallengeView {
   ticket?: string;
   hardBotWins?: number;
   friendWins?: number;
-  target?: number;
-  endsInMs?: number;
+  totalWins?: number;
+  myPosition?: number | null;
+  leaderboard?: ChallengeRowView[];
+  contenders?: number;
+  windowStart?: number;
   windowEnd?: number;
-  complete?: boolean;
+  endsInMs?: number;
+  stars?: number;
+  maxWinners?: number;
+  maxWinsPerFriend?: number;
+  friendCount?: number;
+  /** The rank this seat may collect for the week that just closed, or null. */
+  claimableRank?: number | null;
+  claimableStars?: number;
+  /** The last podium this seat stood on, claimed or not. */
+  lastRank?: number | null;
+  lastStars?: number;
   claimed?: boolean;
   claimedAt?: number;
-  friendCount?: number;
-  maxWinsPerFriend?: number;
-  winner?: ChallengeWinnerView | null;
-  winnerSelf?: boolean;
+  claimedRank?: number | null;
+  claimStars?: number;
+  credited?: boolean;
+}
+
+interface ChallengeRule {
+  t: string;
+  b: string;
 }
 
 interface ChallengeCopy {
   badge: string;
   prizeUnit: string;
   sub: string;
+  podium: string;
+  totalK: string;
+  winsWord: string;
   friendK: string;
   botK: string;
   friendHint: string;
+  /** The live rank pill: the rank token is replaced with a Latin number. */
+  rank: string;
+  unranked: string;
   botCta: string;
   friendCta: string;
+  /** The payout key: the rank token is replaced with a Latin number. */
   claim: string;
-  claimed: string;
-  taken: string;
-  guest: string;
+  claimDone: string;
   claimOk: string;
   claimFail: string;
+  guest: string;
+  /** The two banner keys. */
+  rankKey: string;
+  rulesKey: string;
+  boardTab: string;
+  rulesTab: string;
+  sheetTitle: string;
+  sheetSub: string;
+  you: string;
+  free: string;
+  empty: string;
+  prizeTag: string;
+  /** One row's source split: the two win tokens are Latin numbers. */
+  rowSub: string;
+  rules: ChallengeRule[];
   warsOff: string;
 }
 
 /* All five languages live here, beside the card's own paint, because none of these lines belong in
-   the global string table: this slide is the only surface that says them. */
+   the global string table: this slide and its sheet are the only surfaces that say them. Every
+   numeral is a Latin digit wrapped in an LTR <bdi>, in every language, so no font can re-shape a
+   score and no bidi run can swap a rank. */
 const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   fa: {
     badge: 'چالش هفتگی',
     prizeUnit: 'استارز',
-    sub: 'اولین نفری که <bdi dir="ltr">20</bdi> برد دوستانه و <bdi dir="ltr">20</bdi> برد ربات سخت بگیره برنده‌ست!',
-    friendK: 'برد مقابل دوستان',
-    botK: 'برد مقابل ربات سخت',
-    friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست',
+    sub: 'تا پایان تایمر بیشترین برد رو بیار! <bdi dir="ltr">3</bdi> نفر اول جدول نفری <bdi dir="ltr">50</bdi> استارز می‌برن!',
+    podium: 'برای <bdi dir="ltr">3</bdi> نفر اول هفته',
+    totalK: 'مجموع هفتگی',
+    winsWord: 'برد',
+    friendK: 'دوستان:',
+    botK: 'ربات سخت:',
+    friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد/دوست',
+    rank: 'رتبه #<bdi dir="ltr">{rank}</bdi>',
+    unranked: 'بدون رتبه',
     botCta: 'ربات سخت',
     friendCta: 'دعوت و بازی با دوست',
-    claim: 'ثبت و دریافت <bdi dir="ltr">50</bdi> استارز',
-    claimed: '<bdi dir="ltr">50</bdi> استارز ثبت شد',
-    taken: 'برنده این دوره: {handle}',
-    guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
-    claimOk: 'درخواست 50 استارز ثبت شد',
+    claim: 'دریافت <bdi dir="ltr">50</bdi> استارز (مقام #<bdi dir="ltr">{rank}</bdi>)',
+    claimDone: '<bdi dir="ltr">50</bdi> استارز ثبت شد',
+    claimOk: 'درخواست <bdi dir="ltr">50</bdi> استارز شما ثبت شد',
     claimFail: 'ثبت درخواست ممکن نشد؛ دوباره تلاش کنید',
+    guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
+    rankKey: 'رتبه‌بندی',
+    rulesKey: 'قوانین',
+    boardTab: 'رتبه‌بندی هفته',
+    rulesTab: 'قوانین و شرایط',
+    sheetTitle: 'چالش هفتگی',
+    sheetSub: 'رتبه‌بندی زنده و قوانین جایزه',
+    you: 'شما',
+    free: 'جایگاه آزاد',
+    empty: 'هنوز هیچ بردی ثبت نشده؛ اولین نفر این هفته باش!',
+    prizeTag: '<bdi dir="ltr">50</bdi> استارز',
+    rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> <i>•</i> ربات <bdi dir="ltr">{botWins}</bdi>',
+    rules: [
+      {
+        t: 'جایزه <bdi dir="ltr">3</bdi> نفر برتر هفته',
+        b: 'در پایان تایمر <bdi dir="ltr">7</bdi> روزه، <bdi dir="ltr">3</bdi> بازیکنی که بیشترین مجموع برد را ثبت کرده باشند، نفری <bdi dir="ltr">50</bdi> استارز تلگرام برنده می‌شوند.',
+      },
+      {
+        t: 'شمارش نامحدود بردها',
+        b: 'هر برد آنلاین مقابل دوستان و هر برد مقابل ربات در حالت سخت (Hard) بدون سقف محدودیت به امتیاز هفتگی شما اضافه می‌شود.',
+      },
+      {
+        t: 'قانون ضدتقلب دوستان',
+        b: 'برای جلوگیری از تبانی، از هر دوست در طول هفته حداکثر <bdi dir="ltr">3</bdi> برد شمارش می‌شود؛ برای امتیاز بیشتر با دوستان جدید رقابت کنید.',
+      },
+      {
+        t: 'شرایط تایید هر مسابقه',
+        b: 'فقط بازی‌های <bdi dir="ltr">1v1</bdi> واقعی با مدت زمان حداقل <bdi dir="ltr">45</bdi> ثانیه و ثبت حداقل <bdi dir="ltr">10</bdi> حرکت معتبر در جدول محاسبه می‌شوند.',
+      },
+    ],
     warsOff: 'موقتاً غیرفعال • به زودی',
   },
   en: {
     badge: '7-DAY CHALLENGE',
     prizeUnit: 'STARS',
-    sub: 'First to <bdi dir="ltr">20</bdi> Friend Wins + <bdi dir="ltr">20</bdi> Hard Bot Wins claims <bdi dir="ltr">50</bdi> Stars!',
-    friendK: 'Friend wins',
-    botK: 'Hard Bot wins',
-    friendHint: 'Max <bdi dir="ltr">3</bdi> wins per friend',
+    sub: 'Rack up the most wins before the timer ends — Top <bdi dir="ltr">3</bdi> win <bdi dir="ltr">50</bdi> Stars each!',
+    podium: 'TOP <bdi dir="ltr">3</bdi> THIS WEEK • <bdi dir="ltr">50</bdi> STARS EACH',
+    totalK: 'WEEKLY TOTAL',
+    winsWord: 'wins',
+    friendK: 'Friends:',
+    botK: 'Hard Bot:',
+    friendHint: 'Max <bdi dir="ltr">3</bdi> wins/friend',
+    rank: 'RANK #<bdi dir="ltr">{rank}</bdi>',
+    unranked: 'UNRANKED',
     botCta: 'Play Hard Bot',
     friendCta: 'Play with Friend',
-    claim: 'Claim <bdi dir="ltr">50</bdi> Stars',
-    claimed: '<bdi dir="ltr">50</bdi> Stars claimed',
-    taken: 'This round’s winner: {handle}',
-    guest: 'Open this Mini App inside Telegram to compete',
-    claimOk: 'Your 50-Star claim is recorded',
+    claim: 'Claim <bdi dir="ltr">50</bdi> Stars (Rank #<bdi dir="ltr">{rank}</bdi>)',
+    claimDone: '<bdi dir="ltr">50</bdi> Stars claimed',
+    claimOk: 'Your <bdi dir="ltr">50</bdi>-Star claim is recorded',
     claimFail: 'Could not record the claim — try again',
+    guest: 'Open this Mini App inside Telegram to compete',
+    rankKey: 'Rankings',
+    rulesKey: 'Rules',
+    boardTab: 'Weekly Rankings',
+    rulesTab: 'Rules & Terms',
+    sheetTitle: '7-Day Challenge',
+    sheetSub: 'Live standings and prize rules',
+    you: 'YOU',
+    free: 'OPEN SLOT',
+    empty: 'No wins on the board yet — be the first this week!',
+    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Bot <bdi dir="ltr">{botWins}</bdi>',
+    rules: [
+      {
+        t: 'Top <bdi dir="ltr">3</bdi> of the week',
+        b: 'When the <bdi dir="ltr">7</bdi>-day timer ends, the <bdi dir="ltr">3</bdi> players with the highest total wins each receive <bdi dir="ltr">50</bdi> Telegram Stars.',
+      },
+      {
+        t: 'Unlimited wins count',
+        b: 'Every online win against a friend and every win against the Hard Bot adds to your weekly score with no cap at all.',
+      },
+      {
+        t: 'The friend anti-collusion cap',
+        b: 'To block collusion, at most <bdi dir="ltr">3</bdi> wins count from each friend during the week; play new friends to score more.',
+      },
+      {
+        t: 'What makes a win count',
+        b: 'Only real <bdi dir="ltr">1v1</bdi> games lasting at least <bdi dir="ltr">45</bdi> seconds with at least <bdi dir="ltr">10</bdi> valid moves are counted.',
+      },
+    ],
     warsOff: 'Paused • Back soon',
   },
   ru: {
     badge: '7-ДНЕВНЫЙ ВЫЗОВ',
     prizeUnit: 'ЗВЁЗД',
-    sub: 'Первый, кто возьмёт <bdi dir="ltr">20</bdi> побед с друзьями и <bdi dir="ltr">20</bdi> побед над сложным ботом, получает <bdi dir="ltr">50</bdi> звёзд!',
-    friendK: 'Победы с друзьями',
-    botK: 'Победы над сложным ботом',
-    friendHint: 'Не больше <bdi dir="ltr">3</bdi> побед с одним другом',
+    sub: 'Набери больше всех побед за неделю — Топ-<bdi dir="ltr">3</bdi> получат по <bdi dir="ltr">50</bdi> Stars каждый!',
+    podium: 'ТОП-<bdi dir="ltr">3</bdi> НЕДЕЛИ • <bdi dir="ltr">50</bdi> STARS КАЖДОМУ',
+    totalK: 'ИТОГО ЗА НЕДЕЛЮ',
+    winsWord: 'побед',
+    friendK: 'Друзья:',
+    botK: 'Сложный бот:',
+    friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед/друг',
+    rank: 'МЕСТО #<bdi dir="ltr">{rank}</bdi>',
+    unranked: 'БЕЗ МЕСТА',
     botCta: 'Сложный бот',
     friendCta: 'Играть с другом',
-    claim: 'Получить <bdi dir="ltr">50</bdi> звёзд',
-    claimed: '<bdi dir="ltr">50</bdi> звёзд получены',
-    taken: 'Победитель раунда: {handle}',
-    guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
-    claimOk: 'Заявка на 50 звёзд принята',
+    claim: 'Получить <bdi dir="ltr">50</bdi> Stars (место #<bdi dir="ltr">{rank}</bdi>)',
+    claimDone: '<bdi dir="ltr">50</bdi> Stars получены',
+    claimOk: 'Заявка на <bdi dir="ltr">50</bdi> Stars принята',
     claimFail: 'Не удалось отправить заявку — попробуйте ещё раз',
+    guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
+    rankKey: 'Рейтинг',
+    rulesKey: 'Правила',
+    boardTab: 'Рейтинг недели',
+    rulesTab: 'Правила и условия',
+    sheetTitle: '7-дневный вызов',
+    sheetSub: 'Живой рейтинг и правила приза',
+    you: 'ВЫ',
+    free: 'СВОБОДНОЕ МЕСТО',
+    empty: 'Побед пока нет — стань первым на этой неделе!',
+    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Бот <bdi dir="ltr">{botWins}</bdi>',
+    rules: [
+      {
+        t: 'Приз — Топ-<bdi dir="ltr">3</bdi> недели',
+        b: 'Когда истекает <bdi dir="ltr">7</bdi>-дневный таймер, <bdi dir="ltr">3</bdi> игрока с наибольшим числом побед получают по <bdi dir="ltr">50</bdi> Telegram Stars каждый.',
+      },
+      {
+        t: 'Победы без ограничений',
+        b: 'Каждая онлайн-победа над другом и каждая победа над ботом в режиме Hard добавляется к вашему недельному счёту без потолка.',
+      },
+      {
+        t: 'Анти-сговор: лимит на друга',
+        b: 'Чтобы исключить сговор, от каждого друга за неделю считается максимум <bdi dir="ltr">3</bdi> победы; играйте с новыми друзьями, чтобы набрать больше.',
+      },
+      {
+        t: 'Какая победа засчитывается',
+        b: 'Учитываются только настоящие игры <bdi dir="ltr">1v1</bdi> длительностью не менее <bdi dir="ltr">45</bdi> секунд и минимум <bdi dir="ltr">10</bdi> корректных ходов.',
+      },
+    ],
     warsOff: 'Приостановлено • Скоро вернётся',
   },
   ar: {
     badge: 'تحدي 7 أيام',
     prizeUnit: 'نجوم',
-    sub: 'أول من يحقق <bdi dir="ltr">20</bdi> انتصاراً مع الأصدقاء و<bdi dir="ltr">20</bdi> انتصاراً على الروبوت الصعب يفوز بـ <bdi dir="ltr">50</bdi> نجمة!',
-    friendK: 'انتصارات مع الأصدقاء',
-    botK: 'انتصارات على الروبوت الصعب',
-    friendHint: '<bdi dir="ltr">3</bdi> انتصارات كحد أقصى من كل صديق',
+    sub: 'حقق أكبر عدد من الانتصارات هذا الأسبوع — أول <bdi dir="ltr">3</bdi> في الترتيب يربح كل منهم <bdi dir="ltr">50</bdi> ستارز!',
+    podium: 'أول <bdi dir="ltr">3</bdi> هذا الأسبوع • <bdi dir="ltr">50</bdi> ستارز لكل منهم',
+    totalK: 'مجموع الأسبوع',
+    winsWord: 'انتصار',
+    friendK: 'الأصدقاء:',
+    botK: 'الروبوت الصعب:',
+    friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات/صديق',
+    rank: 'الترتيب #<bdi dir="ltr">{rank}</bdi>',
+    unranked: 'بدون ترتيب',
     botCta: 'الروبوت الصعب',
     friendCta: 'العب مع صديق',
-    claim: 'استلم <bdi dir="ltr">50</bdi> نجمة',
-    claimed: 'تم تسجيل <bdi dir="ltr">50</bdi> نجمة',
-    taken: 'فائز الجولة: {handle}',
-    guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
-    claimOk: 'تم تسجيل طلب 50 نجمة',
+    claim: 'استلم <bdi dir="ltr">50</bdi> ستارز (المرتبة #<bdi dir="ltr">{rank}</bdi>)',
+    claimDone: 'تم تسجيل <bdi dir="ltr">50</bdi> ستارز',
+    claimOk: 'تم تسجيل طلب <bdi dir="ltr">50</bdi> ستارز',
     claimFail: 'تعذّر تسجيل الطلب — حاول مرة أخرى',
+    guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
+    rankKey: 'الترتيب',
+    rulesKey: 'القوانين',
+    boardTab: 'ترتيب الأسبوع',
+    rulesTab: 'القوانين والشروط',
+    sheetTitle: 'تحدي 7 أيام',
+    sheetSub: 'الترتيب الحيّ وقوانين الجائزة',
+    you: 'أنت',
+    free: 'مقعد متاح',
+    empty: 'لا انتصارات بعد — كن الأول هذا الأسبوع!',
+    prizeTag: '<bdi dir="ltr">50</bdi> ستارز',
+    rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> <i>•</i> الروبوت <bdi dir="ltr">{botWins}</bdi>',
+    rules: [
+      {
+        t: 'جائزة أول <bdi dir="ltr">3</bdi> في الأسبوع',
+        b: 'عند انتهاء مؤقّت <bdi dir="ltr">7</bdi> أيام، يحصل <bdi dir="ltr">3</bdi> لاعبين بأعلى مجموع انتصارات على <bdi dir="ltr">50</bdi> ستارز تلغرام لكل منهم.',
+      },
+      {
+        t: 'انتصارات بلا سقف',
+        b: 'كل انتصار أونلاين على صديق وكل انتصار على الروبوت في الوضع الصعب (Hard) يُضاف إلى رصيدك الأسبوعي دون أي سقف.',
+      },
+      {
+        t: 'قانون منع التواطؤ مع الأصدقاء',
+        b: 'لمنع التواطؤ، يُحتسب من كل صديق <bdi dir="ltr">3</bdi> انتصارات كحد أقصى خلال الأسبوع؛ واجه أصدقاء جدداً لتجمع أكثر.',
+      },
+      {
+        t: 'شروط احتساب المباراة',
+        b: 'تُحتسب فقط مباريات <bdi dir="ltr">1v1</bdi> الحقيقية التي تستمر <bdi dir="ltr">45</bdi> ثانية على الأقل مع <bdi dir="ltr">10</bdi> حركات صحيحة على الأقل.',
+      },
+    ],
     warsOff: 'متوقف مؤقتاً • يعود قريباً',
   },
   es: {
     badge: 'RETO DE 7 DÍAS',
     prizeUnit: 'ESTRELLAS',
-    sub: '¡El primero en lograr <bdi dir="ltr">20</bdi> victorias con amigos y <bdi dir="ltr">20</bdi> contra el bot difícil gana <bdi dir="ltr">50</bdi> estrellas!',
-    friendK: 'Victorias con amigos',
-    botK: 'Victorias vs bot difícil',
-    friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias por amigo',
+    sub: '¡Consigue la mayor cantidad de victorias de la semana — el Top <bdi dir="ltr">3</bdi> gana <bdi dir="ltr">50</bdi> Stars cada uno!',
+    podium: 'TOP <bdi dir="ltr">3</bdi> SEMANAL • <bdi dir="ltr">50</bdi> STARS CADA UNO',
+    totalK: 'TOTAL SEMANAL',
+    winsWord: 'victorias',
+    friendK: 'Amigos:',
+    botK: 'Bot difícil:',
+    friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias/amigo',
+    rank: 'PUESTO #<bdi dir="ltr">{rank}</bdi>',
+    unranked: 'SIN PUESTO',
     botCta: 'Jugar vs bot difícil',
     friendCta: 'Jugar con un amigo',
-    claim: 'Reclamar <bdi dir="ltr">50</bdi> estrellas',
-    claimed: '<bdi dir="ltr">50</bdi> estrellas reclamadas',
-    taken: 'Ganador de la ronda: {handle}',
-    guest: 'Abre este Mini App dentro de Telegram para competir',
-    claimOk: 'Tu solicitud de 50 estrellas quedó registrada',
+    claim: 'Reclamar <bdi dir="ltr">50</bdi> Stars (puesto #<bdi dir="ltr">{rank}</bdi>)',
+    claimDone: '<bdi dir="ltr">50</bdi> Stars reclamadas',
+    claimOk: 'Tu solicitud de <bdi dir="ltr">50</bdi> Stars quedó registrada',
     claimFail: 'No se pudo registrar la solicitud — inténtalo de nuevo',
+    guest: 'Abre este Mini App dentro de Telegram para competir',
+    rankKey: 'Ranking',
+    rulesKey: 'Reglas',
+    boardTab: 'Ranking semanal',
+    rulesTab: 'Reglas y condiciones',
+    sheetTitle: 'Reto de 7 días',
+    sheetSub: 'Clasificación en vivo y reglas del premio',
+    you: 'TÚ',
+    free: 'PUESTO LIBRE',
+    empty: 'Aún no hay victorias — ¡sé el primero esta semana!',
+    prizeTag: '<bdi dir="ltr">50</bdi> STARS',
+    rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> <i>•</i> Bot <bdi dir="ltr">{botWins}</bdi>',
+    rules: [
+      {
+        t: 'Premio al Top <bdi dir="ltr">3</bdi> de la semana',
+        b: 'Al terminar el temporizador de <bdi dir="ltr">7</bdi> días, los <bdi dir="ltr">3</bdi> jugadores con más victorias totales reciben <bdi dir="ltr">50</bdi> Telegram Stars cada uno.',
+      },
+      {
+        t: 'Victorias sin límite',
+        b: 'Cada victoria online contra un amigo y cada victoria contra el bot difícil suma a tu puntaje semanal sin ningún tope.',
+      },
+      {
+        t: 'Regla anti-colusión con amigos',
+        b: 'Para evitar la colusión, se cuentan como máximo <bdi dir="ltr">3</bdi> victorias de cada amigo durante la semana; juega con amigos nuevos para sumar más.',
+      },
+      {
+        t: 'Cuándo cuenta una partida',
+        b: 'Solo cuentan partidas <bdi dir="ltr">1v1</bdi> reales de al menos <bdi dir="ltr">45</bdi> segundos y con un mínimo de <bdi dir="ltr">10</bdi> movimientos válidos.',
+      },
+    ],
     warsOff: 'En pausa • Vuelve pronto',
   },
 };
@@ -6923,6 +7140,9 @@ let challengeTicket = '';
 let challengeBotStartedAt = 0;
 let challengeClaimBusy = false;
 let challengeReady = false;
+let challengeSheet: ModalHandle | null = null;
+let challengeSheetTab: 'board' | 'rules' = 'board';
+let challengeBoardSig = '';
 
 const challengeCopy = (): ChallengeCopy => CHALLENGE_COPY[lang] ?? CHALLENGE_COPY.en;
 
@@ -6958,18 +7178,53 @@ function challengeSetText(id: string, value: string): void {
   if (el && el.textContent !== value) el.textContent = value;
 }
 
-/** Static, authored card copy only: the numerals inside it are wrapped in LTR <bdi> runs. */
+/** Static, authored card copy only: the numerals inside it are wrapped in LTR bdi runs. */
 function challengeSetHTML(id: string, html: string): void {
   const el = document.getElementById(id);
   if (el && el.innerHTML !== html) el.innerHTML = html;
 }
 
-function challengeFill(id: string, value: number, target: number): void {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const pct = target > 0 ? Math.max(0, Math.min(100, (value / target) * 100)) : 0;
-  const next = pct.toFixed(1) + '%';
-  if (el.style.width !== next) el.style.width = next;
+/** One Latin figure inside its own LTR run: every number this card prints goes through here. */
+function challengeBdi(value: string): HTMLElement {
+  const el = document.createElement('bdi');
+  el.setAttribute('dir', 'ltr');
+  el.textContent = value;
+  return el;
+}
+
+/** A public handle, as the board prints it: the room already stores the verified at-name. */
+function challengeHandleText(raw: unknown): string {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return '—';
+  if (text.startsWith('@') || text.includes(' ')) return text;
+  return '@' + text;
+}
+
+const challengeCount = (raw: unknown): number => {
+  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 0;
+  return Math.max(0, n);
+};
+
+/** The room's board, sanitised: 30 rows at most, every figure a non-negative integer. */
+function challengeBoardRows(): ChallengeRowView[] {
+  const rows = challengeView?.leaderboard;
+  if (!Array.isArray(rows)) return [];
+  const out: ChallengeRowView[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const position = challengeCount(row.position);
+    if (position < 1) continue;
+    out.push({
+      position,
+      handle: typeof row.handle === 'string' ? row.handle : '',
+      friendWins: challengeCount(row.friendWins),
+      hardBotWins: challengeCount(row.hardBotWins),
+      totalWins: challengeCount(row.totalWins),
+      isMe: row.isMe === true,
+    });
+    if (out.length >= CHALLENGE_BOARD_MAX) break;
+  }
+  return out;
 }
 
 /** The countdown is the room's window end projected onto this device's clock. */
@@ -6995,64 +7250,55 @@ function paintChallengeClock(): void {
   }
 }
 
-/** Paint every label and both meters from the current copy + the room's last answer. */
+/** Paint every label, the live total + rank, the source split and the payout key. */
 function paintChallengeCard(): void {
   const copy = challengeCopy();
   challengeSetText('chal-badge-t', copy.badge);
   challengeSetText('chal-prize-u', copy.prizeUnit);
   challengeSetHTML('chal-sub', copy.sub);
+  challengeSetHTML('chal-podium-pill', copy.podium);
+  challengeSetText('chal-total-k', copy.totalK);
+  challengeSetText('chal-total-u', copy.winsWord);
   challengeSetText('chal-friend-k', copy.friendK);
   challengeSetText('chal-bot-k', copy.botK);
   challengeSetHTML('chal-friend-hint', copy.friendHint);
   challengeSetText('chal-bot-t', copy.botCta);
   challengeSetText('chal-friend-t', copy.friendCta);
+  challengeSetText('chal-rank-t', copy.rankKey);
+  challengeSetText('chal-rules-t', copy.rulesKey);
   challengeSetText('home-tournament-off-t', copy.warsOff);
 
   const view = challengeView;
-  const target = Math.max(1, Math.floor(view?.target ?? 20));
-  const friend = Math.max(0, Math.min(target, Math.floor(view?.friendWins ?? 0)));
-  const bot = Math.max(0, Math.min(target, Math.floor(view?.hardBotWins ?? 0)));
+  const friend = challengeCount(view?.friendWins);
+  const bot = challengeCount(view?.hardBotWins);
+  const total = typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : friend + bot;
+  const position = typeof view?.myPosition === 'number' ? challengeCount(view.myPosition) : 0;
+
+  challengeSetText('chal-total-v', String(total));
   challengeSetText('chal-friend-v', String(friend));
   challengeSetText('chal-bot-v', String(bot));
-  for (const goal of document.querySelectorAll<HTMLElement>('.chal-meter-goal')) {
-    if (goal.textContent !== String(target)) goal.textContent = String(target);
-  }
-  challengeFill('chal-friend-fill', friend, target);
-  challengeFill('chal-bot-fill', bot, target);
-  const friendBar = document.getElementById('chal-friend-bar');
-  if (friendBar) {
-    friendBar.setAttribute('aria-valuemax', String(target));
-    friendBar.setAttribute('aria-valuenow', String(friend));
-    friendBar.setAttribute('aria-valuetext', friend + ' / ' + target);
-  }
-  const botBar = document.getElementById('chal-bot-bar');
-  if (botBar) {
-    botBar.setAttribute('aria-valuemax', String(target));
-    botBar.setAttribute('aria-valuenow', String(bot));
-    botBar.setAttribute('aria-valuetext', bot + ' / ' + target);
+
+  const rankPill = document.getElementById('chal-rank-pill');
+  if (rankPill) {
+    const ranked = position > 0;
+    challengeSetHTML('chal-rank-pill', ranked ? copy.rank.replace('{rank}', String(position)) : copy.unranked);
+    rankPill.classList.toggle('is-none', !ranked);
   }
 
-  const complete = view?.complete === true || (friend >= target && bot >= target);
-  const claimed = view?.claimed === true;
-  const handle = view?.winner?.handle ?? '';
-  const selfWon = claimed && (view?.winnerSelf === true || !handle);
+  /* A champion of the week that just closed collects here — and keeps both keys below, because
+     those two ways to score are live all week, in every state. Once the room stamps the payout the
+     key is gone for good, so nothing gold is left on the card that cannot be pressed. */
+  const claimableRank = typeof view?.claimableRank === 'number' ? challengeCount(view.claimableRank) : 0;
   const claim = document.getElementById('chal-claim-cta') as HTMLButtonElement | null;
-  const ctas = document.getElementById('chal-ctas');
-  /* The keys give way to one glowing claim the moment both tracks are full — or to the round's
-     winner when this device is not the one who took it. */
-  const showClaim = complete || claimed || (!!view?.winner && !!handle);
-  if (ctas) ctas.hidden = showClaim;
   if (claim) {
-    claim.hidden = !showClaim;
-    /* the winner's handle is server data: it is written as text, never as markup */
-    if (handle && !selfWon) challengeSetText('chal-claim-t', copy.taken.replace('{handle}', handle));
-    else challengeSetHTML('chal-claim-t', selfWon ? copy.claimed : copy.claim);
-    const locked = claimed || !!handle || challengeClaimBusy;
-    claim.disabled = locked;
-    claim.setAttribute('aria-disabled', String(locked));
-    claim.classList.toggle('is-done', selfWon);
-    if (challengeClaimBusy) challengeSetHTML('chal-claim-t', copy.claim);
+    claim.hidden = claimableRank === 0;
+    if (claimableRank > 0) {
+      challengeSetHTML('chal-claim-t', copy.claim.replace('{rank}', String(claimableRank)));
+      claim.disabled = challengeClaimBusy;
+      claim.setAttribute('aria-disabled', String(challengeClaimBusy));
+    }
   }
+
   /* The parked poster's localized subtitle still opens with a trophy glyph from the old design:
      the dormant slide keeps its line, never the cartoon. */
   const warSub = document.querySelector<HTMLElement>('[data-i18n="carouselWarSubtitle"]');
@@ -7060,9 +7306,145 @@ function paintChallengeCard(): void {
     const clean = (warSub.textContent ?? '').replace(/^[\u2600-\u27BF\u{1F300}-\u{1FAFF}]\uFE0F?\s*/u, '');
     if (clean !== warSub.textContent) warSub.textContent = clean;
   }
+
+  if (challengeSheet?.isOpen()) paintChallengeSheet();
 }
 
-/** Adopt one room answer: counters, the projected window end and the winner lock. */
+/** One podium slot: its crest, its handle, its weekly total and its Star tag — or a free seat. */
+function paintChallengePodium(rows: ChallengeRowView[]): void {
+  const copy = challengeCopy();
+  for (let place = 1; place <= 3; place += 1) {
+    const pod = document.querySelector<HTMLElement>('#ci-podium .ci-pod[data-place="' + place + '"]');
+    const handleEl = document.getElementById('ci-pod-' + place + '-h');
+    const winsEl = document.getElementById('ci-pod-' + place + '-w');
+    const prizeEl = document.getElementById('ci-pod-' + place + '-p');
+    const row = rows.find((item) => item.position === place) ?? null;
+    if (pod) pod.classList.toggle('is-free', !row);
+    if (handleEl) handleEl.textContent = row ? challengeHandleText(row.handle) : copy.free;
+    if (winsEl) {
+      winsEl.textContent = '';
+      if (row) winsEl.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
+    }
+    if (prizeEl) {
+      if (row) challengeSetHTML('ci-pod-' + place + '-p', copy.prizeTag);
+      else prizeEl.textContent = '—';
+    }
+  }
+}
+
+/** One contender row, built as nodes: the handle is text, the figures are Latin bdi runs. */
+function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
+  const copy = challengeCopy();
+  const item = document.createElement('li');
+  item.className = 'ci-row';
+  item.dataset.place = String(row.position);
+  if (row.isMe === true) item.classList.add('is-me');
+
+  const rank = document.createElement('span');
+  rank.className = 'ci-row-rank';
+  rank.append(document.createTextNode('#'), challengeBdi(String(row.position)));
+
+  const main = document.createElement('div');
+  main.className = 'ci-row-main';
+  const handleLine = document.createElement('div');
+  handleLine.className = 'ci-row-handle';
+  const handle = document.createElement('b');
+  handle.textContent = challengeHandleText(row.handle);
+  handleLine.append(handle);
+  if (row.isMe === true) {
+    const you = document.createElement('span');
+    you.className = 'ci-you';
+    you.textContent = copy.you;
+    handleLine.append(you);
+  }
+  const sub = document.createElement('div');
+  sub.className = 'ci-row-sub';
+  /* Authored copy plus two integers: nothing here can carry a handle into markup. */
+  sub.innerHTML = copy.rowSub
+    .replace('{friendWins}', String(row.friendWins))
+    .replace('{botWins}', String(row.hardBotWins));
+  main.append(handleLine, sub);
+
+  const total = document.createElement('span');
+  total.className = 'ci-row-w';
+  total.append(challengeBdi(String(row.totalWins)), document.createTextNode(' ' + copy.winsWord));
+
+  item.append(rank, main, total);
+  return item;
+}
+
+/** The Top-30 list. It is rebuilt only when the board, the language or the seat actually moves. */
+function paintChallengeList(rows: ChallengeRowView[]): void {
+  const list = document.getElementById('ci-list');
+  const empty = document.getElementById('ci-empty');
+  if (!list) return;
+  const copy = challengeCopy();
+  const sig = lang + '|' + rows
+    .map((row) => [row.position, row.handle, row.friendWins, row.hardBotWins, row.totalWins, row.isMe === true ? 1 : 0].join(','))
+    .join(';');
+  if (sig !== challengeBoardSig) {
+    challengeBoardSig = sig;
+    list.textContent = '';
+    for (const row of rows) list.append(challengeRowNode(row));
+  }
+  if (empty) {
+    empty.hidden = rows.length > 0;
+    if (rows.length === 0) empty.textContent = copy.empty;
+  }
+}
+
+function paintChallengeRules(): void {
+  const copy = challengeCopy();
+  copy.rules.forEach((rule, index) => {
+    challengeSetHTML('ci-r' + (index + 1) + '-t', rule.t);
+    challengeSetHTML('ci-r' + (index + 1) + '-b', rule.b);
+  });
+}
+
+function paintChallengeSheetLabels(): void {
+  const copy = challengeCopy();
+  challengeSetText('ci-title', copy.sheetTitle);
+  challengeSetText('ci-sub', copy.sheetSub);
+  challengeSetText('ci-tab-board-t', copy.boardTab);
+  challengeSetText('ci-tab-rules-t', copy.rulesTab);
+  paintChallengeRules();
+}
+
+function paintChallengeSheet(): void {
+  paintChallengeSheetLabels();
+  const rows = challengeBoardRows();
+  paintChallengePodium(rows);
+  paintChallengeList(rows);
+}
+
+/** One segmented switch: the active tab is the only one in the tab order. */
+function showChallengeTab(tab: 'board' | 'rules'): void {
+  challengeSheetTab = tab;
+  for (const btn of document.querySelectorAll<HTMLElement>('[data-ci-tab]')) {
+    const on = btn.dataset.ciTab === tab;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-selected', String(on));
+    btn.tabIndex = on ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-ci-panel]')) {
+    panel.hidden = panel.dataset.ciPanel !== tab;
+  }
+}
+
+/** Open the board / rules sheet on one exact tab. */
+function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null): void {
+  const root = document.getElementById('challenge-info-modal');
+  if (!root) return;
+  if (!challengeSheet) challengeSheet = createModal(root);
+  challengeBoardSig = '';
+  paintChallengeSheet();
+  showChallengeTab(tab);
+  challengeSheet.open(opener ?? null);
+  /* A board that was never read paints zeros; one background read fills it in place. */
+  void refreshChallengeCard();
+}
+
+/** Adopt one room answer: figures, live rank, the board and the projected window end. */
 function applyChallengeView(view: ChallengeView): void {
   challengeView = view;
   if (view.auth === 'guest' || view.auth === 'telegram') challengeView.auth = view.auth;
@@ -7078,7 +7460,7 @@ async function refreshChallengeCard(): Promise<void> {
   challengeRefreshing = true;
   try {
     const view = await challengeCall('/api/challenge/me');
-    if (view && typeof view.target === 'number') applyChallengeView(view);
+    if (view && typeof view.totalWins === 'number') applyChallengeView(view);
   } finally {
     challengeRefreshing = false;
   }
@@ -7101,7 +7483,7 @@ function beginChallengeBotBoard(): void {
 
 /**
  * The board settled. A Hard AI win is reported with its ticket + played moves; the room re-proves
- * the 45-second floor itself. Every other board only refreshes the counters (a friend win was
+ * the 45-second floor itself. Every other board only refreshes the figures (a friend win was
  * already credited by the room's own settlement).
  */
 function settleChallengeBoard(won: boolean): void {
@@ -7127,7 +7509,7 @@ function settleChallengeBoard(won: boolean): void {
       difficulty: 'hard',
       format: '1v1',
     });
-    if (view && typeof view.target === 'number') applyChallengeView(view);
+    if (view && typeof view.totalWins === 'number') applyChallengeView(view);
     else void refreshChallengeCard();
   })();
 }
@@ -7146,19 +7528,47 @@ async function claimChallengePrize(): Promise<void> {
     if (view.ok === true) {
       notify('success');
       showToast(copy.claimOk, 'success', 3800);
-    } else if (view.error === 'winner_taken') {
-      showToast(copy.taken.replace('{handle}', view.winner?.handle ?? '—'), 'warning', 4400);
-    } else if (view.error === 'already_claimed' || view.claimed === true) {
-      showToast(copy.claimed, 'warning', 3200);
+    } else if (view.error === 'already_claimed') {
+      showToast(copy.claimDone, 'warning', 3400);
     } else {
       showToast(copy.claimFail, 'error', 3400);
     }
-    if (typeof view.target === 'number') applyChallengeView(view);
+    if (typeof view.totalWins === 'number') applyChallengeView(view);
   } finally {
     challengeClaimBusy = false;
     paintChallengeCard();
     void refreshChallengeCard();
   }
+}
+
+/** The two banner keys and the sheet's segmented switcher, wired once. */
+function wireChallengeSheet(): void {
+  const root = document.getElementById('challenge-info-modal');
+  if (!root) return;
+  challengeSheet = createModal(root);
+
+  const rankKey = document.getElementById('chal-rank-btn');
+  rankKey?.addEventListener('click', () => {
+    impact('light');
+    openChallengeSheet('board', rankKey);
+  });
+  const rulesKey = document.getElementById('chal-rules-btn');
+  rulesKey?.addEventListener('click', () => {
+    impact('light');
+    openChallengeSheet('rules', rulesKey);
+  });
+
+  for (const btn of root.querySelectorAll<HTMLElement>('[data-ci-tab]')) {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.ciTab === 'rules' ? 'rules' : 'board';
+      if (tab === challengeSheetTab) return;
+      impact('light');
+      showChallengeTab(tab);
+      paintChallengeSheet();
+    });
+  }
+
+  showChallengeTab('board');
 }
 
 /** Boot the card: asset, listeners, the first read and the one-second window clock. */
@@ -7187,13 +7597,14 @@ function initChallengeCard(): void {
   const claim = document.getElementById('chal-claim-cta');
   claim?.addEventListener('click', () => { void claimChallengePrize(); });
 
+  wireChallengeSheet();
   paintChallengeCard();
   paintChallengeClock();
   window.setInterval(paintChallengeClock, 1000);
   onLang(() => { paintChallengeCard(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshChallengeCard(); });
-  /* A slow reconcile while Home is on screen: the friend track moves on the room's side, so the
-     card must not need a reload to catch up. */
+  /* A slow reconcile while Home is on screen: friend wins move on the room's side, so the card
+     must not need a reload to catch up. */
   window.setInterval(() => {
     if (!document.hidden && router.current === 'home') void refreshChallengeCard();
   }, 60_000);

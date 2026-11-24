@@ -47049,6 +47049,58 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 .chal-clock bdi { display: block; }
 .chal-clock-ico { flex: none; width: 12px; height: 12px; color: #FBBF24; fill: none; stroke: currentColor; stroke-width: 2; }
 
+/* ---- the utility strip's two micro keys: a gold trophy for the board, a slate document for
+   the rules. Both ride the clock's own 22px line, so the card's fixed --slide-h height — and the
+   Play dock under it — never moves by a pixel. ---- */
+.chal-tools {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.chal-tool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(251, 191, 36, .32);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(76, 54, 14, .52) 0%, rgba(16, 20, 30, .84) 100%);
+  color: #FFE7A6;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16), 0 2px 6px rgba(0, 0, 0, .3);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.chal-tool-ico {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chal-tool-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-tool-rules {
+  color: #CBD5E1;
+  border-color: rgba(148, 163, 184, .34);
+  background: linear-gradient(180deg, rgba(51, 65, 85, .5) 0%, rgba(13, 18, 28, .84) 100%);
+}
+.chal-tool-rules .chal-tool-ico { color: #FCD34D; }
+.chal-tool:hover { filter: brightness(1.08); }
+.chal-tool:active { transform: scale(.96); filter: none; }
+.chal-tool:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
 /* ---- the prize lockup: the authentic Star at 44px, the number in struck gold ---- */
 .chal-prize {
   /* The prize lockup owns the card's flexible middle: the Star, the number and the one-line
@@ -47110,6 +47162,28 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   -webkit-text-stroke: .5px rgba(124, 45, 18, .4);
 }
 .chal-prize-v > span { font-size: 15px; font-weight: 900; letter-spacing: 0; }
+/* the podium lockup: one 24K-gold pill that states exactly who the Stars go to */
+.chal-podium-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(251, 191, 36, .45);
+  background: linear-gradient(180deg, rgba(120, 74, 12, .55) 0%, rgba(28, 20, 8, .82) 100%);
+  color: #FFE7A6;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .2), 0 1px 4px rgba(0, 0, 0, .35);
+}
+.chal-podium-pill bdi { font-weight: 900; color: #FFD666; }
 .chal-prize-sub {
   min-width: 0;
   font-size: 10.5px;
@@ -47125,66 +47199,120 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   overflow: hidden;
 }
 
-/* ---- the two meters: one emerald-cyan, one struck gold, each with a real counter ---- */
-.chal-meters { flex: none; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.chal-meter { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.chal-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
-.chal-meter-k {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/* ---- the live telemetry: one dark-glass plate — this week's UNLIMITED total and live rank on
+   the left, the two sources on the right. There are no bars any more: the race has no ceiling to
+   draw, so the figure itself is the meter. ---- */
+.chal-telemetry {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.06fr);
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(19, 26, 40, .9) 0%, rgba(8, 12, 20, .92) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .16),
+    inset 0 1px 0 rgba(255, 241, 192, .07),
+    0 2px 8px rgba(0, 0, 0, .3);
   min-width: 0;
-  font-size: 11px;
+}
+.chal-tel { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.chal-tel.is-src {
+  justify-content: center;
+  gap: 4px;
+  padding-inline-start: 9px;
+  border-inline-start: 1px solid rgba(148, 163, 184, .16);
+}
+.chal-tel-k {
+  min-width: 0;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .01em;
-  color: #E7EDF7;
+  letter-spacing: .1em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: #8593A8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.chal-tel-main { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.chal-tel-v {
+  min-width: 0;
+  max-width: 100%;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #FFF7DA;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chal-tel-u { flex: none; font-size: 10px; font-weight: 900; color: #C9D3E4; white-space: nowrap; }
+.chal-rank {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 15px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(16, 185, 129, .38);
+  background: linear-gradient(180deg, rgba(6, 78, 59, .62) 0%, rgba(6, 24, 24, .74) 100%);
+  color: #A7F3D0;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(167, 243, 208, .16);
+}
+.chal-rank bdi { font-weight: 900; }
+.chal-rank.is-none {
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, .28);
+  background: linear-gradient(180deg, rgba(51, 65, 85, .5) 0%, rgba(13, 18, 28, .7) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.chal-src {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  color: #E7EDF7;
+  white-space: nowrap;
+}
+.chal-src-k { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-src-v {
+  flex: none;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #FFF7DA;
+}
 .chal-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
 .chal-dot.is-friend { background: linear-gradient(180deg, #34D399 0%, #06B6D4 100%); box-shadow: 0 0 6px rgba(16, 185, 129, .55); }
 .chal-dot.is-bot { background: linear-gradient(180deg, #FDE68A 0%, #E8890C 100%); box-shadow: 0 0 6px rgba(251, 191, 36, .5); }
-.chal-meter-v {
-  flex: none;
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
+.chal-src-hint bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #9AA7BB; }
+.chal-src-hint {
+  min-width: 0;
+  font-size: 8.5px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: #F8FAFC;
-  white-space: nowrap;
-}
-.chal-meter-v b { font-weight: 900; color: #FFF7DA; }
-.chal-meter-goal { color: rgba(203, 213, 225, .6); }
-.chal-bar {
-  position: relative;
-  height: 7px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .07);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .04);
-  overflow: hidden;
-}
-.chal-fill {
-  display: block;
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  transition: width 260ms cubic-bezier(.2, .9, .3, 1);
-}
-.chal-fill.is-friend {
-  background: linear-gradient(90deg, #059669 0%, #10B981 46%, #22D3EE 100%);
-  box-shadow: 0 0 8px rgba(16, 185, 129, .45);
-}
-.chal-fill.is-bot {
-  background: linear-gradient(90deg, #B45309 0%, #F59E0B 52%, #FDE68A 100%);
-  box-shadow: 0 0 8px rgba(251, 191, 36, .4);
-}
-.chal-hint {
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
   letter-spacing: .01em;
   color: #8593A8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- the two hands: Hard AI in struck gold, the friend invite in cyan-lit glass ---- */
@@ -47235,22 +47363,23 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 .chal-cta:active { transform: scale(.98); filter: none; }
 .chal-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- the claim: both meters complete, the prize becomes one glowing key ---- */
+/* ---- the claim: a champion of the week that just closed collects here, while the two hands
+   below stay live all week. A static glow — no keyframes, so the card still paints at 60fps. ---- */
 .chal-claim {
   width: 100%;
-  min-height: 44px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   margin-top: 0;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(180deg, #FFF7CC 0%, #FDE68A 26%, #F59E0B 66%, #B45309 100%);
   color: #241503;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: .015em;
   line-height: 1;
@@ -47258,13 +47387,14 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   cursor: pointer;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .7),
-    0 0 0 1px rgba(255, 232, 166, .4),
-    0 6px 18px rgba(245, 158, 11, .32),
-    0 2px 6px rgba(0, 0, 0, .4);
+    0 0 0 1px rgba(255, 232, 166, .48),
+    0 0 18px rgba(245, 158, 11, .45),
+    0 2px 8px rgba(0, 0, 0, .42);
   transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-.chal-claim-ico { flex: none; width: 20px; height: 20px; color: #7C2D12; }
+.chal-claim-ico { flex: none; width: 18px; height: 18px; color: #7C2D12; }
 .chal-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chal-claim-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
 .chal-claim:hover { filter: brightness(1.04); }
 .chal-claim:active { transform: scale(.985); filter: none; }
 .chal-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
@@ -47295,19 +47425,18 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 html[data-channel-wars="off"] #iv-war { display: none !important; }
 
 /* ---- Persian / Arabic: the script keeps its own tracking, digits stay Latin ---- */
-html[data-lang="fa"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-meter-k, .chal-hint, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-cta, .chal-claim),
-html[data-lang="ar"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-meter-k, .chal-hint, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-cta, .chal-claim) {
+html[data-lang="fa"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-tool-t, .chal-tel-k, .chal-src-k, .chal-src-hint, .chal-rank, .chal-podium-pill, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-tool, .chal-cta, .chal-claim),
+html[data-lang="ar"] :is(.chal-badge-t, .chal-prize-sub, .chal-prize-u, .chal-tool-t, .chal-tel-k, .chal-src-k, .chal-src-hint, .chal-rank, .chal-podium-pill, .chal-cta-t, .chal-claim-t, .chal-badge, .chal-tool, .chal-cta, .chal-claim) {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
 /* the two reading rows mirror: the Star, the meter dots and the counters sit at the reading
    start while every figure keeps its own LTR isolation */
-html[data-lang="fa"] :is(.chal-head, .chal-prize, .chal-meter-top, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub, .chal-hint),
-html[data-lang="ar"] :is(.chal-head, .chal-prize, .chal-meter-top, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub, .chal-hint) {
+html[data-lang="fa"] :is(.chal-head, .chal-prize, .chal-prize-txt, .chal-podium-pill, .chal-telemetry, .chal-tel, .chal-src, .chal-rank, .chal-tools, .chal-tool, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub),
+html[data-lang="ar"] :is(.chal-head, .chal-prize, .chal-prize-txt, .chal-podium-pill, .chal-telemetry, .chal-tel, .chal-src, .chal-rank, .chal-tools, .chal-tool, .chal-ctas, .chal-cta, .chal-badge, .chal-claim, .chal-prize-sub) {
   direction: rtl;
 }
 html[data-lang="fa"] .chal-prize-sub { line-height: 1.5; }
-html[data-lang="fa"] .chal-hint { line-height: 1.45; }
 html[data-lang="ar"] .chal-prize-sub { line-height: 1.55; }
 html[data-lang="ru"] .chal-cta,
 html[data-lang="es"] .chal-cta { font-size: 11.5px; }
@@ -47323,7 +47452,7 @@ html[data-lang="es"] .chal-cta { font-size: 11.5px; }
   .chal-prize-sub { font-size: 9.5px; }
   .chal-cta { min-height: 40px; padding: 0 8px; font-size: 11.5px; gap: 4px; }
   .chal-cta-ico { width: 14px; height: 14px; }
-  .chal-claim { font-size: 12.5px; min-height: 42px; }
+  .chal-claim { font-size: 12.5px; min-height: 36px; }
 }
 
 /* ---- shorter columns: give back air, never the copy ---- */
@@ -47333,13 +47462,13 @@ html[data-lang="es"] .chal-cta { font-size: 11.5px; }
 }
 @media (max-height: 680px) {
   .car-card.carousel-slide-challenge > .chal-inner { gap: 7px; }
-  .chal-meters { gap: 6px; }
+  .chal-telemetry { gap: 6px; }
   .chal-star-stage { width: 46px; height: 46px; }
   .chal-star-img { width: 40px; height: 40px; }
   .chal-prize-v { font-size: 22px; }
   .chal-prize-sub { font-size: 10px; }
   .chal-cta { min-height: 40px; }
-  .chal-claim { min-height: 42px; }
+  .chal-claim { min-height: 36px; }
 }
 @media (max-height: 620px) {
   .car-card.carousel-slide-challenge { padding-top: 10px; padding-bottom: 32px; }
@@ -47353,26 +47482,426 @@ html[data-lang="es"] .chal-cta { font-size: 11.5px; }
   .chal-star-img { width: 34px; height: 34px; }
   .chal-prize-v { font-size: 20px; }
   .chal-prize-sub { font-size: 9.5px; line-height: 1.34; -webkit-line-clamp: 2; }
-  .chal-meters { gap: 5px; }
-  .chal-meter { gap: 2px; }
-  .chal-meter-k { font-size: 10.5px; }
-  .chal-bar { height: 6px; }
-  .chal-hint { font-size: 9px; }
+  .chal-telemetry { gap: 5px; padding: 5px 7px; }
   .chal-cta { min-height: 38px; font-size: 12px; }
-  .chal-claim { min-height: 40px; font-size: 13px; }
+  .chal-claim { min-height: 34px; font-size: 13px; }
 }
 @media (max-height: 600px) {
   .car-card.carousel-slide-challenge > .chal-inner { gap: 5px; }
   .chal-prize-sub { -webkit-line-clamp: 1; font-size: 9.5px; }
-  .chal-hint { display: none; }
+  .chal-src-hint { display: none; }
   .chal-cta { min-height: 36px; }
   .chal-claim { min-height: 38px; }
 }
 
-/* reduced motion: the fills settle instead of sliding, and nothing else moves at all */
-html.reduced-motion .chal-fill,
+/* reduced motion: nothing slides, and the keys settle instead of scaling */
 html.reduced-motion .chal-cta,
-html.reduced-motion .chal-claim { transition: none; }
+html.reduced-motion .chal-claim,
+html.reduced-motion .chal-tool { transition: none; }
+
+/* ---- the tool strip owns the header on a phone: the kicker shrinks to its gold bolt medallion
+   before either key or the 7-day clock loses a word. The long Latin and Cyrillic kickers yield
+   first, every kicker yields on the narrowest phones. Inside a claim the card gives back five
+   pixels of air instead of squeezing the prize lockup. ---- */
+.car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) { gap: 5px; }
+@media (max-width: 480px) {
+  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-badge {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-badge-t { display: none; }
+  :is(html:lang(en), html:lang(ru), html:lang(es)) .chal-head { gap: 6px; }
+}
+@media (max-width: 380px) {
+  .chal-badge {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+  .chal-badge-t { display: none; }
+  .chal-head { gap: 6px; }
+}
+/* ---- the narrow floor and the short columns: the two micro keys keep their labels, the 7-day
+   chip gives its words away first, and the telemetry compresses to its figures ---- */
+@media (max-width: 350px) {
+  .chal-badge { padding: 4px 6px; }
+  .chal-badge-t { display: none; }
+  .chal-tool { padding: 0 5px; font-size: 9px; gap: 3px; }
+  .chal-tool-ico { width: 11px; height: 11px; }
+  .chal-telemetry { padding: 6px 7px; gap: 6px; }
+  .chal-tel-v { font-size: 18px; }
+  .chal-src { font-size: 9.5px; }
+  .chal-src-v { font-size: 10.5px; }
+  .chal-podium-pill { font-size: 8px; padding: 2px 6px; }
+}
+@media (max-height: 620px) {
+  .chal-tool { height: 20px; font-size: 9px; }
+  .chal-clock { height: 20px; font-size: 9.5px; }
+  .chal-telemetry { padding: 5px 8px; }
+  .chal-tel-v { font-size: 17px; }
+  .chal-rank { height: 14px; font-size: 8.5px; }
+  .chal-src { font-size: 9.5px; }
+  .chal-src-v { font-size: 10.5px; }
+  .chal-src-hint { display: none; }
+  .chal-claim { min-height: 34px; font-size: 12px; }
+  .chal-podium-pill { font-size: 8px; }
+}
+
+/* ============================================================================================
+   CHALLENGE LEADERBOARD & RULES SHEET — slide #1's two banner keys
+
+   One obsidian-and-24K-gold bottom sheet, two segments: the live weekly board (a three-crest
+   podium over a scrollable, hidden-scrollbar Top-30 list) and the transparent rules guide (four
+   engraved cards). Static gradients and hairlines only — no backdrop-filter, no keyframes — so
+   the sheet rises over the same 60fps budget as the vault. Every figure is Latin and wrapped in
+   <bdi dir="ltr"> by src/main.ts; nothing here depends on a font's own digits.
+   ============================================================================================ */
+#challenge-info-modal .ci-sheet {
+  max-height: 88vh;
+  max-height: 88dvh;
+  gap: 8px;
+  padding: 16px 14px calc(14px + env(safe-area-inset-bottom));
+}
+#challenge-info-modal .ci-sheet .vault-modal-x { top: 9px; inset-inline-end: 9px; background: rgba(255, 255, 255, .06); color: #F8E7B4; }
+#challenge-info-modal .ci-body { justify-content: flex-start; gap: 8px; min-height: 0; }
+
+/* ---- the segmented switcher ---- */
+.ci-tabs {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(6, 10, 18, .74);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14), inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.ci-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #94A3B8;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.ci-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-tab-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-tab.is-on {
+  color: #241503;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #D97706 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 8px rgba(0, 0, 0, .38);
+}
+.ci-tab:not(.is-on):hover { color: #E2E8F0; background: rgba(255, 255, 255, .05); }
+.ci-tab:active { transform: scale(.985); }
+.ci-tab:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- the panels: one at a time, each owning its own scroll ---- */
+.ci-panels { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ci-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.ci-panel[hidden] { display: none; }
+
+/* ---- the podium: three crests, gold, silver and bronze ---- */
+.ci-podium { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ci-pod {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 4px 7px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(26, 32, 46, .92) 0%, rgba(10, 14, 22, .94) 100%);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16), inset 0 1px 0 rgba(255, 255, 255, .05);
+  text-align: center;
+}
+.ci-pod[data-place="1"] { box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .55), 0 0 16px -6px rgba(245, 158, 11, .65); }
+.ci-pod[data-place="2"] { box-shadow: inset 0 0 0 1px rgba(203, 213, 225, .42); }
+.ci-pod[data-place="3"] { box-shadow: inset 0 0 0 1px rgba(217, 119, 6, .45); }
+.ci-crest {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .2);
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+.ci-pod[data-place="1"] .ci-crest {
+  color: #241503;
+  background: linear-gradient(180deg, #FFF7CC 0%, #F59E0B 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 0 12px rgba(245, 158, 11, .5);
+}
+.ci-pod[data-place="2"] .ci-crest {
+  color: #172033;
+  background: linear-gradient(180deg, #F8FAFC 0%, #94A3B8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+.ci-pod[data-place="3"] .ci-crest {
+  color: #1F1206;
+  background: linear-gradient(180deg, #FCD9A8 0%, #B45309 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.ci-pod.is-free .ci-crest {
+  color: #94A3B8;
+  background: rgba(148, 163, 184, .14);
+  border-color: rgba(148, 163, 184, .24);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .18);
+}
+.ci-pod-handle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: #FFF7DA;
+}
+.ci-pod.is-free .ci-pod-handle { color: #8593A8; }
+.ci-pod-wins {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #CBD5E1;
+}
+.ci-pod-wins bdi { font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace; font-weight: 900; color: #FFF7DA; }
+.ci-pod-prize {
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(251, 191, 36, .4);
+  background: linear-gradient(180deg, rgba(120, 74, 12, .55) 0%, rgba(28, 20, 8, .82) 100%);
+  color: #FFE7A6;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .18);
+}
+.ci-pod-prize bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-pod.is-free .ci-pod-prize {
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, .26);
+  background: rgba(51, 65, 85, .32);
+  box-shadow: none;
+}
+
+/* ---- the Top-30 contenders: hidden scrollbar, a live row for the reader ---- */
+.ci-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ci-list::-webkit-scrollbar { width: 0; height: 0; }
+.ci-list:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; border-radius: 8px; }
+.ci-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 10px;
+  background: rgba(15, 21, 32, .74);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .1);
+}
+.ci-row.is-me {
+  background: linear-gradient(180deg, rgba(9, 46, 38, .84) 0%, rgba(9, 17, 22, .88) 100%);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .55), 0 0 12px -5px rgba(16, 185, 129, .6);
+}
+.ci-row-rank {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(51, 65, 85, .4);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
+  color: #CBD5E1;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ci-row[data-place="1"] .ci-row-rank { color: #241503; background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
+.ci-row[data-place="2"] .ci-row-rank { color: #172033; background: linear-gradient(180deg, #F1F5F9 0%, #94A3B8 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
+.ci-row[data-place="3"] .ci-row-rank { color: #1F1206; background: linear-gradient(180deg, #FCD9A8 0%, #B45309 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4); }
+.ci-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ci-row-handle { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; font-weight: 900; line-height: 1.3; color: #E7EDF7; }
+.ci-row-handle > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; }
+.ci-you {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #6EE7B7 0%, #10B981 100%);
+  color: #052E21;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.5;
+  letter-spacing: .02em;
+}
+.ci-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+  color: #8593A8;
+}
+.ci-row-sub bdi { font-weight: 900; color: #CBD5E1; }
+.ci-row-sub i { flex: none; opacity: .55; font-style: normal; }
+.ci-row-w {
+  flex: none;
+  text-align: end;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 900;
+  color: #FFF7DA;
+}
+.ci-row-w bdi {
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.ci-empty {
+  flex: none;
+  margin: 0;
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.55;
+  color: #8593A8;
+}
+.ci-empty[hidden] { display: none; }
+
+/* ---- the rules: four engraved cards, each with its own vector mark ---- */
+.ci-rules {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ci-rules::-webkit-scrollbar { width: 0; height: 0; }
+.ci-rules:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; border-radius: 8px; }
+.ci-rule {
+  display: flex;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 26, 38, .94) 0%, rgba(9, 13, 20, .94) 100%);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .16), inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.ci-rule-ico {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+}
+.ci-rule-ico svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-rule[data-tone="gold"] .ci-rule-ico { color: #FCD34D; background: rgba(251, 191, 36, .13); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .26); }
+.ci-rule[data-tone="mint"] .ci-rule-ico { color: #6EE7B7; background: rgba(16, 185, 129, .13); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .26); }
+.ci-rule[data-tone="cyan"] .ci-rule-ico { color: #67E8F9; background: rgba(6, 182, 212, .13); box-shadow: inset 0 0 0 1px rgba(6, 182, 212, .26); }
+.ci-rule[data-tone="slate"] .ci-rule-ico { color: #CBD5E1; background: rgba(148, 163, 184, .13); box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .26); }
+.ci-rule-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ci-rule-t { font-size: 11.5px; font-weight: 900; line-height: 1.35; color: #FFF7DA; }
+.ci-rule-b { font-size: 10px; font-weight: 700; line-height: 1.62; color: #B7C2D3; }
+.ci-rule-b bdi { font-weight: 900; color: #FCD34D; }
+
+/* ---- Persian and Arabic: the script gives up its tracking, never its own digits ---- */
+html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty),
+html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-pod-handle, .ci-pod-wins, .ci-pod-prize, .ci-row-handle, .ci-row-sub, .ci-row-w, .ci-empty) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .ci-rule-b,
+html[data-lang="ar"] .ci-rule-b { line-height: 1.85; }
+html.reduced-motion .ci-tab { transition: none; }
+@media (max-width: 350px) {
+  .ci-tab { font-size: 10.5px; gap: 4px; }
+  .ci-tab-ico { width: 12px; height: 12px; }
+  .ci-crest { width: 24px; height: 24px; font-size: 10px; }
+  .ci-pod { padding: 7px 3px 6px; }
+  .ci-rule { padding: 8px; gap: 7px; }
+}
+@media (max-height: 680px) {
+  #challenge-info-modal .ci-sheet { max-height: 92vh; max-height: 92dvh; }
+  .ci-pod { padding: 6px 3px 6px; }
+  .ci-rule { padding: 8px 9px; }
+}
 
 /* ==========================================================================
    HOME TOP PROFILE HUD — Royal Obsidian & 24K Gold (scoped to #home-id-card)
