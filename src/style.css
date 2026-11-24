@@ -47374,3 +47374,254 @@ html.reduced-motion .chal-fill,
 html.reduced-motion .chal-cta,
 html.reduced-motion .chal-claim { transition: none; }
 
+/* ==========================================================================
+   HOME TOP PROFILE HUD — Royal Obsidian & 24K Gold (scoped to #home-id-card)
+   One full-width obsidian pill, three zones on one line:
+   1 identity (avatar + XP ring + level, name/flag/VIP, handle/rank)
+   2 currency capsule (coins | TIQ)   3 notification bell (38px).
+   Static gradients and hairlines only: no backdrop-filter, no new keyframes.
+   ========================================================================== */
+#home-id-card.id-card.id-compact {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: 22px;
+  overflow: visible;
+  background: linear-gradient(180deg, #1A1F2E 0%, #0D1118 100%) !important;
+  border: 1px solid rgba(246, 200, 94, 0.22) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(246, 200, 94, 0.05),
+    0 10px 24px -10px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* ---- zone 1: identity ---- */
+#home-id-card .id-zone-lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+#home-id-card .id-avatar-btn {
+  flex: 0 0 44px;
+  grid-column: auto;
+  grid-row: auto;
+  align-self: center;
+  justify-self: auto;
+}
+#home-id-card .id-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+#home-id-card .id-name-row {
+  grid-column: auto;
+  grid-row: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+}
+#home-id-card .id-name-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+}
+#home-id-card .id-name {
+  max-width: 96px;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #F8FAFC;
+}
+#home-id-card .id-flag {
+  flex: none;
+  border-radius: 3px;
+}
+#home-id-card .home-vip {
+  flex: none;
+  height: auto;
+  min-height: 18px;
+  max-width: none;
+  padding: 2px 7px;
+  gap: 4px;
+  border: 1px solid rgba(246, 200, 94, 0.52);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.26) 0%, rgba(217, 155, 38, 0.12) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 200, 0.18);
+  color: #FDE68A;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  overflow: visible;
+}
+#home-id-card .home-vip::after { display: none; animation: none; }
+#home-id-card .home-vip-crown { width: 10px; height: 10px; }
+#home-id-card .home-vip-t { min-width: 0; overflow: hidden; text-overflow: clip; }
+#home-id-card .home-vip-d {
+  font-size: 9.5px;
+  color: #FDE68A;
+  border-inline-start-color: rgba(246, 200, 94, 0.4);
+}
+#home-id-card .id-team {
+  grid-column: auto;
+  grid-row: auto;
+  align-self: auto;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  gap: 5px;
+  color: #94A3B8;
+  font-size: 11px;
+  font-weight: 600;
+}
+#home-id-card .id-team-line {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 5px;
+}
+#home-id-card .id-team-t {
+  flex: 0 1 auto;
+  max-width: 88px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+}
+#home-id-card .id-team:not(.bound) .id-team-t { color: #94A3B8; }
+#home-id-card .id-team-rank {
+  margin-inline-start: 0;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.22) 0%, rgba(217, 155, 38, 0.1) 100%);
+  border: 1px solid rgba(246, 200, 94, 0.42);
+  color: #F6C85E;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+#home-id-card .id-team-rank[hidden] { display: none; }
+
+/* avatar: XP ring (emerald to gold) + sapphire face, gold-rimmed level shield */
+#home-id-card .id-lvl-rim { fill: #C9962A; }
+#home-id-card .id-lvl-spec { stroke: rgba(253, 230, 138, 0.75); }
+
+/* ---- zone 2: currency capsule ---- */
+#home-id-card .id-side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#home-id-card #coin-btn.id-coin.coin-pill {
+  grid-column: auto;
+  grid-row: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 6px 10px;
+  border: 1px solid rgba(246, 200, 94, 0.2);
+  border-radius: 14px;
+  background: rgba(8, 11, 18, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #F6C85E;
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1;
+}
+#home-id-card #coin-btn.id-coin.coin-pill:hover:not(:active) { background: rgba(8, 11, 18, 0.86); }
+#home-id-card #coin-btn.id-coin.coin-pill:active { background: rgba(8, 11, 18, 0.92); }
+#home-id-card .hud-dock-part {
+  flex: 0 0 auto;
+  gap: 5px;
+  min-width: 0;
+}
+#home-id-card .hud-dock-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+#home-id-card .hud-dock-n {
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1;
+  color: #F6C85E;
+  overflow: visible;
+  text-overflow: clip;
+}
+#home-id-card #hud-tiq { color: #38BDF8; }
+#home-id-card .hud-dock-tiq-ico { width: 15px; height: 15px; color: #A78BFA; }
+#home-id-card .id-coin.coin-pill .coin { width: 15px; height: 15px; }
+
+/* ---- zone 3: the bell key (38px) ---- */
+#home-id-card #home-notifs.id-bell.icon-btn.xs {
+  flex: none;
+  grid-column: auto;
+  grid-row: auto;
+  align-self: center;
+  justify-self: auto;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+  color: #CBD5E1;
+}
+#home-id-card #home-notifs.id-bell.icon-btn.xs .ico { width: 18px; height: 18px; color: #CBD5E1; }
+#home-id-card #home-notifs.id-bell.icon-btn.xs.has-unread {
+  border-color: rgba(251, 146, 60, 0.34);
+  background: rgba(251, 146, 60, 0.07);
+}
+#home-id-card #home-notifs.id-bell.icon-btn.xs:hover:not(:active) {
+  transform: none;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+#home-id-card #home-notifs.id-bell.icon-btn.xs:active {
+  transform: scale(0.94);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ---- narrow phones (320-375px): tighter padding, capped name and handle ---- */
+@media (max-width: 375px) {
+  #home-id-card.id-card.id-compact { gap: 6px; padding: 7px 8px; }
+  #home-id-card .id-zone-lead { gap: 7px; }
+  #home-id-card .id-name { max-width: 74px; }
+  #home-id-card .id-team-t { max-width: 74px; }
+  #home-id-card .id-side { gap: 6px; }
+  #home-id-card #coin-btn.id-coin.coin-pill { gap: 6px; padding: 6px 8px; font-size: 12px; }
+  #home-id-card .hud-dock-part { gap: 4px; }
+  #home-id-card .hud-dock-n { font-size: 12px; }
+  #home-id-card .hud-dock-tiq-ico,
+  #home-id-card .id-coin.coin-pill .coin { width: 13px; height: 13px; }
+  #home-id-card #home-notifs.id-bell.icon-btn.xs { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+}

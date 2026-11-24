@@ -1218,14 +1218,16 @@
           <h1 id="home-title" hidden>Play</h1>
 
           <header class="id-card id-compact" id="home-id-card">
+            <!-- Zone 1 · identity: avatar with XP ring + level, then name / handle stack. -->
+            <div class="id-zone-lead">
             <button class="avatar-btn id-avatar-btn" type="button" id="avatar-btn" aria-label="Open profile, Level 1, 0 of 10 XP">
               <span class="id-avatar-orb" aria-hidden="true">
                 <svg class="id-ring" viewBox="0 0 48 48" focusable="false">
                   <defs>
                     <linearGradient id="xpGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stop-color="#22D3EE" />
+                      <stop offset="0" stop-color="#10B981" />
                       <stop offset=".55" stop-color="#34D399" />
-                      <stop offset="1" stop-color="#10B981" />
+                      <stop offset="1" stop-color="#F6C85E" />
                     </linearGradient>
                   </defs>
                   <circle class="id-ring-track" cx="24" cy="24" r="22" />
@@ -1248,7 +1250,7 @@
                     <path class="id-lvl-face" d="M10 2.8 16.9 6v5.9c0 3.3-2.8 5.8-6.9 7.3-4.1-1.5-6.9-4-6.9-7.3V6Z" />
                     <path class="id-lvl-spec" d="M4.4 6.8 10 4l5.6 2.8" />
                   </svg>
-                  <b id="p-level">1</b>
+                  <b><bdi dir="ltr" id="p-level">1</bdi></b>
                 </span>
               </span>
             </button>
@@ -1269,20 +1271,21 @@
               <button class="id-team" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
                 <span class="squad-avatar id-team-av" id="squad-avatar" hidden aria-hidden="true">S</span>
                 <svg class="ico chip-ico id-team-ico" id="squad-ico" aria-hidden="true"><use href="#i-send" /></svg>
-                <span class="id-team-line"><span class="id-team-t" id="team-name">Join Squad</span><span class="id-team-rank" id="team-count" hidden></span></span>
+                <span class="id-team-line"><span class="id-team-t" id="team-name">Join Squad</span><span class="id-team-rank" id="team-count" dir="ltr" hidden></span></span>
               </button>
             </div>
+            </div>
+            <!-- Zone 2 · currency capsule (coins | TIQ) · Zone 3 · notification bell. -->
             <div class="id-side">
-              <!-- Wallet and TIQ share the second row, separated by one hairline. -->
               <button class="coin-pill id-coin hud-dock" type="button" id="coin-btn" aria-label="Open profile — coins and TIQ rating">
                 <span class="hud-dock-part" id="hud-coins">
                   <span class="coin" data-coin="notched" aria-hidden="true"></span>
-                  <b class="hud-dock-n" id="p-coins">0</b>
+                  <bdi dir="ltr" class="hud-dock-n" id="p-coins">0</bdi>
                 </span>
                 <span class="hud-dock-sep" aria-hidden="true"></span>
                 <span class="hud-dock-part">
                   <svg class="ico hud-dock-tiq-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-brain" /></svg>
-                  <b class="hud-dock-n" id="hud-tiq">0</b>
+                  <bdi dir="ltr" class="hud-dock-n" id="hud-tiq">0</bdi>
                 </span>
               </button>
               <button class="icon-btn xs notif-bell id-bell" type="button" id="home-notifs" aria-label="Open notifications">
