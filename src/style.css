@@ -44727,6 +44727,98 @@ html[data-lang="ar"] .vip-flag-sub { line-height: 1.8; }
 .cw-sheet .cw-method2[dir="rtl"] .cw-method2-chevron { --cw-chevron-flip: -1; }
 .cw-sheet .cw-method2[aria-expanded="true"] .cw-method2-chevron { --cw-chevron-turn: 90deg; }
 
+/* Method 2's own body: the code pill, the copy key and the verify key.
+   The pill is the one thing a founder reads character by character, so it is a monospace LTR
+   token at full weight — never prose, never a dash, never a figure that a bidi pass could flip. */
+.cw-sheet .cw-m2-alt {
+  gap: 8px;
+  background: rgba(9, 13, 21, .62);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.cw-sheet .cw-m2-hint { margin: 0; }
+.cw-sheet .cw-m2-label {
+  display: block;
+  color: #94A3B8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+.cw-sheet .cw-m2-code-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+.cw-sheet .cw-m2-code {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, .13) 0%, rgba(246, 200, 94, .05) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(246, 200, 94, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+  color: #f6c85e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* One tap selects the whole token, so a WebView that refuses the clipboard still leaves the
+     founder a way to copy by hand. */
+  user-select: all;
+  -webkit-user-select: all;
+}
+/* The device's own placeholder reads a shade quieter than the signed code, and nothing else
+   changes: same size, same weight, same letters. A founder never sees the box move. */
+.cw-sheet .cw-m2-code.is-preview {
+  color: #cbb072;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(246, 200, 94, .22),
+    inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+.cw-sheet .cw-m2-copy {
+  flex: none;
+  min-height: 44px;
+  padding: 0 13px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .1) 0%, rgba(255, 255, 255, .045) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .14),
+    0 2px 0 rgba(0, 0, 0, .35);
+  color: #E2E8F0;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.cw-sheet .cw-m2-copy:active:not(:disabled) { transform: translateY(1px); }
+.cw-sheet .cw-m2-copy:focus-visible { outline: 2px solid #f6c85e; outline-offset: 2px; }
+.cw-sheet .cw-m2-copy.is-copied {
+  color: #34d399;
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 211, 153, .42),
+    0 2px 0 rgba(0, 0, 0, .35);
+}
+.cw-sheet .cw-m2-go {
+  min-height: 44px;
+  font-size: 11.5px;
+}
+.cw-sheet .cw-m2 .sqv-err { margin: 0; }
+html[data-lang="fa"] .cw-sheet .cw-m2-label,
+html[data-lang="ar"] .cw-sheet .cw-m2-label { letter-spacing: 0; }
+
 .cw-sheet .cw-reg-skip {
   appearance: none;
   box-sizing: border-box;

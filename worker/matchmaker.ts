@@ -79,13 +79,17 @@ import {
   cupSquadIds, enrolInWarSeason, isSquadAdmin, markSquadVerified, normalizeChatHandle, readPublicChat,
   readRegisteredSquad, refreshTelegramMembers, removeSquadMember, roleOf, SQUAD_ALREADY_ENLISTED,
   squadTotalTiq, squadTournamentTiq, squadViewOf, squadWarTiq, syncSquadChatDetails, telegramPhotoUrl,
-  upsertSquadMember,
+  upsertSquadMember, warSeasonId,
   verifyAndBuildSquad, verifyChannelMembership, verifyPostedCode, verifySquadAdminOwnership,
   verifySquadChat,
   type RegisteredSquad, type SquadAnnouncementRow, type SquadMemberRow,
   type SquadVerification, type SquadVerifyMethod,
 } from './squads';
 import { botAppLink, squadAppLink } from '../shared/config';
+import {
+  CW_WINDOW_MS, cwCodeCandidates, cwCodeFor, cwFetchPage, cwPageHasCode, cwReadHandle,
+  cwSecret, cwWindow,
+} from './channelWar';
 import { botTokenOf, overtakeLangOf, pushOvertake, type OvertakeLang } from './overtake';
 import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralConfig';
 import { referralBinding, type ReferralBindingPayload } from './referrals';
@@ -3544,6 +3548,18 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadVerifyCodeDoor(request, url);
     }
+    /* Channel Wars, Method 2's own pair. The code door mints this player's `TIQ-XXXXXX`; the
+       register door reads the public channel for it and writes the verified row in one turn.
+       Kept off `/api/squads/verify-code` on purpose: the Ranks sheet's `#TX-XXXXX` flow is a
+       different proof with a different shape, and neither door may change the other. */
+    if (url.pathname === '/api/channel-war/code') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.channelWarCodeDoor(request, url);
+    }
+    if (url.pathname === '/api/channel-war/register') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.channelWarRegisterDoor(request, url);
+    }
     if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
     /* Squad membership: the roster is written only here, and only by the player it names. */
@@ -4001,6 +4017,223 @@ export class MatchmakerDO {
     const code = randomVerifyCode();
     await this.writeVerifyCode(`${requester}:${handle.toLowerCase()}`, code);
     return json({ ok: true, code, username: handle });
+  }
+
+  /* ---------- Channel Wars: Method 2, end to end ----------
+     The Channel Wars door is its own pair of routes, not a second caller of the Ranks sheet's
+     `#TX-XXXXX` flow. Method 2 for a public channel is a different proof — a derived `TIQ-XXXXXX`
+     read off the channel's public preview — and keeping it separate is what lets this surface be
+     fixed without touching a single line of the squad register's. */
+
+  /**
+   * The one `TIQ-XXXXXX` this player may post today.
+   *
+   * No handle is required: the code is bound to the *player* and the UTC day, never to a channel,
+   * so the panel can paint a real code the instant the register view opens — before one character
+   * has been typed into the handle field. Deriving it instead of storing a random one is what makes
+   * it survive a retry, a second tab and an isolate eviction with no row to race and no early
+   * expiry: the same `(player, day, secret)` always answers the same code.
+   */
+  private async channelWarCodeDoor(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const code = await cwCodeFor(requester, cwSecret(this.env));
+    if (!code) {
+      return json({
+        ok: false,
+        error: 'bot_token_missing',
+        message: 'The Worker has no signing secret bound, so no verification code can be issued.',
+      }, 503);
+    }
+    /* The handle is echoed back normalized when the caller named one. An empty field is not an
+       error here — the code does not depend on it, and the panel asks for it on open. */
+    return json({
+      ok: true,
+      code,
+      username: cwReadHandle(body.handle).handle,
+      /* When this code stops being accepted: the end of the next window, because the window
+         before the running one is still honoured across a midnight. */
+      expiresAt: (cwWindow() + 2) * CW_WINDOW_MS,
+    });
+  }
+
+  /**
+   * Method 2's second half: read the public channel, find the code, and write the verified row —
+   * all in one turn.
+   *
+   * The proof and the registry write are deliberately not two round trips. A code that scanned
+   * clean and a badge that landed are one fact; splitting them would let a channel be verified on
+   * a page that changed in between, and would leave the founder staring at a spinner after the
+   * hard part already succeeded. The row is created with its tournament baseline set to the TIQ it
+   * holds right now, so a freshly verified channel enters the running week at exactly `0` TIQ.
+   */
+  private async channelWarRegisterDoor(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const reading = cwReadHandle(body.handle);
+    if (reading.issue === 'private') {
+      return json({
+        ok: false,
+        error: 'channel_private',
+        message: 'Method 2 needs a public channel @username. A private invite link has no public '
+          + 'page to read — use Method 1 (add the bot as admin) for private channels and groups.',
+      }, 400);
+    }
+    if (!reading.handle) {
+      return json({
+        ok: false,
+        error: 'invalid_handle',
+        message: 'Enter a public channel @username like @your_channel.',
+      }, 400);
+    }
+    const handle = reading.handle;
+
+    /* The posted code must be one this player was actually issued — today's or yesterday's. */
+    const posted = String(body.verifyCode ?? '').trim().toUpperCase().replace(/\s+/g, '');
+    const secret = cwSecret(this.env);
+    if (!secret) {
+      return json({
+        ok: false,
+        error: 'bot_token_missing',
+        message: 'The Worker has no signing secret bound, so no verification code can be checked.',
+      }, 503);
+    }
+    const candidates = await cwCodeCandidates(requester, secret);
+    if (!posted || !candidates.includes(posted)) {
+      return json({
+        ok: false,
+        error: 'verify_code_expired',
+        message: 'That code is not the one issued to you. Copy the code from the panel and try again.',
+      }, 400);
+    }
+
+    const page = await cwFetchPage(handle);
+    if (!page.ok) {
+      return page.reason === 'not_public'
+        ? json({
+          ok: false,
+          error: 'channel_not_public',
+          message: 'That channel was not found or is not public. Method 2 only reads public channels.',
+        }, 404)
+        : json({
+          ok: false,
+          error: 'telegram_unreachable',
+          message: 'Telegram did not answer. Try again in a moment.',
+        }, 502);
+    }
+    if (!cwPageHasCode(page.page.html, posted)) {
+      return json({
+        ok: false,
+        error: 'POST_CODE_NOT_FOUND',
+        message: 'Code not found in channel yet. Post the code in your public channel and try again.',
+      }, 400);
+    }
+
+    await this.syncSquadsFromStorage();
+    const now = Date.now();
+    const wantedId = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const existing = wantedId
+      ? this.squads.get(wantedId)
+      : [...this.squads.values()].find((row) => row.handle.toLowerCase() === handle.toLowerCase());
+
+    if (existing) {
+      if (existing.handle.toLowerCase() !== handle.toLowerCase()) {
+        return json({ ok: false, error: 'no_such_squad', message: 'That squad is not on the registry.' }, 404);
+      }
+      if (existing.banned) {
+        return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
+      }
+      if (existing.creatorId !== requester && existing.ownerId !== requester) {
+        return json({ ok: false, error: 'not_founder', message: 'Only the squad founder can verify this community.' }, 403);
+      }
+      if (!(existing.verified && existing.verification === 'verified')) {
+        /* Method 2 never asked for bot rights, so the title/photo/audience sync is what the public
+           page offered — the founder's own title stays when the page carried none. */
+        existing.verified = true;
+        existing.verification = 'verified';
+        existing.verifiedAt = now;
+        existing.verifiedBy = 'post';
+        existing.revokedAt = 0;
+        existing.kind = 'channel';
+        if (page.page.avatar) existing.avatar = page.page.avatar;
+        if (page.page.members !== null) {
+          existing.telegramMembers = page.page.members;
+          existing.subscribers = page.page.members;
+        }
+        this.squadsDirty = true;
+        await this.persistSquads();
+      }
+      return json({ ok: true, squad: squadViewOf(existing), created: false });
+    }
+
+    /* A brand-new channel: the leader's own balance opens the roster, and the same figure is the
+       week's baseline — so the ladder prints `0 TIQ` for a channel that has not fought yet. */
+    const reportedTiq = Number(body.playerTiq ?? body.tiq);
+    const leaderTiq = Number.isFinite(reportedTiq) && reportedTiq > 0
+      ? Math.min(MEMBER_TIQ_CAP, Math.floor(reportedTiq))
+      : (this.players.get(`tg-${requester}`)
+        ?? [...this.players.values()].find((player) => player.tgId === requester))?.tiq ?? 0;
+    const squadName = typeof body.squadName === 'string' ? body.squadName.trim().slice(0, 32) : '';
+    const memberName = typeof body.memberName === 'string'
+      ? body.memberName
+      : typeof body.name === 'string' ? body.name : '';
+    const username = typeof body.username === 'string' ? body.username.replace(/^@+/, '').slice(0, 32) : '';
+    const photo = typeof body.photo === 'string' ? body.photo.trim().slice(0, 300) : '';
+    const baseId = `sq-tg-${handle.slice(1).toLowerCase()}`.slice(0, 48);
+    const id = this.squads.has(baseId) ? `${baseId}-${now.toString(36)}`.slice(0, 48) : baseId;
+    const squad: RegisteredSquad = {
+      id,
+      /* No `getChat` ran, so there is no numeric chat id to keep: the handle is the canonical
+         target, and every later read resolves the chat through it. */
+      chatId: '',
+      handle,
+      name: squadName || page.page.title || handle,
+      subscribers: page.page.members ?? 0,
+      telegramMembers: page.page.members,
+      roster: [{
+        id: requester,
+        name: typeof memberName === 'string' ? memberName.trim().slice(0, 24) : '',
+        tiq: leaderTiq,
+        role: 'leader',
+        joinedAt: now,
+        country: '',
+        username,
+        photo: /^https:\/\/[^\s]+$/i.test(photo) ? photo : '',
+        warTiq: 0,
+      }],
+      members: 1,
+      kind: 'channel',
+      avatar: page.page.avatar,
+      tag: '',
+      creatorId: requester,
+      ownerId: requester,
+      cupId: (typeof body.cupId === 'string' ? body.cupId.trim().slice(0, 48) : '') || ACTIVE_CUP_ID,
+      seasonId: warSeasonId(now),
+      baselineTiq: leaderTiq,
+      enrolledAt: now,
+      createdAt: now,
+      verification: 'verified',
+      verified: true,
+      verifiedAt: now,
+      verifiedBy: 'post',
+      revokedAt: 0,
+      banned: false,
+      bannedAt: 0,
+      requireApproval: false,
+      pending: [],
+      warPoints: 0,
+      announcements: [],
+    };
+    this.squads.set(squad.id, squad);
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, squad: squadViewOf(squad), created: true });
   }
 
   /**

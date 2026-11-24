@@ -411,6 +411,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* Channel Wars, Method 2: the derived `TIQ-XXXXXX` code and the public-channel proof behind it.
+     The registry that owns both the code's secret and the squad rows is the same singleton room,
+     so the two routes ride the same door the squad surface does. */
+  if (url.pathname.startsWith('/api/channel-war/')) {
+    if (!env.MATCHMAKER) return json({ error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   /* The Stars Vault: the Profile card's balance and friend progress, and the manual payout
      request. The room proves the caller's signed initData itself and owns every counter. */
   if (url.pathname.startsWith('/api/stars/')) {

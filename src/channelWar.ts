@@ -17,18 +17,21 @@
  * lifted by farming one.
  */
 import { lang, onLang, t, type LangCode } from './settings';
-import { impact, notify, openLink, openTelegramShare } from './telegram';
+import { impact, notify, openLink, openTelegramShare, tgInitData, tgUser } from './telegram';
 import { showToast, showToastDetail } from './toast';
 import type { Sheets } from './sheets';
 import {
-  cleanHandle, displayNameOf, getMySquad, getSquadRanking, getWarRanking, handleIssue,
-  hasWarEarnings, myPlayerId, onSquadChange, squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
+  ACTIVE_CUP_ID, cleanHandle, claimRegisteredSquad, displayNameOf, getMySquad, getSquadRanking,
+  getWarRanking, handleIssue, hasWarEarnings, joinSquadLocally, myPlayerId, onSquadChange,
+  squadAvatarUrl, squadMark, warEndsAt, warPointsOf,
   type RankedSquad, type SquadMember,
 } from './squads';
 import {
-  buildSquadVerifyPanel, checkChannelMembership, joinSquadOnServer, refreshSquadBoard,
-  registerSquadWithTelegram, syncChannelTiq, type SquadVerifyPanel,
+  botAdminInviteUrl, checkChannelMembership, joinSquadOnServer, refreshSquadBoard,
+  registerSquadWithTelegram, syncChannelTiq, toSquad, verifySquadOwnership,
 } from './squadRegister';
+import { workerUrl } from './adminApi';
+import { myTiq } from './matchmaking';
 import { channelWarAppLink, telegramShareLink } from '../shared/config';
 /* The authentic Telegram Stars mark — the same asset the shop and the vault carry, never a
    glyph, a sprite star or a typed emoji. Vite fingerprints it, so the path is never dangling. */
@@ -382,6 +385,659 @@ const handleErrorKey = (issue: string): string =>
     : issue === 'short' ? 'cwErrShort'
       : issue === 'long' ? 'cwErrLong' : 'cwErrChars';
 
+/**
+ * The two shapes a Telegram private invite takes: `t.me/+hash` and `t.me/joinchat/hash`.
+ *
+ * A private channel has no public `@username` and no `t.me/s/` page, so Method 2 can never read
+ * it. Catching it here — before the generic "letters and numbers only" refusal — is what lets the
+ * founder be told the one thing that helps: use Method 1 for this channel.
+ */
+const PRIVATE_INVITE = /^(?:\+)|^(?:joinchat\/)/i;
+const PRIVATE_LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.(?:me|dog)\/(?:\+|joinchat\/)/i;
+
+function looksPrivateInvite(raw: string): boolean {
+  const value = raw.replace(/[\u0000-\u001f\u007f\s]+/g, '');
+  return !!value && (PRIVATE_INVITE.test(value) || PRIVATE_LINK.test(value));
+}
+
+/* ---------- Method 2: the public-channel proof ----------
+   The Channel Wars door is not the Ranks sheet's `#TX-XXXXX` flow, and it must not behave like it:
+   a founder opening this pane has typed nothing yet, so a code that waits for a handle is a code
+   that renders as a dash. Everything below is built so the pill always holds a real `TIQ-XXXXXX`
+   — the device's own deterministic preview first, the Worker's signed code the instant it lands —
+   and so the copy key works in a Telegram WebView that refuses `navigator.clipboard`. */
+
+type CwM2Key =
+  | 'codeLabel' | 'copied' | 'notFound' | 'private' | 'notPublic' | 'offline' | 'expired'
+  | 'publicOnly' | 'checking' | 'registering';
+
+const CW_M2: Record<LangCode, Record<CwM2Key, string>> = {
+  en: {
+    codeLabel: 'YOUR VERIFY CODE',
+    copied: 'Copied ✓',
+    notFound: 'Code not found in channel yet. Post the code in your public channel and try again.',
+    private: 'Method 2 needs a public channel @username. For a private channel or a group, use Method 1.',
+    notPublic: 'That channel was not found or is not public. Method 2 only reads public channels.',
+    offline: "Couldn't reach the server. Check your connection and try again.",
+    expired: 'That code is no longer valid. Here is a fresh one.',
+    publicOnly: 'PUBLIC CHANNEL',
+    checking: 'Checking the channel…',
+    registering: 'Verifying…',
+  },
+  fa: {
+    codeLabel: 'کد وریفای شما',
+    copied: 'کپی شد ✓',
+    notFound: 'کد هنوز در کانال پیدا نشد. مطمئن شوید کد را در کانال عمومی ارسال کرده‌اید و دوباره بزنید.',
+    private: 'روش دوم فقط برای کانال عمومی با @username است. برای کانال خصوصی و گروه از روش اول استفاده کنید.',
+    notPublic: 'این کانال پیدا نشد یا عمومی نیست. روش دوم فقط کانال‌های عمومی را می‌خواند.',
+    offline: 'ارتباط با سرور برقرار نشد. اتصال را بررسی کنید و دوباره بزنید.',
+    expired: 'این کد دیگر معتبر نیست. کد تازه آماده شد.',
+    publicOnly: 'کانال عمومی',
+    checking: 'در حال بررسی کانال…',
+    registering: 'در حال تایید…',
+  },
+  ru: {
+    codeLabel: 'ВАШ КОД',
+    copied: 'Скопировано ✓',
+    notFound: 'Код пока не найден в канале. Опубликуйте его в публичном канале и попробуйте снова.',
+    private: 'Способ 2 работает только с публичным каналом @username. Для приватного канала или группы используйте способ 1.',
+    notPublic: 'Канал не найден или не является публичным. Способ 2 читает только публичные каналы.',
+    offline: 'Не удалось связаться с сервером. Проверьте соединение и повторите.',
+    expired: 'Этот код больше не действует. Вот новый.',
+    publicOnly: 'ПУБЛИЧНЫЙ КАНАЛ',
+    checking: 'Проверяем канал…',
+    registering: 'Проверяем…',
+  },
+  ar: {
+    codeLabel: 'رمز التحقق الخاص بك',
+    copied: 'تم النسخ ✓',
+    notFound: 'لم يُعثر على الرمز في القناة بعد. انشر الرمز في قناتك العامة وحاول مرة أخرى.',
+    private: 'الطريقة الثانية تحتاج قناة عامة بـ @username. للقناة الخاصة أو المجموعة استخدم الطريقة الأولى.',
+    notPublic: 'لم يتم العثور على القناة أو أنها ليست عامة. الطريقة الثانية تقرأ القنوات العامة فقط.',
+    offline: 'تعذّر الاتصال بالخادم. تحقّق من الاتصال وحاول مجددًا.',
+    expired: 'هذا الرمز لم يعد صالحًا. هذا رمز جديد.',
+    publicOnly: 'قناة عامة',
+    checking: 'جارٍ فحص القناة…',
+    registering: 'جارٍ التحقق…',
+  },
+  es: {
+    codeLabel: 'TU CÓDIGO',
+    copied: 'Copiado ✓',
+    notFound: 'El código aún no aparece en el canal. Publícalo en tu canal público e inténtalo de nuevo.',
+    private: 'El método 2 necesita un canal público @username. Para un canal privado o un grupo, usa el método 1.',
+    notPublic: 'Ese canal no existe o no es público. El método 2 solo lee canales públicos.',
+    offline: 'No se pudo contactar con el servidor. Revisa tu conexión e inténtalo otra vez.',
+    expired: 'Ese código ya no es válido. Aquí tienes uno nuevo.',
+    publicOnly: 'CANAL PÚBLICO',
+    checking: 'Comprobando el canal…',
+    registering: 'Verificando…',
+  },
+};
+
+const m2 = (key: CwM2Key): string => (CW_M2[lang] ?? CW_M2.en)[key];
+
+/** The code alphabet, identical to the Worker's: `A`–`Z` without `I`/`O`, then `2`–`9`. */
+const CW_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CW_CODE_LEN = 6;
+
+/**
+ * The device's own code, for the half-second before the Worker answers.
+ *
+ * Seeded from this player's id and the running UTC day, so the pill holds a stable, unmistakable
+ * `TIQ-XXXXXX` from the first frame instead of a dash. It is a *placeholder* and never a proof:
+ * only the Worker's HMAC — signed with a secret this bundle cannot hold — is accepted by the
+ * channel scan, and the real code replaces this one as soon as it lands.
+ */
+function previewWarCode(seed: string): string {
+  let h = hash32(`${seed}:${Math.floor(Date.now() / 86_400_000)}`);
+  let body = '';
+  for (let i = 0; i < CW_CODE_LEN; i++) {
+    body += CW_CODE_ALPHABET[h % CW_CODE_ALPHABET.length];
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+    h = (h ^ (h >>> 13)) >>> 0;
+  }
+  return `TIQ-${body}`;
+}
+
+/** What the Worker answers about a channel row, as this sheet reads it. */
+interface WarSquadPayload {
+  id?: string;
+  handle?: string;
+  name?: string;
+  kind?: 'channel' | 'group';
+  avatar?: string;
+  tag?: string;
+  members?: number;
+  subscribers?: number;
+  telegramMembers?: number | null;
+  creatorId?: string;
+  ownerId?: string;
+  cupId?: string;
+  requireApproval?: boolean;
+  verified?: boolean;
+  roster?: Array<{
+    id?: string; name?: string; tiq?: number; role?: string; joinedAt?: number;
+    country?: string; username?: string; photo?: string;
+  }>;
+}
+
+interface WarCodeWire {
+  ok?: boolean;
+  code?: string;
+  error?: string;
+  message?: string;
+}
+
+interface WarSquadWire {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  squad?: WarSquadPayload;
+}
+
+/** One POST to the Worker, with this Mini App's own identity attached. Never throws. */
+async function warPost<T>(
+  path: string,
+  payload: Record<string, unknown>,
+): Promise<{ data: T | null; ok: boolean } | null> {
+  const url = workerUrl(path);
+  if (!url) return null;
+  const headers: Record<string, string> = {
+    accept: 'application/json',
+    'content-type': 'application/json',
+  };
+  const initData = tgInitData();
+  if (initData) headers['x-telegram-init-data'] = initData;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify(payload),
+    });
+    let data: T | null = null;
+    try {
+      data = (await response.json()) as T;
+    } catch {
+      data = null;
+    }
+    return { data, ok: response.ok };
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/** This player's own numbers, in the shape every registry write reads. */
+function warPlayerPayload(): Record<string, unknown> {
+  const u = tgUser();
+  const name = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim().slice(0, 24);
+  const photo = (u?.photo_url ?? '').trim().slice(0, 300);
+  const tiq = Math.max(0, Math.floor(myTiq()));
+  return {
+    name,
+    username: (u?.username ?? '').slice(0, 32),
+    /* The leader's real balance seeds the roster row **and** the week's baseline, so a channel
+       that registers today starts the ladder at exactly `0` whatever it brought with it. */
+    tiq,
+    playerTiq: tiq,
+    ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
+    userTelegramId: u?.id === undefined ? '' : String(u.id),
+  };
+}
+
+/** The Worker's signed `TIQ-XXXXXX` for this player and today, or why it could not be issued. */
+async function requestWarCode(handle: string): Promise<{ ok: true; code: string } | { ok: false; message: string }> {
+  const id = tgUser()?.id;
+  const sent = await warPost<WarCodeWire>('/api/channel-war/code', {
+    handle,
+    userTelegramId: id === undefined ? '' : String(id),
+  });
+  if (!sent) return { ok: false, message: m2('offline') };
+  const { data, ok } = sent;
+  if (!ok || !data || data.ok !== true || typeof data.code !== 'string' || !data.code) {
+    const code = typeof data?.error === 'string' ? data.error : '';
+    if (code === 'unauthorized') return { ok: false, message: t('squadErrTelegram') };
+    if (code === 'bot_token_missing') return { ok: false, message: t('enlistErrToken') };
+    return { ok: false, message: m2('offline') };
+  }
+  return { ok: true, code: data.code.trim().toUpperCase() };
+}
+
+/** The one atomic Method 2 call: scan the channel, prove the code, write the verified row. */
+async function registerWarChannel(input: {
+  handle: string;
+  code: string;
+  squadId?: string;
+  name?: string;
+}): Promise<{ ok: true; payload: WarSquadPayload } | { ok: false; error: string; message: string }> {
+  const sent = await warPost<WarSquadWire>('/api/channel-war/register', {
+    handle: input.handle,
+    verifyCode: input.code,
+    ...(input.squadId ? { squadId: input.squadId } : {}),
+    squadName: input.name ?? '',
+    cupId: ACTIVE_CUP_ID,
+    ...warPlayerPayload(),
+  });
+  if (!sent) return { ok: false, error: 'offline', message: m2('offline') };
+  const { data, ok } = sent;
+  if (ok && data && data.ok === true && data.squad) return { ok: true, payload: data.squad };
+  const error = typeof data?.error === 'string' ? data.error : 'failed';
+  switch (error) {
+    case 'channel_private': return { ok: false, error, message: m2('private') };
+    case 'channel_not_public': return { ok: false, error, message: m2('notPublic') };
+    case 'POST_CODE_NOT_FOUND': return { ok: false, error, message: m2('notFound') };
+    case 'verify_code_expired': return { ok: false, error, message: m2('expired') };
+    case 'not_founder': return { ok: false, error, message: t('squadVerifyNotOwner') };
+    case 'squad_banned': return { ok: false, error, message: t('squadErrBanned') };
+    case 'unauthorized': return { ok: false, error, message: t('squadErrTelegram') };
+    default: return { ok: false, error, message: m2('offline') };
+  }
+}
+
+/**
+ * Fold the Worker's answer into this device's own board.
+ *
+ * The registry already wrote the row, so this is the local half: a channel this device has never
+ * seen is claimed and bound; one it already lists gets the registry's roster and badge, and the
+ * player is bound to it without a second membership round trip.
+ */
+function absorbWarSquad(payload: WarSquadPayload): RankedSquad | null {
+  const handle = cleanHandle(payload.handle ?? '');
+  if (!handle) return null;
+  const parsed = toSquad(payload);
+  const claimed = claimRegisteredSquad({
+    id: payload.id,
+    handle,
+    name: payload.name ?? handle,
+    roster: parsed?.roster,
+    members: typeof payload.members === 'number' ? payload.members : 0,
+    subscribers: typeof payload.subscribers === 'number' ? payload.subscribers : undefined,
+    telegramMembers: payload.telegramMembers,
+    kind: payload.kind,
+    avatar: payload.avatar,
+    tag: payload.tag ?? '',
+    ownerId: payload.creatorId ?? payload.ownerId,
+    cupId: payload.cupId ?? ACTIVE_CUP_ID,
+    requireApproval: payload.requireApproval,
+    verified: payload.verified === true,
+  });
+  if (claimed.ok) return claimed.squad;
+  const existing = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
+  if (!existing) return null;
+  const bound = joinSquadLocally(existing.id, parsed?.roster, {
+    subscribers: payload.subscribers,
+    telegramMembers: payload.telegramMembers,
+    ownerId: payload.creatorId ?? payload.ownerId,
+    verified: payload.verified === true,
+  });
+  return bound === 'bad-handle' ? null : getMySquad() ?? existing;
+}
+
+/** What a Method 2 attempt answered, in the shape the panel paints. */
+type WarVerifyOutcome =
+  | { ok: true; squad?: RankedSquad }
+  | { ok: false; message: string; expired?: boolean };
+
+interface WarVerifyPanelOptions {
+  /** `register` is the admin door's own block; `verify` adds the founder banner. */
+  mode: 'register' | 'verify';
+  /** Read the handle at tap time, so a field edited after mount is always the one verified. */
+  handle: () => string;
+  /** The field's own text, before cleaning — so a private invite is named as one, not as a typo. */
+  rawHandle?: () => string;
+  /** Present when the channel is already on the registry and only its badge is missing. */
+  squadId?: string;
+  /** Run the one atomic call: scan, prove, write. */
+  onSubmit: (code: string) => Promise<WarVerifyOutcome>;
+  onVerified?: (squad?: RankedSquad) => void;
+  onError?: (message: string) => void;
+  onNotice?: (message: string) => void;
+}
+
+interface WarVerifyPanel {
+  el: HTMLElement;
+  /** A field change clears the error; the code itself is player-bound and survives it. */
+  handleChanged(): void;
+  /** Drop the signed code and mint a fresh one — used when the Worker calls it stale. */
+  resetCode(): void;
+  /** Warm the code as the pane opens, before Method 2 is unfolded. */
+  preload(): void;
+}
+
+/**
+ * The dual-mode verification block, built for Channel Wars.
+ *
+ * Method 1 is the Ranks sheet's card, unchanged in look and in meaning. Method 2 is this sheet's
+ * own: the code is asked for on mount, painted from the device's preview and swapped for the
+ * Worker's signed one as it arrives, copied through whichever clipboard the WebView honours, and
+ * proven by reading the channel's public page.
+ */
+function buildWarVerifyPanel(opts: WarVerifyPanelOptions): WarVerifyPanel {
+  const root = document.createElement('section');
+  root.className = 'sqv cw-m2';
+  const body = document.createElement('div');
+  body.className = 'sqv-body';
+
+  let code = '';
+  let codeReady = false;
+  let fetching = false;
+  let busy = false;
+  let altOpen = false;
+  let copyTimer = 0;
+  const buttons: HTMLButtonElement[] = [];
+
+  const button = (cls: string, label: string, run: () => void, withCheck = false): HTMLButtonElement => {
+    const node = document.createElement('button');
+    node.type = 'button';
+    node.className = cls;
+    if (withCheck) node.append(icon('#i-check', 'ico'));
+    const text = document.createElement('span');
+    text.textContent = label;
+    node.append(text);
+    node.addEventListener('click', run);
+    buttons.push(node);
+    return node;
+  };
+
+  const error = document.createElement('p');
+  error.className = 'sqv-err';
+  error.hidden = true;
+  error.setAttribute('role', 'alert');
+
+  const clearError = (): void => {
+    error.hidden = true;
+    error.textContent = '';
+  };
+  const showError = (message: string): void => {
+    error.textContent = message;
+    error.hidden = false;
+    opts.onError?.(message);
+  };
+
+  const refreshDisabled = (): void => {
+    const off = busy || fetching;
+    for (const node of buttons) {
+      node.disabled = off;
+      node.setAttribute('aria-busy', String(off));
+    }
+  };
+
+  /* ---------- Method 1 — the recommended card, exactly as the Ranks sheet draws it ---------- */
+
+  const card = document.createElement('div');
+  card.className = 'sqv-card';
+  const cardTitle = document.createElement('b');
+  cardTitle.className = 'sqv-title';
+  cardTitle.textContent = t('squadVerifyMethod1Title');
+  const cardSub = document.createElement('p');
+  cardSub.className = 'sqv-sub';
+  cardSub.textContent = t('squadVerifyMethod1Sub');
+  const addRow = document.createElement('div');
+  addRow.className = 'sqv-row';
+  addRow.append(
+    button('sqv-add', t('squadVerifyAddChannel'), () => openLink(botAdminInviteUrl('channel'))),
+    button('sqv-add', t('squadVerifyAddGroup'), () => openLink(botAdminInviteUrl('group'))),
+  );
+  card.append(cardTitle, cardSub, addRow);
+  if (opts.mode === 'verify') {
+    card.append(button('sqv-go is-primary', t('squadVerifyBotVerify'), () => { void verifyBot(); }, true));
+  }
+
+  /* ---------- Method 2 — the folded alternative ---------- */
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'sqv-toggle cw-method2';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('dir', lang === 'fa' || lang === 'ar' ? 'rtl' : 'ltr');
+  const badge = document.createElement('span');
+  badge.className = 'cw-method2-icon';
+  badge.setAttribute('aria-hidden', 'true');
+  badge.append(icon('#i-globe', 'cw-method2-globe'));
+  const labelRun = document.createElement('span');
+  labelRun.className = 'cw-method2-label';
+  /* The method number is a Latin digit and rides its own bdi, so RTL prose never moves it. */
+  const methodLabel = t('squadVerifyMethod2Toggle');
+  let offset = 0;
+  for (const match of methodLabel.matchAll(/[0-9]+/g)) {
+    const at = match.index ?? 0;
+    if (at > offset) labelRun.append(methodLabel.slice(offset, at));
+    const digits = document.createElement('bdi');
+    digits.setAttribute('dir', 'ltr');
+    digits.textContent = match[0];
+    labelRun.append(digits);
+    offset = at + match[0].length;
+  }
+  if (offset < methodLabel.length) labelRun.append(methodLabel.slice(offset));
+  toggle.append(badge, labelRun, icon('#i-next', 'cw-method2-chevron'));
+
+  const alt = document.createElement('div');
+  alt.className = 'sqv-alt cw-m2-alt';
+  alt.hidden = true;
+
+  const hint = document.createElement('p');
+  hint.className = 'sqv-hint cw-m2-hint';
+  hint.textContent = t('squadVerifyCodeHint');
+
+  const codeLabel = document.createElement('span');
+  codeLabel.className = 'cw-m2-label';
+  codeLabel.textContent = m2('codeLabel');
+
+  const codeRow = document.createElement('div');
+  codeRow.className = 'cw-m2-code-row';
+  const codeBox = document.createElement('bdi');
+  codeBox.className = 'cw-m2-code';
+  codeBox.setAttribute('dir', 'ltr');
+  /* The pill opens on the device's own deterministic code, never on a dash: a founder who unfolds
+     this block sees a real `TIQ-XXXXXX` in the same frame, and the Worker's signed code replaces
+     it silently when it lands. */
+  codeBox.textContent = previewWarCode(myPlayerId() || 'anon');
+
+  const copy = button('sqv-copy cw-m2-copy', t('squadVerifyCopyCode'), () => { void copyCode(); });
+  const copyLabel = copy.querySelector('span');
+  codeRow.append(codeBox, copy);
+
+  const post = button('sqv-go cw-m2-go', t('squadVerifyPostCta'), () => { void verifyPost(); }, true);
+  const postLabel = post.querySelector('span');
+
+  alt.append(hint, codeLabel, codeRow, post, error);
+
+  const paintCode = (value: string, signed: boolean): void => {
+    codeBox.textContent = value;
+    codeBox.classList.toggle('is-preview', !signed);
+    codeBox.setAttribute('dir', 'ltr');
+  };
+
+  /**
+   * The signed code, fetched once per mount.
+   *
+   * Never blocks the paint and never clears the pill: the preview stays on screen for the whole
+   * round trip, so there is no frame in which this box is empty or reads as a dash. Concurrent
+   * callers — the preload the pane opens with, the unfold, a tap on Verify — share one request
+   * and all wait for it, so a fast tap can never read "not ready" while the answer is in flight.
+   */
+  let inflight: Promise<void> | null = null;
+
+  async function ensureCode(silent = false): Promise<string> {
+    if (codeReady && code) return code;
+    if (inflight) {
+      await inflight;
+      return code;
+    }
+    inflight = (async () => {
+      fetching = true;
+      refreshDisabled();
+      let result: { ok: true; code: string } | { ok: false; message: string };
+      try {
+        result = await requestWarCode(opts.handle().trim());
+      } catch {
+        result = { ok: false, message: m2('offline') };
+      }
+      fetching = false;
+      refreshDisabled();
+      if (!result.ok) {
+        if (!silent) showError(result.message);
+        return;
+      }
+      code = result.code;
+      codeReady = true;
+      paintCode(code, true);
+      clearError();
+    })();
+    await inflight;
+    inflight = null;
+    return code;
+  }
+
+  /** `کپی شد ✓` for two seconds, then back to the key's own label. */
+  function flashCopied(): void {
+    if (!copyLabel) return;
+    copyLabel.textContent = m2('copied');
+    copy.classList.add('is-copied');
+    window.clearTimeout(copyTimer);
+    copyTimer = window.setTimeout(() => {
+      copyLabel.textContent = t('squadVerifyCopyCode');
+      copy.classList.remove('is-copied');
+    }, 2_000);
+  }
+
+  async function copyCode(): Promise<void> {
+    const value = (await ensureCode()).trim();
+    if (!value) return;
+    const copied = await copyText(value);
+    if (!copied) {
+      showError(t('linkCopyFailed'));
+      return;
+    }
+    /* The spec's one haptic, through the same door every other success in this sheet uses. */
+    notify('success');
+    flashCopied();
+    /* A copied preview is still a placeholder: say so rather than let the founder post a code the
+       Worker will refuse. The pill keeps showing it, because an empty box is worse. */
+    if (!codeReady) showError(m2('offline'));
+  }
+
+  async function verifyPost(): Promise<void> {
+    if (busy) return;
+    if (looksPrivateInvite(opts.rawHandle?.() ?? '')) {
+      showError(m2('private'));
+      return;
+    }
+    const handle = opts.handle().trim();
+    if (!handle) {
+      showError(t('enlistErrHandle'));
+      return;
+    }
+    clearError();
+    busy = true;
+    refreshDisabled();
+    if (postLabel) postLabel.textContent = m2('registering');
+    const signed = await ensureCode();
+    if (!codeReady) {
+      busy = false;
+      refreshDisabled();
+      if (postLabel) postLabel.textContent = t('squadVerifyPostCta');
+      showError(m2('offline'));
+      return;
+    }
+    let result: WarVerifyOutcome;
+    try {
+      result = await opts.onSubmit(signed.trim());
+    } catch {
+      result = { ok: false, message: m2('offline') };
+    }
+    busy = false;
+    refreshDisabled();
+    if (postLabel) postLabel.textContent = t('squadVerifyPostCta');
+    if (!result.ok) {
+      if (result.expired) resetCode();
+      showError(result.message);
+      return;
+    }
+    opts.onNotice?.(t('squadVerifyDonePost'));
+    opts.onVerified?.(result.squad);
+  }
+
+  async function verifyBot(): Promise<void> {
+    if (busy) return;
+    const handle = opts.handle().trim();
+    if (!handle) {
+      showError(t('enlistErrHandle'));
+      return;
+    }
+    clearError();
+    busy = true;
+    refreshDisabled();
+    const result = await verifySquadOwnership({ squadId: opts.squadId, handle, method: 'bot' });
+    busy = false;
+    refreshDisabled();
+    if (!result.ok) {
+      showError(result.message || t('enlistErrBot'));
+      return;
+    }
+    opts.onNotice?.(t('squadVerifyDone'));
+    if (result.squad) opts.onVerified?.(result.squad);
+  }
+
+  function resetCode(): void {
+    code = '';
+    codeReady = false;
+    refreshDisabled();
+    paintCode(previewWarCode(myPlayerId() || 'anon'), false);
+    if (altOpen && !body.hidden) void ensureCode();
+  }
+
+  toggle.addEventListener('click', () => {
+    altOpen = alt.hidden;
+    alt.hidden = !altOpen;
+    toggle.setAttribute('aria-expanded', String(altOpen));
+    clearError();
+    if (altOpen) void ensureCode();
+  });
+
+  /* In `verify` mode the block starts folded behind its founder banner; in `register` mode the
+     form itself is the stage, so both methods are already visible. */
+  if (opts.mode === 'verify') {
+    const banner = document.createElement('button');
+    banner.type = 'button';
+    banner.className = 'sqv-banner';
+    banner.append(icon('#i-check', 'ico'));
+    const text = document.createElement('span');
+    text.textContent = t('squadVerifyFounderCta');
+    banner.append(text);
+    banner.setAttribute('aria-expanded', 'false');
+    body.hidden = true;
+    banner.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      banner.setAttribute('aria-expanded', String(!body.hidden));
+      if (!body.hidden) void ensureCode();
+    });
+    root.append(banner);
+  }
+
+  body.append(card, toggle, alt);
+  root.append(body);
+  refreshDisabled();
+
+  return {
+    el: root,
+    handleChanged(): void {
+      clearError();
+      /* The code is bound to the player and the day, not to the handle: a field edit must not
+         throw away a code the founder has already copied. */
+      if (altOpen && !body.hidden && !codeReady) void ensureCode(true);
+    },
+    resetCode,
+    preload(): void {
+      void ensureCode(true);
+    },
+  };
+}
+
 /** Which pane of the sheet is on screen. */
 type WarView = 'hub' | 'register' | 'detail';
 
@@ -414,7 +1070,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
   const regVerifyHost = document.getElementById('cw-reg-verify');
   const regSkip = document.getElementById('cw-reg-skip') as HTMLButtonElement | null;
   /** The dual-mode verification block mounted in the register view. */
-  let regVerifyPanel: SquadVerifyPanel | null = null;
+  let regVerifyPanel: WarVerifyPanel | null = null;
 
   const pick = document.getElementById('cw-pick');
   const pickList = document.getElementById('cw-pick-list');
@@ -871,10 +1527,15 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       host.className = 'cw-verifybox';
       const fighters = detailBody.querySelector('.cw-fighters');
       detailBody.insertBefore(host, fighters ?? null);
-      const panel = buildSquadVerifyPanel({
+      const panel = buildWarVerifyPanel({
         mode: 'verify',
         handle: () => s.handle,
         squadId: s.id,
+        onSubmit: async (code) => {
+          const result = await registerWarChannel({ handle: s.handle, code, squadId: s.id });
+          if (!result.ok) return { ok: false, message: result.message, expired: result.error === 'verify_code_expired' };
+          return { ok: true, squad: absorbWarSquad(result.payload) ?? undefined };
+        },
         onVerified: () => {
           notify('success');
           showToast(t('squadVerifyDone'), 'success');
@@ -1075,14 +1736,21 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     if (regName) regName.disabled = on;
   }
 
-  /** Mount the shared dual-mode verification block inside the admin door. */
+  /**
+   * Mount the dual-mode verification block inside the admin door.
+   *
+   * The block is this sheet's own, not the Ranks sheet's: Method 2 here has to hold a real code
+   * from the first frame, copy it through a WebView clipboard, and prove it against the channel's
+   * public page. Method 1 stays the shared card, word for word and key for key.
+   */
   function mountRegVerifyPanel(): void {
     if (!regVerifyHost) return;
     regVerifyHost.textContent = '';
-    regVerifyPanel = buildSquadVerifyPanel({
+    regVerifyPanel = buildWarVerifyPanel({
       mode: 'register',
       handle: () => cleanHandle(regHandle?.value ?? ''),
-      onPostRegister: (code) => { void submitRegister('post', code); },
+      rawHandle: () => regHandle?.value ?? '',
+      onSubmit: (code) => submitPostRegister(code),
       onError: (message) => setRegErrorText(message),
       onNotice: (message) => {
         notify('success');
@@ -1090,33 +1758,9 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
       },
     });
     regVerifyHost.append(regVerifyPanel.el);
-    const toggle = regVerifyPanel.el.querySelector<HTMLButtonElement>('.sqv-toggle');
-    if (!toggle) return;
-    const label = toggle.textContent ?? '';
-    toggle.replaceChildren();
-    toggle.classList.add('cw-method2');
-    toggle.setAttribute('dir', lang === 'fa' || lang === 'ar' ? 'rtl' : 'ltr');
-
-    const badge = document.createElement('span');
-    badge.className = 'cw-method2-icon';
-    badge.setAttribute('aria-hidden', 'true');
-    badge.append(icon('#i-globe', 'cw-method2-globe'));
-
-    const labelRun = document.createElement('span');
-    labelRun.className = 'cw-method2-label';
-    let offset = 0;
-    for (const match of label.matchAll(/[0-9]+/g)) {
-      const at = match.index ?? 0;
-      if (at > offset) labelRun.append(label.slice(offset, at));
-      const digits = document.createElement('bdi');
-      digits.setAttribute('dir', 'ltr');
-      digits.textContent = match[0];
-      labelRun.append(digits);
-      offset = at + match[0].length;
-    }
-    if (offset < label.length) labelRun.append(label.slice(offset));
-
-    toggle.append(badge, labelRun, icon('#i-next', 'cw-method2-chevron'));
+    /* The code is asked for as the pane opens, not when the founder unfolds Method 2: by the time
+       they read the hint, the signed `TIQ-XXXXXX` is already the one in the pill. */
+    regVerifyPanel.preload();
   }
 
   function showInviteCard(handle: string): void {
@@ -1159,7 +1803,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     showInviteCard(handle);
   }
 
-  async function submitRegister(method: 'bot' | 'none' | 'post' = 'bot', code = ''): Promise<void> {
+  async function submitRegister(method: 'bot' | 'none' = 'bot'): Promise<void> {
     if (registering) return;
     const issue = handleIssue(regHandle?.value ?? '');
     if (issue) {
@@ -1176,10 +1820,7 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     const result = await registerSquadWithTelegram(handle, {
       name: (regName?.value ?? '').trim().slice(0, 32),
       tag: '',
-    }, undefined, {
-      method,
-      ...(method === 'post' ? { verifyCode: code } : {}),
-    });
+    }, undefined, { method });
     registering = false;
     setRegBusy(false);
     if (!result.ok) {
@@ -1202,6 +1843,63 @@ export function createChannelWarHub(api: ChannelWarApi): ChannelWarHub {
     showInviteCard(result.squad.handle);
     notify('success');
     if (verified) showToast(t('squadVerifyDone'), 'success');
+  }
+
+  /**
+   * Method 2's one round trip: the Worker scans the public channel, finds the code, and writes the
+   * verified row before it answers. This half folds that answer into the device and returns the
+   * admin to the ladder the channel now stands on — at `0` TIQ, with its badge already earned.
+   */
+  async function submitPostRegister(code: string): Promise<WarVerifyOutcome> {
+    if (registering) return { ok: false, message: t('squadVerifyBusy') };
+    /* A private invite is refused with its own sentence, before the generic character check can
+       turn it into "letters and numbers only" — which would tell the founder nothing. */
+    if (looksPrivateInvite(regHandle?.value ?? '')) {
+      const message = m2('private');
+      setRegErrorText(message);
+      notify('warning');
+      regHandle?.focus();
+      return { ok: false, message };
+    }
+    const issue = handleIssue(regHandle?.value ?? '');
+    if (issue) {
+      const message = t(handleErrorKey(issue));
+      setRegError(handleErrorKey(issue));
+      notify('warning');
+      regHandle?.focus();
+      return { ok: false, message };
+    }
+    const handle = cleanHandle(regHandle?.value ?? '');
+    setRegError('');
+    registering = true;
+    setRegBusy(true);
+    const result = await registerWarChannel({
+      handle,
+      code,
+      name: (regName?.value ?? '').trim().slice(0, 32),
+    });
+    registering = false;
+    setRegBusy(false);
+    if (!result.ok) {
+      setRegErrorText(result.message);
+      notify('warning');
+      return { ok: false, message: result.message, expired: result.error === 'verify_code_expired' };
+    }
+    const squad = absorbWarSquad(result.payload);
+    if (!squad) {
+      /* The registry took the channel but this device could not place it on its own board: the
+         next board refresh will, so the admin is told to look rather than shown a false refusal. */
+      void refreshSquadBoard().then(() => { if (isOpen()) paint(); });
+      notify('success');
+      showToast(t('squadVerifyDonePost'), 'success');
+      closeRegister();
+      return { ok: true };
+    }
+    noteBaseline(squad.id, warPointsOf(squad));
+    notify('success');
+    welcome(squad);
+    closeRegister();
+    return { ok: true, squad };
   }
 
   /* ---------- the invite link ---------- */
