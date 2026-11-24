@@ -4972,30 +4972,32 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
   flex: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4));
 }
-/* A restrained status tag; the crown carries the recognition without a glowing pill. */
+/* The upgrade CTA stays quiet; only an active membership earns the metallic badge. */
 .id-card.id-compact .home-vip {
   height: 24px;
   max-width: 96px;
   padding: 0 7px;
   gap: 4px;
-  border: 1px solid rgba(245, 158, 11, .18);
+  border: 1px solid rgba(246, 200, 94, 0.36);
   border-radius: 7px;
-  background: rgba(245, 158, 11, .055);
+  background: rgba(246, 200, 94, 0.08);
   box-shadow: none;
-  color: #F3D98F;
+  color: #f6c85e;
   font-size: 10px;
   letter-spacing: .02em;
 }
-.id-card.id-compact .home-vip::after { display: none; }
-.id-card.id-compact .home-vip.is-active {
-  border-color: rgba(245, 158, 11, .3);
-  background: rgba(245, 158, 11, .1);
+.id-card.id-compact .home-vip.is-vip {
+  border-color: rgba(246, 200, 94, 0.65);
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.30) 0%, rgba(217, 155, 38, 0.16) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.40);
+  color: #fde68a;
 }
+.id-card.id-compact .home-vip:not(.is-vip):active { transform: scale(0.96); }
 .id-card.id-compact .home-vip-crown { width: 11px; height: 11px; }
 .id-card.id-compact .home-vip-t { text-overflow: ellipsis; }
 .id-card.id-compact .home-vip-d {
   padding-inline-start: 4px;
-  border-inline-start: 1px solid rgba(245, 158, 11, .2);
+  border-inline-start: 1px solid rgba(246, 200, 94, 0.2);
   color: #FFE7A8;
   font-size: 10px;
   letter-spacing: 0;
@@ -34801,11 +34803,11 @@ html[data-lang="ar"] [data-i18n-html] {
   height: 16px;
   max-width: 84px;
   padding: 0 6px;
-  border: 1px solid rgba(245, 158, 11, .2);
+  border: 1px solid rgba(246, 200, 94, 0.36);
   border-radius: 9999px;
-  background: rgba(245, 158, 11, .06);
+  background: rgba(246, 200, 94, 0.08);
   box-shadow: none;
-  color: #F3D98F;
+  color: #f6c85e;
   font: inherit;
   font-size: 8px;
   font-weight: 700;
@@ -34818,22 +34820,13 @@ html[data-lang="ar"] [data-i18n-html] {
   -webkit-tap-highlight-color: transparent;
   transition: border-color .16s ease, background .16s ease, transform .14s ease;
 }
-.home-vip::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(104deg, transparent 30%, rgba(255, 242, 196, .16) 48%, transparent 66%);
-  transform: translateX(-130%);
-  animation: home-vip-sheen 4.2s ease-in-out infinite;
-  pointer-events: none;
+.home-vip.is-vip {
+  border-color: rgba(246, 200, 94, 0.65);
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.30) 0%, rgba(217, 155, 38, 0.16) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.40);
+  color: #fde68a;
 }
-.home-vip.is-active {
-  border-color: rgba(245, 158, 11, .42);
-  background: rgba(245, 158, 11, .12);
-  box-shadow: none;
-}
-.home-vip:not(:disabled):active { transform: scale(.96); }
+.home-vip:not(:disabled):active { transform: scale(0.96); }
 .home-vip:focus-visible { outline: 2px solid #FFE7A8; outline-offset: 2px; }
 .home-vip-crown { flex: none; width: 9px; height: 9px; }
 .home-vip-t {
@@ -34913,11 +34906,6 @@ html[data-lang="ar"] [data-i18n-html] {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
 }
 
-@keyframes home-vip-sheen {
-  0%, 62% { transform: translateX(-130%); }
-  84%, 100% { transform: translateX(130%); }
-}
-
 html[data-lang="fa"] :is(.home-vip, .arena-vip) {
   letter-spacing: 0;
   text-transform: none;
@@ -34931,7 +34919,6 @@ html[data-lang="fa"] .arena-vip { font-size: 8px; }
   .home-vip { max-width: 58px; padding-inline: 5px; }
   .home-vip-d { display: none; }
 }
-html.reduced-motion .home-vip::after { animation: none; }
 
 /* crown lines inside the Arena roster and runners keep their own single row */
 .stars-run-nmline,
@@ -34948,7 +34935,7 @@ html.reduced-motion .home-vip::after { animation: none; }
   white-space: nowrap;
 }
 
-/* The days chip is the first thing a narrow header can spare; the full "VIP ACTIVE" label
+/* The days chip is the first thing a narrow header can spare; the earned VIP title
    still fits between 375px and 430px, and every size keeps the day count in its aria-label. */
 @media (max-width: 430px) {
   .home-vip-d { display: none; }
@@ -38994,7 +38981,6 @@ html:not(.game-live) .screen:not(.game) *::after,
   animation: none !important;
 }
 
-.home-vip::after,
 .tour-star-stage::before,
 .pod-card.gold .pod-av::after,
 #s-profile .badge-chip[data-state="locked"]::after,
@@ -48154,11 +48140,7 @@ html.reduced-motion .ci-seat.is-cta { transition: none; }
   max-width: none;
   padding: 2px 8px;
   gap: 4px;
-  border: 1px solid rgba(246, 200, 94, 0.58);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(246, 200, 94, 0.26) 0%, rgba(217, 155, 38, 0.12) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.35);
-  color: #FDE68A;
   font-size: 10.5px;
   font-weight: 900;
   letter-spacing: 0;
@@ -48167,8 +48149,21 @@ html.reduced-motion .ci-seat.is-cta { transition: none; }
   white-space: nowrap;
   overflow: hidden;
 }
-#home-id-card .home-vip::after { display: none; }
+#home-id-card .home-vip:not(.is-vip) {
+  border: 1px solid rgba(246, 200, 94, 0.36);
+  background: rgba(246, 200, 94, 0.08);
+  box-shadow: none;
+  color: #f6c85e;
+}
+#home-id-card .home-vip.is-vip {
+  border: 1px solid rgba(246, 200, 94, 0.65);
+  background: linear-gradient(180deg, rgba(246, 200, 94, 0.30) 0%, rgba(217, 155, 38, 0.16) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.40);
+  color: #fde68a;
+}
+#home-id-card .home-vip:not(.is-vip):active { transform: scale(0.96); }
 #home-id-card .home-vip-crown { width: 11px; height: 11px; color: #F6C85E; }
+#home-id-card .home-vip.is-vip .home-vip-crown { color: #FDE68A; }
 #home-id-card .home-vip,
 #home-id-card .home-vip-t,
 #home-id-card .home-vip-d {

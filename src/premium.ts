@@ -19,7 +19,7 @@
  */
 import { workerUrl } from './adminApi';
 import { activeTgId } from './storage';
-import { onLang, t } from './settings';
+import { lang, onLang, t, type LangCode } from './settings';
 import { showToast } from './toast';
 import {
   impact, notify, openInvoice, tgInitData, tgUser, type InvoiceStatus,
@@ -477,23 +477,25 @@ let trigger: HTMLElement | null = null;
 let unlocked: (() => void) | null = null;
 let statusKey = '';
 
+const HOME_VIP_LABELS: Record<LangCode, { offer: string; active: string }> = {
+  en: { offer: 'Get VIP', active: 'VIP' },
+  fa: { offer: 'عضویت ویژه', active: 'ویژه' },
+  ru: { offer: 'Стать VIP', active: 'VIP' },
+  ar: { offer: 'ترقية VIP', active: 'مميز' },
+  es: { offer: 'Ser VIP', active: 'VIP' },
+};
+
 function paintEntryPoints(): void {
   if (!dom) return;
   const source = vipSource();
   const active = source !== 'none';
   const days = source === 'subscription' ? vipDaysLeft() : 0;
-  let narrow = false;
-  try { narrow = window.matchMedia('(max-width: 374px)').matches; } catch { /* fixed width */ }
-  const label = !active
-    ? t('vipPillOffer')
-    : narrow
-      ? days > 0 ? t('vipPillDays').replace('{days}', digits(days)) : t('vipPillActiveShort')
-      : source === 'subscription' || source === 'telegram' ? t('vipPillActive') : t('vipPillPreview');
+  const labels = HOME_VIP_LABELS[lang];
   const dayText = days > 0 ? t('vipPillDays').replace('{days}', digits(days)) : '';
 
-  dom.homePill.classList.toggle('is-active', active);
+  dom.homePill.classList.toggle('is-vip', active);
   dom.homePill.classList.toggle('is-offer', !active);
-  dom.homePillT.textContent = label;
+  dom.homePillT.textContent = active ? labels.active : labels.offer;
   dom.homePillD.textContent = dayText;
   dom.homePillD.hidden = !dayText;
   dom.homePill.setAttribute(
@@ -816,8 +818,6 @@ export function initVipStore(): void {
 
   paintEntryPoints();
   void refreshVip().then(() => paintEntryPoints());
-  /* the header pill shortens its label on a 320px phone; an orientation flip re-reads the breakpoint */
-  window.addEventListener('resize', () => paintEntryPoints());
   window.setInterval(() => {
     const now = vipSource();
     if (now === lastSource) return;
