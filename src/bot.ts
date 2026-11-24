@@ -83,6 +83,121 @@ export function botThinkMs(d: Difficulty): number {
 const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
 /** A cell key on the board in play: the stride is the board's own width, never a constant. */
 const key = (c: number, r: number, cols: number) => r * cols + c;
+
+/* ---------- per-bot anti-oscillation memory ---------- */
+
+/**
+ * One bot's recent walk. The board does not carry a pawn's trail, so the brain keeps the smallest
+ * thing it needs to refuse a shuffle: the last `HISTORY_LEN` squares its own moves landed on.
+ * `head` is the next write slot of the ring, `count` how many entries are live. The match signature
+ * and `clock` let a new race clear the trail instead of charging a fresh pawn for an old match.
+ */
+interface BotMemory {
+  /** Filed-board count at the last action — a clock that only grows inside one race. */
+  clock: number;
+  /** Format signature (dimensions, seats, balls): a different board is a different race. */
+  sig: number;
+  /** Ring of cell keys (`r * 100 + c`); a coordinate is unique on every board the rules lay out. */
+  recent: number[];
+  /** Next write slot in `recent`. */
+  head: number;
+  /** Live entries in `recent`, capped at `HISTORY_LEN`. */
+  count: number;
+}
+
+/** One ring per seat. Bots never share a trail; a new race resets the seat's own ring. */
+const BOT_MEMORY = new Map<Player, BotMemory>();
+
+/** The static format of a board, used to drop a trail from a different match. */
+const matchSignature = (s: GameState): number =>
+  (((s.cols * 31 + s.rows) * 131 + s.balls.length) * 17 + s.teams.length) >>> 0;
+
+/** A cell key with a stride no board reaches, so the ring needs no dimensions to stay unique. */
+const visitKey = (p: Pos): number => p.r * 100 + p.c;
+
+/**
+ * The memory this seat acts on. A trail is only meaningful inside one race, so it resets when the
+ * format changes, when the filed-board clock goes backwards (a new board), or during the opening
+ * cycle — the first full lap a seat has not yet completed. That makes every fresh match start with
+ * an empty ring even when it repeats the previous match's format exactly.
+ */
+function botMemory(s: GameState, me: Player): BotMemory {
+  const clock = s.repeat?.seen.length ?? 0;
+  const sig = matchSignature(s);
+  const opening = clock <= s.teams.length;
+  let mem = BOT_MEMORY.get(me);
+  if (!mem || mem.sig !== sig || clock < mem.clock || opening) {
+    mem = { clock, sig, recent: [], head: 0, count: 0 };
+    BOT_MEMORY.set(me, mem);
+  }
+  mem.clock = Math.max(mem.clock, clock);
+  return mem;
+}
+
+/** File one committed move's destination in the ring, dropping the oldest once it is full. */
+function recordMove(mem: BotMemory, p: Pos): void {
+  mem.recent[mem.head] = visitKey(p);
+  mem.head = (mem.head + 1) % HISTORY_LEN;
+  mem.count = Math.min(HISTORY_LEN, mem.count + 1);
+}
+
+/** The square this bot's last move landed on, or -1 when it has not moved yet. */
+const previousSquare = (mem: BotMemory): number =>
+  (mem.count ? mem.recent[(mem.head - 1 + HISTORY_LEN) % HISTORY_LEN] : -1);
+
+/** How many times a square appears in the recent window. */
+function recentVisits(mem: BotMemory, cell: number): number {
+  let n = 0;
+  for (let i = 0; i < mem.count; i++) {
+    if (mem.recent[(mem.head - 1 - i + HISTORY_LEN * 2) % HISTORY_LEN] === cell) n++;
+  }
+  return n;
+}
+
+/** Does this square sit in the recent trail? */
+const recentlyVisited = (mem: BotMemory, p: Pos): boolean => recentVisits(mem, visitKey(p)) > 0;
+
+/**
+ * The sprint heuristic: how good a destination is purely as a route to FINISH, in BFS steps plus
+ * row distance — `-(shortestPath * 100 + row * 10)`, larger is better. It is the secondary key
+ * every selection falls back on, and the primary key once a race is already lost, because a
+ * terminal losing score is identical for a forward step and a sideways shuffle.
+ */
+function sprintProgress(s: GameState, me: Player, d: Int16Array, movedId: number, to: Pos): number {
+  let best = pathOn(d, to, s.cols);
+  if (!Number.isFinite(best)) return -Infinity;
+  for (const b of s.balls) {
+    if (b.team !== me || b.id === movedId || b.isCheckmated) continue;
+    const v = d[b.pos.r * s.cols + b.pos.c];
+    if (v >= 0 && v < best) best = v;
+  }
+  return -(best * 100 + to.r * 10);
+}
+
+/**
+ * Which way around a barrier is the committed one. Counts rival walls between the moving ball and
+ * FINISH on each side of its column and prefers the emptier side; a perfectly symmetric board
+ * prefers the side the candidate already walks toward, with the left as the final stable fallback.
+ * The result is a tiny +/-1 tie-break, never a primary score: two routes with the same BFS length
+ * then commit to one side for the whole walk instead of mirroring each other turn after turn.
+ */
+function exitBias(s: GameState, me: Player, from: Pos, to: Pos): number {
+  let left = 0, right = 0;
+  for (const w of s.walls) {
+    if (w.owner === me) continue;
+    const wx = w.o === 'h' ? w.x + 0.5 : w.x;
+    const wy = w.o === 'h' ? w.y : w.y + 0.5;
+    if (wy > from.r) continue;                    // only obstacles between the ball and the line
+    if (wx < from.c - 0.25) left++;
+    else if (wx > from.c + 0.25) right++;
+  }
+  /* Fewer rival walls wins; a perfectly symmetric lane commits to the left, so the fallback is a
+     property of the board and not of the order the step list happened to enumerate. */
+  const side = left <= right ? -1 : 1;
+  const dc = to.c - from.c;
+  return dc === 0 ? 0 : (dc * side > 0 ? 1 : -1);
+}
+
 /** The most wall slots one turn will price, nearest the balls first — the turn's own work cap. */
 const WALL_SLOTS = 48;
 /** The largest row gap the slot ranking tracks (any board is shorter than this). */
@@ -96,6 +211,21 @@ const WALL_RANK_MAX = 31;
 const TURN_EDGE = 0.5;
 /** An opponent this close to FINISH puts the race in the red zone: interception is mandatory. */
 const RED_ZONE = 3;
+/**
+ * How many recent destinations one bot remembers. Long enough to span the walk around a wide
+ * horizontal barrier — the exact A <-> B loop this ring exists to break — while staying so small
+ * that the per-turn scan is free.
+ */
+const HISTORY_LEN = 8;
+/** Stepping straight back onto the square this bot just left is almost never progress. */
+const BACKTRACK_PENALTY = 450;
+/** Re-entering any square from the recent window: the fuel of an A <-> B ping-pong. */
+const REVISIT_PENALTY = 220;
+/**
+ * A candidate score at or below this is an unavoidable loss. The terminal losing score is the same
+ * for every action then, so the sprint heuristic is promoted from tie-breaker to primary key.
+ */
+const LOSS_THRESHOLD = 300;
 
 /* ---------- shared board reads ---------- */
 
@@ -244,6 +374,7 @@ function bestStepCount(s: GameState, d: Int16Array, team: Player): number {
 
 function moveCandidates(
   s: GameState, me: Player, d: Int16Array, dfOpp: Int16Array, myD: number, foes: Contender[],
+  mem: BotMemory,
 ): Cand[] {
   const out: Cand[] = [];
   const opts = steps(s, me);
@@ -251,6 +382,9 @@ function moveCandidates(
   const danger = dangerCells(s, me);
   const K = (c: number, r: number) => key(c, r, s.cols);
   const blockFor = foes.map((f) => blockTargets(s, d, f.team));
+  /* The one move a bot has cannot be refused: no anti-oscillation price applies to it. */
+  const onlyMove = opts.length === 1;
+  const prev = previousSquare(mem);
   for (const st of opts) {
     const b = ballById(s, st.ball);
     if (!b) continue;
@@ -273,7 +407,26 @@ function moveCandidates(
     }
     /* develop the second ball when the one in the lead is not the one moving */
     if (before > myD) sc += 0.15 * (from - after);
-    out.push({ a: { kind: 'move', ball: st.ball, to: st.to }, s: sc, danger: danger.has(K(st.to.c, st.to.r)) });
+    /* ANTI-BACKTRACK / CYCLE PRICE. The previous square is the A <-> B loop's whole engine, so it
+       is priced hardest; every square still in the recent trail is priced by how often it recurs.
+       A step into FINISH ends the race, and the only legal step has no alternative: both exempt. */
+    const toKey = K(st.to.c, st.to.r);
+    let hist = 0;
+    if (!onlyMove && st.to.r !== 0) {
+      if (toKey === prev) hist -= BACKTRACK_PENALTY;
+      const visits = recentVisits(mem, toKey);
+      if (visits > 0) hist -= REVISIT_PENALTY * visits;
+    }
+    /* Two exits of equal BFS length must not mirror each other: the tie key is the sprint route
+       plus a stable side preference, so the walk commits to one way around a symmetric barrier. */
+    const progress = sprintProgress(s, me, d, st.ball, st.to);
+    out.push({
+      a: { kind: 'move', ball: st.ball, to: st.to },
+      s: sc + hist,
+      danger: danger.has(toKey),
+      tie: progress + exitBias(s, me, b.pos, st.to),
+      progress,
+    });
   }
   return out;
 }
@@ -596,6 +749,16 @@ interface Cand {
   frontal?: boolean;
   /** Walls only: steps it costs the bot's own path (0 = free). */
   selfCost?: number;
+  /**
+   * Moves only: the deterministic secondary key — sprint progress toward FINISH plus a stable
+   * side preference for symmetric barriers. Larger is better, and it only decides a score tie.
+   */
+  tie?: number;
+  /**
+   * Moves only: the raw sprint heuristic `-(BFS steps * 100 + goal-row distance * 10)`. It is
+   * promoted into the primary score when every candidate shares the same terminal losing result.
+   */
+  progress?: number;
 }
 
 /**
@@ -676,10 +839,16 @@ function select(pool: Cand[], p: Profile): Action {
   const use = safe.length && bestSafe > 0 ? safe : pool;
   let best = -Infinity;
   for (const c of use) if (c.s > best) best = c.s;
-  if (p.band <= 0 || p.temp <= 0) {
-    const top = use.filter((c) => c.s === best);
-    return top[(Math.random() * top.length) | 0].a;
+  /* Exact primary ties are resolved by the deterministic tie key BEFORE any softmax: two equal
+     exits around a barrier must commit to one side, never alternate because the dice said so. */
+  let top: Cand | null = null, ties = 0, topTie = -Infinity;
+  for (const c of use) {
+    if (c.s !== best) continue;
+    const t = c.tie ?? -Infinity;
+    if (!top || t > topTie) { top = c; topTie = t; ties = 1; }
+    else if (t === topTie) ties++;
   }
+  if (top && (ties > 1 || p.band <= 0 || p.temp <= 0)) return top.a;
   const band = use.filter((c) => c.s >= best - p.band);
   const weights = band.map((c) => Math.exp((c.s - best) / p.temp));
   let total = 0;
@@ -689,12 +858,36 @@ function select(pool: Cand[], p: Profile): Action {
   return band[band.length - 1].a;
 }
 
+/**
+ * The forward step with the best sprint key. When a race is already lost every candidate can carry
+ * the SAME terminal score, so a score-based pick is blind between a sprint and a shuffle. This
+ * ranks the moves on BFS distance to FINISH alone (the `progress` key), keeping the deterministic
+ * side preference for an exact distance tie, and prefers a safe step when one exists.
+ */
+function sprintChoice(pool: readonly Cand[]): Action | null {
+  const rank = (c: Cand): number => c.tie ?? c.progress ?? -Infinity;
+  let best: Cand | null = null, safe: Cand | null = null;
+  for (const c of pool) {
+    if (c.progress === undefined) continue;
+    if (c.danger) {
+      if (!best || rank(c) > rank(best)) best = c;
+    } else if (!safe || rank(c) > rank(safe)) {
+      safe = c;
+    }
+  }
+  const pick = safe ?? best;
+  return pick ? pick.a : null;
+}
+
 /** A uniformly random legal step that keeps a route to FINISH — Easy's dive off the shortest
- *  path, never a walk into a sealed pocket. */
-function randomStep(s: GameState, me: Player, d: Int16Array): Action | null {
+ *  path, never a walk into a sealed pocket. The recent trail is filtered out first, so even a
+ *  wandering Easy cannot fall into an A <-> B loop; with no fresh square it takes the plain set. */
+function randomStep(s: GameState, me: Player, d: Int16Array, mem: BotMemory): Action | null {
   const opts = steps(s, me).filter((st) => pathOn(d, st.to, s.cols) < Infinity);
   if (!opts.length) return null;
-  const st = opts[(Math.random() * opts.length) | 0];
+  const fresh = opts.length > 1 ? opts.filter((st) => !recentlyVisited(mem, st.to)) : opts;
+  const use = fresh.length ? fresh : opts;
+  const st = use[(Math.random() * use.length) | 0];
   return { kind: 'move', ball: st.ball, to: st.to };
 }
 
@@ -709,9 +902,8 @@ function randomStep(s: GameState, me: Player, d: Int16Array): Action | null {
  * which could not see a charge buried two rows ahead — so Hard never spent a mine, and every tier
  * walked to FINISH holding its whole inventory.
  */
-export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Action {
+function decide(s: GameState, difficulty: Difficulty, me: Player, mem: BotMemory): Action {
   const p = PROFILES[difficulty];
-  const me = s.turn;
   const d = distField(s.walls, s.cols, s.rows);
   const myD = teamField(s, me, d);
   const foes = contenders(s, me, d);
@@ -732,13 +924,18 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   const pressure = underPressure(myD, foes);
   const emergency = foes.some((f) => Number.isFinite(f.dist) && f.dist <= RED_ZONE && f.eff <= myD);
   const assertive = isProactive(s) && pressure;
+  /* Bug A guard: with the front-runner inside two steps and no better standing, every candidate
+     can carry the same terminal losing score. The BFS sprint key is then the only thing that can
+     separate a forward step from a sideways shuffle, so it is promoted to primary below. */
+  const doomed = leader !== null && Number.isFinite(leader.dist) && leader.dist <= 2
+    && leader.eff <= myD;
   /* Unspent walls and mines are worth nothing once somebody crosses the line. The nearer the
      front-runner gets, the more a single bite is worth the turn it costs. */
   const urgency = Number.isFinite(leadDist) ? Math.max(0, 1 - leadDist / Math.max(1, s.rows)) : 0;
 
   /* Easy wanders: a plain random legal step, exactly as it always has, keeps it forgiving */
   if (p.noise > 0 && Math.random() < p.noise) {
-    const wander = randomStep(s, me, d);
+    const wander = randomStep(s, me, d, mem);
     if (wander) return wander;
   }
 
@@ -810,12 +1007,20 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
      fresh board with a full stack. That reserve was the gate that produced the hoarding sprint. */
   const thr = wallThreshold(s, me, foes, p.wallDemand, emergency ? 2 : assertive ? 1 : 0);
   for (const w of walls) if (w.s >= thr) pool.push(w);
-  pool.push(...moveCandidates(s, me, d, dfOpp, myD, foes));
+  pool.push(...moveCandidates(s, me, d, dfOpp, myD, foes, mem));
   if (mine) pool.push(mine);
+
+  /* An unavoidable loss is the one case where primary scores are all the same terminal value.
+     Sprint the fastest BFS route instead: that is Bug A's fix, and it must outrank a wall that
+     cannot stop the front-runner (any real block was already returned by the emergency gate). */
+  if (doomed) {
+    const sprinted = sprintChoice(pool);
+    if (sprinted) return sprinted;
+  }
 
   if (!pool.length) {
     if (mine) return mine.a;
-    const st = randomStep(s, me, d);
+    const st = randomStep(s, me, d, mem);
     if (st) return st;
     for (const w of allWalls(me, s.cols, s.rows)) if (wallOk(s, w)) return { kind: 'wall', wall: w };
     return { kind: 'pass' };
@@ -830,6 +1035,28 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     if (bestWall) extras.push(bestWall);
     if (mine) extras.push(mine);
     refineTwoPly(s, me, myD, foes, pool, extras);
+    /* The reply check can reveal that EVERY candidate loses: the 2-ply score is then one and the
+       same terminal value. Rank the sprint on BFS progress when that happens. */
+    let bestNow = -Infinity;
+    for (const c of pool) if (c.s > bestNow) bestNow = c.s;
+    if (bestNow <= -LOSS_THRESHOLD) {
+      const sprinted = sprintChoice(pool);
+      if (sprinted) return sprinted;
+    }
   }
   return select(pool, p);
+}
+
+/**
+ * The public turn. Resolving the seat's recent trail here — outside every early return — keeps the
+ * history exact for a winning step, a sprint, an interception, a wall and a trap alike, and files
+ * only the moves that were actually chosen. The trail is not a hidden-information leak: it names
+ * squares this bot itself walked on.
+ */
+export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Action {
+  const me = s.turn;
+  const mem = botMemory(s, me);
+  const action = decide(s, difficulty, me, mem);
+  if (action.kind === 'move') recordMove(mem, action.to);
+  return action;
 }
