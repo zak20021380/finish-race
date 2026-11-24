@@ -6770,9 +6770,9 @@ document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop()
 /* ============================================================================================
    THE 7-DAY "MOST WINS" RACE — slide 0's engine
    --------------------------------------------------------------------------------------------
-   The weekly race is uncapped: every friend win and every Hard AI win inside one 7-day window
-   (Monday 00:00 UTC cycles, the same clock the Worker runs) adds to a single total, and the Top 3
-   totals when the week closes split one 50-Star pool 25 / 15 / 10. The card is markup in index.html; every live
+   The weekly race is uncapped: every friend win and every Hard AI win inside one exact 168-hour
+   window (the season epoch stamped at launch, the same clock the Worker runs) adds to a single
+   total, and the Top 3 totals when the week closes split one 50-Star pool 25 / 15 / 10. The card is markup in index.html; every live
    figure on it — and on its board / rules sheet — is painted here from the room's own answer.
 
    Anti-cheat is the room's, never this file's:
@@ -6787,7 +6787,12 @@ document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop()
    ============================================================================================ */
 
 const CHALLENGE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const CHALLENGE_WEEK_ANCHOR = Date.UTC(2024, 0, 1);
+/** Mirrors `CHALLENGE_SEASON_EPOCH` in worker/challenge.ts: 2026-11-24T14:30:00Z. */
+const CHALLENGE_SEASON_EPOCH = Date.UTC(2026, 10, 24, 14, 30, 0);
+const CHALLENGE_DAY_MS = 24 * 60 * 60 * 1000;
+const CHALLENGE_HOUR_MS = 60 * 60 * 1000;
+/** The countdown turns warm amber for the last six hours of the 168-hour cycle. */
+const CHALLENGE_URGENT_MS = 6 * 60 * 60 * 1000;
 /** One row of the room's live board. The internal player id never leaves the Worker. */
 interface ChallengeRowView {
   position: number;
@@ -6852,6 +6857,8 @@ interface ChallengeCopy {
   /** The poster's one-line hook, under the headline. */
   hook: string;
   podium: string;
+  /** The word after the countdown digits while a day or more remains ("left" / "باقی‌مانده"). */
+  clockLeft: string;
   winsWord: string;
   friendHint: string;
   /** The live rank pill: the rank token is replaced with a Latin number. */
@@ -6914,8 +6921,9 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   fa: {
     badge: 'تورنمنت هفتگی',
     prizeUnit: 'استارز',
-    hook: 'بیشترین برد این هفته رو بیار و سهمت رو از <bdi dir="ltr">50</bdi> استارز جایزه بگیر!',
-    podium: 'مجموع جوایز: <bdi dir="ltr">50</bdi> استارز • <bdi dir="ltr">3</bdi> نفر برتر',
+    hook: 'بیشترین برد این هفته رو ثبت کن و سهمت رو از <bdi dir="ltr">50</bdi> استارز واقعی ببر!',
+    podium: 'جایزه <bdi dir="ltr">3</bdi> نفر برتر • <bdi dir="ltr">25 / 15 / 10</bdi> استارز',
+    clockLeft: 'باقی‌مانده',
     winsWord: 'برد',
     friendHint: 'حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست',
     rank: 'رتبه <bdi dir="ltr">#{rank}</bdi>',
@@ -6928,7 +6936,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rivalsLink: 'انتخاب مستقیم از لیست دوستان و رقبا',
     claim: 'ثبت و دریافت <bdi dir="ltr">{stars}</bdi> استارز • مقام <bdi dir="ltr">#{rank}</bdi>',
     claimShort: 'دریافت <bdi dir="ltr">{stars}</bdi> استارز • مقام <bdi dir="ltr">#{rank}</bdi>',
-    enter: 'ورود به تورنمنت هفتگی',
+    enter: 'ورود به تورنمنت و جدول زنده',
     claimDone: 'این جایزه قبلاً ثبت شده است',
     claimOk: 'جایزه تورنمنت شما ثبت شد',
     claimFail: 'ثبت درخواست ممکن نشد؛ دوباره تلاش کنید',
@@ -6975,7 +6983,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     badge: 'WEEKLY TOURNAMENT',
     prizeUnit: 'STARS',
     hook: 'Rack up the most wins this week to claim your share of <bdi dir="ltr">50</bdi> Stars!',
-    podium: '<bdi dir="ltr">50</bdi> STARS PRIZE POOL • TOP <bdi dir="ltr">3</bdi> WINNERS',
+    podium: 'TOP <bdi dir="ltr">3</bdi> PRIZES • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
+    clockLeft: 'left',
     winsWord: 'wins',
     friendHint: 'Max <bdi dir="ltr">3</bdi> wins from each friend',
     rank: 'RANK <bdi dir="ltr">#{rank}</bdi>',
@@ -6988,7 +6997,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rivalsLink: 'Or challenge directly from Friends & Rivals',
     claim: 'Claim <bdi dir="ltr">{stars}</bdi> Stars • Rank <bdi dir="ltr">#{rank}</bdi>',
     claimShort: 'Claim <bdi dir="ltr">{stars}</bdi> Stars • Rank <bdi dir="ltr">#{rank}</bdi>',
-    enter: 'Enter the Weekly Tournament',
+    enter: 'Enter Tournament &amp; Standings',
     claimDone: 'This prize was already claimed',
     claimOk: 'Your tournament prize is recorded',
     claimFail: 'Could not record the claim — try again',
@@ -7034,8 +7043,9 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   ru: {
     badge: 'НЕДЕЛЬНЫЙ ТУРНИР',
     prizeUnit: 'STARS',
-    hook: 'Набери больше всех побед за неделю и раздели призовой фонд <bdi dir="ltr">50</bdi> Stars!',
-    podium: 'ПРИЗОВОЙ ФОНД <bdi dir="ltr">50</bdi> STARS • ТОП-<bdi dir="ltr">3</bdi>',
+    hook: 'Набери больше всех побед за неделю и раздели <bdi dir="ltr">50</bdi> Stars!',
+    podium: 'ТОП-<bdi dir="ltr">3</bdi> ПРИЗЫ • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
+    clockLeft: 'осталось',
     winsWord: 'побед',
     friendHint: 'Макс. <bdi dir="ltr">3</bdi> побед от друга',
     rank: 'МЕСТО <bdi dir="ltr">#{rank}</bdi>',
@@ -7048,7 +7058,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rivalsLink: 'Или выбрать из списка друзей и соперников',
     claim: 'Получить <bdi dir="ltr">{stars}</bdi> Stars • место <bdi dir="ltr">#{rank}</bdi>',
     claimShort: 'Забрать <bdi dir="ltr">{stars}</bdi> Stars • место <bdi dir="ltr">#{rank}</bdi>',
-    enter: 'Войти в недельный турнир',
+    enter: 'Войти в турнир и таблицу',
     claimDone: 'Этот приз уже получен',
     claimOk: 'Ваш турнирный приз записан',
     claimFail: 'Не удалось отправить заявку — попробуйте ещё раз',
@@ -7095,7 +7105,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     badge: 'البطولة الأسبوعية',
     prizeUnit: 'ستارز',
     hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع واربح حصتك من <bdi dir="ltr">50</bdi> ستارز!',
-    podium: 'مجموع الجوائز: <bdi dir="ltr">50</bdi> ستارز • أول <bdi dir="ltr">3</bdi> فائزين',
+    podium: 'جوائز أول <bdi dir="ltr">3</bdi> • <bdi dir="ltr">25 / 15 / 10</bdi> ستارز',
+    clockLeft: 'متبقي',
     winsWord: 'انتصار',
     friendHint: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات من كل صديق',
     rank: 'الترتيب <bdi dir="ltr">#{rank}</bdi>',
@@ -7108,7 +7119,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rivalsLink: 'أو اختر مباشرة من قائمة الأصدقاء والمنافسين',
     claim: 'استلم <bdi dir="ltr">{stars}</bdi> ستارز • المرتبة <bdi dir="ltr">#{rank}</bdi>',
     claimShort: 'استلم <bdi dir="ltr">{stars}</bdi> ستارز • المرتبة <bdi dir="ltr">#{rank}</bdi>',
-    enter: 'دخول البطولة الأسبوعية',
+    enter: 'دخول البطولة والترتيب المباشر',
     claimDone: 'تم تسجيل هذه الجائزة سابقاً',
     claimOk: 'تم تسجيل جائزة البطولة',
     claimFail: 'تعذّر تسجيل الطلب — حاول مرة أخرى',
@@ -7155,7 +7166,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     badge: 'TORNEO SEMANAL',
     prizeUnit: 'STARS',
     hook: '¡Consigue más victorias esta semana y gana tu parte de <bdi dir="ltr">50</bdi> Stars!',
-    podium: 'PREMIO TOTAL <bdi dir="ltr">50</bdi> STARS • TOP <bdi dir="ltr">3</bdi>',
+    podium: 'TOP <bdi dir="ltr">3</bdi> PREMIOS • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
+    clockLeft: 'restantes',
     winsWord: 'victorias',
     friendHint: 'Máx. <bdi dir="ltr">3</bdi> victorias por amigo',
     rank: 'PUESTO <bdi dir="ltr">#{rank}</bdi>',
@@ -7168,7 +7180,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     rivalsLink: 'O desafía directo desde Amigos y Rivales',
     claim: 'Reclamar <bdi dir="ltr">{stars}</bdi> Stars • puesto <bdi dir="ltr">#{rank}</bdi>',
     claimShort: 'Reclamar <bdi dir="ltr">{stars}</bdi> Stars • puesto <bdi dir="ltr">#{rank}</bdi>',
-    enter: 'Entrar al Torneo Semanal',
+    enter: 'Entrar al Torneo y Clasificación',
     claimDone: 'Este premio ya fue reclamado',
     claimOk: 'Tu premio del torneo quedó registrado',
     claimFail: 'No se pudo registrar la solicitud — inténtalo de nuevo',
@@ -7228,10 +7240,14 @@ let challengeBoardSig = '';
 
 const challengeCopy = (): ChallengeCopy => CHALLENGE_COPY[lang] ?? CHALLENGE_COPY.en;
 
-/** The fixed weekly window, computed locally only when the room has not answered yet. */
+/**
+ * The fixed 168-hour window, computed locally only when the room has not answered yet. It runs on
+ * the exact season epoch the Worker uses, so an offline card counts down to the same boundary as
+ * the live room and a launch does not silently shave the days already gone since Monday.
+ */
 function localChallengeWindowEnd(now = Date.now()): number {
-  const start = CHALLENGE_WEEK_ANCHOR + Math.floor((now - CHALLENGE_WEEK_ANCHOR) / CHALLENGE_WEEK_MS) * CHALLENGE_WEEK_MS;
-  return start + CHALLENGE_WEEK_MS;
+  const weekIndex = Math.max(0, Math.floor((now - CHALLENGE_SEASON_EPOCH) / CHALLENGE_WEEK_MS));
+  return CHALLENGE_SEASON_EPOCH + (weekIndex + 1) * CHALLENGE_WEEK_MS;
 }
 
 /** One room call. Its own fetch, so a refused or offline answer never throws into the UI. */
@@ -7328,12 +7344,26 @@ function paintChallengeClock(): void {
   const hours = Math.floor((total % 86400) / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
-  const line = days > 0
+  /* The 168-hour window reads in days until the final day, then in hours, then in minutes and
+     seconds: every threshold is tested on the raw millisecond clock, not on a rounded second. */
+  const line = ms >= CHALLENGE_DAY_MS
     ? days + 'd ' + hours + 'h'
-    : hours > 0
+    : ms >= CHALLENGE_HOUR_MS
       ? hours + 'h ' + minutes + 'm'
       : minutes + 'm ' + seconds + 's';
   if (el.textContent !== line) el.textContent = line;
+  /* The "left / باقی‌مانده" suffix belongs to the day-scale reading only; the sub-day readings are
+     self-sufficient. It is repainted with the digits, so a language switch cannot leave a stale
+     word behind, and it keeps the baseline markup's digits-alone shape before the first tick. */
+  const left = document.getElementById('chal-clock-left');
+  if (left) {
+    const word = challengeCopy().clockLeft;
+    if (left.textContent !== word) left.textContent = word;
+    left.hidden = ms < CHALLENGE_DAY_MS;
+  }
+  /* Last six hours: one static warm-amber glow, no keyframes and no blur. */
+  const pill = el.closest('.chal-clock');
+  if (pill) pill.classList.toggle('is-urgent', ms > 0 && ms <= CHALLENGE_URGENT_MS);
   if (ms === 0 && !challengeRolled) {
     challengeRolled = true;
     void refreshChallengeCard();
@@ -7348,6 +7378,8 @@ function paintChallengeLabels(): void {
   challengeSetHTML('chal-hook', copy.hook);
   challengeSetHTML('chal-podium-pill', copy.podium);
   challengeSetHTML('chal-enter-t', copy.enter);
+  const clockLeft = document.getElementById('chal-clock-left');
+  if (clockLeft) clockLeft.textContent = copy.clockLeft;
   challengeSetText('home-tournament-off-t', copy.warsOff);
 }
 

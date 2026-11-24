@@ -51,7 +51,17 @@ export const CHANNEL_WARS_ENABLED = false;
  * writer that can ever turn it back on.
  */
 export function applyChannelWarsFlag(): void {
-  document.documentElement.dataset.channelWars = CHANNEL_WARS_ENABLED ? 'on' : 'off';
+  const on = CHANNEL_WARS_ENABLED;
+  document.documentElement.dataset.channelWars = on ? 'on' : 'off';
+  if (on) return;
+  /* A cached or legacy document can still carry the old corner key. Hide it at the source too, so
+     a parked build never leaves a dead shield floating over the home hero even if a stylesheet
+     hash is stale; the stylesheet rule also covers anything painted after this pass. */
+  for (const el of document.querySelectorAll<HTMLElement>('#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-war-fab, .war-shield-fab, [data-war-shield]')) {
+    el.hidden = true;
+    el.setAttribute('aria-hidden', 'true');
+    el.style.display = 'none';
+  }
 }
 
 /** The one line the parked hub says if it is ever reached (a stale link, a cached tap). */

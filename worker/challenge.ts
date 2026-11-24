@@ -1,5 +1,5 @@
 /**
- * challenge.ts — the 7-Day "Most Wins" Race: unlimited weekly wins, the Top 3 take 50 Stars each.
+ * challenge.ts — the 7-Day "Most Wins" Race: unlimited weekly wins, the Top 3 split 50 Stars.
  *
  * This module is the server's whole rulebook, kept apart from the room so the anti-cheat can be
  * read (and tested) on its own. The room owns the clock, the receipts and the storage; nothing a
@@ -27,15 +27,33 @@
  * stored per week, so a claim is paid exactly once and a late boot landing on a boundary still
  * finds the standings it has to lock.
  *
- * Windows are 7 days, aligned to a fixed Monday 00:00 UTC anchor, so the countdown a client paints
- * is the same for every player and a counter can never be farmed across a boundary.
+ * Windows are exactly 7 days — 168 hours — counted from the season epoch that was stamped when
+ * the tournament launched, not from a Monday 00:00 UTC calendar anchor. A launch-week window can
+ * therefore never lose the days that already passed before the next Monday: week one opens on the
+ * launch instant with a full week on the clock, and every later round starts exactly one
+ * `WEEK_MS` after the one before. The countdown a client paints is the same for every player and
+ * a counter can never be farmed across a boundary.
  */
 
 export const CHALLENGE_KEY = 'challenge.v1';
 export const CHALLENGE_DAYS = 7;
-export const CHALLENGE_WINDOW_MS = CHALLENGE_DAYS * 24 * 60 * 60 * 1000;
-/** Fixed Monday 00:00 UTC: 2024-01-01, so every 7-day cycle starts on a Monday. */
-export const CHALLENGE_WINDOW_ANCHOR = Date.UTC(2024, 0, 1);
+/** One exact tournament week: 7 days = 168 hours = 604,800,000 ms. */
+export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+export const CHALLENGE_WINDOW_MS = WEEK_MS;
+/**
+ * The launch stamp of the very first 168-hour window. The tournament starts on the launch
+ * instant instead of the next calendar Monday, so the opening week keeps the whole seven days.
+ * Every later round is this instant plus a whole number of `WEEK_MS`.
+ */
+export const CHALLENGE_SEASON_EPOCH = Date.UTC(2026, 10, 24, 14, 30, 0);
+/** Legacy name for the season epoch, kept for callers that still import the old anchor. */
+export const CHALLENGE_WINDOW_ANCHOR = CHALLENGE_SEASON_EPOCH;
+/**
+ * The epoch the live room actually runs on. It defaults to the launch stamp above; a ledger read
+ * back from Durable Object storage may carry the stamp it was created with, and adopting it keeps
+ * a reboot on the same 168-hour grid instead of drifting the boundary by the restart gap.
+ */
+let activeSeasonEpoch = CHALLENGE_SEASON_EPOCH;
 /** The week's total prize pool, divided across the Top 3 finishers. */
 export const TOTAL_PRIZE_POOL = 50;
 /** The exact payout for each podium rank: 25 / 15 / 10, summing to the 50-Star pool. */
@@ -108,6 +126,11 @@ export interface ChallengeSettlement {
 export interface ChallengeState {
   entries: ChallengeEntry[];
   settlements: ChallengeSettlement[];
+  /**
+   * The launch stamp this ledger belongs to. A ledger that carries it is resumed on the exact
+   * same 168-hour grid; when the field is absent the fixed launch epoch above wins.
+   */
+  seasonEpoch: number;
 }
 
 /** One public row of the weekly board. The internal `id` is never part of it. */
@@ -184,11 +207,36 @@ export function prizeForRank(rank: number): number {
 export const challengeTotalWins = (entry: ChallengeEntry): number =>
   Math.max(0, entry.friendWins) + Math.max(0, entry.hardBotWins);
 
-/** The 7-day window that contains `now`. */
-export function challengeWindowAt(now: number): { start: number; end: number } {
-  const elapsed = Math.max(0, now - CHALLENGE_WINDOW_ANCHOR);
-  const start = CHALLENGE_WINDOW_ANCHOR + Math.floor(elapsed / CHALLENGE_WINDOW_MS) * CHALLENGE_WINDOW_MS;
-  return { start, end: start + CHALLENGE_WINDOW_MS };
+/** The season epoch every window calculation runs on. */
+export function challengeSeasonEpoch(): number {
+  return activeSeasonEpoch;
+}
+
+/**
+ * Adopt a launch stamp read back from storage. The default launch epoch always wins when the
+ * stored value is unusable, so a corrupt field can never move the boundary off the season grid.
+ */
+export function setChallengeSeasonEpoch(raw: unknown): number {
+  const stamp = readStamp(raw);
+  if (stamp > 0) activeSeasonEpoch = stamp;
+  return activeSeasonEpoch;
+}
+
+/** The deterministic week index of `now` inside the season started by `epoch` (never negative). */
+export function challengeWeekIndex(now: number, epoch: number = activeSeasonEpoch): number {
+  return Math.max(0, Math.floor((now - epoch) / WEEK_MS));
+}
+
+/**
+ * The exact 168-hour window that contains `now`:
+ * `weekStart = epoch + floor((now - epoch) / WEEK_MS) * WEEK_MS`, `weekEnd = weekStart + WEEK_MS`.
+ * Every round therefore advances on a whole-week boundary that is fixed at launch, never on a
+ * calendar weekday, so the first week keeps its full seven days.
+ */
+export function challengeWindowAt(now: number, epoch: number = activeSeasonEpoch): { start: number; end: number } {
+  const anchor = readStamp(epoch) || CHALLENGE_SEASON_EPOCH;
+  const weekStart = anchor + challengeWeekIndex(now, anchor) * WEEK_MS;
+  return { start: weekStart, end: weekStart + WEEK_MS };
 }
 
 /** A brand-new scorecard for the current window. */
@@ -285,9 +333,12 @@ const readSettlement = (raw: unknown): ChallengeSettlement | null => {
 
 /** Defensive parse of the ledger: an unreadable row is skipped, never fatal. */
 export function readChallengeState(raw: unknown): ChallengeState {
-  const out: ChallengeState = { entries: [], settlements: [] };
+  const out: ChallengeState = { entries: [], settlements: [], seasonEpoch: activeSeasonEpoch };
   if (!raw || typeof raw !== 'object') return out;
-  const state = raw as { entries?: unknown; settlements?: unknown };
+  const state = raw as { entries?: unknown; settlements?: unknown; seasonEpoch?: unknown };
+  /* Adopt the stored launch stamp BEFORE the rows are parsed: a row's fallback window must be
+     computed on the season the ledger was written under, not on a different default. */
+  out.seasonEpoch = setChallengeSeasonEpoch(state.seasonEpoch);
   if (Array.isArray(state.entries)) {
     for (const row of state.entries) {
       const entry = readEntry(row);

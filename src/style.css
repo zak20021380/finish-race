@@ -47032,7 +47032,8 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 3px 10px 3px 4px;
+  /* 2px top/bottom + the 20px emblem keeps the badge's old 26px footprint */
+  padding: 2px 10px 2px 4px;
   border-radius: var(--radius-pill);
   border: 1px solid rgba(246, 200, 94, .34);
   background: linear-gradient(180deg, rgba(120, 78, 16, .34) 0%, rgba(20, 27, 45, .74) 100%);
@@ -47046,26 +47047,41 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16);
 }
+/* a struck 24K emblem, not a flat coin: a bright top-left facet, a darkened rim and one inner
+   hairline ring, so the solid crown inside reads as a relief at 20px */
 .chal-crown-pod {
+  position: relative;
   flex: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, #FFF0BC 0%, #F5C351 52%, #C98A18 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 1px 4px rgba(0, 0, 0, .4);
+  border: 1px solid rgba(255, 246, 214, .74);
+  background: radial-gradient(120% 120% at 32% 22%, #FFF9DC 0%, #F8D06B 38%, #D79A24 70%, #9A620C 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .9),
+    inset 0 -1px 2px rgba(88, 51, 4, .55),
+    0 1px 5px rgba(0, 0, 0, .45),
+    0 0 10px rgba(246, 200, 94, .3);
+}
+.chal-crown-pod::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 1px solid rgba(90, 54, 6, .34);
+  pointer-events: none;
 }
 .chal-crown-ico {
+  position: relative;
+  z-index: 1;
   display: block;
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
   color: #2A1A05;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  fill: currentColor;
+  stroke: none;
 }
 .chal-crown-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chal-clock {
@@ -47087,7 +47103,32 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   box-shadow: inset 0 1px 0 rgba(255, 241, 192, .16), 0 2px 6px rgba(0, 0, 0, .3);
 }
 .chal-clock bdi { display: block; }
-.chal-clock-ico { flex: none; width: 12px; height: 12px; color: #FBBF24; fill: none; stroke: currentColor; stroke-width: 2; }
+/* the word after the digits is prose, not a measurement: it keeps Vazirmatn and the card's
+   tracking even while the digits stay tabular, and disappears under the 24-hour scale */
+.chal-clock-left {
+  display: block;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: .74;
+}
+.chal-clock-left[hidden] { display: none; }
+.chal-clock-ico { flex: none; width: 13px; height: 13px; color: #FBBF24; fill: currentColor; stroke: none; }
+/* final six hours: one fixed warm-amber glow. No keyframes, no blur — the pill only gets a
+   warmer border, a deeper amber bed and a two-layer emissive rim. */
+.chal-clock.is-urgent {
+  border-color: rgba(251, 146, 60, .64);
+  background: linear-gradient(180deg, rgba(124, 45, 18, .62) 0%, rgba(28, 14, 6, .9) 100%);
+  color: #FFD9A0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, .24),
+    0 0 12px rgba(251, 146, 60, .42),
+    0 0 26px rgba(245, 158, 11, .16);
+}
+.chal-clock.is-urgent .chal-clock-ico { color: #FB923C; }
+.chal-clock.is-urgent .chal-clock-left { opacity: .9; }
 
 /* ---- the royal spotlight: a warm radial glow behind a sculpted halo ring, the authentic
    Star inside it, the prize in struck gold right below, then the one-line hook. ---- */
@@ -47111,20 +47152,45 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   pointer-events: none;
   background: radial-gradient(50% 44% at 50% 32%, rgba(246, 200, 94, .15) 0%, rgba(246, 200, 94, .05) 46%, rgba(246, 200, 94, 0) 74%);
 }
+/* the 24K celestial crest: one 72px medal with an outer ring, an inset hairline ring, a warm
+   radial bed and two four-point glints welded to the rim. Static gradients only. */
 .chal-halo {
   position: relative;
   z-index: 1;
   flex: none;
-  width: 70px;
-  height: 70px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1.5px solid rgba(246, 200, 94, 0.55);
-  background: radial-gradient(circle, rgba(246, 200, 94, 0.28) 0%, rgba(246, 200, 94, 0.04) 72%);
-  box-shadow: 0 0 32px rgba(246, 200, 94, 0.28);
+  border: 1.5px solid rgba(246, 200, 94, 0.58);
+  background: radial-gradient(circle, rgba(246, 200, 94, 0.30) 0%, rgba(246, 200, 94, 0.04) 72%);
+  box-shadow: 0 0 34px rgba(246, 200, 94, 0.28);
 }
+.chal-halo::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(246, 200, 94, .34);
+  box-shadow: inset 0 0 12px rgba(246, 200, 94, .16);
+  pointer-events: none;
+}
+.chal-glint {
+  position: absolute;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  color: #FFE9AE;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(246, 200, 94, .8));
+}
+.chal-glint svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+.chal-glint-a { top: -3px; inset-inline-start: 9px; }
+.chal-glint-b { width: 6px; height: 6px; bottom: 3px; inset-inline-end: 7px; opacity: .85; }
 .chal-star-img {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 52px;
   height: 52px;
@@ -47186,9 +47252,9 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
   color: #C9D3E4;
   text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
   text-wrap: balance;
-  /* two lines of the compactest leading any locale uses; a third is clipped, never pushed
-     into the foot (the copy is authored to fit inside two lines) */
-  max-height: 3.1em;
+  /* two lines at the tallest leading any locale uses (Arabic/FA 1.66); a third is clipped,
+     never pushed into the foot (the copy is authored to fit inside two lines) */
+  max-height: 3.4em;
   overflow: hidden;
 }
 
@@ -47258,13 +47324,10 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 }
 .chal-enter-ico {
   flex: none;
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 17px;
+  height: 17px;
+  fill: #141008;
+  stroke: none;
 }
 .chal-enter-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chal-enter-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
@@ -47279,10 +47342,16 @@ html[data-lang="ar"] #s-shop :is(.shop-vip-tier-badge, .shop-vip-tier-tag) { let
 .car-card.carousel-slide-challenge > .chal-inner:has(.chal-claim:not([hidden])) .chal-star-img { width: 46px; height: 46px; }
 
 /* ---- Persian / Arabic: the script keeps its own tracking, digits stay Latin ---- */
-html[data-lang="fa"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t),
-html[data-lang="ar"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t) {
+html[data-lang="fa"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t, .chal-clock-left),
+html[data-lang="ar"] :is(.chal-crown, .chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter, .chal-enter-t, .chal-claim, .chal-claim-t, .chal-clock-left) {
   letter-spacing: 0 !important;
   text-transform: none !important;
+}
+/* Vazirmatn owns every Persian/Arabic word on the poster; only the countdown's Latin digits
+   keep the tabular mono face, and even the suffix beside them returns to the app's script face. */
+html[data-lang="fa"] :is(.chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter-t, .chal-claim-t, .chal-clock-left),
+html[data-lang="ar"] :is(.chal-crown-t, .chal-podium-pill, .chal-hook, .chal-enter-t, .chal-claim-t, .chal-clock-left) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
 /* the two reading rows mirror; every figure keeps its own LTR isolation */
 html[data-lang="fa"] :is(.chal-top, .chal-hero, .chal-foot, .chal-enter, .chal-claim, .chal-crown, .chal-podium-pill),
@@ -47332,7 +47401,7 @@ html[data-lang="es"] .chal-enter { font-size: 12.5px; }
   .chal-star-img { width: 42px; height: 42px; }
   .chal-title { font-size: 22px; }
   .chal-title > span { font-size: 16px; }
-  .chal-hook { font-size: 9px; line-height: 1.4; max-height: 2.8em; }
+  .chal-hook { font-size: 9px; line-height: 1.4; max-height: 3.4em; }
   .chal-enter { height: 42px; font-size: 12px; }
   .chal-claim { height: 28px; }
 }
@@ -47366,8 +47435,10 @@ html.reduced-motion .chal-claim { transition: none; }
    first paint, so the badge can never flash on a parked build. The rule covers the floating
    hero shield, its in-board strip (#iv-war) and any legacy corner key in one place — a parked
    tournament owns no pixel of the home hero. */
-html[data-channel-wars="off"] :is(#iv-war, .cw-fab, .cw-war-fab, .home-war-fab, .war-shield-fab, [data-war-shield]) {
+html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-war-fab, .war-shield-fab, [data-war-shield]) {
   display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* ============================================================================================
