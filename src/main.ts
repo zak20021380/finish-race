@@ -6912,8 +6912,8 @@ interface ChallengeCopy {
   guest: string;
   boardTab: string;
   rulesTab: string;
+  /** The sheet's own headline only: the 50-Star pool is the separate gold pill beside it. */
   sheetTitle: string;
-  sheetSub: string;
   /** The standings rail's two column names. */
   boardHeadStart: string;
   boardHeadEnd: string;
@@ -6969,8 +6969,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
     boardTab: 'جدول رتبه‌بندی',
     rulesTab: 'قوانین تورنمنت',
-    sheetTitle: 'تورنمنت هفتگی <bdi dir="ltr">50</bdi> استارز',
-    sheetSub: 'رقابت <bdi dir="ltr">7</bdi> روزه • جوایز نقدی تلگرام',
+    sheetTitle: 'تورنمنت هفتگی',
     boardHeadStart: 'بازیکن و رتبه',
     boardHeadEnd: 'امتیاز و جایزه',
     tier1: 'نفر اول',
@@ -7026,8 +7025,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     guest: 'Open this Mini App inside Telegram to compete',
     boardTab: 'Leaderboard',
     rulesTab: 'Tournament Rules',
-    sheetTitle: 'Weekly Tournament <bdi dir="ltr">50</bdi> Stars',
-    sheetSub: '<bdi dir="ltr">7</bdi>-day race • Telegram cash prizes',
+    sheetTitle: 'Weekly Tournament',
     boardHeadStart: 'Player & rank',
     boardHeadEnd: 'Wins & prize',
     tier1: 'First Place',
@@ -7083,8 +7081,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
     boardTab: 'Таблица лидеров',
     rulesTab: 'Правила турнира',
-    sheetTitle: 'Недельный турнир <bdi dir="ltr">50</bdi> Stars',
-    sheetSub: 'Гонка <bdi dir="ltr">7</bdi> дней • Денежные призы Telegram',
+    sheetTitle: 'Недельный турнир',
     boardHeadStart: 'Игрок и место',
     boardHeadEnd: 'Победы и приз',
     tier1: 'Первое место',
@@ -7140,8 +7137,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
     boardTab: 'جدول الترتيب',
     rulesTab: 'قوانين البطولة',
-    sheetTitle: 'البطولة الأسبوعية <bdi dir="ltr">50</bdi> ستارز',
-    sheetSub: 'سباق <bdi dir="ltr">7</bdi> أيام • جوائز نقدية عبر تلغرام',
+    sheetTitle: 'البطولة الأسبوعية',
     boardHeadStart: 'اللاعب والترتيب',
     boardHeadEnd: 'الانتصارات والجائزة',
     tier1: 'المركز الأول',
@@ -7197,8 +7193,7 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     guest: 'Abre este Mini App dentro de Telegram para competir',
     boardTab: 'Clasificación',
     rulesTab: 'Reglas del torneo',
-    sheetTitle: 'Torneo semanal <bdi dir="ltr">50</bdi> Stars',
-    sheetSub: 'Carrera de <bdi dir="ltr">7</bdi> días • Premios en efectivo de Telegram',
+    sheetTitle: 'Torneo semanal',
     boardHeadStart: 'Jugador y puesto',
     boardHeadEnd: 'Victorias y premio',
     tier1: 'Primer puesto',
@@ -7687,8 +7682,13 @@ function paintChallengeRules(): void {
 
 function paintChallengeSheetLabels(): void {
   const copy = challengeCopy();
+  /* The headline and the pool are two separate runs in the header: the room's whole 50-Star pool
+     is the gold pill, and it is the sum of the three podium slices unless the room serves its own. */
+  const pool = challengeCount(challengeView?.totalPrizePool)
+    || challengePrizeStars(1) + challengePrizeStars(2) + challengePrizeStars(3);
   challengeSetHTML('ci-title', copy.sheetTitle);
-  challengeSetHTML('ci-sub', copy.sheetSub);
+  challengeSetHTML('ci-pool', copy.prizeTag.replace('{stars}', String(pool)));
+  challengeSetText('ci-clock-left', copy.clockLeft);
   challengeSetHTML('ci-prize-1-k', copy.tier1);
   challengeSetHTML('ci-prize-2-k', copy.tier2);
   challengeSetHTML('ci-prize-3-k', copy.tier3);

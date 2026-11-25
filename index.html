@@ -3468,11 +3468,12 @@
       </div>
 
       <!-- ============ Tournament Championship Sheet (slide #0 one key) ============
-           One obsidian-and-24K-gold championship sheet: the sculpted medal header with the live
-           clock and field, a true three-column podium (silver / gold / bronze), one unified status
-           and quick-play card, then a two-tab switch over the live weekly standings and three
-           engraved rules. Static gradients and hairlines only: no backdrop-filter, no keyframes,
-           every figure a Latin digit inside its own <bdi dir="ltr"> run, all painted by
+           A calm obsidian drawer with one 24K-gold hairline: a symmetric header (emblem, title,
+           pool pill, then the live countdown and field on a single metadata row), a borderless
+           three-column podium (silver / gold / bronze), one elevated player hub, then a borderless
+           segmented switch over the live weekly standings and the three rules. Static tonal
+           surfaces only: no backdrop-filter, no keyframes, every figure a Latin digit inside its
+           own <bdi dir="ltr"> run, every glyph an inline currentColor SVG, all painted by
            src/main.ts from /api/challenge/me. -->
       <div class="vault-modal challenge-info" hidden id="challenge-info-modal">
         <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
@@ -3482,89 +3483,118 @@
 
           <div class="vault-modal-body ci-body">
             <header class="ci-head">
-              <span class="ci-medal" aria-hidden="true">
-                <svg class="ci-medal-ico" viewBox="0 0 24 24" focusable="false"><use href="#i-medal" /></svg>
-              </span>
-              <span class="ci-head-t">
-                <h2 class="ci-title" id="ci-title">تورنمنت هفتگی <bdi dir="ltr">50</bdi> استارز</h2>
-                <p class="ci-sub" id="ci-sub">رقابت <bdi dir="ltr">7</bdi> روزه • جوایز نقدی تلگرام</p>
-              </span>
+              <div class="ci-head-t">
+                <div class="ci-head-row">
+                  <span class="ci-emblem" aria-hidden="true">
+                    <svg class="ci-emblem-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                      <path d="M8.1 2.8h7.8v5.4a3.9 3.9 0 0 1-7.8 0Z" />
+                      <path d="M8.1 4.1H5.5v1.5c0 1.9 1.3 3.4 3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                      <path d="M15.9 4.1h2.6v1.5c0 1.9-1.3 3.4-3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                      <path d="M10.9 11.6h2.2v3.6h-2.2Z" />
+                      <path d="M7.9 15.2h8.2a1.4 1.4 0 0 1 1.4 1.4v1.7H6.5v-1.7a1.4 1.4 0 0 1 1.4-1.4Z" />
+                    </svg>
+                  </span>
+                  <h2 class="ci-title" id="ci-title">تورنمنت هفتگی</h2>
+                  <span class="ci-pool" id="ci-pool"><bdi dir="ltr">50</bdi> استارز</span>
+                </div>
+                <div class="ci-meta" id="ci-sub">
+                  <span class="ci-clock" id="ci-clock-pill">
+                    <svg class="ci-clock-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                      <circle cx="12" cy="12" r="8.4" />
+                      <path d="M12 7.4V12l3 1.8" />
+                    </svg>
+                    <bdi dir="ltr" id="ci-clock-n">2d 14h</bdi>
+                    <span class="ci-clock-left" id="ci-clock-left">باقی‌مانده</span>
+                  </span>
+                  <span class="ci-dot" aria-hidden="true">•</span>
+                  <span class="ci-players" id="ci-players-pill" role="status">
+                    <bdi dir="ltr" id="ci-players-n">128</bdi>
+                    <span class="ci-players-u" id="ci-players-u">شرکت‌کننده</span>
+                  </span>
+                </div>
+              </div>
               <button class="ci-x" type="button" id="ci-close" data-modal-close aria-label="Close">
-                <svg class="ci-x-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-close" /></svg>
+                <svg class="ci-x-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false">
+                  <path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6" />
+                </svg>
               </button>
-              <span class="ci-head-pills">
-                <span class="ci-clock" id="ci-clock-pill">
-                  <svg class="ci-clock-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-chal-stopwatch" /></svg>
-                  <bdi dir="ltr" id="ci-clock-n">2d 14h</bdi>
-                </span>
-                <span class="ci-players" id="ci-players-pill" role="status">
-                  <svg class="ci-players-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-users" /></svg>
-                  <bdi dir="ltr" id="ci-players-n">128</bdi>
-                  <span class="ci-players-u" id="ci-players-u">شرکت‌کننده</span>
-                </span>
-              </span>
             </header>
 
-            <!-- THE CHAMPIONSHIP PODIUM: a true three-column architectural split. In RTL the
-                 first DOM column is the right-hand #2 silver step, the taller centre is the
-                 #1 24K-gold champion, and the left-hand step is #3 bronze. Every figure is
-                 Latin and sealed inside its own LTR run. -->
+            <!-- THE PODIUM: a borderless architectural split. In RTL the first DOM column is the
+                 right-hand #2 silver step, the taller centre is the #1 24K-gold champion, and the
+                 left-hand step is #3 bronze. The tier word is the rank — there is no floating "#n"
+                 chip, so no stray dot can ever sit above the champion. -->
             <div class="ci-podium" id="ci-podium" role="list" aria-label="Prize split by rank">
               <article class="ci-step is-silver" data-rank="2" role="listitem">
-                <span class="ci-step-rank"><bdi dir="ltr">#2</bdi></span>
                 <span class="ci-step-k" id="ci-prize-2-k">نفر دوم</span>
                 <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-2-v">15</bdi> <span id="ci-prize-2-u">استارز</span></b>
               </article>
               <article class="ci-step is-gold" data-rank="1" role="listitem">
-                <svg class="ci-step-crown" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3.9 8 6.4 16.2h11.2L20.1 8l-4.5 3.3L12 4.4 8.4 11.3Z" fill="currentColor" />
-                  <path d="M6.6 17.9h10.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
-                </svg>
-                <span class="ci-step-rank"><bdi dir="ltr">#1</bdi></span>
-                <span class="ci-step-k" id="ci-prize-1-k">نفر اول</span>
+                <span class="ci-step-top">
+                  <svg class="ci-step-crown" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="M3.4 7.4 6.1 16.6h11.8L20.6 7.4l-4.8 3.5L12 3.6 8.2 10.9Z" />
+                  </svg>
+                  <span class="ci-step-k" id="ci-prize-1-k">نفر اول</span>
+                </span>
                 <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-1-v">25</bdi> <span id="ci-prize-1-u">استارز</span></b>
               </article>
               <article class="ci-step is-bronze" data-rank="3" role="listitem">
-                <span class="ci-step-rank"><bdi dir="ltr">#3</bdi></span>
                 <span class="ci-step-k" id="ci-prize-3-k">نفر سوم</span>
                 <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-3-v">10</bdi> <span id="ci-prize-3-u">استارز</span></b>
               </article>
             </div>
 
-            <!-- YOUR STATUS & QUICK PLAY: one cohesive glass-obsidian card. The top strip
-                 carries rank, weekly wins, the split and the enrollment key; the claim rides
-                 above the two duel keys and stays hidden until a closed week pays out. -->
+            <!-- YOUR HUB: one elevated surface, two rows. The top row is this seat's whole reading
+                 (rank, weekly wins, the split) with the enrollment key on its end edge; the claim
+                 rides above the two duel keys and stays hidden until a closed week pays out. -->
             <section class="ci-status" aria-label="Your weekly status and quick play">
               <div class="ci-status-top">
                 <span class="ci-status-meta">
                   <span class="ci-rank" id="ci-my-rank">رتبه <bdi dir="ltr">#4</bdi></span>
                   <span class="ci-wins"><bdi dir="ltr" id="ci-my-wins">7</bdi> <span class="ci-wins-u" id="ci-my-wins-u">برد</span></span>
+                  <span class="ci-split" id="ci-sum-src">دوستان <bdi dir="ltr">4</bdi> • ربات Hard <bdi dir="ltr">3</bdi></span>
                 </span>
                 <span class="ci-status-action">
                   <span class="ci-seat is-on" id="ci-seat-on" hidden>
-                    <svg class="ci-seat-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-check" /></svg>
+                    <svg class="ci-seat-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                      <path d="M5.4 12.6 10 17.2l8.6-9.4" />
+                    </svg>
                     <span id="ci-seat-on-t">عضو تورنمنت</span>
                   </span>
                   <button class="ci-seat is-cta" type="button" id="chal-join-btn" data-chal-join="1">
-                    <svg class="ci-seat-plus" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-plus" /></svg>
+                    <svg class="ci-seat-plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false">
+                      <path d="M12 5.4v13.2M5.4 12h13.2" />
+                    </svg>
                     <span id="ci-seat-join-t">شرکت رایگان</span>
                   </button>
                 </span>
               </div>
-              <p class="ci-split" id="ci-sum-src">دوستان <bdi dir="ltr">4</bdi> • ربات Hard <bdi dir="ltr">3</bdi></p>
 
               <button class="ci-claim" type="button" id="ci-claim-cta" hidden>
-                <svg class="ci-claim-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                <svg class="ci-claim-ico" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <path d="m12 3.2 2.7 5.7 6.2.9-4.5 4.4 1.1 6.2-5.5-2.9-5.5 2.9 1.1-6.2L3.1 9.8l6.2-.9Z" />
+                </svg>
                 <span class="ci-claim-t" id="ci-claim-t">ثبت و دریافت جایزه تورنمنت</span>
               </button>
 
               <div class="ci-duel">
                 <button class="ci-duel-btn is-gold" type="button" id="ci-bot-cta">
-                  <svg class="ci-duel-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-bot" /></svg>
+                  <svg class="ci-duel-ico" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="3.3" r="1.5" />
+                    <path d="M12 5.5v1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    <path fill-rule="evenodd" d="M12 6.9h4.1a3.7 3.7 0 0 1 3.7 3.7v6a3.7 3.7 0 0 1-3.7 3.7H7.9a3.7 3.7 0 0 1-3.7-3.7v-6a3.7 3.7 0 0 1 3.7-3.7H12Zm-3.4 4.6v2.1h2.1v-2.1H8.6Zm5.7 0v2.1h2.1v-2.1h-2.1Z" />
+                  </svg>
                   <span class="ci-duel-t" id="ci-bot-t">بازی با ربات Hard</span>
                 </button>
                 <button class="ci-duel-btn is-mint" type="button" id="ci-friend-cta">
-                  <svg class="ci-duel-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-users" /></svg>
+                  <svg class="ci-duel-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="8" r="3.1" />
+                    <path d="M6.2 19.4c0-2.9 2.5-4.7 5.8-4.7s5.8 1.8 5.8 4.7" />
+                    <circle cx="5.4" cy="9.6" r="2.3" />
+                    <path d="M2.2 16.6c0-2 1.3-3.3 3.2-3.7" />
+                    <circle cx="18.6" cy="9.6" r="2.3" />
+                    <path d="M21.8 16.6c0-2-1.3-3.3-3.2-3.7" />
+                  </svg>
                   <span class="ci-duel-t" id="ci-friend-t">دعوت از دوست</span>
                 </button>
               </div>
@@ -3573,22 +3603,21 @@
             <div class="ci-tabs" role="tablist" aria-label="Tournament board and rules">
               <button class="ci-tab is-on" type="button" id="ci-tab-board" role="tab"
                       aria-selected="true" aria-controls="ci-panel-board" data-ci-tab="board">
-                <svg class="ci-tab-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M8.2 4h7.6v3.1c0 3.2-1.7 5.5-3.8 6.1-2.1-.6-3.8-2.9-3.8-6.1Z" />
-                  <path d="M8.2 5.2H6.1c-.9 0-1.6.7-1.6 1.6v.6c0 1.9 1.4 3.4 3.3 3.6" />
-                  <path d="M15.8 5.2h2.1c.9 0 1.6.7 1.6 1.6v.6c0 1.9-1.4 3.4-3.3 3.6" />
-                  <path d="M12 13.2v2.9" />
-                  <path d="M9 19.4h6" />
-                  <path d="M10.1 19.4c0-1.7.9-2.7 1.9-3.3 1 .6 1.9 1.6 1.9 3.3" />
+                <svg class="ci-tab-ico" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <path d="M7.9 2.9h8.2v5.5a4.1 4.1 0 0 1-8.2 0Z" />
+                  <path d="M7.9 4.2H5.3v1.5c0 1.9 1.3 3.4 3.2 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M16.1 4.2h2.6v1.5c0 1.9-1.3 3.4-3.2 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M10.9 11.8h2.2v3.4h-2.2Z" />
+                  <path d="M7.9 15.3h8.2a1.3 1.3 0 0 1 1.3 1.3v1.7H6.6v-1.7a1.3 1.3 0 0 1 1.3-1.3Z" />
                 </svg>
                 <span id="ci-tab-board-t">جدول رتبه‌بندی</span>
               </button>
               <button class="ci-tab" type="button" id="ci-tab-rules" role="tab"
                       aria-selected="false" aria-controls="ci-panel-rules" data-ci-tab="rules">
-                <svg class="ci-tab-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M6.4 3.7h7.1l4 4v12.6H6.4Z" />
-                  <path d="M13.5 3.7v4.1h3.9" />
-                  <path d="M9.1 12.3l1.7 1.7 3.1-3.2" />
+                <svg class="ci-tab-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M6.6 3.6h6.5l4.3 4.3v12.5H6.6Z" />
+                  <path d="M13.1 3.6v4.3h4.3" />
+                  <path d="M9.4 12.6h5.2M9.4 15.8h3.4" />
                 </svg>
                 <span id="ci-tab-rules-t">قوانین تورنمنت</span>
               </button>
@@ -3596,16 +3625,18 @@
 
             <div class="ci-panels">
               <section class="ci-panel" id="ci-panel-board" role="tabpanel" aria-labelledby="ci-tab-board" data-ci-panel="board">
-                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"><li class="ci-row"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#1</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@navid</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">9</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">16</bdi> برد</span><span class="ci-row-prize">25 استارز</span></div></li>
-<li class="ci-row"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#2</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@sara_l</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">6</bdi> • ربات Hard <bdi dir="ltr">8</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">14</bdi> برد</span><span class="ci-row-prize">15 استارز</span></div></li>
-<li class="ci-row"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#3</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@mehdi</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">5</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">12</bdi> برد</span><span class="ci-row-prize">10 استارز</span></div></li>
-<li class="ci-row is-me"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#4</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@you</bdi><span class="ci-you">شما</span></div><span class="ci-row-sub">دوستان <bdi dir="ltr">4</bdi> • ربات Hard <bdi dir="ltr">5</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">9</bdi> برد</span></div></li>
-<li class="ci-row"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#5</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@arash</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">3</bdi> • ربات Hard <bdi dir="ltr">4</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">7</bdi> برد</span></div></li></ol>
+                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"><li class="ci-row" data-place="1"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#1</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@navid</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">9</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">16</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">25</bdi> استارز</span></div></li>
+<li class="ci-row" data-place="2"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#2</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@sara_l</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">6</bdi> • ربات Hard <bdi dir="ltr">8</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">14</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">15</bdi> استارز</span></div></li>
+<li class="ci-row" data-place="3"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#3</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@mehdi</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">5</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">12</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">10</bdi> استارز</span></div></li>
+<li class="ci-row is-me" data-place="4"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#4</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@you</bdi><span class="ci-you">شما</span></div><span class="ci-row-sub">دوستان <bdi dir="ltr">4</bdi> • ربات Hard <bdi dir="ltr">5</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">9</bdi> برد</span></div></li>
+<li class="ci-row" data-place="5"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#5</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@arash</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">3</bdi> • ربات Hard <bdi dir="ltr">4</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">7</bdi> برد</span></div></li></ol>
                 <div class="ci-empty" id="ci-empty" hidden>
-                  <svg class="ci-empty-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M7 3.5h10v4.2a5 5 0 0 1-10 0Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-                    <path d="M7 4.7H4.6v1.2c0 2.2 1.5 3.9 3.5 4.3M17 4.7h2.4v1.2c0 2.2-1.5 3.9-3.5 4.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                    <path d="M12 12.7v3.4M9.2 19.6h5.6M10.2 16.1h3.6v3.5h-3.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                  <svg class="ci-empty-ico" width="36" height="36" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="M8.1 2.8h7.8v5.4a3.9 3.9 0 0 1-7.8 0Z" />
+                    <path d="M8.1 4.1H5.5v1.5c0 1.9 1.3 3.4 3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    <path d="M15.9 4.1h2.6v1.5c0 1.9-1.3 3.4-3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    <path d="M10.9 11.6h2.2v3.6h-2.2Z" />
+                    <path d="M7.9 15.2h8.2a1.4 1.4 0 0 1 1.4 1.4v1.7H6.5v-1.7a1.4 1.4 0 0 1 1.4-1.4Z" />
                   </svg>
                   <p class="ci-empty-t" id="ci-empty-t">هنوز شرکت‌کننده‌ای ثبت نشده؛ دکمه شرکت رایگان رو بزن و نفر اول شو!</p>
                 </div>
