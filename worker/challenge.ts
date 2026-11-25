@@ -85,6 +85,14 @@ export const CHALLENGE_MIN_SECONDS = 45;
 export const CHALLENGE_FORFEIT_MIN_SECONDS = 60;
 /** Both tracks require this many played moves. */
 export const CHALLENGE_MIN_MOVES = 10;
+/**
+ * The board's FINISH row. Verified against `src/rules.ts`, the one rulebook both replicas run: every
+ * pawn spawns in the bottom start rows and the race is won by reaching row 0, on the 8×12 duel board
+ * AND on the wider board a three- or four-contender race uses. Both seats of a 1v1 therefore share
+ * one goal edge — the winner's pawn stands on row 0, never on the opposite row — so a goal gate on
+ * any other row would refuse every honest victory.
+ */
+export const CHALLENGE_FINISH_ROW = 0;
 /** Unique-opponent anti-farming cap: a single friend can only ever be worth 3 wins a week. */
 export const MAX_WINS_PER_FRIEND = 3;
 /** How long an issued Hard AI ticket stays usable. */
@@ -704,7 +712,12 @@ export function applyFriendWin(entry: ChallengeEntry, now: number, report: Frien
   if (report.opponentTgId === entry.tgId) return 'self_opponent';
   if (!report.matchId || entry.friendReceipts.includes(report.matchId)) return 'duplicate';
   if (clampSeconds(report.durationSec) < CHALLENGE_MIN_SECONDS) return 'not_enough_time';
-  if (Math.floor(report.moves) < CHALLENGE_MIN_MOVES) return 'not_enough_moves';
+  /* FAIL CLOSED ON THE DEPTH. `Math.floor(undefined)` and `Math.floor(NaN)` are `NaN`, and every
+     comparison against `NaN` is false — so the old `Math.floor(report.moves) < MIN` let a caller
+     that never counted the plies straight through the gate. `clampInt` folds any non-number (an
+     undefined field, a malformed one) to 0, which this gate then refuses. A caller that mistook a
+     seat index for a depth (`state.turn` is `0|1`) is refused the same way instead of credited. */
+  if (clampInt(report.moves, CHALLENGE_MATCH_MAX_MOVES) < CHALLENGE_MIN_MOVES) return 'not_enough_moves';
   return creditFriendWin(entry, now, report.matchId, report.opponentTgId);
 }
 
@@ -849,9 +862,13 @@ export async function verifyChallengeMatchToken(
 
 /**
  * The 5th gate: a victory report may name the square its winning pawn stands on, and that square
- * must be the goal row (`row === 0`, the board's FINISH). `null` means the body named no position
- * at all — the gate is skipped exactly as the report contract allows — while `false` is a board
- * that claims a win its pawn never reached.
+ * must be the goal row (`CHALLENGE_FINISH_ROW`, the board's FINISH). `null` means the body named no
+ * position at all — the gate is skipped exactly as the report contract allows — while `false` is a
+ * board that claims a win its pawn never reached.
+ *
+ * A body that NAMES a square but whose row cannot be read is not an omission: it is a claim this
+ * door cannot verify, so it is refused rather than waved through (the old reading folded an
+ * unreadable row into `null` and silently skipped the gate).
  */
 export function challengeGoalRow(raw: unknown): boolean | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -860,9 +877,10 @@ export function challengeGoalRow(raw: unknown): boolean | null {
     const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : Number.NaN;
     return Number.isFinite(n) ? n : null;
   };
+  const named = pos.row !== undefined || pos.y !== undefined || pos.r !== undefined;
   const row = whole(pos.row) ?? whole(pos.y) ?? whole(pos.r);
-  if (row === null) return null;
-  return row === 0;
+  if (row === null) return named ? false : null;
+  return row === CHALLENGE_FINISH_ROW;
 }
 
 /**

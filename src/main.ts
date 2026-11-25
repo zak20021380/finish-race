@@ -7571,12 +7571,30 @@ function challengeReadEnrollment(weekEnd = challengeState.weekEnd || localChalle
 
 /** One room call. Its own fetch, so a refused or offline answer never throws into the UI. */
 async function challengeCall(path: string, body?: Record<string, unknown>): Promise<ChallengeView | null> {
-  const url = workerUrl(path);
+  let url = workerUrl(path);
   if (!url) return null;
   const headers: Record<string, string> = { accept: 'application/json' };
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
   if (body) headers['content-type'] = 'application/json';
+  else {
+    /* THE READ DOORS NAME THE SAME SEAT THE WRITE DOORS NAME. A Mini App normally proves itself
+       with signed `initData`; a Telegram Desktop / external WebView session without one is exactly
+       the declared-seat case the join and match doors already accept from a POST body. The read
+       doors take that same declaration as a query string, so `/join`, `/match/start`,
+       `/match/finish` and `/me` can never resolve two different rows for one person — a win
+       credited to `tg-<id>` while the card is read for the anonymous `guest-<id>` is precisely how
+       a recorded victory looks unrecorded. */
+    const declaredId = String(tgUser()?.id ?? '');
+    if (/^[1-9][0-9]{0,19}$/.test(declaredId)) {
+      const identity = new URLSearchParams({
+        userId: declaredId,
+        displayName: challengeDisplayNameLocal(),
+        handle: challengeLocalHandle(),
+      });
+      url += (url.includes('?') ? '&' : '?') + identity.toString();
+    }
+  }
   try {
     const answer = await fetch(url, {
       method: body ? 'POST' : 'GET',
@@ -7584,8 +7602,16 @@ async function challengeCall(path: string, body?: Record<string, unknown>): Prom
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await answer.json() as ChallengeView;
-    return data && typeof data === 'object' ? data : null;
-  } catch {
+    if (!data || typeof data !== 'object') {
+      challengeDebug('call/unreadable', { path, status: answer.status });
+      return null;
+    }
+    /* A door refusing (an unauthenticated read, a banned seat) is a silent zero on the card
+       otherwise: say it once, with the room's own reason. */
+    if (data.ok === false) challengeDebug('call/refused', { path, status: answer.status, error: data.error, reason: data.reason });
+    return data;
+  } catch (error) {
+    challengeDebug('call/failed', { path, error: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
@@ -8317,6 +8343,16 @@ function applyChallengeView(view: ChallengeView): void {
   challengeStampSelfRow();
   paintChallengeCard();
   paintChallengeClock();
+  /* The leaderboard sync, stated: after this line the card's own counters are the ones painted. */
+  challengeDebug('leaderboard/sync', {
+    hardBotWins: challengeState.hardBotWins,
+    friendWins: challengeState.friendWins,
+    totalWins: challengeState.totalWins,
+    myPosition: challengeState.myPosition,
+    totalParticipants: challengeState.totalParticipants,
+    isEnrolled: challengeState.isEnrolled,
+    rows: challengeState.leaderboard.length,
+  });
 }
 
 async function refreshChallengeCard(): Promise<void> {
@@ -8369,6 +8405,30 @@ async function healChallengeEnrollment(myUserId: string): Promise<void> {
 
 /** The two tracks a finished board can be filed against. */
 type ChallengeMatchMode = 'hard_bot' | 'friend';
+
+/**
+ * This device's own floor before it even asks the room: the worker's 45-second gate less the very
+ * same three seconds of network tolerance the room applies (`CHALLENGE_MATCH_MIN_MS` in
+ * worker/challenge.ts). The tap that opens the session and the request that follows it are not the
+ * same instant, so a client that insisted on the full 45 seconds here would silently drop a
+ * legitimate board the room itself would have accepted.
+ */
+const CHALLENGE_MATCH_MIN_MS = (CHALLENGE_MIN_SECONDS - 3) * 1000;
+
+/**
+ * The temporary structured trace for the weekly tournament. Every step of the signed session —
+ * open, refusal, finish request, the room's answer (its own rejection `reason` included) and each
+ * leaderboard sync — prints one `[TactiX Challenge]` line, so a dropped victory is visible in the
+ * browser console instead of having to be inferred from two counters that never moved.
+ *
+ * It is a diagnostic, never a dependency: a stripped WebView without a console must not break the
+ * pipeline, hence the guard.
+ */
+function challengeDebug(step: string, detail: Record<string, unknown> = {}): void {
+  try {
+    console.info('[TactiX Challenge]', step, detail);
+  } catch { /* no console available: the trace is optional */ }
+}
 
 /**
  * One live match session: the room's signed token, the mode it was minted for, and the clock this
@@ -8432,6 +8492,7 @@ function startChallengeMatchSession(mode: ChallengeMatchMode, opponentId = ''): 
   challengeSession = session;
   challengeOptimisticWin = '';
   challengeOptimisticSeq = 0;
+  challengeDebug('match/start →', { mode, opponentId, seq });
   challengeSessionPending = (async () => {
     const view = await challengeCall('/api/challenge/match/start', {
       userId: String(tgUser()?.id ?? ''),
@@ -8440,20 +8501,42 @@ function startChallengeMatchSession(mode: ChallengeMatchMode, opponentId = ''): 
       opponentId,
     });
     /* A replay may have started a newer board while this answer was in flight. */
-    if (seq !== challengeSessionSeq || challengeSession !== session) return;
+    if (seq !== challengeSessionSeq || challengeSession !== session) {
+      challengeDebug('match/start dropped', { mode, seq, current: challengeSessionSeq, reason: 'superseded' });
+      return;
+    }
     if (!view || view.ok !== true
-      || typeof view.matchId !== 'string' || typeof view.matchToken !== 'string') return;
+      || typeof view.matchId !== 'string' || typeof view.matchToken !== 'string') {
+      /* The one place the session can die: an unauthenticated guest, an offline device, or a
+         non-2xx answer. The board itself keeps playing — only the receipt is missing. */
+      challengeDebug('match/start refused', {
+        mode,
+        ok: view?.ok,
+        error: view?.error,
+        reason: view?.reason ?? (view ? 'malformed_answer' : 'offline'),
+      });
+      return;
+    }
     session.matchId = view.matchId;
     session.matchToken = view.matchToken;
+    challengeDebug('match/start ok', { mode, matchId: view.matchId, startedAt: view.startedAt });
   })();
 }
+
+/**
+ * The board's FINISH row, exactly as `src/rules.ts` defines it: every pawn spawns in the bottom
+ * start rows and the race is won on row 0, on both the 8×12 duel board and the wider multi-seat
+ * one. So the human's winning pawn always stands at row 0 when it crossed the line — there is no
+ * second orientation in which a winner would be on the opposite edge.
+ */
+const CHALLENGE_FINISH_ROW = 0;
 
 /** The winning pawn's square, or null for a win the board did not decide by reaching FINISH. */
 function challengeGoalPawn(): { row: number; col: number } | null {
   const winner = state.winner;
   if (winner === null) return null;
   const side = sideOf(state, winner);
-  const done = state.balls.find((ball) => ball.pos.r === 0 && side.includes(ball.team));
+  const done = state.balls.find((ball) => ball.pos.r === CHALLENGE_FINISH_ROW && side.includes(ball.team));
   return done ? { row: done.pos.r, col: done.pos.c } : null;
 }
 
@@ -8531,17 +8614,32 @@ function recordChallengeMatchWin(won: boolean): void {
   challengeSessionPending = null;
   challengeSessionSeq += 1;
   if (!session || !won) {
+    challengeDebug('win/skip', { won, hasSession: !!session, reason: session ? 'lost_board' : 'no_session' });
     challengeOptimisticWin = '';
     challengeOptimisticSeq = 0;
     void refreshChallengeCard();
     return;
   }
-  const moveCount = Math.max(0, Math.floor(state.turn));
+  /* THE BOARD'S PLY COUNT — never `state.turn`. `turn` is the seat whose move it is (`Player`), so
+     on every 1v1 board it reads 0 or 1: the depth gate below then treated every real victory as a
+     one-move game and returned here, before the finish request was ever sent. `turnsPlayed` is the
+     single counter `play()` bumps for every committed action, the machine's turns included. */
+  const moveCount = Math.max(0, Math.floor(turnsPlayed));
   const finalPawnPos = challengeGoalPawn();
   const lastedMs = Date.now() - session.startedAt;
-  /* This device's own floor: a board that did not last 45 seconds or play 10 moves is not a
-     victory worth filing, and the room would refuse it anyway. */
-  if (lastedMs < CHALLENGE_MIN_SECONDS * 1000 || moveCount < CHALLENGE_MIN_MOVES) {
+  const durationSec = Math.max(0, Math.round(lastedMs / 1000));
+  challengeDebug('win', {
+    mode: session.mode,
+    opponentId: session.opponentId,
+    moveCount,
+    durationSec,
+    finalPawnPos,
+    matchId: session.matchId || '(pending)',
+  });
+  /* This device's own floor: a board that did not last 45 seconds (less the room's network
+     tolerance) or play 10 moves is not a victory worth filing, and the room would refuse it. */
+  if (lastedMs < CHALLENGE_MATCH_MIN_MS || moveCount < CHALLENGE_MIN_MOVES) {
+    challengeDebug('win/skip', { reason: 'below_device_floor', lastedMs, moveCount });
     void refreshChallengeCard();
     return;
   }
@@ -8551,10 +8649,19 @@ function recordChallengeMatchWin(won: boolean): void {
        of one session, and the finish is meaningless without the id the start minted. */
     if (pending) await pending;
     if (!session.matchId || !session.matchToken) {
+      challengeDebug('win/skip', { mode: session.mode, reason: 'no_signed_token' });
       challengeUndoWinFloor(painted);
       void refreshChallengeCard();
       return;
     }
+    challengeDebug('match/finish →', {
+      mode: session.mode,
+      matchId: session.matchId,
+      opponentId: session.opponentId,
+      moveCount,
+      durationSec,
+      finalPawnPos,
+    });
     const view = await challengeCall('/api/challenge/match/finish', {
       userId: String(tgUser()?.id ?? ''),
       displayName: challengeDisplayNameLocal(),
@@ -8563,12 +8670,19 @@ function recordChallengeMatchWin(won: boolean): void {
       matchId: session.matchId,
       matchToken: session.matchToken,
       moveCount,
-      durationSec: Math.max(0, Math.round(lastedMs / 1000)),
+      durationSec,
       finalPawnPos,
       moveLog: [],
     });
     if (view && typeof view.totalWins === 'number') {
       /* The room answered with its own card: it is the truth, and it already holds this win. */
+      challengeDebug('match/finish ok', {
+        mode: session.mode,
+        recorded: view.recorded === true,
+        hardBotWins: view.hardBotWins,
+        friendWins: view.friendWins,
+        totalWins: view.totalWins,
+      });
       challengeOptimisticWin = '';
       challengeOptimisticSeq = 0;
       applyChallengeView(view);
@@ -8578,12 +8692,19 @@ function recordChallengeMatchWin(won: boolean): void {
        report) already paid it, so the figure this card painted is right and the next read
        confirms it. Every other reason means no counter moved, so the optimistic win goes back. */
     if (view && view.reason === 'already_recorded') {
+      challengeDebug('match/finish already recorded', { mode: session.mode, matchId: session.matchId });
       challengeOptimisticWin = '';
       challengeOptimisticSeq = 0;
       void refreshChallengeCard();
       return;
     }
-    /* Refused, offline or unreadable: the optimistic win goes back and the next read decides. */
+    /* Refused, offline or unreadable: the room's own reason is the whole diagnosis. */
+    challengeDebug('match/finish refused', {
+      mode: session.mode,
+      matchId: session.matchId,
+      error: view?.error,
+      reason: view?.reason ?? (view ? 'malformed_answer' : 'offline'),
+    });
     challengeUndoWinFloor(painted);
     void refreshChallengeCard();
   })();

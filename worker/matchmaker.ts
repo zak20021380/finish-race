@@ -384,6 +384,12 @@ interface Race {
   state: GameState;
   /** When the pairing was announced: the inspector's match clock starts here. */
   startedAt: number;
+  /**
+   * The board's own PLY count: one tick per action this authoritative board accepted. The weekly
+   * tournament's friend track reads it as the match depth — `state.turn` is the seat that is up
+   * (`0 | 1` on a duel), never a move count, so passing that to a depth gate refused every win.
+   */
+  plies: number;
   over: boolean;
 }
 
@@ -8667,6 +8673,7 @@ export class MatchmakerDO {
       seats: [challenger, target],
       state: newGame(sizes),
       startedAt: Date.now(),
+      plies: 0,
       over: false,
     };
     challenger.race = race;
@@ -8834,6 +8841,7 @@ export class MatchmakerDO {
       seats: [first, second],
       state: newGame(sizes),
       startedAt: Date.now(),
+      plies: 0,
       over: false,
     };
     first.race = race;
@@ -10695,7 +10703,10 @@ export class MatchmakerDO {
     }
     /* The 7-Day Challenge's friend track. Only a real two-person 1v1 counts, and only when the
        winning chair is still held by its person: a bot backfill or a substitute seat is a
-       practice board, never a friend win. */
+       practice board, never a friend win. The depth is the room's own board-mutation counter
+       (`live.seq`, one tick per accepted action, reset when a rematch deals a new board):
+       `driver.state.turn` is the seat that is up, so passing it here refused every settled win
+       on the ten-move gate. */
     if (live.members.length === 2 && winner >= 0 && winner < 2) {
       const champion = live.members[winner];
       const rival = live.members[winner === 0 ? 1 : 0];
@@ -10704,7 +10715,7 @@ export class MatchmakerDO {
           champion.id,
           rival.id,
           Math.max(0, Math.round((Date.now() - live.startedAt) / 1000)),
-          live.driver?.state.turn ?? 0,
+          live.seq,
           live.matchId,
           false,
         );
@@ -11149,6 +11160,9 @@ export class MatchmakerDO {
     }
 
     race.state = next;
+    /* One accepted action is one ply. This is the only depth the room reports to the weekly
+       tournament — a seat index must never stand in for it. */
+    race.plies += 1;
     this.countBoard(before, next);
     const rival = race.seats[seat.side === 0 ? 1 : 0];
     const relayed = JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action });
@@ -11215,7 +11229,10 @@ export class MatchmakerDO {
       this.verdict(seat.id, winner === null ? null : seat.side === winner, true);
     }
     /* The 7-Day Challenge's friend track is the room's own settlement, not a client report:
-       one credited win per real 1v1 board, with the room's elapsed time and turn count. */
+       one credited win per real 1v1 board, with the room's elapsed time and ITS OWN board depth.
+       The depth is `race.plies` — one tick per action this authority accepted. Reading
+       `race.state.turn` here (the seat that is up, `0 | 1`) made every board look like a
+       one-move game, so the ten-move gate refused every friend victory the room ever settled. */
     if (winner !== null) {
       const champion = race.seats[winner];
       const rival = race.seats[race.seats.length - 1 - winner];
@@ -11224,7 +11241,7 @@ export class MatchmakerDO {
           champion.id,
           rival.id,
           Math.max(0, Math.round((Date.now() - race.startedAt) / 1000)),
-          race.state.turn,
+          race.plies,
           race.matchId,
           forfeit,
         );
@@ -11539,9 +11556,18 @@ export class MatchmakerDO {
     if (!this.challengeLoaded) return;
     const winnerTg = chatIdOf(winnerId);
     const loserTg = chatIdOf(loserId);
-    if (!/^[0-9]{1,20}$/.test(winnerTg) || !/^[0-9]{1,20}$/.test(loserTg)) return;
-    if (winnerTg === loserTg) return;
-    if (forfeit && durationSec < CHALLENGE_FORFEIT_MIN_SECONDS) return;
+    if (!/^[0-9]{1,20}$/.test(winnerTg) || !/^[0-9]{1,20}$/.test(loserTg)) {
+      console.info('[TactiX Challenge]', 'friend/settle skipped', { matchId, reason: 'no_verified_seats' });
+      return;
+    }
+    if (winnerTg === loserTg) {
+      console.info('[TactiX Challenge]', 'friend/settle skipped', { matchId, reason: 'self_opponent' });
+      return;
+    }
+    if (forfeit && durationSec < CHALLENGE_FORFEIT_MIN_SECONDS) {
+      console.info('[TactiX Challenge]', 'friend/settle skipped', { matchId, reason: 'forfeit_too_fast', durationSec });
+      return;
+    }
     const now = Date.now();
     /* A settle that lands before this credit: a win can never be added to last week's card. */
     if (this.settleChallenge(now)) this.persistChallenge();
@@ -11550,11 +11576,22 @@ export class MatchmakerDO {
     const entry = this.enrollChallenge(winnerId, winnerTg, now);
     this.enrollChallenge(loserId, loserTg, now);
     if (!entry) return;
-    applyFriendWin(entry, now, {
+    const refusal = applyFriendWin(entry, now, {
       matchId,
       opponentTgId: loserTg,
       durationSec,
       moves,
+    });
+    /* The refusal used to be discarded here, which is how a settled friend win could vanish with
+       no trace at all. Every settle now states its own verdict. */
+    console.info('[TactiX Challenge]', refusal ? 'friend/settle refused' : 'friend/settle credited', {
+      matchId,
+      winner: winnerTg,
+      opponent: loserTg,
+      durationSec,
+      moves,
+      forfeit,
+      reason: refusal,
     });
     /* Written even when the win itself was refused: the loser's enrollment is still a new seat. */
     this.persistChallenge();
@@ -11599,6 +11636,23 @@ export class MatchmakerDO {
       const seat = challengeFallbackSeat(body)
         ?? (url.pathname === '/api/challenge/join' ? null : challengeDeclaredSeat(body));
       if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
+    } else if (request.method === 'GET' && (!who || who.guest)
+      && (url.pathname === '/api/challenge/me' || url.pathname === '/api/challenge/leaderboard')) {
+      /* THE READ DOORS ANSWER FOR THE SAME SEAT THE WRITE DOORS CREDITED. Without signed
+         `initData` (Telegram Desktop, an external WebView) the match doors already open a session
+         for the seat the body declares, and a redeemed token then moves THAT row's counter. If the
+         card were read as the anonymous guest seat instead, the win would be real in the ledger and
+         invisible on the card — the exact "my win did not record" report. One normalization
+         (`challengeDeclaredSeat` → `tg-<digits>`) now resolves all four doors, so `/join`,
+         `/match/start`, `/match/finish` and `/me` always address the same entry of the same
+         `weekStart` window. The declaration reads only a public card and enrolls a zero-win seat,
+         exactly like the POST join door it mirrors — it can never credit anything. */
+      const seat = challengeDeclaredSeat({
+        userId: url.searchParams.get('userId') ?? '',
+        displayName: url.searchParams.get('displayName') ?? '',
+        handle: url.searchParams.get('handle') ?? '',
+      });
+      if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
     }
     if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
     if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, CHALLENGE_CORS);
@@ -11625,6 +11679,16 @@ export class MatchmakerDO {
         age: own ? own.age : null,
         ...extra,
       };
+    };
+
+    /**
+     * The room's half of the `[TactiX Challenge]` trace: one line per session step and per refusal,
+     * carrying the room's own verdict (`reason`) so a dropped win is diagnosable from the server log
+     * the same way the browser console diagnoses the client side. Temporary: diagnostics only.
+     */
+    const reader: PlayerAuth = who;
+    const trace = (step: string, detail: Record<string, unknown> = {}): void => {
+      console.info('[TactiX Challenge]', step, { who: reader.playerId, tgId: reader.tgId, ...detail });
     };
 
     if (url.pathname === '/api/challenge/me') {
@@ -11720,15 +11784,22 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const body = await readBody(request);
       const mode = challengeMatchMode(body.mode);
-      if (!mode) return json({ ok: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
-      if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+      if (!mode) {
+        trace('match/start refused', { reason: 'bad_mode' });
+        return json({ ok: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
+      }
+      if (!who.tgId) {
+        trace('match/start refused', { mode, reason: 'telegram_required' });
+        return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+      }
       const entry = this.challengeEntry(who, now);
       const matchId = crypto.randomUUID();
+      const opponentId = mode === 'friend' ? challengeNumericId(body.opponentId) : '';
       const matchToken = await signChallengeMatchToken(this.challengeMatchKey(), {
         matchId,
         userId: who.tgId,
         mode,
-        opponentId: mode === 'friend' ? challengeNumericId(body.opponentId) : '',
+        opponentId,
         startedAt: now,
         weekEnd: entry.windowEnd,
       });
@@ -11736,6 +11807,7 @@ export class MatchmakerDO {
       /* The seat — and the key that signs for it — is durable before the token is answered, so a
          reload the instant after a board starts still redeems against a stored secret. */
       await this.flushChallenge();
+      trace('match/start ok', { mode, matchId, opponentId, weekEnd: entry.windowEnd });
       return json({ ok: true, matchId, matchToken, startedAt: now }, 200, CHALLENGE_CORS);
     }
 
@@ -11745,54 +11817,62 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const body = await readBody(request);
       const mode = challengeMatchMode(body.mode);
-      if (!mode) return json({ ok: false, recorded: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
-      if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
       const matchId = typeof body.matchId === 'string' ? body.matchId.trim().slice(0, 64) : '';
+      /* Every gate answers AND says so: the room's verdict is the one thing a client can log. */
+      const refuse = (reason: string, status: number): Response => {
+        trace('match/finish refused', { mode, matchId, reason, status });
+        return json({ ok: false, recorded: false, reason }, status, CHALLENGE_CORS);
+      };
+      if (!mode) {
+        trace('match/finish refused', { matchId, reason: 'bad_mode' });
+        return json({ ok: false, recorded: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
+      }
+      if (!who.tgId) {
+        trace('match/finish refused', { mode, matchId, reason: 'telegram_required' });
+        return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+      }
       const token = typeof body.matchToken === 'string' ? body.matchToken.trim().slice(0, 4096) : '';
       const claim = await verifyChallengeMatchToken(this.challengeMatchKey(), token);
       /* Gate 1 — the signature: the token must be the room's own, for this seat, this mode and
          this exact match id. A forged body dies here, before anything else is read. */
       if (!claim || claim.matchId !== matchId || claim.userId !== who.tgId || claim.mode !== mode) {
-        return json({ ok: false, recorded: false, reason: 'bad_token' }, 400, CHALLENGE_CORS);
+        return refuse('bad_token', 400);
       }
       /* Gate 2 — single use: one token is worth one victory, however often it is replayed. */
-      if (this.challengeUsedMatches.has(matchId)) {
-        return json({ ok: false, recorded: false, reason: 'already_recorded' }, 409, CHALLENGE_CORS);
-      }
+      if (this.challengeUsedMatches.has(matchId)) return refuse('already_recorded', 409);
       /* Gate 3 — the room's clock. The client's `durationSec` is accepted but never trusted: the
          token's `startedAt` was stamped by this object, and 42s is the 45s floor less 3s of
          network tolerance. */
       const elapsed = now - claim.startedAt;
       if (elapsed < CHALLENGE_MATCH_MIN_MS) {
-        return json({ ok: false, recorded: false, reason: 'too_fast' }, 400, CHALLENGE_CORS);
+        return refuse('too_fast', 400);
       }
-      if (elapsed > CHALLENGE_MATCH_MAX_AGE_MS) {
-        return json({ ok: false, recorded: false, reason: 'stale_token' }, 409, CHALLENGE_CORS);
-      }
+      if (elapsed > CHALLENGE_MATCH_MAX_AGE_MS) return refuse('stale_token', 409);
       /* A win never crosses a boundary: the window the token was signed in must still be open. */
-      if (now >= claim.weekEnd) {
-        return json({ ok: false, recorded: false, reason: 'window_closed' }, 409, CHALLENGE_CORS);
-      }
+      if (now >= claim.weekEnd) return refuse('window_closed', 409);
       /* Gate 4 — depth: a real board plays at least ten moves, and no board plays 250. */
       const moveCount = typeof body.moveCount === 'number' && Number.isFinite(body.moveCount)
         ? Math.floor(body.moveCount) : -1;
       if (moveCount < CHALLENGE_MIN_MOVES || moveCount > CHALLENGE_MATCH_MAX_MOVES) {
-        return json({ ok: false, recorded: false, reason: 'not_enough_moves' }, 400, CHALLENGE_CORS);
+        trace('match/finish depth', { mode, matchId, moveCount, reason: 'not_enough_moves' });
+        return refuse('not_enough_moves', 400);
       }
       /* Gate 5 — the board: a claimed victory names the goal row its pawn reached. */
-      if (challengeGoalRow(body.finalPawnPos) === false) {
-        return json({ ok: false, recorded: false, reason: 'not_won' }, 400, CHALLENGE_CORS);
+      const goal = challengeGoalRow(body.finalPawnPos);
+      if (goal === false) {
+        trace('match/finish goal row', { mode, matchId, finalPawnPos: body.finalPawnPos, reason: 'not_won' });
+        return refuse('not_won', 400);
       }
       /* Gate 6 — the friend track: a distinct opponent, then at most three wins against them. */
       const opponentId = mode === 'friend' ? challengeNumericId(body.opponentId) : '';
       if (mode === 'friend' && (!opponentId || opponentId === who.tgId)) {
-        return json({ ok: false, recorded: false, reason: 'self_opponent' }, 400, CHALLENGE_CORS);
+        return refuse('self_opponent', 400);
       }
       const entry = this.challengeEntry(who, now);
       /* A friends 1v1 the room itself settled is already paid (or already lost): the room's own
          verdict is final, and this report is only the fallback for a board it never settled. */
       if (mode === 'friend' && this.challengeFriendSettledByRoom(who.playerId)) {
-        return json({ ok: false, recorded: false, reason: 'already_recorded' }, 409, CHALLENGE_CORS);
+        return refuse('already_recorded', 409);
       }
       const refusal = mode === 'hard_bot'
         ? applyChallengeBotWin(entry, now, matchId)
@@ -11801,17 +11881,23 @@ export class MatchmakerDO {
         const reason = refusal === 'duplicate' ? 'already_recorded'
           : refusal === 'friend_cap' ? 'friend_cap_reached'
             : refusal;
-        return json(
-          { ok: false, recorded: false, reason },
-          reason === 'already_recorded' ? 409 : 400,
-          CHALLENGE_CORS,
-        );
+        return refuse(reason, reason === 'already_recorded' ? 409 : 400);
       }
       /* Paid: the id is spent before the answer leaves, and the whole ledger is durable before
          the client is told it can stop asking. */
       this.challengeUsedMatches.set(matchId, now);
       this.trimChallenge(now);
       await this.flushChallenge();
+      trace('match/finish credited', {
+        mode,
+        matchId,
+        moveCount,
+        elapsedSec: Math.round(elapsed / 1000),
+        opponentId,
+        hardBotWins: entry.hardBotWins,
+        friendWins: entry.friendWins,
+        totalWins: entry.friendWins + entry.hardBotWins,
+      });
       return json(view(entry, { ok: true, recorded: true }), 200, CHALLENGE_CORS);
     }
 
