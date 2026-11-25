@@ -7582,40 +7582,6 @@ function challengeBdi(value: string): HTMLElement {
 }
 
 /**
- * One crisp inline vector at an explicit size: stroked paths on `currentColor` only, so the
- * glyph inherits the row's muted slate (or the card's gold) without a second colour source and
- * can never fall back to a cartoon emoji. Width and height are attributes, not CSS, so the box
- * is reserved before the first paint and the row cannot shift when the glyph appears.
- */
-function challengeVector(paths: readonly string[], size: number, viewBox = '0 0 24 24'): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', viewBox);
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  for (const d of paths) {
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', d);
-    svg.append(path);
-  }
-  return svg;
-}
-
-/** The globe that leads the nationality reading: one circle, one equator, two meridians. */
-const CHALLENGE_GLOBE_PATHS: readonly string[] = [
-  'M12 3.6a8.4 8.4 0 1 0 0 16.8a8.4 8.4 0 1 0 0-16.8Z',
-  'M3.6 12h16.8',
-  'M12 3.6c2.3 2.6 3.5 5.4 3.5 8.4s-1.2 5.8-3.5 8.4c-2.3-2.6-3.5-5.4-3.5-8.4S9.7 6.2 12 3.6Z',
-];
-
-/**
  * This device's own printable name, the way the standings print it: the Telegram
  * `first_name` + `last_name` from the signed session, then the top-HUD profile name, then the
  * username with its `@` stripped. It is never prefixed with an at-sign.
@@ -7837,8 +7803,11 @@ function paintChallengeLabels(): void {
  * the Latin `#n` in its own `<bdi dir="ltr">`, and this repairs the one case that could still
  * reverse it — a locale line that lost its run — so `#1` can never paint as `1#` in an RTL card.
  */
-function challengeRankHTML(position: number): string {
-  const token = '#' + position;
+function challengeRankHTML(position: number | string): string {
+  /* The served position may already arrive as "#4": strip every leading hash and every non-digit
+     before the template's own hash is applied, so the pill can never print "##4". */
+  const clean = String(position).trim().replace(/^#+/, '').replace(/\D+/g, '');
+  const token = '#' + (clean || '0');
   const sealed = challengeCopy().rank.replace('{rank}', token);
   if (/<bdi\b[^>]*>\s*#\d+\s*<\/bdi>/i.test(sealed)) return sealed;
   return sealed.replace(token, `<bdi dir="ltr">${token}</bdi>`);
@@ -7957,68 +7926,10 @@ function paintChallengeCard(): void {
 }
 
 /**
- * Line 2 of a contender card: the compact nationality + age strip.
+ * One contender row of the championship ladder, built as nodes — two lines, never more:
  *
- *   [globe] ملیت: {nationality} • سن: {age}
- *
- * Each reading is one shrinkable pair (its label never truncates, its value ellipsises), so a
- * long nation name is cut instead of pushing the age off the card or wrapping the line into a
- * fourth row — the card's height stays identical for every seat. A value the player never set
- * prints the language's own `نامعلوم` in slate, so an unknown field is legible without inventing
- * a nation or an age. Digits stay Latin inside their own LTR `<bdi>`, and the whole line is text
- * nodes plus one vector: no innerHTML at all.
- */
-function challengeMetaNode(row: ChallengeRowView): HTMLDivElement {
-  const copy = challengeCopy();
-  const identity = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
-  const meta = document.createElement('div');
-  meta.className = 'ci-row-meta';
-  const globe = challengeVector(CHALLENGE_GLOBE_PATHS, 11);
-  globe.classList.add('ci-meta-ico');
-  meta.append(globe);
-
-  /** One label + value pair: the label is fixed, the value shrinks behind an ellipsis. */
-  const pair = (label: string): { wrap: HTMLSpanElement; value: HTMLSpanElement } => {
-    const wrap = document.createElement('span');
-    wrap.className = 'ci-meta-pair';
-    const tag = document.createElement('span');
-    tag.className = 'ci-meta-k';
-    tag.textContent = label + ':';
-    const value = document.createElement('span');
-    value.className = 'ci-meta-val';
-    wrap.append(tag, value);
-    return { wrap, value };
-  };
-
-  const nation = pair(copy.nationality);
-  nation.value.textContent = identity.nationalityText;
-  nation.value.title = identity.nationalityText;
-  nation.value.classList.toggle('is-unknown', !identity.hasCountry);
-  meta.append(nation.wrap);
-
-  const dot = document.createElement('span');
-  dot.className = 'ci-meta-dot';
-  dot.textContent = '•';
-
-  const years = pair(copy.age);
-  years.value.classList.toggle('is-unknown', !identity.hasAge);
-  if (identity.hasAge && identity.age !== null) {
-    years.value.append(challengeBdi(String(identity.age)), document.createTextNode(' ' + identity.yearsWord));
-    years.value.title = identity.age + ' ' + identity.yearsWord;
-  } else {
-    years.value.textContent = identity.unknownText;
-    years.value.title = identity.unknownText;
-  }
-  meta.append(dot, years.wrap);
-  return meta;
-}
-
-/**
- * One contender row of the championship ladder, built as nodes:
- *
- *   start — a sculpted metallic rank medallion, then a three-line info stack: the real Telegram
- *           display name with its YOU badge, the muted nationality + age strip, and the
- *           Hard-bot / friends split;
+ *   start — a sculpted metallic rank medallion, then the real Telegram display name with its YOU
+ *           badge over the Hard-bot / friends split;
  *   end   — the tabular weekly total, with that rank's exact 25 / 15 / 10 Star pill beneath it.
  *
  * Every row is a real button target: the delegated listener on `#ci-list` reads the seat's
@@ -8036,15 +7947,9 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   item.dataset.chalProfileName = name;
   item.setAttribute('role', 'button');
   item.tabIndex = 0;
-  /* Plain text only: the visible rank token carries its <bdi>, an aria label must not. The two
-     identity readings are spoken too, so the new line is not sighted-only. */
-  const spoken = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
-  const spokenAge = spoken.hasAge && spoken.age !== null
-    ? spoken.age + ' ' + spoken.yearsWord
-    : spoken.unknownText;
+  /* Plain text only: the visible rank token carries its <bdi>, an aria label must not. */
   item.setAttribute('aria-label',
-    `${name} · #${row.position} · ${row.totalWins} ${copy.winsWord} `
-    + `· ${copy.nationality}: ${spoken.nationalityText} · ${copy.age}: ${spokenAge}`);
+    `${name} · #${row.position} · ${row.totalWins} ${copy.winsWord}`);
   if (row.isMe === true) item.classList.add('is-me');
 
   const start = document.createElement('div');
@@ -8084,7 +7989,7 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
 
-  info.append(top, challengeMetaNode(row), sub);
+  info.append(top, sub);
   start.append(rank, info);
 
   const end = document.createElement('div');
@@ -8184,80 +8089,6 @@ function setChallengeProfileLayer(open: boolean): void {
   document.body.classList.toggle('chal-profile-open', open);
 }
 
-/**
- * The standings row the open drawer was painted for, so a language flip relabels the identity
- * strip in place instead of leaving the previous tongue on screen. Null while no tournament
- * profile is open: the strip belongs to this door only, never to the Ranks dossiers.
- */
-let challengeProfileRow: ChallengeRowView | null = null;
-
-/** The nation a row prints: its own code first, then this device's live read and saved profile. */
-function challengeRowCountry(row: ChallengeRowView): unknown {
-  if (typeof row.country === 'string' && row.country) return row.country;
-  if (row.isMe !== true) return null;
-  /* This device's own seat: the card's live read, then the save itself, so a row served before
-     the profile was synced still prints the nation the player already chose on this device. */
-  return challengeView?.country ?? profile.country ?? null;
-}
-
-/** The age a row prints: its own number first, then this device's live read and saved profile. */
-function challengeRowAge(row: ChallengeRowView): unknown {
-  if (playerAgeNumber(row.age) !== null) return row.age;
-  if (row.isMe !== true) return null;
-  return challengeView?.age ?? profile.age ?? null;
-}
-
-/**
- * Hide the identity strip again. The strip is this drawer's tournament face only; every other
- * user of the shared `#sheet-mind` (the Ranks ladder, a rival dossier, a guild card) must find
- * the sheet exactly as it was, so closing the tournament profile puts the strip away with it.
- */
-function hideChallengeProfileIdentity(): void {
-  challengeProfileRow = null;
-  const strip = document.getElementById('sm-identity');
-  if (strip) strip.hidden = true;
-}
-
-/**
- * Paint the drawer's two identity micro-cards from one standings row.
- *
- * Both values are resolved synchronously from the row the tap carried (0ms latency), with the
- * room's live read as the fallback for this device's own seat — so a row that arrived before the
- * profile was synced still prints the real nation and age. A field the player never set prints
- * the language's own `نامعلوم` in muted slate, and the age digits stay Latin inside their LTR bdi.
- */
-function paintChallengeProfileIdentity(row: ChallengeRowView): void {
-  const strip = document.getElementById('sm-identity');
-  if (!strip) return;
-  challengeProfileRow = row;
-  const copy = challengeCopy();
-  const identity = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
-  strip.hidden = false;
-
-  challengeSetText('sm-id-country-k', copy.nationality);
-  challengeSetText('sm-id-age-k', copy.age);
-
-  const nation = document.getElementById('sm-id-country');
-  if (nation) {
-    nation.textContent = identity.nationalityText;
-    nation.title = identity.nationalityText;
-    nation.classList.toggle('is-unknown', !identity.hasCountry);
-  }
-
-  const years = document.getElementById('sm-id-age');
-  if (years) {
-    years.textContent = '';
-    if (identity.hasAge && identity.age !== null) {
-      years.append(challengeBdi(String(identity.age)), document.createTextNode(' ' + identity.yearsWord));
-      years.title = identity.age + ' ' + identity.yearsWord;
-    } else {
-      years.textContent = identity.unknownText;
-      years.title = identity.unknownText;
-    }
-    years.classList.toggle('is-unknown', !identity.hasAge);
-  }
-}
-
 /** The drawer closes by its X, Escape or the scrim; the raised layer flag follows it back down. */
 let challengeProfileWatch: MutationObserver | null = null;
 function watchChallengeProfileClose(sheet: HTMLElement): void {
@@ -8265,7 +8096,6 @@ function watchChallengeProfileClose(sheet: HTMLElement): void {
   challengeProfileWatch = new MutationObserver(() => {
     if (!sheet.hidden) return;
     setChallengeProfileLayer(false);
-    hideChallengeProfileIdentity();
   });
   challengeProfileWatch.observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
 }
@@ -8325,10 +8155,6 @@ function openChallengeProfile(row: ChallengeRowView): void {
     sub.innerHTML = (row.isMe === true ? copy.you + ' • ' : '') + line;
   }
   sheet.setAttribute('aria-label', `${copy.sheetTitle} · ${name}`);
-
-  /* The nationality + age strip is painted from the row the tap already carries: both cards are
-     filled before the sheet opens, so there is no empty frame and no network wait on the tap. */
-  paintChallengeProfileIdentity(row);
 
   /* This is a read-only mirror of the row: the confrontation and squad keys do not belong on it,
      so the drawer's whole action bar stays hidden while the tournament opened it. */
@@ -8815,9 +8641,6 @@ function initChallengeCard(): void {
   }, 1000);
   onLang(() => {
     paintChallengeCard();
-    /* An open tournament profile keeps its two identity labels in the new tongue: the row itself
-       is still on hand, so the strip is relabelled without touching the drawer's scroll or face. */
-    if (challengeProfileRow) paintChallengeProfileIdentity(challengeProfileRow);
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) { paintChallengeClock(); void refreshChallengeCard(); }

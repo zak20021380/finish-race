@@ -16573,57 +16573,6 @@ html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
 .ms-x:active { transform: translateY(var(--press-y)); --d: 0px; }
 .ms-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- identity strip: nationality + age, two recessed micro-cards under the header ----
-   Only the weekly-tournament profile paints it; every other user of this shared drawer
-   leaves it hidden, so no Ranks dossier grows a metadata row it never had. Fixed height,
-   hairline rims and one vector glyph per card: no blur, no keyframes, no layout shift —
-   the strip is `flex: none`, so showing it can only take the room the body already had.
-   Every rule is scoped to #sheet-mind: the `.sm-` namespace belongs to this one drawer. */
-#sheet-mind .sm-identity-grid {
-  flex: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 10px 0 12px;
-  min-width: 0;
-}
-#sheet-mind .sm-identity-grid[hidden] { display: none !important; }
-#sheet-mind .sm-id-card {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  padding: 9px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .035);
-  border: 1px solid rgba(255, 255, 255, .07);
-}
-#sheet-mind .sm-id-ico { flex: none; display: block; color: #f6c85e; }
-#sheet-mind .sm-id-ico.is-age { color: #38bdf8; }
-#sheet-mind .sm-id-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-#sheet-mind .sm-id-k {
-  min-width: 0;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#sheet-mind .sm-id-v {
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.35;
-  color: #f8fafc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#sheet-mind .sm-id-v.is-unknown { color: #64748b; }
-#sheet-mind .sm-id-v bdi { color: inherit; font-weight: 800; font-variant-numeric: tabular-nums; }
-
 /* ---- body ---- */
 .ms-body { gap: var(--s3); padding-right: 2px; }
 
@@ -47541,16 +47490,25 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, .07);
 }
+/* The start side: the emblem and the two-row text column, pinned together on the header's start
+   edge and allowed to shrink so the two keys on the end edge never move. */
+.ci-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
 .ci-head-emblem {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(145deg, rgba(251, 191, 36, .24) 0%, rgba(180, 83, 9, .10) 100%);
   border: 1px solid rgba(253, 224, 71, .42);
   box-shadow: inset 0 1px 0 rgba(254, 249, 195, .4), 0 6px 18px rgba(245, 158, 11, .14);
@@ -47560,12 +47518,26 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   color: #fbbf24;
 }
 .ci-head-emblem-ico { display: block; }
-.ci-head-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.ci-head-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+/* The two-row text column — the title line over one inline telemetry line — is nowrap in both
+   rows, so the header can only ever be two lines tall at any width. */
+.ci-head-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ci-head-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-width: 0;
+}
 .ci-title {
   margin: 0;
   min-width: 0;
-  font-size: 16.5px;
+  font-size: 15.5px;
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: 0;
@@ -47578,53 +47550,54 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(251, 191, 36, .22) 0%, rgba(245, 158, 11, .10) 100%);
-  border: 1px solid rgba(253, 224, 71, .44);
+  background: rgba(251, 191, 36, .16);
+  border: 1px solid rgba(253, 224, 71, .38);
   color: #fde68a;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.ci-pool-ico { flex: none; color: #fbbf24; }
 .ci-pool-t { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
-.ci-head-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* Line 2: one inline telemetry run — clock, "باقی‌مانده", a dot, the field count — never a box. */
+.ci-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+}
 .ci-clock, .ci-players {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 7px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #cbd5e1;
   min-width: 0;
   white-space: nowrap;
 }
-.ci-clock { background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .20); }
-.ci-players { background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); }
-.ci-clock-ico { flex: none; color: #fbbf24; }
+.ci-head-dot { flex: none; font-size: 9px; color: #475569; }
+.ci-clock-ico { flex: none; display: block; color: #fbbf24; }
 .ci-clock bdi { color: #fde68a; font-weight: 800; font-variant-numeric: tabular-nums; }
-.ci-clock-left { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-clock-left { min-width: 0; }
 /* The last six hours keep their warm-red reading; the inline telemetry tone on the digits would
    otherwise win, so this single urgent override is the one declaration that must outrank it. */
 .ci-clock.is-urgent, .ci-clock.is-urgent .ci-clock-left { color: #fca5a5; }
 .ci-clock.is-urgent bdi { color: #fca5a5 !important; }
 .ci-clock.is-urgent .ci-clock-ico { color: #f87171; }
-.ci-players-ico { flex: none; color: #94a3b8; }
-.ci-players bdi { color: #f8fafc; font-weight: 800; font-variant-numeric: tabular-nums; }
-.ci-players-u { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-players bdi { color: #e2e8f0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ci-players-u { min-width: 0; }
 .ci-head-keys { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .ci-rules-pill {
   flex: none;
-  height: 34px;
-  padding: 0 11px;
-  border-radius: 11px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, .05);
   border: 1px solid rgba(255, 255, 255, .11);
   color: #e2e8f0;
@@ -47644,14 +47617,14 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 .ci-rules-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .ci-x {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   appearance: none;
   padding: 0;
-  border-radius: 11px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, .05);
   border: 1px solid rgba(255, 255, 255, .11);
   color: #94a3b8;
@@ -47997,8 +47970,8 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 58px;
-  padding: 10px 12px;
+  min-height: 52px;
+  padding: 9px 12px;
   border-radius: 14px;
   background: rgba(255, 255, 255, .035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
@@ -48048,7 +48021,7 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   color: #2a1402;
   background: linear-gradient(180deg, #f0b173, #a75b12);
 }
-.ci-row-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ci-row-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ci-row-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ci-row-handle {
   max-width: 150px;
@@ -48060,42 +48033,6 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   font-weight: 800;
   color: #f8fafc;
 }
-/* Line 2: the compact nationality + age strip. One nowrap row of two shrinkable pairs, so a
-   full nation name ellipsises instead of wrapping into a fourth line — the card's height is
-   therefore stable for every row on every read. */
-.ci-row-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: #94a3b8;
-}
-.ci-meta-ico { flex: none; display: block; color: #94a3b8; }
-/* One label + value pair. The pair shrinks as a unit, but its label keeps its glyphs: only the
-   value is allowed to ellipsise, so "ملیت:" / "سن:" always stay readable. */
-.ci-meta-pair {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-}
-.ci-meta-k { flex: none; color: #94a3b8; }
-.ci-meta-val {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #cbd5e1;
-}
-.ci-meta-val.is-unknown { color: #64748b; }
-.ci-meta-val bdi { color: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
-.ci-meta-dot { flex: none; font-size: 9px; color: #475569; }
 .ci-you {
   flex: none;
   padding: 1px 5px;
@@ -48292,10 +48229,10 @@ html:lang(ar) #challenge-rules-modal {
 body.chal-profile-open #scrim { z-index: 1240; }
 
 @media (max-width: 380px) {
-  .ci-title { font-size: 15.5px; }
-  .ci-head { gap: 8px; }
-  .ci-head-meta { gap: 5px; }
-  .ci-pool { padding: 0 7px; }
+  .ci-title { font-size: 14.5px; }
+  .ci-head { gap: 6px; }
+  .ci-head-meta { gap: 5px; font-size: 11px; }
+  .ci-pool { padding: 0 6px; }
   .ci-podium-step.is-gold { height: 88px; }
   .ci-podium-step.is-silver { height: 72px; }
   .ci-podium-step.is-bronze { height: 66px; }
@@ -48306,10 +48243,6 @@ body.chal-profile-open #scrim { z-index: 1240; }
   .ci-duel-btn { font-size: 11.5px; gap: 4px; }
   .ci-row { padding: 9px 10px; }
   .ci-row-handle { max-width: 112px; }
-  /* The identity line gives back a hair of width here: the row keeps three clean lines and the
-     nation value ellipsises instead of pushing the age off the card. */
-  .ci-row-meta { gap: 5px; font-size: 10.5px; }
-  .ci-meta-pair { gap: 2px; }
   .ci-row-rank { width: 30px; height: 34px; }
 }
 @media (max-height: 680px) {
