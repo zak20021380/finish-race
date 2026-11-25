@@ -161,7 +161,27 @@ export interface ChallengeBoardRow {
   /** The exact pool slice this position pays at week close: 25 / 15 / 10, else 0. */
   prizeStars: number;
   isMe: boolean;
+  /**
+   * The registry's ISO 3166-1 alpha-2 nation for this seat, or null when their profile never set
+   * one. The row carries the code only: the client localises it, the room never guesses a nation.
+   */
+  country: string | null;
+  /** The player-declared age from the registry, or null when their profile never set one. */
+  age: number | string | null;
 }
+
+/**
+ * The two registry profile fields a standings row mirrors. Resolved by the room from its own
+ * player registry — never from the request body — so a board can neither invent nor edit an
+ * identity. A null field is the honest reading: the seat never set that profile value.
+ */
+export interface ChallengeIdentity {
+  country: string | null;
+  age: number | string | null;
+}
+
+/** Resolve one seat's registry identity. Null means the room holds no profile for that seat. */
+export type ChallengeIdentityLookup = (playerId: string) => ChallengeIdentity | null;
 
 export interface ChallengeBoard {
   /** Every participant of the live week, zero wins included, in ranking order. */
@@ -486,9 +506,17 @@ export function settleChallengeWeek(rows: ChallengeEntry[], now: number): Challe
  * (total wins descending, then the earliest `updatedAt` — whoever reached that count first keeps
  * the higher seat). Guest seats never participate, so they hold no row. The room's internal id and
  * the per-opponent ledger stay in the room; a row carries the numeric Telegram id, the printable
- * display name and the public handle only.
+ * display name, the public handle, and the two profile fields the client localises (nation, age).
+ *
+ * `identity` is the room's own registry reader. It is optional so a pure caller (a rulebook test)
+ * can rank a ledger with no registry at all: a missing reader simply leaves both fields null.
  */
-export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: number): ChallengeBoard {
+export function challengeBoard(
+  rows: ChallengeEntry[],
+  selfId: string,
+  now: number,
+  identity: ChallengeIdentityLookup | null = null,
+): ChallengeBoard {
   const window = challengeWindowAt(now);
   const live = rankContenders(rows.filter((row) => (
     row.windowStart === window.start
@@ -501,17 +529,22 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
      live field, and a guest (whose card carries no Telegram id) can never hold one. */
   const isEnrolled = at >= 0;
   return {
-    rows: live.map((row, index) => ({
-      position: index + 1,
-      userId: row.tgId,
-      displayName: row.displayName || challengeDisplayName('', row.handle, row.tgId),
-      handle: row.handle || row.tgId,
-      friendWins: row.friendWins,
-      hardBotWins: row.hardBotWins,
-      totalWins: challengeTotalWins(row),
-      prizeStars: prizeForRank(index + 1),
-      isMe: row.id === selfId,
-    })),
+    rows: live.map((row, index) => {
+      const profile = identity ? identity(row.id) : null;
+      return {
+        position: index + 1,
+        userId: row.tgId,
+        displayName: row.displayName || challengeDisplayName('', row.handle, row.tgId),
+        handle: row.handle || row.tgId,
+        friendWins: row.friendWins,
+        hardBotWins: row.hardBotWins,
+        totalWins: challengeTotalWins(row),
+        prizeStars: prizeForRank(index + 1),
+        isMe: row.id === selfId,
+        country: profile ? profile.country : null,
+        age: profile ? profile.age : null,
+      };
+    }),
     totalPrizePool: TOTAL_PRIZE_POOL,
     prizeByRank: PRIZE_BY_RANK,
     myPosition: at >= 0 ? at + 1 : null,
@@ -626,6 +659,9 @@ export function challengeView(
 ): Record<string, unknown> {
   const window = challengeWindowAt(now);
   const prizeStars = board.myPosition ? prizeForRank(board.myPosition) : 0;
+  /* The reader's own registry identity rides the card beside the board, so the client can paint a
+     profile that the served standings did not happen to include (a brand-new seat still prints). */
+  const self = board.rows.find((row) => row.isMe) ?? null;
   return {
     ok: true,
     tgId: entry.tgId,
@@ -634,6 +670,9 @@ export function challengeView(
     handle: entry.handle,
     /** The printable name the card's own seat prints — never an `@handle`. */
     displayName: entry.displayName || challengeDisplayName('', entry.handle, entry.tgId),
+    /** The reader's own nation (ISO alpha-2) and age, or null when their profile never set one. */
+    country: self ? self.country : null,
+    age: self ? self.age : null,
     windowStart: entry.windowStart || window.start,
     windowEnd: entry.windowEnd || window.end,
     endsInMs: Math.max(0, (entry.windowEnd || window.end) - now),

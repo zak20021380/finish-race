@@ -88,7 +88,7 @@ import {
   detonation, impact, initTelegram, inviteChannelWarHandle, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
   onBackPress, roomShareUrl, shatterImpact, startParam, tgInitData, tgUser,
 } from './telegram';
-import { applyFlagSupport } from './countries';
+import { applyFlagSupport, knownCountry, nameOf } from './countries';
 import {
   autoTutorialForLaunch, createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy,
   onGameModeChange, openInviteRoom, rewardModeFor, resumeRoom, setGameMode,
@@ -6831,6 +6831,10 @@ interface ChallengeRowView {
   /** The exact rank reward at week close: 25 / 15 / 10, 0 outside the Top 3. */
   prizeStars?: number;
   isMe?: boolean;
+  /** The registry's ISO alpha-2 nation for this seat, or null when their profile never set one. */
+  country?: string | null;
+  /** The player-declared age from the registry, or null when their profile never set one. */
+  age?: number | string | null;
 }
 
 interface ChallengeView {
@@ -6841,6 +6845,9 @@ interface ChallengeView {
   /** The reader's numeric Telegram id and printable display name. */
   userId?: string;
   displayName?: string;
+  /** The reader's own registry nation and age, or null when their profile never set one. */
+  country?: string | null;
+  age?: number | string | null;
   hardBotWins?: number;
   friendWins?: number;
   totalWins?: number;
@@ -6887,6 +6894,9 @@ interface ChallengeCopy {
   /** The crown label on the poster's top edge. */
   badge: string;
   prizeUnit: string;
+  /** The identity strip's two labels over the nationality and the age. */
+  nationality: string;
+  age: string;
   /** The poster's one-line hook, under the headline. */
   hook: string;
   podium: string;
@@ -6966,6 +6976,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   fa: {
     badge: 'تورنمنت هفتگی',
     prizeUnit: 'استارز',
+    nationality: 'ملیت',
+    age: 'سن',
     hook: 'بیشترین برد این هفته رو ثبت کن و سهمت رو از <bdi dir="ltr">50</bdi> استارز واقعی ببر!',
     podium: 'جایزه <bdi dir="ltr">3</bdi> نفر برتر • <bdi dir="ltr">25 / 15 / 10</bdi> استارز',
     clockLeft: 'باقی‌مانده',
@@ -7020,6 +7032,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   en: {
     badge: 'WEEKLY TOURNAMENT',
     prizeUnit: 'STARS',
+    nationality: 'Nationality',
+    age: 'Age',
     hook: 'Rack up the most wins this week to claim your share of <bdi dir="ltr">50</bdi> Stars!',
     podium: 'TOP <bdi dir="ltr">3</bdi> PRIZES • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
     clockLeft: 'left',
@@ -7074,6 +7088,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   ru: {
     badge: 'НЕДЕЛЬНЫЙ ТУРНИР',
     prizeUnit: 'STARS',
+    nationality: 'Гражданство',
+    age: 'Возраст',
     hook: 'Набери больше всех побед за неделю и раздели <bdi dir="ltr">50</bdi> Stars!',
     podium: 'ТОП-<bdi dir="ltr">3</bdi> ПРИЗЫ • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
     clockLeft: 'осталось',
@@ -7128,6 +7144,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   ar: {
     badge: 'البطولة الأسبوعية',
     prizeUnit: 'ستارز',
+    nationality: 'الجنسية',
+    age: 'العمر',
     hook: 'حقق أكبر عدد من الانتصارات هذا الأسبوع واربح حصتك من <bdi dir="ltr">50</bdi> ستارز!',
     podium: 'جوائز أول <bdi dir="ltr">3</bdi> • <bdi dir="ltr">25 / 15 / 10</bdi> ستارز',
     clockLeft: 'متبقي',
@@ -7182,6 +7200,8 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
   es: {
     badge: 'TORNEO SEMANAL',
     prizeUnit: 'STARS',
+    nationality: 'Nacionalidad',
+    age: 'Edad',
     hook: '¡Consigue más victorias esta semana y gana tu parte de <bdi dir="ltr">50</bdi> Stars!',
     podium: 'TOP <bdi dir="ltr">3</bdi> PREMIOS • <bdi dir="ltr">25 / 15 / 10</bdi> STARS',
     clockLeft: 'restantes',
@@ -7234,6 +7254,215 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     warsOff: 'En pausa • Vuelve pronto',
   },
 };
+
+/* ---------- nationality + age: one localised reading of the two registry fields ----------
+   The room serves a nation as its ISO alpha-2 code and an age as a whole number, or null for
+   either when the player never set it. Everything a card prints about them is decided here:
+   one helper, one fallback word per language, no emoji and no guessed nation. */
+
+/** The word a card prints for a field the player never set, per language. */
+const IDENTITY_UNKNOWN: Record<LangCode, string> = {
+  fa: 'نامعلوم',
+  en: 'Unknown',
+  ru: 'Неизвестно',
+  ar: 'غير معروف',
+  es: 'Desconocido',
+};
+
+/** The word after the Latin age digits ("24 سال" / "24 yrs"). */
+const IDENTITY_YEARS: Record<LangCode, string> = {
+  fa: 'سال',
+  en: 'yrs',
+  ru: 'лет',
+  ar: 'سنة',
+  es: 'años',
+};
+
+/**
+ * The Persian names of the nations this ladder actually meets. The ISO registry each picker reads
+ * only publishes English names, and `Intl.DisplayNames('fa')` spells several of them differently
+ * from the way this app says them (ایالات متحده for آمریکا, بریتانیا for انگلیس), so the handbook
+ * spelling wins first and Intl answers for every nation outside it.
+ */
+const COUNTRY_NAME_FA: Record<string, string> = {
+  IR: 'ایران',
+  AF: 'افغانستان',
+  AE: 'امارات',
+  SA: 'عربستان',
+  TR: 'ترکیه',
+  IQ: 'عراق',
+  DE: 'آلمان',
+  US: 'آمریکا',
+  GB: 'انگلیس',
+  RU: 'روسیه',
+  CA: 'کانادا',
+  SE: 'سوئد',
+  NL: 'هلند',
+  FR: 'فرانسه',
+  ES: 'اسپانیا',
+  IT: 'ایتالیا',
+  PT: 'پرتغال',
+  AT: 'اتریش',
+  CH: 'سوئیس',
+  BE: 'بلژیک',
+  DK: 'دانمارک',
+  NO: 'نروژ',
+  FI: 'فنلاند',
+  PL: 'لهستان',
+  UA: 'اوکراین',
+  BY: 'بلاروس',
+  GR: 'یونان',
+  IE: 'ایرلند',
+  PK: 'پاکستان',
+  IN: 'هند',
+  BD: 'بنگلادش',
+  LK: 'سریلانکا',
+  NP: 'نپال',
+  AZ: 'آذربایجان',
+  AM: 'ارمنستان',
+  GE: 'گرجستان',
+  TJ: 'تاجیکستان',
+  UZ: 'ازبکستان',
+  TM: 'ترکمنستان',
+  KZ: 'قزاقستان',
+  KW: 'کویت',
+  QA: 'قطر',
+  BH: 'بحرین',
+  OM: 'عمان',
+  JO: 'اردن',
+  LB: 'لبنان',
+  SY: 'سوریه',
+  PS: 'فلسطین',
+  IL: 'اسرائیل',
+  EG: 'مصر',
+  MA: 'مراکش',
+  DZ: 'الجزایر',
+  TN: 'تونس',
+  LY: 'لیبی',
+  SD: 'سودان',
+  YE: 'یمن',
+  CN: 'چین',
+  JP: 'ژاپن',
+  KR: 'کره جنوبی',
+  KP: 'کره شمالی',
+  MY: 'مالزی',
+  ID: 'اندونزی',
+  SG: 'سنگاپور',
+  TH: 'تایلند',
+  PH: 'فیلیپین',
+  VN: 'ویتنام',
+  AU: 'استرالیا',
+  NZ: 'زلاندنو',
+  BR: 'برزیل',
+  AR: 'آرژانتین',
+  MX: 'مکزیک',
+  CL: 'شیلی',
+  CO: 'کلمبیا',
+  ZA: 'آفریقای جنوبی',
+};
+
+/** The locale `Intl.DisplayNames` should spell a region in, per language. */
+const COUNTRY_LOCALE: Record<LangCode, string> = {
+  fa: 'fa',
+  en: 'en',
+  ru: 'ru',
+  ar: 'ar',
+  es: 'es',
+};
+
+/** One localised region name from `Intl.DisplayNames`, or '' when the runtime cannot answer. */
+function intlCountryName(iso: string, code: LangCode): string {
+  try {
+    const Display = Intl.DisplayNames;
+    if (typeof Display !== 'function') return '';
+    const name = new Display([COUNTRY_LOCALE[code] ?? code], { type: 'region' }).of(iso) ?? '';
+    /* An unknown region echoes its own code back: that is not a name. */
+    return name && name.toUpperCase() !== iso ? name.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Localised nation names are pure per (language, code), so one memo keeps a full board off the
+ * `Intl.DisplayNames` constructor: ten thousand rows resolve against at most five tongues.
+ */
+const COUNTRY_TEXT_CACHE = new Map<string, { text: string; known: boolean }>();
+
+/** A row's nation, localised and proved: only a code the ISO registry really holds resolves. */
+function playerCountryText(raw: unknown, code: LangCode): { text: string; known: boolean } {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  const iso = knownCountry(value) ? value.toUpperCase() : '';
+  if (!iso) return { text: '', known: false };
+  const key = code + '|' + iso;
+  const held = COUNTRY_TEXT_CACHE.get(key);
+  if (held) return held;
+  const handbook = code === 'fa' ? COUNTRY_NAME_FA[iso] ?? '' : '';
+  /* The registry's own English name beats the unknown fallback for a nation we can prove exists. */
+  const resolved = handbook
+    ? { text: handbook, known: true }
+    : { text: intlCountryName(iso, code) || nameOf(iso), known: true };
+  COUNTRY_TEXT_CACHE.set(key, resolved);
+  return resolved;
+}
+
+/** A row's age as a Latin whole number, or null for every unset, zero and nonsense value. */
+function playerAgeNumber(raw: unknown): number | null {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : Number.NaN;
+  if (!Number.isFinite(n)) return null;
+  const whole = Math.floor(n);
+  /* 0 is "never set", and a four-digit year is a birthdate that leaked into the field. */
+  return whole > 0 && whole <= 120 ? whole : null;
+}
+
+/** The one reading of a player's two identity fields that every card paints. */
+interface PlayerIdentity {
+  /** True when the nation resolved to a real localised name. */
+  hasCountry: boolean;
+  /** The localised nation, or the language's own "unknown" word. */
+  nationalityText: string;
+  /** True when the age is a real positive number. */
+  hasAge: boolean;
+  /** The Latin age in years, or null. */
+  age: number | null;
+  /** The word printed after the age digits. */
+  yearsWord: string;
+  /** The language's own "unknown" word, for the field that is missing. */
+  unknownText: string;
+}
+
+/**
+ * Turn the two registry fields into the words a card prints. A missing, empty or unrecognised
+ * nation becomes the language's own `نامعلوم` / `Unknown` / `Неизвестно` / `غير معروف` /
+ * `Desconocido` and `hasCountry` is false; a missing, null, zero, non-numeric or out-of-range age
+ * does the same for `hasAge`. Nothing is guessed and nothing is invented.
+ */
+function formatPlayerIdentity(country: unknown, age: unknown, code: LangCode = lang): PlayerIdentity {
+  const nation = playerCountryText(country, code);
+  const years = playerAgeNumber(age);
+  const unknown = IDENTITY_UNKNOWN[code] ?? IDENTITY_UNKNOWN.en;
+  return {
+    hasCountry: nation.known,
+    nationalityText: nation.known ? nation.text : unknown,
+    hasAge: years !== null,
+    age: years,
+    yearsWord: IDENTITY_YEARS[code] ?? IDENTITY_YEARS.en,
+    unknownText: unknown,
+  };
+}
+
+/**
+ * One row's nation and age flattened for the board's cache key, so a profile edit repaints the
+ * list. This device's own seat also carries the live read and the local save, because either can
+ * be the source that paints its strip.
+ */
+function challengeRowIdentityKey(row: ChallengeRowView): string {
+  const own = row.isMe === true
+    ? '~' + (challengeView?.country ?? '') + '~' + (challengeView?.age ?? '')
+      + '~' + (profile.country ?? '') + '~' + (profile.age ?? '')
+    : '';
+  return (row.country ?? '') + '|' + (row.age ?? '') + own;
+}
 
 let challengeView: ChallengeView | null = null;
 /**
@@ -7353,6 +7582,40 @@ function challengeBdi(value: string): HTMLElement {
 }
 
 /**
+ * One crisp inline vector at an explicit size: stroked paths on `currentColor` only, so the
+ * glyph inherits the row's muted slate (or the card's gold) without a second colour source and
+ * can never fall back to a cartoon emoji. Width and height are attributes, not CSS, so the box
+ * is reserved before the first paint and the row cannot shift when the glyph appears.
+ */
+function challengeVector(paths: readonly string[], size: number, viewBox = '0 0 24 24'): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', viewBox);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  for (const d of paths) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
+/** The globe that leads the nationality reading: one circle, one equator, two meridians. */
+const CHALLENGE_GLOBE_PATHS: readonly string[] = [
+  'M12 3.6a8.4 8.4 0 1 0 0 16.8a8.4 8.4 0 1 0 0-16.8Z',
+  'M3.6 12h16.8',
+  'M12 3.6c2.3 2.6 3.5 5.4 3.5 8.4s-1.2 5.8-3.5 8.4c-2.3-2.6-3.5-5.4-3.5-8.4S9.7 6.2 12 3.6Z',
+];
+
+/**
  * This device's own printable name, the way the standings print it: the Telegram
  * `first_name` + `last_name` from the signed session, then the top-HUD profile name, then the
  * username with its `@` stripped. It is never prefixed with an at-sign.
@@ -7400,6 +7663,17 @@ function challengePrizeStars(rank: number): number {
   return rank === 1 ? 25 : rank === 2 ? 15 : rank === 3 ? 10 : 0;
 }
 
+/** A served nation as the board keeps it: an ISO alpha-2 code, upper-cased, or null. */
+function challengeCountry(raw: unknown): string | null {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return /^[A-Za-z]{2}$/.test(value) ? value.toUpperCase() : null;
+}
+
+/** A served age as the board keeps it: one Latin whole number, or null when it is not an age. */
+function challengeAge(raw: unknown): number | null {
+  return playerAgeNumber(raw);
+}
+
 /** The room's board, sanitised and merged with this device's own optimistic seat. */
 function challengeBoardRows(): ChallengeRowView[] {
   const rows = challengeView?.leaderboard;
@@ -7419,6 +7693,8 @@ function challengeBoardRows(): ChallengeRowView[] {
         totalWins: challengeCount(row.totalWins),
         prizeStars: row.prizeStars === undefined ? challengePrizeStars(position) : challengeCount(row.prizeStars),
         isMe: row.isMe === true,
+        country: challengeCountry(row.country),
+        age: challengeAge(row.age),
       });
     }
   }
@@ -7480,6 +7756,10 @@ function ensureSelfInLeaderboard(): void {
       totalWins,
       prizeStars: 0,
       isMe: true,
+      /* The tap's own row prints this device's saved profile until the room serves its row: the
+         join POST carries the same two values, so the row it answers with reads identically. */
+      country: challengeCountry(profile.country),
+      age: challengeAge(profile.age),
     });
   }
   challengeState.leaderboard.sort((a, b) => b.totalWins - a.totalWins || a.position - b.position);
@@ -7553,6 +7833,18 @@ function paintChallengeLabels(): void {
 }
 
 /**
+ * The status card's rank pill markup for one live position. The authored template already seals
+ * the Latin `#n` in its own `<bdi dir="ltr">`, and this repairs the one case that could still
+ * reverse it — a locale line that lost its run — so `#1` can never paint as `1#` in an RTL card.
+ */
+function challengeRankHTML(position: number): string {
+  const token = '#' + position;
+  const sealed = challengeCopy().rank.replace('{rank}', token);
+  if (/<bdi\b[^>]*>\s*#\d+\s*<\/bdi>/i.test(sealed)) return sealed;
+  return sealed.replace(token, `<bdi dir="ltr">${token}</bdi>`);
+}
+
+/**
  * The hub's pinned scoreboard: live rank, weekly total, both sources — and the two payout keys,
  * the hub's banner and the poster's slim label, which are the same claim one tap apart.
  */
@@ -7584,7 +7876,7 @@ function paintChallengeTelemetry(): void {
   const rank = document.getElementById('ci-my-rank');
   if (rank) {
     const ranked = position > 0;
-    challengeSetHTML('ci-my-rank', ranked ? copy.rank.replace('{rank}', String(position)) : copy.unranked);
+    challengeSetHTML('ci-my-rank', ranked ? challengeRankHTML(position) : copy.unranked);
     rank.classList.toggle('is-none', !ranked);
   }
 
@@ -7665,10 +7957,68 @@ function paintChallengeCard(): void {
 }
 
 /**
+ * Line 2 of a contender card: the compact nationality + age strip.
+ *
+ *   [globe] ملیت: {nationality} • سن: {age}
+ *
+ * Each reading is one shrinkable pair (its label never truncates, its value ellipsises), so a
+ * long nation name is cut instead of pushing the age off the card or wrapping the line into a
+ * fourth row — the card's height stays identical for every seat. A value the player never set
+ * prints the language's own `نامعلوم` in slate, so an unknown field is legible without inventing
+ * a nation or an age. Digits stay Latin inside their own LTR `<bdi>`, and the whole line is text
+ * nodes plus one vector: no innerHTML at all.
+ */
+function challengeMetaNode(row: ChallengeRowView): HTMLDivElement {
+  const copy = challengeCopy();
+  const identity = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
+  const meta = document.createElement('div');
+  meta.className = 'ci-row-meta';
+  const globe = challengeVector(CHALLENGE_GLOBE_PATHS, 11);
+  globe.classList.add('ci-meta-ico');
+  meta.append(globe);
+
+  /** One label + value pair: the label is fixed, the value shrinks behind an ellipsis. */
+  const pair = (label: string): { wrap: HTMLSpanElement; value: HTMLSpanElement } => {
+    const wrap = document.createElement('span');
+    wrap.className = 'ci-meta-pair';
+    const tag = document.createElement('span');
+    tag.className = 'ci-meta-k';
+    tag.textContent = label + ':';
+    const value = document.createElement('span');
+    value.className = 'ci-meta-val';
+    wrap.append(tag, value);
+    return { wrap, value };
+  };
+
+  const nation = pair(copy.nationality);
+  nation.value.textContent = identity.nationalityText;
+  nation.value.title = identity.nationalityText;
+  nation.value.classList.toggle('is-unknown', !identity.hasCountry);
+  meta.append(nation.wrap);
+
+  const dot = document.createElement('span');
+  dot.className = 'ci-meta-dot';
+  dot.textContent = '•';
+
+  const years = pair(copy.age);
+  years.value.classList.toggle('is-unknown', !identity.hasAge);
+  if (identity.hasAge && identity.age !== null) {
+    years.value.append(challengeBdi(String(identity.age)), document.createTextNode(' ' + identity.yearsWord));
+    years.value.title = identity.age + ' ' + identity.yearsWord;
+  } else {
+    years.value.textContent = identity.unknownText;
+    years.value.title = identity.unknownText;
+  }
+  meta.append(dot, years.wrap);
+  return meta;
+}
+
+/**
  * One contender row of the championship ladder, built as nodes:
  *
- *   start — a sculpted metallic rank medallion, then the real Telegram display name with its YOU
- *           badge and the muted Hard-bot / friends split;
+ *   start — a sculpted metallic rank medallion, then a three-line info stack: the real Telegram
+ *           display name with its YOU badge, the muted nationality + age strip, and the
+ *           Hard-bot / friends split;
  *   end   — the tabular weekly total, with that rank's exact 25 / 15 / 10 Star pill beneath it.
  *
  * Every row is a real button target: the delegated listener on `#ci-list` reads the seat's
@@ -7686,8 +8036,15 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   item.dataset.chalProfileName = name;
   item.setAttribute('role', 'button');
   item.tabIndex = 0;
-  /* Plain text only: the visible rank token carries its <bdi>, an aria label must not. */
-  item.setAttribute('aria-label', `${name} · #${row.position} · ${row.totalWins} ${copy.winsWord}`);
+  /* Plain text only: the visible rank token carries its <bdi>, an aria label must not. The two
+     identity readings are spoken too, so the new line is not sighted-only. */
+  const spoken = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
+  const spokenAge = spoken.hasAge && spoken.age !== null
+    ? spoken.age + ' ' + spoken.yearsWord
+    : spoken.unknownText;
+  item.setAttribute('aria-label',
+    `${name} · #${row.position} · ${row.totalWins} ${copy.winsWord} `
+    + `· ${copy.nationality}: ${spoken.nationalityText} · ${copy.age}: ${spokenAge}`);
   if (row.isMe === true) item.classList.add('is-me');
 
   const start = document.createElement('div');
@@ -7727,7 +8084,7 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
 
-  info.append(top, sub);
+  info.append(top, challengeMetaNode(row), sub);
   start.append(rank, info);
 
   const end = document.createElement('div');
@@ -7756,7 +8113,7 @@ function paintChallengeList(rows: ChallengeRowView[]): void {
   const empty = document.getElementById('ci-empty');
   const copy = challengeCopy();
   const sig = lang + '|' + rows
-    .map((row) => [row.position, row.userId ?? '', challengeRowName(row), row.friendWins, row.hardBotWins, row.totalWins, row.prizeStars ?? 0, row.isMe === true ? 1 : 0].join(','))
+    .map((row) => [row.position, row.userId ?? '', challengeRowName(row), row.friendWins, row.hardBotWins, row.totalWins, row.prizeStars ?? 0, row.isMe === true ? 1 : 0, challengeRowIdentityKey(row)].join(','))
     .join(';');
   if (list && sig !== challengeBoardSig) {
     challengeBoardSig = sig;
@@ -7795,7 +8152,7 @@ function paintChallengeSheetLabels(): void {
   const pool = challengeCount(challengeView?.totalPrizePool)
     || challengePrizeStars(1) + challengePrizeStars(2) + challengePrizeStars(3);
   challengeSetHTML('ci-title', copy.sheetTitle);
-  challengeSetHTML('ci-pool', copy.prizeTag.replace('{stars}', String(pool)));
+  challengeSetHTML('ci-pool-t', copy.prizeTag.replace('{stars}', String(pool)));
   challengeSetText('ci-clock-left', copy.clockLeft);
   challengeSetHTML('ci-prize-1-k', copy.tier1);
   challengeSetHTML('ci-prize-2-k', copy.tier2);
@@ -7827,12 +8184,88 @@ function setChallengeProfileLayer(open: boolean): void {
   document.body.classList.toggle('chal-profile-open', open);
 }
 
+/**
+ * The standings row the open drawer was painted for, so a language flip relabels the identity
+ * strip in place instead of leaving the previous tongue on screen. Null while no tournament
+ * profile is open: the strip belongs to this door only, never to the Ranks dossiers.
+ */
+let challengeProfileRow: ChallengeRowView | null = null;
+
+/** The nation a row prints: its own code first, then this device's live read and saved profile. */
+function challengeRowCountry(row: ChallengeRowView): unknown {
+  if (typeof row.country === 'string' && row.country) return row.country;
+  if (row.isMe !== true) return null;
+  /* This device's own seat: the card's live read, then the save itself, so a row served before
+     the profile was synced still prints the nation the player already chose on this device. */
+  return challengeView?.country ?? profile.country ?? null;
+}
+
+/** The age a row prints: its own number first, then this device's live read and saved profile. */
+function challengeRowAge(row: ChallengeRowView): unknown {
+  if (playerAgeNumber(row.age) !== null) return row.age;
+  if (row.isMe !== true) return null;
+  return challengeView?.age ?? profile.age ?? null;
+}
+
+/**
+ * Hide the identity strip again. The strip is this drawer's tournament face only; every other
+ * user of the shared `#sheet-mind` (the Ranks ladder, a rival dossier, a guild card) must find
+ * the sheet exactly as it was, so closing the tournament profile puts the strip away with it.
+ */
+function hideChallengeProfileIdentity(): void {
+  challengeProfileRow = null;
+  const strip = document.getElementById('sm-identity');
+  if (strip) strip.hidden = true;
+}
+
+/**
+ * Paint the drawer's two identity micro-cards from one standings row.
+ *
+ * Both values are resolved synchronously from the row the tap carried (0ms latency), with the
+ * room's live read as the fallback for this device's own seat — so a row that arrived before the
+ * profile was synced still prints the real nation and age. A field the player never set prints
+ * the language's own `نامعلوم` in muted slate, and the age digits stay Latin inside their LTR bdi.
+ */
+function paintChallengeProfileIdentity(row: ChallengeRowView): void {
+  const strip = document.getElementById('sm-identity');
+  if (!strip) return;
+  challengeProfileRow = row;
+  const copy = challengeCopy();
+  const identity = formatPlayerIdentity(challengeRowCountry(row), challengeRowAge(row), lang);
+  strip.hidden = false;
+
+  challengeSetText('sm-id-country-k', copy.nationality);
+  challengeSetText('sm-id-age-k', copy.age);
+
+  const nation = document.getElementById('sm-id-country');
+  if (nation) {
+    nation.textContent = identity.nationalityText;
+    nation.title = identity.nationalityText;
+    nation.classList.toggle('is-unknown', !identity.hasCountry);
+  }
+
+  const years = document.getElementById('sm-id-age');
+  if (years) {
+    years.textContent = '';
+    if (identity.hasAge && identity.age !== null) {
+      years.append(challengeBdi(String(identity.age)), document.createTextNode(' ' + identity.yearsWord));
+      years.title = identity.age + ' ' + identity.yearsWord;
+    } else {
+      years.textContent = identity.unknownText;
+      years.title = identity.unknownText;
+    }
+    years.classList.toggle('is-unknown', !identity.hasAge);
+  }
+}
+
 /** The drawer closes by its X, Escape or the scrim; the raised layer flag follows it back down. */
 let challengeProfileWatch: MutationObserver | null = null;
 function watchChallengeProfileClose(sheet: HTMLElement): void {
   if (challengeProfileWatch) return;
   challengeProfileWatch = new MutationObserver(() => {
-    if (sheet.hidden) setChallengeProfileLayer(false);
+    if (!sheet.hidden) return;
+    setChallengeProfileLayer(false);
+    hideChallengeProfileIdentity();
   });
   challengeProfileWatch.observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
 }
@@ -7892,6 +8325,10 @@ function openChallengeProfile(row: ChallengeRowView): void {
     sub.innerHTML = (row.isMe === true ? copy.you + ' • ' : '') + line;
   }
   sheet.setAttribute('aria-label', `${copy.sheetTitle} · ${name}`);
+
+  /* The nationality + age strip is painted from the row the tap already carries: both cards are
+     filled before the sheet opens, so there is no empty frame and no network wait on the tap. */
+  paintChallengeProfileIdentity(row);
 
   /* This is a read-only mirror of the row: the confrontation and squad keys do not belong on it,
      so the drawer's whole action bar stays hidden while the tournament opened it. */
@@ -8038,6 +8475,10 @@ async function healChallengeEnrollment(myUserId: string): Promise<void> {
       userId: myUserId,
       displayName: challengeDisplayNameLocal(),
       handle: challengeLocalHandle(),
+      /* The saved profile's two identity fields: the room prints them on this seat's row even
+         before its registry has met this device. Counters are still the room's alone. */
+      country: profile.country ?? '',
+      age: profile.age ?? 0,
     });
     if (view && view.isEnrolled === true && typeof view.totalWins === 'number') applyChallengeView(view);
   } finally {
@@ -8120,6 +8561,10 @@ async function handleChallengeJoin(): Promise<void> {
       userId: myUserId,
       displayName: challengeDisplayNameLocal(),
       handle: myHandle,
+      /* Same two profile values as the join tap's own seat: the row the room answers with prints
+         the nation and age this device already knows. */
+      country: profile.country ?? '',
+      age: profile.age ?? 0,
     });
     if (view && view.isEnrolled === true) {
       applyChallengeView(view);
@@ -8368,7 +8813,12 @@ function initChallengeCard(): void {
     if (document.hidden || router.current === 'game') return;
     paintChallengeClock();
   }, 1000);
-  onLang(() => { paintChallengeCard(); });
+  onLang(() => {
+    paintChallengeCard();
+    /* An open tournament profile keeps its two identity labels in the new tongue: the row itself
+       is still on hand, so the strip is relabelled without touching the drawer's scroll or face. */
+    if (challengeProfileRow) paintChallengeProfileIdentity(challengeProfileRow);
+  });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) { paintChallengeClock(); void refreshChallengeCard(); }
   });

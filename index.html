@@ -3468,52 +3468,66 @@
       </div>
 
       <!-- ============ Tournament Championship Sheet (slide #0 one key) ============
-           A calm obsidian drawer with one 24K-gold hairline: a symmetric header (emblem, title,
-           pool pill, then the live countdown and field on a single metadata row, with the compact
-           rules pill beside the close key), a borderless three-column podium (silver / gold /
-           bronze), one elevated player hub, then the whole lower half handed to the live weekly
-           standings under one quiet section label. The three long-form rules moved out to the
-           floating #challenge-rules-modal below. Static tonal surfaces only: no backdrop-filter,
-           no keyframes, every figure a Latin digit inside its own <bdi dir="ltr"> run, every glyph
-           an inline currentColor SVG, all painted by src/main.ts from /api/challenge/me. -->
+           A calm obsidian drawer with one 24K-gold hairline: a centered grabber pill with real
+           breathing room, a symmetric championship header (a sculpted 24K emblem, then a two-row
+           title stack — the name beside the jewel pool pill, the live countdown and the field on
+           one telemetry row — and two matched squircle keys on the end edge), a borderless
+           three-column podium (silver / gold / bronze), one elevated player hub, then the whole
+           lower half handed to the live weekly standings under one quiet section label. The three
+           long-form rules moved out to the floating #challenge-rules-modal below. Static tonal
+           surfaces only: no backdrop-filter, no keyframes, every figure a Latin digit inside its
+           own <bdi dir="ltr"> run, every glyph an inline currentColor SVG, all painted by
+           src/main.ts from /api/challenge/me. -->
       <div class="vault-modal challenge-info" hidden id="challenge-info-modal">
         <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
         <section class="vault-modal-sheet ci-sheet" role="dialog" aria-modal="true" tabindex="-1"
                  aria-labelledby="ci-title" aria-describedby="ci-sub">
-          <span class="vault-modal-handle" data-modal-close aria-hidden="true"></span>
+          <span class="vault-modal-handle ci-handle" data-modal-close aria-hidden="true"></span>
 
           <div class="vault-modal-body ci-body">
             <header class="ci-head">
-              <div class="ci-head-t">
-                <div class="ci-head-row">
-                  <span class="ci-emblem" aria-hidden="true">
-                    <svg class="ci-emblem-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                      <path d="M8.1 2.8h7.8v5.4a3.9 3.9 0 0 1-7.8 0Z" />
-                      <path d="M8.1 4.1H5.5v1.5c0 1.9 1.3 3.4 3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                      <path d="M15.9 4.1h2.6v1.5c0 1.9-1.3 3.4-3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                      <path d="M10.9 11.6h2.2v3.6h-2.2Z" />
-                      <path d="M7.9 15.2h8.2a1.4 1.4 0 0 1 1.4 1.4v1.7H6.5v-1.7a1.4 1.4 0 0 1 1.4-1.4Z" />
-                    </svg>
-                  </span>
+              <span class="ci-head-emblem" aria-hidden="true">
+                <svg class="ci-head-emblem-ico" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                  <path d="M8.1 2.8h7.8v5.4a3.9 3.9 0 0 1-7.8 0Z" />
+                  <path d="M8.1 4.1H5.5v1.5c0 1.9 1.3 3.4 3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M15.9 4.1h2.6v1.5c0 1.9-1.3 3.4-3.1 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M10.9 11.6h2.2v3.6h-2.2Z" />
+                  <path d="M7.9 15.2h8.2a1.4 1.4 0 0 1 1.4 1.4v1.7H6.5v-1.7a1.4 1.4 0 0 1 1.4-1.4Z" />
+                </svg>
+              </span>
+
+              <div class="ci-head-info">
+                <div class="ci-head-title-row">
                   <h2 class="ci-title" id="ci-title">تورنمنت هفتگی</h2>
-                  <span class="ci-pool" id="ci-pool"><bdi dir="ltr">50</bdi> استارز</span>
+                  <span class="ci-pool">
+                    <svg class="ci-pool-ico" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                      <path d="m12 3.2 2.7 5.7 6.2.9-4.5 4.4 1.1 6.2-5.5-2.9-5.5 2.9 1.1-6.2L3.1 9.8l6.2-.9Z" />
+                    </svg>
+                    <span class="ci-pool-t" id="ci-pool-t"><bdi dir="ltr">50</bdi> استارز</span>
+                  </span>
                 </div>
-                <div class="ci-meta" id="ci-sub">
+                <div class="ci-head-meta" id="ci-sub">
                   <span class="ci-clock" id="ci-clock-pill">
-                    <svg class="ci-clock-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <svg class="ci-clock-ico" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                       <circle cx="12" cy="12" r="8.4" />
                       <path d="M12 7.4V12l3 1.8" />
                     </svg>
-                    <bdi dir="ltr" id="ci-clock-n">2d 14h</bdi>
+                    <bdi dir="ltr" id="ci-clock-n" style="color:#fde68a;font-weight:800;">6d 23h</bdi>
                     <span class="ci-clock-left" id="ci-clock-left">باقی‌مانده</span>
                   </span>
-                  <span class="ci-dot" aria-hidden="true">•</span>
                   <span class="ci-players" id="ci-players-pill" role="status">
-                    <bdi dir="ltr" id="ci-players-n">128</bdi>
+                    <svg class="ci-players-ico" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                      <circle cx="9.3" cy="8.4" r="3.2" />
+                      <path d="M3.6 19.4c0-3.1 2.5-5.1 5.7-5.1s5.7 2 5.7 5.1" />
+                      <circle cx="17.4" cy="9.5" r="2.4" />
+                      <path d="M15.8 14.7c2.7.4 4.6 2.2 4.6 4.7" />
+                    </svg>
+                    <bdi dir="ltr" id="ci-players-n" style="color:#f8fafc;font-weight:800;">128</bdi>
                     <span class="ci-players-u" id="ci-players-u">شرکت‌کننده</span>
                   </span>
                 </div>
               </div>
+
               <div class="ci-head-keys">
                 <button class="ci-rules-pill" type="button" id="ci-rules-open" data-chal-rules-open="1"
                         aria-haspopup="dialog" aria-controls="challenge-rules-modal">
@@ -5876,6 +5890,39 @@
             <span class="ms-x-g" aria-hidden="true">&times;</span>
           </button>
         </header>
+        <!-- Identity strip: the two profile facts a weekly-tournament row prints — nationality and
+             age — as two recessed micro-cards under the header. It ships hidden so the Ranks ladder
+             and every rival dossier that share this drawer keep exactly the face they had; only a
+             tournament row paints it (and closing the drawer hides it again). The glyphs are crisp
+             inline vectors on currentColor, the values are Latin digits inside their own LTR bdi,
+             and the whole strip is a fixed-height grid, so opening it can never shift the header. -->
+        <div class="sm-identity-grid" id="sm-identity" hidden>
+          <div class="sm-id-card">
+            <svg class="sm-id-ico is-nation" width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+              aria-hidden="true" focusable="false">
+              <path d="M12 3.6a8.4 8.4 0 1 0 0 16.8a8.4 8.4 0 1 0 0-16.8Z" />
+              <path d="M3.6 12h16.8" />
+              <path d="M12 3.6c2.3 2.6 3.5 5.4 3.5 8.4s-1.2 5.8-3.5 8.4c-2.3-2.6-3.5-5.4-3.5-8.4S9.7 6.2 12 3.6Z" />
+            </svg>
+            <span class="sm-id-txt">
+              <span class="sm-id-k" id="sm-id-country-k">ملیت</span>
+              <b class="sm-id-v is-unknown" id="sm-id-country">نامعلوم</b>
+            </span>
+          </div>
+          <div class="sm-id-card">
+            <svg class="sm-id-ico is-age" width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+              aria-hidden="true" focusable="false">
+              <path d="M12 4.6a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7Z" />
+              <path d="M4.9 20.1c0-3.4 3.2-5.5 7.1-5.5s7.1 2.1 7.1 5.5" />
+            </svg>
+            <span class="sm-id-txt">
+              <span class="sm-id-k" id="sm-id-age-k">سن</span>
+              <b class="sm-id-v is-unknown" id="sm-id-age">نامعلوم</b>
+            </span>
+          </div>
+        </div>
         <div class="sheet-body ms-body" id="ms-body" data-scroll></div>
         <div class="ms-acts">
           <button class="ms-challenge btn-duel-badge" type="button" id="ms-challenge" aria-label="Challenge mind: start a race" disabled aria-disabled="true" hidden>

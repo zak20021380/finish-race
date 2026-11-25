@@ -101,7 +101,7 @@ import {
   applyFriendWin, applyHardBotWin, challengeBoard, challengeDisplayName, challengeFallbackSeat,
   challengeSeasonEpoch, challengeSeasonMigrated, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
-  type ChallengeBoard, type ChallengeEntry, type ChallengeSettlement,
+  type ChallengeBoard, type ChallengeEntry, type ChallengeIdentity, type ChallengeSettlement,
 } from './challenge';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
@@ -3257,6 +3257,12 @@ export class MatchmakerDO {
   private vaultLoaded = false;
   /* ---- the 7-Day "Most Wins" Race: counters, one-shot tickets and the weekly podium ---- */
   private challengeEntries = new Map<string, ChallengeEntry>();
+  /**
+   * Profile fields a join door heard from a seat the registry has not met yet (Telegram Desktop /
+   * external WebView): the row still prints its nation and age on the board. Registry values always
+   * outrank this hint, and it is pruned with the ledger, so it can never grow on its own.
+   */
+  private challengeIdentities = new Map<string, ChallengeIdentity>();
   /** The locked Top-3 of every week that has already closed, newest last. */
   private challengeSettlements: ChallengeSettlement[] = [];
   private challengeLoaded = false;
@@ -11276,6 +11282,41 @@ export class MatchmakerDO {
   }
 
   /**
+   * The two profile fields one standings row prints, read from the room's own registry: the ISO
+   * nation and the declared age. A seat the registry has not met yet falls back to the profile a
+   * join body declared (see `challengeIdentities`), and null is the honest answer for both when
+   * neither source holds a value. Nothing here is written back to the registry: a challenge read
+   * mirrors a profile, it never edits one.
+   */
+  private challengeIdentityOf(playerId: string): ChallengeIdentity | null {
+    const record = this.players.get(playerId);
+    const heard = this.challengeIdentities.get(playerId);
+    const storedCountry = normalizeCountry(record?.country ?? '');
+    const storedAge = record && record.age > 0 ? Math.min(120, Math.floor(record.age)) : 0;
+    const country = storedCountry || normalizeCountry(heard?.country ?? '');
+    const age = storedAge > 0 ? storedAge : (typeof heard?.age === 'number' ? heard.age : 0);
+    if (!country && age <= 0) return null;
+    return { country: country || null, age: age > 0 ? age : null };
+  }
+
+  /**
+   * The optional profile fields a join body may carry. This is the telegram-desktop / external
+   * WebView seat's own declaration, kept to the two metadata values the board prints — a join body
+   * can still never move a win counter. A nation resolves through the same normaliser the registry
+   * uses, and an age outside the declared window is dropped rather than clamped into a wrong band.
+   */
+  private challengeIdentityFromBody(body: Record<string, unknown>): ChallengeIdentity {
+    const country = normalizeCountry(body.country);
+    const raw = typeof body.age === 'number' ? body.age
+      : typeof body.age === 'string' ? Number(body.age.trim()) : Number.NaN;
+    const age = Number.isFinite(raw) ? Math.floor(raw) : 0;
+    return {
+      country: country || null,
+      age: age > 0 && age <= 120 ? age : null,
+    };
+  }
+
+  /**
    * Automatic enrollment: every authenticated Telegram seat that touches the hub (a home-screen
    * read, a leaderboard read, an explicit join) or finishes a 1v1 is registered on the live week's
    * participant table at zero wins. The card is created on first sight and rolled with the window.
@@ -11307,11 +11348,16 @@ export class MatchmakerDO {
       if (now - entry.updatedAt > CHALLENGE_KEEP_MS) this.challengeEntries.delete(id);
     }
     const over = this.challengeEntries.size - CHALLENGE_PLAYERS_MAX;
-    if (over <= 0) return;
-    const rows = [...this.challengeEntries.values()].sort((a, b) => a.updatedAt - b.updatedAt);
-    for (let i = 0; i < over; i += 1) {
-      const row = rows[i];
-      if (row) this.challengeEntries.delete(row.id);
+    if (over > 0) {
+      const rows = [...this.challengeEntries.values()].sort((a, b) => a.updatedAt - b.updatedAt);
+      for (let i = 0; i < over; i += 1) {
+        const row = rows[i];
+        if (row) this.challengeEntries.delete(row.id);
+      }
+    }
+    /* A declared profile hint lives exactly as long as the seat it belongs to: no orphan map. */
+    for (const id of this.challengeIdentities.keys()) {
+      if (!this.challengeEntries.has(id)) this.challengeIdentities.delete(id);
     }
   }
 
@@ -11390,7 +11436,15 @@ export class MatchmakerDO {
       const name = this.challengeDisplayNameOf(row.id, row.tgId);
       if (name && row.displayName !== name) row.displayName = name;
     }
-    return challengeBoard([...this.challengeEntries.values()], entry.id, now);
+    /* Every row's nation and age are read from the room's own registry as the board is built, so a
+       profile edited on the player's device reaches the standings on the next read. Metadata only:
+       neither field can move a win, a rank or the ranking's `updatedAt` tie-breaker. */
+    return challengeBoard(
+      [...this.challengeEntries.values()],
+      entry.id,
+      now,
+      (playerId) => this.challengeIdentityOf(playerId),
+    );
   }
 
   /** Write-behind: a card read never waits on storage, and a failed put never breaks a settle. */
@@ -11480,16 +11534,23 @@ export class MatchmakerDO {
     if (this.settleChallenge(now)) this.persistChallenge();
 
     /** One entry's full read model: counters, live rank, the board and its podium state. */
-    const view = (entry: ChallengeEntry, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
-      ...challengeView(
-        entry,
-        now,
-        this.challengeBoardFor(entry, now),
-        this.challengeClaimable(entry.id, now),
-        this.challengeLatestSettlement(entry.id),
-      ),
-      ...extra,
-    });
+    const view = (entry: ChallengeEntry, extra: Record<string, unknown> = {}): Record<string, unknown> => {
+      const own = this.challengeIdentityOf(entry.id);
+      return {
+        ...challengeView(
+          entry,
+          now,
+          this.challengeBoardFor(entry, now),
+          this.challengeClaimable(entry.id, now),
+          this.challengeLatestSettlement(entry.id),
+        ),
+        /* The reader's own nation and age, read straight from the registry, so the card can answer
+           even for a seat whose row is not on the board (a guest holds no row at all). */
+        country: own ? own.country : null,
+        age: own ? own.age : null,
+        ...extra,
+      };
+    };
 
     if (url.pathname === '/api/challenge/me') {
       if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
@@ -11555,6 +11616,14 @@ export class MatchmakerDO {
     if (url.pathname === '/api/challenge/join') {
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
       const entry = this.challengeEntry(who, now);
+      /* The optional profile hint the client's own save carries: the two metadata values the board
+         prints, kept for this seat only and read only where the registry holds none. A join body
+         still can never move a win counter. */
+      const declared = this.challengeIdentityFromBody(await readBody(request.clone()));
+      /* Reconcile the hint on every join: a body that clears both fields must clear the stale hint
+         instead of leaving an old nation painting for a seat the registry still does not know. */
+      if (declared.country || declared.age !== null) this.challengeIdentities.set(who.playerId, declared);
+      else this.challengeIdentities.delete(who.playerId);
       this.trimChallenge(now);
       /* The seat is durable before the card leaves the room: the awaited put writes the whole
          ledger with this seat's row — handle, zero wins, this window — inside it. */
