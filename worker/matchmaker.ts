@@ -11418,11 +11418,11 @@ export class MatchmakerDO {
   private async challenge(request: Request, url: URL): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CHALLENGE_CORS });
     let who = await identifyPlayerRequest(request, this.env);
-    /* A test / desktop WebView has no signed initData. The free-join door accepts the declared
-       seat only on a development door; every production door still requires Telegram's signature. */
+    /* A verified Telegram signature always wins. When it is absent, expired or fails its check
+       (Telegram Desktop / external WebView), the free-join door accepts the declared seat from
+       the body. Enrollment is the only thing it writes — no win counter is credited from a body. */
     if (url.pathname === '/api/challenge/join' && request.method === 'POST'
-      && !initDataOf(request) && (!who || who.guest)
-      && (this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname))) {
+      && (!who || who.guest)) {
       const seat = challengeFallbackSeat(await readBody(request.clone()));
       if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
     }
@@ -11514,7 +11514,12 @@ export class MatchmakerDO {
       /* The seat is durable before the card leaves the room: the awaited put writes the whole
          ledger with this seat's row — handle, zero wins, this window — inside it. */
       await this.flushChallenge();
-      return json(view(entry, { ok: true, isEnrolled: true }), 200, CHALLENGE_CORS);
+      return json(view(entry, {
+        ok: true,
+        isEnrolled: true,
+        /* The client reads either spelling; `weekEnd` is the canonical join answer. */
+        weekEnd: entry.windowEnd,
+      }), 200, CHALLENGE_CORS);
     }
 
     if (url.pathname === '/api/challenge/start') {

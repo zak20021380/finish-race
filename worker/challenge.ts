@@ -596,11 +596,12 @@ export function challengeView(
 }
 
 /**
- * A declared seat for a test or desktop WebView, where Telegram's signed `initData` is absent.
- * The HTTP door only honors this on a development host (`DEV_AUTH` or localhost); a production
- * door never reaches it, so an unsigned launch cannot claim a Telegram id. The id is normalized
- * to the same canonical `tg-<digits>` form the verified door produces, and the declared handle
- * becomes the seat's public name so the board row matches the one the client painted on tap.
+ * A declared seat for a Telegram Desktop / external WebView session, where the signed `initData`
+ * is absent, expired or fails its signature check. The join door accepts it for enrollment only:
+ * it registers the declared positive Telegram id in the live window at zero wins and never
+ * credits a counter from the body. The id is normalized to the same canonical `tg-<digits>` form
+ * the verified door produces, and the declared handle (sanitized, up to 32 chars) becomes the
+ * seat's public name so the board row matches the one the client painted on tap.
  */
 export interface ChallengeFallbackSeat {
   playerId: string;
@@ -612,12 +613,13 @@ export function challengeFallbackSeat(raw: unknown): ChallengeFallbackSeat | nul
   if (!raw || typeof raw !== 'object') return null;
   const body = raw as { userId?: unknown; handle?: unknown };
   const rawId = typeof body.userId === 'number'
-    ? String(body.userId)
+    ? (Number.isSafeInteger(body.userId) ? String(body.userId) : '')
     : typeof body.userId === 'string' ? body.userId.trim() : '';
-  if (!/^[0-9]{1,20}$/.test(rawId)) return null;
+  /* A positive integer id only: no zero, no sign, no decimal, at most a Telegram-sized 20 digits. */
+  if (!/^[1-9][0-9]{0,19}$/.test(rawId)) return null;
   const declared = typeof body.handle === 'string'
-    ? body.handle.trim().replace(/\s+/g, ' ').slice(0, 40).replace(/^@+/, '')
+    ? body.handle.trim().replace(/^@+/, '').replace(/\s+/g, ' ').slice(0, 32).trim()
     : '';
-  const name = declared ? '@' + declared : '@' + rawId;
-  return { playerId: 'tg-' + rawId, tgId: rawId, name };
+  if (!declared) return null;
+  return { playerId: 'tg-' + rawId, tgId: rawId, name: '@' + declared };
 }

@@ -3532,27 +3532,47 @@
               </div>
             </header>
 
-            <!-- THE PODIUM: a borderless architectural split. In RTL the first DOM column is the
-                 right-hand #2 silver step, the taller centre is the #1 24K-gold champion, and the
-                 left-hand step is #3 bronze. The tier word is the rank — there is no floating "#n"
-                 chip, so no stray dot can ever sit above the champion. -->
+            <!-- THE PODIUM: a sculpted three-tier trophy stage. In RTL the first DOM column is the
+                 right-hand #2 platinum step, the taller centre is the #1 24K-gold champion, and the
+                 left-hand step is #3 bronze. Each pedestal carries an overlapping metallic crest
+                 medallion above its top rim, so the rank reads before the tier word beneath it. -->
             <div class="ci-podium" id="ci-podium" role="list" aria-label="Prize split by rank">
-              <article class="ci-step is-silver" data-rank="2" role="listitem">
-                <span class="ci-step-k" id="ci-prize-2-k">نفر دوم</span>
-                <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-2-v">15</bdi> <span id="ci-prize-2-u">استارز</span></b>
+              <article class="ci-podium-step is-silver" data-rank="2" role="listitem">
+                <span class="ci-podium-crest is-silver" aria-hidden="true"><bdi dir="ltr">2</bdi></span>
+                <span class="ci-podium-k" id="ci-prize-2-k">نفر دوم</span>
+                <span class="ci-podium-v">
+                  <svg class="ci-podium-star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="m12 3.2 2.7 5.7 6.2.9-4.5 4.4 1.1 6.2-5.5-2.9-5.5 2.9 1.1-6.2L3.1 9.8l6.2-.9Z" />
+                  </svg>
+                  <bdi dir="ltr" id="ci-prize-2-v">15</bdi>
+                  <span class="ci-podium-u" id="ci-prize-2-u">استارز</span>
+                </span>
               </article>
-              <article class="ci-step is-gold" data-rank="1" role="listitem">
-                <span class="ci-step-top">
-                  <svg class="ci-step-crown" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <article class="ci-podium-step is-gold" data-rank="1" role="listitem">
+                <span class="ci-podium-crest is-gold" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                     <path d="M3.4 7.4 6.1 16.6h11.8L20.6 7.4l-4.8 3.5L12 3.6 8.2 10.9Z" />
                   </svg>
-                  <span class="ci-step-k" id="ci-prize-1-k">نفر اول</span>
                 </span>
-                <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-1-v">25</bdi> <span id="ci-prize-1-u">استارز</span></b>
+                <span class="ci-podium-k" id="ci-prize-1-k">نفر اول</span>
+                <span class="ci-podium-v">
+                  <svg class="ci-podium-star" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="m12 3.2 2.7 5.7 6.2.9-4.5 4.4 1.1 6.2-5.5-2.9-5.5 2.9 1.1-6.2L3.1 9.8l6.2-.9Z" />
+                  </svg>
+                  <bdi dir="ltr" id="ci-prize-1-v">25</bdi>
+                  <span class="ci-podium-u" id="ci-prize-1-u">استارز</span>
+                </span>
               </article>
-              <article class="ci-step is-bronze" data-rank="3" role="listitem">
-                <span class="ci-step-k" id="ci-prize-3-k">نفر سوم</span>
-                <b class="ci-step-v"><bdi dir="ltr" id="ci-prize-3-v">10</bdi> <span id="ci-prize-3-u">استارز</span></b>
+              <article class="ci-podium-step is-bronze" data-rank="3" role="listitem">
+                <span class="ci-podium-crest is-bronze" aria-hidden="true"><bdi dir="ltr">3</bdi></span>
+                <span class="ci-podium-k" id="ci-prize-3-k">نفر سوم</span>
+                <span class="ci-podium-v">
+                  <svg class="ci-podium-star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="m12 3.2 2.7 5.7 6.2.9-4.5 4.4 1.1 6.2-5.5-2.9-5.5 2.9 1.1-6.2L3.1 9.8l6.2-.9Z" />
+                  </svg>
+                  <bdi dir="ltr" id="ci-prize-3-v">10</bdi>
+                  <span class="ci-podium-u" id="ci-prize-3-u">استارز</span>
+                </span>
               </article>
             </div>
 

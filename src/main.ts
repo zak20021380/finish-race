@@ -7212,6 +7212,8 @@ let challengeTicket = '';
 let challengeBotStartedAt = 0;
 let challengeClaimBusy = false;
 let challengeJoinBusy = false;
+/** One background enrollment repair at a time; only a `/me` miss can schedule it. */
+let challengeSelfHealing = false;
 let challengeReady = false;
 let challengeSheet: ModalHandle | null = null;
 let challengeBoardSig = '';
@@ -7369,7 +7371,9 @@ function challengeBoardRows(): ChallengeRowView[] {
   for (const row of challengeState.leaderboard) {
     if (!row || typeof row !== 'object') continue;
     if (row.isMe === true && out.some((served) => served.isMe === true)) continue;
-    const sameSeat = out.some((served) =>
+    /* This device's own seat is never dropped as a handle collision with another row: an
+       enrolled reader must always be printed, even when the room's answer lost their row. */
+    const sameSeat = row.isMe !== true && out.some((served) =>
       (row.userId && served.userId === row.userId)
       || (row.handle && served.handle.trim().toLowerCase() === row.handle.trim().toLowerCase()));
     if (sameSeat) continue;
@@ -7383,6 +7387,57 @@ function challengeBoardRows(): ChallengeRowView[] {
     row.prizeStars = challengePrizeStars(row.position);
   });
   return out;
+}
+
+/** True when a board row is this device's own seat: the room marks it `isMe`, or its id matches. */
+function challengeIsSelfRow(row: ChallengeRowView | null | undefined, myUserId: string): boolean {
+  if (!row || typeof row !== 'object') return false;
+  return row.isMe === true || (myUserId !== '' && row.userId === myUserId);
+}
+
+/**
+ * Guarantee this device's own row on the board. An enrolled reader always holds a printed seat:
+ * the room's row when it served one, otherwise the optimistic row the join tap (or a restored
+ * per-window latch) carries locally. The injected row takes the room's latest counters, never
+ * zeroing a real total, and the rank and field size are recomputed from the merged board so the
+ * pill can never print "unranked" while `isEnrolled` is true.
+ */
+function ensureSelfInLeaderboard(): void {
+  if (challengeState.isEnrolled !== true) return;
+  const myUserId = String(tgUser()?.id ?? '');
+  const holdsSelf = (row: ChallengeRowView | null | undefined): boolean =>
+    challengeIsSelfRow(row, myUserId);
+  const merged = challengeBoardRows();
+  if (!merged.some(holdsSelf)) {
+    const friendWins = challengeCount(challengeView?.friendWins);
+    const hardBotWins = challengeCount(challengeView?.hardBotWins);
+    const totalWins = typeof challengeView?.totalWins === 'number'
+      ? challengeCount(challengeView.totalWins)
+      : friendWins + hardBotWins;
+    challengeState.leaderboard.push({
+      userId: myUserId,
+      position: merged.length + 1,
+      handle: challengeLocalHandle(),
+      friendWins,
+      hardBotWins,
+      totalWins,
+      prizeStars: 0,
+      isMe: true,
+    });
+  }
+  challengeState.leaderboard.sort((a, b) => b.totalWins - a.totalWins || a.position - b.position);
+  const board = challengeBoardRows();
+  const at = board.findIndex(holdsSelf);
+  challengeState.myPosition = at >= 0 ? at + 1 : Math.max(1, challengeState.myPosition);
+  challengeState.totalParticipants = Math.max(
+    challengeState.totalParticipants || 0,
+    challengeCount(challengeView?.totalParticipants),
+    board.length,
+    1,
+  );
+  /* The empty trophy must never replace the row of a reader who is already in the race. */
+  const empty = document.getElementById('ci-empty');
+  if (empty) empty.hidden = true;
 }
 
 /** The countdown is the room's window end projected onto this device's clock. */
@@ -7642,7 +7697,7 @@ function paintChallengeList(rows: ChallengeRowView[]): void {
   /* An empty field hands the whole panel to the centred trophy and its gold CTA sentence. */
   if (list) list.hidden = rows.length === 0;
   if (empty) {
-    empty.hidden = rows.length > 0;
+    empty.hidden = rows.length > 0 || challengeState.isEnrolled === true;
     if (rows.length === 0) challengeSetText('ci-empty-t', copy.empty);
   }
 }
@@ -7751,6 +7806,9 @@ function applyChallengeView(view: ChallengeView): void {
     challengeCount(view.totalParticipants),
     served.length,
   );
+  /* A room answer that pre-dates the join (or lost the row) must not erase the seat: the local
+     optimistic row and this reader's rank survive until the next answer catches up. */
+  ensureSelfInLeaderboard();
   paintChallengeCard();
   paintChallengeClock();
 }
@@ -7760,9 +7818,39 @@ async function refreshChallengeCard(): Promise<void> {
   challengeRefreshing = true;
   try {
     const view = await challengeCall('/api/challenge/me');
-    if (view && typeof view.totalWins === 'number') applyChallengeView(view);
+    if (!view || typeof view.totalWins !== 'number') return;
+    const wasEnrolled = challengeState.isEnrolled;
+    const myUserId = String(tgUser()?.id ?? '');
+    const servedMine = Array.isArray(view.leaderboard)
+      && view.leaderboard.some((row) => challengeIsSelfRow(row, myUserId));
+    applyChallengeView(view);
+    /* The local latch holds a seat the room's answer does not. Repair it through the idempotent
+       join door in the background, so the next read comes back with this participant persisted. */
+    if (wasEnrolled && /^[0-9]{1,20}$/.test(myUserId)
+      && (view.isEnrolled !== true || !servedMine)) {
+      void healChallengeEnrollment(myUserId);
+    }
   } finally {
     challengeRefreshing = false;
+  }
+}
+
+/**
+ * Self-heal a seat the local latch holds but the room's `/me` answer does not. The join door is
+ * idempotent and awaits its own storage write, so replaying it persists the participant in the
+ * live window's ledger; one POST is in flight at a time and only a `/me` miss can start it.
+ */
+async function healChallengeEnrollment(myUserId: string): Promise<void> {
+  if (challengeSelfHealing || challengeState.isEnrolled !== true) return;
+  challengeSelfHealing = true;
+  try {
+    const view = await challengeCall('/api/challenge/join', {
+      userId: myUserId,
+      handle: challengeLocalHandle(),
+    });
+    if (view && view.isEnrolled === true && typeof view.totalWins === 'number') applyChallengeView(view);
+  } finally {
+    challengeSelfHealing = false;
   }
 }
 
@@ -7831,25 +7919,7 @@ async function handleChallengeJoin(): Promise<void> {
   challengeState.isEnrolled = true;
   if (!challengeState.weekEnd) challengeState.weekEnd = localChallengeWindowEnd();
   try { localStorage.setItem('tactix_chal_enrolled_' + challengeState.weekEnd, '1'); } catch { /* private mode */ }
-  const before = challengeBoardRows();
-  const already = before.some((row) => row.isMe === true
-    || (myUserId !== '' && row.userId === myUserId));
-  if (!already) {
-    challengeState.leaderboard.push({
-      userId: myUserId,
-      position: before.length + 1,
-      handle: myHandle,
-      friendWins: 0,
-      hardBotWins: 0,
-      totalWins: 0,
-      prizeStars: challengePrizeStars(before.length + 1),
-      isMe: true,
-    });
-  }
-  const merged = challengeBoardRows();
-  const mine = merged.find((row) => row.isMe === true) ?? null;
-  challengeState.myPosition = mine ? mine.position : 0;
-  challengeState.totalParticipants = Math.max(challengeState.totalParticipants, merged.length);
+  ensureSelfInLeaderboard();
   challengeBoardSig = '';
   paintChallengeCard();
 
@@ -8021,6 +8091,8 @@ function initChallengeCard(): void {
      week finds the badge already on, without waiting for the room's answer. */
   challengeState.weekEnd = localChallengeWindowEnd();
   challengeReadEnrollment(challengeState.weekEnd);
+  /* A restored per-window latch already owns a printed seat, before the room's first answer. */
+  ensureSelfInLeaderboard();
   /* The parked Channel Wars poster and its floating shield follow the module flag, one attribute
      for the whole document. index.html ships it `off`, so a parked build never flashes the shield
      before this line runs. */
