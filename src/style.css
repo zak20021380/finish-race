@@ -47444,941 +47444,604 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 }
 
 /* ============================================================================================
-   TOURNAMENT COMMAND HUB — the poster's one key
+   TOURNAMENT CHAMPIONSHIP SHEET — Sovereign 24K Gold & Deep Obsidian
 
-   One obsidian-and-24K-gold bottom sheet that owns everything the poster no longer carries:
-   the pinned personal scoreboard, the payout claim, the two quick-launch keys, then a
-   two-tab switcher over the live weekly board (one flat vertical stack of every participant)
-   and the transparent rules guide (four engraved cards). Static gradients and hairlines
-   only — no backdrop-filter, no keyframes — so the sheet rises over the same 60fps budget as
-   the vault. Every figure is Latin and wrapped in <bdi dir="ltr"> by src/main.ts.
+   One calm championship sheet that owns the header, the three-column podium, one unified
+   status-and-quick-play card, then a two-tab segmented switch over the live weekly standings
+   and three engraved rules. Static gradients and hairlines only — no backdrop-filter, no
+   keyframes — so it holds the same 60fps budget as the vault. Every live figure is Latin and
+   wrapped in <bdi dir="ltr"> by src/main.ts.
    ============================================================================================ */
+:is(html:lang(fa), html[lang="fa"], html[data-lang="fa"]) #challenge-info-modal {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
 #challenge-info-modal .ci-sheet {
-  /* A taller, airier bottom sheet: the live board needs real vertical room to show several
-     rows at once, and the pinned telemetry above it is now a single line. */
   height: 88vh;
   height: 88dvh;
   max-height: 780px;
-  /* one rhythm for the whole sheet: title, split strip, telemetry, keys and tabs sit 10px
-     apart, so no dead band can open between the personal strip and the two launch keys */
-  gap: 10px;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  gap: 12px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1.5px solid rgba(246, 200, 94, .42);
+  border-radius: 24px 24px 0 0;
+  background: linear-gradient(180deg, #131722 0%, #0b0e16 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(246, 200, 94, .14),
+    0 -24px 60px -24px rgba(0, 0, 0, .9);
 }
-#challenge-info-modal .ci-sheet .vault-modal-x { top: 9px; inset-inline-end: 9px; background: rgba(255, 255, 255, .06); color: #F8E7B4; }
-#challenge-info-modal .ci-body { justify-content: flex-start; gap: 10px; min-height: 0; }
+#challenge-info-modal .ci-sheet .vault-modal-handle {
+  background: linear-gradient(90deg, rgba(246, 200, 94, 0), rgba(246, 200, 94, .55), rgba(246, 200, 94, 0));
+  box-shadow: none;
+}
+#challenge-info-modal .ci-body { justify-content: flex-start; gap: 12px; min-height: 0; }
 
-/* ---- the pinned scoreboard: one flat summary strip, then the claim and the two keys ---- */
-.ci-pin {
+/* ---- A: the championship header — medal, title, live pills, close ---- */
+.ci-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  grid-template-areas:
+    "medal title close"
+    "pills pills pills";
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.ci-medal {
+  grid-area: medal;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #2b1a03;
+  background: linear-gradient(145deg, #fff0b8 0%, #f6c85e 42%, #c58f2c 78%, #8b5c10 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .72),
+    inset 0 0 0 1px rgba(255, 246, 214, .35),
+    0 6px 14px -8px rgba(246, 200, 94, .75);
+}
+.ci-medal-ico { width: 24px; height: 24px; }
+.ci-head-t { grid-area: title; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ci-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.32;
+  letter-spacing: 0;
+  color: #f8fafc;
+}
+.ci-title bdi { color: #fde68a; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-sub { margin: 0; font-size: 11.5px; font-weight: 600; line-height: 1.45; color: #94a3b8; }
+.ci-sub bdi { color: #cbd5e1; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-x {
+  grid-area: close;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .055);
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 0;
+}
+.ci-x-ico { width: 15px; height: 15px; }
+.ci-x:hover { color: #f8fafc; background: rgba(255, 255, 255, .10); }
+.ci-x:active { transform: scale(.94); }
+.ci-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.ci-head-pills {
+  grid-area: pills;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ci-clock, .ci-players {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 25px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ci-clock {
+  color: #fde68a;
+  background: rgba(246, 200, 94, .09);
+  border: 1px solid rgba(246, 200, 94, .30);
+}
+.ci-clock.is-urgent {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, .10);
+  border-color: rgba(248, 113, 113, .35);
+}
+.ci-clock-ico { width: 12px; height: 12px; flex: none; }
+.ci-clock bdi { color: inherit; font-weight: 900; }
+.ci-players {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.ci-players-ico { width: 12px; height: 12px; flex: none; color: #94a3b8; }
+.ci-players bdi { color: #f8fafc; font-weight: 900; }
+.ci-players-u { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- B: the three-column architectural podium ---- */
+.ci-podium {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1.12fr 1fr;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+.ci-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 4px;
+  border-radius: 12px 12px 9px 9px;
+  overflow: hidden;
+}
+.ci-step.is-silver {
+  height: 68px;
+  background: linear-gradient(180deg, rgba(203, 213, 225, .12) 0%, rgba(203, 213, 225, .03) 100%);
+  border: 1px solid rgba(203, 213, 225, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+.ci-step.is-gold {
+  height: 82px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, .26) 0%, rgba(246, 200, 94, .06) 100%);
+  border: 1.5px solid rgba(246, 200, 94, .65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 22px -9px rgba(246, 200, 94, .70);
+}
+.ci-step.is-bronze {
+  height: 64px;
+  background: linear-gradient(180deg, rgba(217, 119, 6, .13) 0%, rgba(217, 119, 6, .04) 100%);
+  border: 1px solid rgba(217, 119, 6, .30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.ci-step-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ci-step.is-silver .ci-step-rank {
+  color: #e2e8f0;
+  background: linear-gradient(180deg, #94a3b8, #475569);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.ci-step.is-gold .ci-step-rank {
+  color: #3a2504;
+  background: linear-gradient(180deg, #ffe9a8, #d9a334);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+.ci-step.is-bronze .ci-step-rank {
+  color: #2a1402;
+  background: linear-gradient(180deg, #f0b173, #a75b12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.ci-step-k { font-size: 10px; font-weight: 800; color: #cbd5e1; white-space: nowrap; }
+.ci-step.is-gold .ci-step-k { color: #fde68a; }
+.ci-step-v { font-size: 12px; font-weight: 900; color: #e2e8f0; white-space: nowrap; }
+.ci-step.is-gold .ci-step-v {
+  font-size: 15px;
+  font-weight: 900;
+  color: #fde68a;
+  text-shadow: 0 0 12px rgba(246, 200, 94, .40);
+}
+.ci-step-v bdi { font-variant-numeric: tabular-nums; }
+.ci-step-crown { width: 16px; height: 16px; color: #f6c85e; }
+
+/* ---- C: one unified status and quick-play card ---- */
+.ci-status {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 0;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .08);
 }
-/* The personal telemetry: ONE horizontal line — rank, total, split, live state. */
-.ci-sum {
+.ci-status-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  padding: 9px 12px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, .035);
 }
-.ci-sum-start {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.ci-sum-end {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.ci-sum-total {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  flex: none;
-  white-space: nowrap;
-  font-size: 14.5px;
-  font-weight: 900;
-  line-height: 1.1;
-  color: #f8fafc;
-}
-.ci-sum-total bdi {
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 14.5px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: #f8fafc;
-}
-.ci-sum-u { font-size: 10px; font-weight: 900; color: #C9D3E4; }
-.ci-sum-src {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
-}
-.ci-sum-src bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #CBD5E1; }
-.ci-sum-src i { flex: none; opacity: .55; font-style: normal; }
+.ci-status-meta { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .ci-rank {
-  flex: none;
   display: inline-flex;
   align-items: center;
-  max-width: 40%;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(246, 200, 94, .35);
-  background: linear-gradient(180deg, rgba(120, 74, 12, .45) 0%, rgba(28, 20, 8, .70) 100%);
-  color: #F8E7B4;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: inset 0 1px 0 rgba(255, 241, 192, .14);
+  color: #fde68a;
+  background: rgba(246, 200, 94, .10);
+  border: 1px solid rgba(246, 200, 94, .26);
 }
 .ci-rank.is-none {
-  color: #94A3B8;
-  border-color: rgba(148, 163, 184, .28);
-  background: rgba(51, 65, 85, .35);
-  box-shadow: none;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, .04);
+  border-color: rgba(255, 255, 255, .09);
 }
-
-/* ---- the live field: a 24K-gold participant counter in the hub's own header ---- */
-.ci-players {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 46%;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(246, 200, 94, .34);
-  background: linear-gradient(180deg, rgba(246, 200, 94, .16) 0%, rgba(30, 22, 8, .72) 100%);
-  color: #F8E7B4;
-  font-size: 9.5px;
-  font-weight: 900;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 243, 196, .18);
-}
-.ci-players-ico {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: #F6C85E;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ci-players bdi {
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: #FFF3C4;
-}
-.ci-players-u { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#challenge-info-modal .ci-head .vm-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* the pool line is short enough to wrap to a second balanced line on a 320px WebView */
-#challenge-info-modal .ci-head .vm-sub {
-  white-space: normal;
-  line-height: 1.4;
-  text-wrap: balance;
-}
-
-/* ---- the pool split: three compact podium chips in ONE row under the title. Gold, platinum
-   and bronze each own their exact tint; every figure is Latin in its own LTR run. ---- */
-.ci-prize-split {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-  min-width: 0;
-}
-.ci-prize-tier {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-width: 0;
-  padding: 6px 5px;
-  border-radius: 11px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
-  line-height: 1.1;
-}
-.ci-prize-tier[data-rank="1"] {
-  color: #fde68a;
-  background: rgba(246, 200, 94, 0.14);
-  border: 1px solid rgba(246, 200, 94, 0.38);
-}
-.ci-prize-tier[data-rank="2"] {
-  color: #e2e8f0;
-  background: rgba(203, 213, 225, 0.10);
-  border: 1px solid rgba(203, 213, 225, 0.28);
-}
-.ci-prize-tier[data-rank="3"] {
-  color: #fdba74;
-  background: rgba(217, 119, 6, 0.12);
-  border: 1px solid rgba(217, 119, 6, 0.30);
-}
-.ci-prize-tier-ico {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ci-prize-tier-txt {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.ci-prize-tier-k {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 9px;
-  font-weight: 700;
-  opacity: .82;
-}
-.ci-prize-tier-v {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
-  min-width: 0;
-  white-space: nowrap;
-  font-size: 11.5px;
-  font-weight: 900;
-  color: inherit;
-}
-.ci-prize-tier-v bdi {
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
-  font-weight: 900;
-}
-
-/* ---- the seat: a compact emerald live dot once enrolled, a free one-tap key until synced ---- */
-.ci-seat {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #34d399;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
+.ci-rank bdi { color: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-wins { font-size: 13px; font-weight: 900; color: #f8fafc; white-space: nowrap; }
+.ci-wins bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-wins-u { font-size: 10px; font-weight: 800; color: #94a3b8; }
+.ci-status-action { flex: none; margin-inline-start: auto; display: inline-flex; align-items: center; }
+.ci-split { margin: 0; font-size: 10.5px; font-weight: 600; line-height: 1.5; color: #94a3b8; }
+.ci-split bdi { color: #cbd5e1; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-seat { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 .ci-seat[hidden] { display: none; }
-.ci-seat > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ci-seat-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, .16);
-}
-.ci-seat-ico {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: #FFE7A6;
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 .ci-seat.is-cta {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(246, 200, 94, .55);
-  background: linear-gradient(180deg, #FFE494 0%, #F5C351 52%, #D4961E 100%);
-  color: #141008;
-  font-size: 10px;
-  font-weight: 900;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
   cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 900;
+  white-space: nowrap;
+  color: #3a2504;
+  background: linear-gradient(180deg, #ffe7a3 0%, #f0c25a 55%, #d6a133 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .6),
-    0 4px 12px rgba(245, 195, 81, .22);
-  transition: transform var(--motion-fast), filter var(--motion-fast);
+    inset 0 1px 0 rgba(255, 255, 255, .60),
+    0 5px 16px -7px rgba(246, 200, 94, .80);
 }
-.ci-seat.is-cta .ci-seat-ico { stroke: #4A2E05; }
 .ci-seat.is-cta:hover { filter: brightness(1.04); }
 .ci-seat.is-cta:active { transform: scale(.98); filter: none; }
-.ci-seat.is-cta:disabled { opacity: .7; cursor: default; filter: none; transform: none; }
 .ci-seat.is-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-/* the enrolled badge: a locked emerald pill with a crisp check-circle — a status, never a tap
-   target, so a double-tap cannot fire the key twice and the gold key can never repaint over it */
+.ci-seat-plus { width: 14px; height: 14px; flex: none; }
 .ci-seat.is-on {
-  height: 26px;
-  padding: 0 11px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(16, 185, 129, 0.36);
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  pointer-events: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, .12);
+  border: 1px solid rgba(16, 185, 129, .42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
 }
-.ci-seat-check {
-  flex: none;
-  width: 13px;
-  height: 13px;
-  fill: none;
-  stroke: #34d399;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* ---- the payout: a champion of the week that just closed collects here ---- */
+.ci-seat-check { width: 15px; height: 15px; flex: none; color: #34d399; }
 .ci-claim {
   width: 100%;
-  height: 38px;
-  display: flex;
+  min-height: 38px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #FFF7CC 0%, #FDE68A 24%, #F59E0B 66%, #B45309 100%);
-  color: #241503;
-  font: inherit;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(246, 200, 94, .38);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(246, 200, 94, .18), rgba(246, 200, 94, .06));
+  color: #fde68a;
   font-size: 11.5px;
   font-weight: 900;
-  letter-spacing: .015em;
-  line-height: 1;
-  white-space: nowrap;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    0 0 0 1px rgba(255, 232, 166, .48),
-    0 0 18px rgba(245, 158, 11, .42),
-    0 2px 8px rgba(0, 0, 0, .4);
-  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
 .ci-claim[hidden] { display: none; }
-.ci-claim-ico { flex: none; width: 17px; height: 17px; }
+.ci-claim-ico { flex: none; width: 16px; height: 16px; }
 .ci-claim-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ci-claim-t bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
 .ci-claim:hover { filter: brightness(1.04); }
 .ci-claim:active { transform: scale(.985); filter: none; }
 .ci-claim:disabled { opacity: .7; cursor: default; filter: none; transform: none; }
 .ci-claim:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-/* ---- the two quick launches moved off the poster: struck gold and cyan-lit glass ---- */
-.ci-launch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
-.ci-launch-btn {
+.ci-duel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-width: 0; }
+.ci-duel-btn {
+  height: 44px;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-width: 0;
-  height: 44px;
+  gap: 6px;
   padding: 0 8px;
   border: 0;
   border-radius: 12px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .01em;
-  line-height: 1;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
-  cursor: pointer;
-  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-.ci-launch-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ci-launch-ico {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ci-launch-btn.is-gold {
-  background: linear-gradient(180deg, #FFE494 0%, #F5C351 52%, #D4961E 100%);
-  color: #141008;
+.ci-duel-btn.is-gold {
+  color: #3a2504;
+  background: linear-gradient(180deg, #ffe6a0 0%, #f1c35c 58%, #d29c2f 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    inset 0 -2px 0 rgba(120, 74, 12, .32),
-    0 6px 16px rgba(245, 195, 81, .24);
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 5px 16px -8px rgba(246, 200, 94, .80);
 }
-.ci-launch-btn.is-mint {
-  border: 1px solid rgba(45, 212, 191, .42);
-  background: linear-gradient(180deg, rgba(6, 58, 58, .74) 0%, rgba(8, 26, 38, .88) 100%);
-  color: #D6FFF7;
-  box-shadow:
-    inset 0 1px 0 rgba(153, 246, 228, .16),
-    inset 0 -2px 0 rgba(2, 6, 12, .4),
-    0 4px 12px rgba(0, 0, 0, .3);
+.ci-duel-btn.is-mint {
+  color: #a7f3d0;
+  background: linear-gradient(180deg, rgba(16, 185, 129, .28) 0%, rgba(13, 148, 136, .13) 100%);
+  border: 1px solid rgba(45, 212, 191, .36);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
 }
-.ci-launch-btn.is-mint .ci-launch-ico { color: #5EEAD4; }
-.ci-launch-btn:hover { filter: brightness(1.05); }
-.ci-launch-btn:active { transform: scale(.98); filter: none; }
-.ci-launch-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* ---- the cap note and the second door: one balanced row under the two keys ---- */
-.ci-note-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  margin-top: -2px;
-  font-size: 11px;
-}
-.ci-launch-hint {
-  flex: none;
-  margin: 0;
-  text-align: start;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: .01em;
-  color: #8593A8;
-}
-.ci-launch-hint bdi { font-weight: 900; font-variant-numeric: tabular-nums; color: #9AA7BB; }
+.ci-duel-btn:hover { filter: brightness(1.05); }
+.ci-duel-btn:active { transform: scale(.98); filter: none; }
+.ci-duel-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.ci-duel-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ci-duel-ico { width: 15px; height: 15px; flex: none; }
 
-/* ---- the quiet second door beside the caption: the Friends & Rivals list, no room minted.
-   A flat cyan link, one static hairline of nothing else — no scrim, no blur, no motion beyond
-   the colour it settles into. It inherits the pane's own RTL direction on fa/ar. ---- */
-.ci-rivals {
-  flex: 0 1 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0 2px;
-  /* a comfortable thumb target under 11px type, still flat and shadowless */
-  min-height: 26px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.35;
-  color: #38bdf8;
-  text-align: end;
-  cursor: pointer;
-  transition: color var(--motion-fast);
-}
-.ci-rivals-ico {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ci-rivals-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ci-rivals:hover { color: #7DD3FC; }
-.ci-rivals:active { color: #BAE6FD; }
-.ci-rivals:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-/* ---- the segmented switcher ---- */
+/* ---- D: the segmented switch, the standings and the three engraved rules ---- */
 .ci-tabs {
   flex: none;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3px;
   padding: 3px;
   border-radius: 12px;
-  background: rgba(6, 10, 18, .74);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14), inset 0 1px 0 rgba(255, 255, 255, .04);
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .07);
 }
 .ci-tab {
+  min-height: 38px;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 0;
-  height: 34px;
-  padding: 0 6px;
+  padding: 0 8px;
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #94A3B8;
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 900;
-  letter-spacing: .01em;
-  line-height: 1;
-  white-space: nowrap;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
   cursor: pointer;
-  transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
 }
+.ci-tab-ico { width: 15px; height: 15px; flex: none; }
 .ci-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ci-tab-ico {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 .ci-tab.is-on {
-  color: #241503;
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #D97706 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 8px rgba(0, 0, 0, .38);
+  color: #fde68a;
+  background: linear-gradient(180deg, rgba(246, 200, 94, .20) 0%, rgba(246, 200, 94, .07) 100%);
+  box-shadow: inset 0 0 0 1px rgba(246, 200, 94, .30);
 }
-.ci-tab:not(.is-on):hover { color: #E2E8F0; background: rgba(255, 255, 255, .05); }
+.ci-tab:not(.is-on):hover { color: #e2e8f0; background: rgba(255, 255, 255, .05); }
 .ci-tab:active { transform: scale(.985); }
 .ci-tab:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
-
-/* ---- the panels: one at a time, each owning its own scroll ---- */
 .ci-panels { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.ci-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.ci-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .ci-panel[hidden] { display: none; }
-
-/* ---- the standings rail: two quiet column names over the board ---- */
-.ci-board-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
-}
-.ci-board-head > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ci-board-head > span:last-child { text-align: end; }
-
-/* ---- every participant: one strict vertical stack, hidden scrollbar ---- */
 .ci-list {
   flex: 1 1 auto;
   min-height: 0;
+  margin: 0;
+  padding: 4px 2px 8px;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
   overflow-y: auto;
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  contain: layout style paint;
 }
-.ci-list::-webkit-scrollbar { width: 0; height: 0; }
-.ci-list:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; border-radius: 8px; }
-/* One contender card. Two parts only — a crest plus a two-line player stack, and the score
-   column on the end side. The wide dark stat box that used to sit inside the row is gone, so
-   the handle owns every pixel it needs and a long at-name is never clipped to "@ZUkn...". */
+.ci-list[hidden] { display: none; }
 .ci-row {
-  position: relative;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  padding: 11px 14px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 15px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(15, 18, 26, .88) 100%);
-  overflow: hidden;
-  contain: layout style paint;   /* long leaderboards scroll without repainting their siblings */
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .02));
+  contain: layout style paint;
 }
-/* #1 — 24K Sovereign Gold */
-.ci-row[data-place="1"] {
-  background: linear-gradient(95deg, rgba(246, 200, 94, .14) 0%, rgba(16, 19, 28, .94) 65%);
-  border: 1px solid rgba(246, 200, 94, .45);
-}
-/* #2 — Platinum Silver */
-.ci-row[data-place="2"] {
-  background: linear-gradient(95deg, rgba(203, 213, 225, .10) 0%, rgba(16, 19, 28, .94) 65%);
-  border: 1px solid rgba(203, 213, 225, .30);
-}
-/* #3 — Burnished Royal Bronze */
-.ci-row[data-place="3"] {
-  background: linear-gradient(95deg, rgba(217, 119, 6, .11) 0%, rgba(16, 19, 28, .94) 65%);
-  border: 1px solid rgba(217, 119, 6, .32);
-}
-/* the reader's own seat: an emerald accent bar on the inline start edge plus a hairline ring,
-   so the player spots themselves instantly in a long board without the row shouting */
 .ci-row.is-me {
-  border-color: rgba(52, 211, 153, .55);
-  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .16);
+  border-color: rgba(45, 212, 191, .30);
+  background: linear-gradient(180deg, rgba(16, 185, 129, .10), rgba(255, 255, 255, .02));
 }
-.ci-row.is-me::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 4px;
-  top: 9px;
-  bottom: 9px;
-  width: 3px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #6EE7B7 0%, #10B981 100%);
-}
-.ci-row-start {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-/* the sculpted rank medallion: a 38px coin with a brushed metal face. The whole "#1" token is
-   one Latin run in its centre, so the hash never flips to the wrong side in RTL. */
+.ci-row-start { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ci-row-rank {
-  position: relative;
-  flex-shrink: 0;
-  display: inline-flex;
-  direction: ltr;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
+  flex: none;
+  width: 34px;
   height: 38px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(148, 163, 184, .30);
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .20) 0%, rgba(255, 255, 255, .03) 42%, rgba(15, 23, 42, .18) 100%),
-    linear-gradient(180deg, #64748b 0%, #334155 100%);
-  color: #e2e8f0;
-  font-family: var(--font-numeric);
-  font-size: 12.5px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
   font-weight: 900;
-  line-height: 1;
   font-variant-numeric: tabular-nums;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .28),
-    inset 0 -2px 3px rgba(0, 0, 0, .28),
-    0 2px 6px rgba(0, 0, 0, .30);
+  color: #e2e8f0;
+  background: linear-gradient(180deg, rgba(148, 163, 184, .38), rgba(71, 85, 105, .30));
+  clip-path: polygon(50% 0, 100% 16%, 100% 64%, 50% 100%, 0 64%, 0 16%);
 }
-.ci-row-rank::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, .16);
-  pointer-events: none;
-}
-.ci-row-rank bdi { position: relative; z-index: 1; }
-/* #1 — 24K sovereign gold */
 .ci-row[data-place="1"] .ci-row-rank {
-  border-color: rgba(255, 232, 166, .65);
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .62) 0%, rgba(255, 246, 214, .16) 40%, rgba(120, 74, 12, .12) 100%),
-    linear-gradient(180deg, #ffe484 0%, #e0a72c 58%, #a86a0d 100%);
-  color: #1a1205;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .55),
-    inset 0 -2px 3px rgba(90, 52, 4, .28),
-    0 0 14px rgba(246, 200, 94, .30);
+  color: #3a2504;
+  background: linear-gradient(180deg, #ffe9a8, #d9a334);
 }
-/* #2 — brushed platinum silver */
 .ci-row[data-place="2"] .ci-row-rank {
-  border-color: rgba(241, 245, 249, .62);
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .20) 44%, rgba(100, 116, 139, .10) 100%),
-    linear-gradient(180deg, #f8fafc 0%, #cbd5e1 56%, #94a3b8 100%);
-  color: #0f172a;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .75),
-    inset 0 -2px 3px rgba(71, 85, 105, .22),
-    0 2px 8px rgba(0, 0, 0, .28);
+  color: #1e293b;
+  background: linear-gradient(180deg, #f1f5f9, #94a3b8);
 }
-/* #3 — warm burnished bronze */
 .ci-row[data-place="3"] .ci-row-rank {
-  border-color: rgba(253, 186, 116, .55);
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 237, 213, .52) 0%, rgba(255, 237, 213, .10) 44%, rgba(120, 53, 15, .18) 100%),
-    linear-gradient(180deg, #fdba74 0%, #d97706 58%, #9a3412 100%);
-  color: #1c0f05;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .42),
-    inset 0 -2px 3px rgba(120, 53, 15, .25),
-    0 2px 8px rgba(0, 0, 0, .26);
+  color: #2a1402;
+  background: linear-gradient(180deg, #f0b173, #a75b12);
 }
-/* the two-line player stack: the full handle over its muted source split */
-.ci-row-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.ci-row-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
+.ci-row-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ci-row-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ci-row-handle {
-  display: block;
-  flex: 0 1 auto;
+  max-width: 150px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: #f8fafc;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #f1f5f9;
 }
 .ci-you {
   flex: none;
-  padding: 1px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(52, 211, 153, .32);
-  background: rgba(52, 211, 153, .16);
-  color: #6EE7B7;
+  padding: 1px 5px;
+  border-radius: 5px;
   font-size: 9px;
-  font-weight: 800;
-  line-height: 1.5;
-  letter-spacing: .02em;
-}
-/* the end side: the tabular score over its prize tag — no inner box, no wasted width */
-.ci-row-end {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  text-align: end;
-}
-.ci-row-w {
-  white-space: nowrap;
-  font-size: 15px;
-  font-weight: 800;
-  line-height: 1.15;
-  color: #f8fafc;
-}
-.ci-row-w bdi {
-  font-family: var(--font-numeric);
-  font-size: 15px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-/* the exact rank reward: 24K gold, platinum silver, warm bronze — muted for everyone below */
-.ci-row-prize {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(246, 200, 94, .38);
-  background: rgba(246, 200, 94, .14);
-  color: #fde68a;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.35;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.ci-row-prize bdi {
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
   font-weight: 900;
-}
-.ci-row[data-place="2"] .ci-row-prize {
-  color: #e2e8f0;
-  background: rgba(203, 213, 225, 0.10);
-  border: 1px solid rgba(203, 213, 225, 0.28);
-}
-.ci-row[data-place="3"] .ci-row-prize {
-  color: #fdba74;
-  background: rgba(217, 119, 6, 0.12);
-  border: 1px solid rgba(217, 119, 6, 0.30);
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, .14);
+  border: 1px solid rgba(16, 185, 129, .32);
 }
 .ci-row-sub {
-  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   color: #94a3b8;
 }
-.ci-row-sub bdi { font-weight: 900; color: #CBD5E1; font-variant-numeric: tabular-nums; }
-.ci-row-sub i { flex: none; opacity: .55; font-style: normal; }
-/* a 3px race rail under the source split: how far this seat stands from the week's leader */
-.ci-row-race {
-  display: block;
-  position: relative;
-  width: 100%;
-  height: 3px;
-  margin-top: 1px;
-  border-radius: var(--radius-pill);
-  background: rgba(148, 163, 184, .16);
-  overflow: hidden;
-}
-.ci-row-race-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(100, 116, 139, .75) 0%, rgba(148, 163, 184, .95) 100%);
-}
-.ci-row[data-place="1"] .ci-row-race-fill {
-  background: linear-gradient(90deg, #c98a18 0%, #ffe484 100%);
-}
-.ci-row[data-place="2"] .ci-row-race-fill {
-  background: linear-gradient(90deg, #94a3b8 0%, #f1f5f9 100%);
-}
-.ci-row[data-place="3"] .ci-row-race-fill {
-  background: linear-gradient(90deg, #b45309 0%, #fdba74 100%);
-}
-.ci-row.is-me .ci-row-race-fill {
-  background: linear-gradient(90deg, #10B981 0%, #6EE7B7 100%);
-}
-.ci-empty {
+.ci-row-sub bdi { color: #cbd5e1; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-row-sub i { font-style: normal; opacity: .55; }
+.ci-row-end {
   flex: none;
-  margin: 0;
-  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  text-align: end;
+}
+.ci-row-w { font-size: 13.5px; font-weight: 900; color: #f8fafc; white-space: nowrap; }
+.ci-row-w bdi { font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-row-prize {
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
+  color: #fde68a;
+  background: rgba(246, 200, 94, .10);
+  border: 1px solid rgba(246, 200, 94, .26);
+}
+.ci-row-prize bdi { color: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ci-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 20px;
   text-align: center;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.55;
-  color: #8593A8;
 }
 .ci-empty[hidden] { display: none; }
-
-/* ---- the rules: four engraved cards, each with its own vector mark ---- */
+.ci-empty-ico { width: 36px; height: 36px; color: #f6c85e; opacity: .92; }
+.ci-empty-t { margin: 0; max-width: 250px; font-size: 11.5px; font-weight: 600; line-height: 1.75; color: #94a3b8; }
 .ci-rules {
   flex: 1 1 auto;
   min-height: 0;
+  margin: 0;
+  padding: 4px 2px 8px;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  contain: layout style paint;
 }
-.ci-rules::-webkit-scrollbar { width: 0; height: 0; }
-.ci-rules:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; border-radius: 8px; }
 .ci-rule {
-  display: flex;
-  gap: 9px;
-  padding: 9px 10px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(20, 26, 38, .94) 0%, rgba(9, 13, 20, .94) 100%);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .16), inset 0 1px 0 rgba(255, 255, 255, .04);
-}
-.ci-rule-ico {
   flex: none;
-  width: 28px;
-  height: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .018));
+}
+.ci-rule-n {
+  flex: none;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #3a2504;
+  background: linear-gradient(180deg, #ffe9a8, #d9a334);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .50);
 }
-.ci-rule-ico svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.ci-rule[data-tone="mint"] .ci-rule-n {
+  color: #04261d;
+  background: linear-gradient(180deg, #a7f3d0, #34d399);
 }
-.ci-rule[data-tone="gold"] .ci-rule-ico { color: #FCD34D; background: rgba(251, 191, 36, .13); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .26); }
-.ci-rule[data-tone="mint"] .ci-rule-ico { color: #6EE7B7; background: rgba(16, 185, 129, .13); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .26); }
-.ci-rule[data-tone="cyan"] .ci-rule-ico { color: #67E8F9; background: rgba(6, 182, 212, .13); box-shadow: inset 0 0 0 1px rgba(6, 182, 212, .26); }
-.ci-rule[data-tone="slate"] .ci-rule-ico { color: #CBD5E1; background: rgba(148, 163, 184, .13); box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .26); }
-.ci-rule-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ci-rule-t { font-size: 11.5px; font-weight: 900; line-height: 1.35; color: #FFF7DA; }
-.ci-rule-b { font-size: 10px; font-weight: 700; line-height: 1.62; color: #B7C2D3; }
-.ci-rule-b bdi { font-weight: 900; color: #FCD34D; }
+.ci-rule[data-tone="bronze"] .ci-rule-n {
+  color: #2a1402;
+  background: linear-gradient(180deg, #f0b173, #d97706);
+}
+.ci-rule-txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ci-rule-t { font-size: 11.5px; font-weight: 900; line-height: 1.45; color: #f8fafc; }
+.ci-rule-b { font-size: 10.5px; font-weight: 500; line-height: 1.75; color: #94a3b8; }
+.ci-rule-b bdi { color: #e2e8f0; font-weight: 900; font-variant-numeric: tabular-nums; }
 
-/* ---- Persian and Arabic: the script gives up its tracking, never its own digits ---- */
-html[data-lang="fa"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-board-head, .ci-prize-tier, .ci-prize-tier-k, .ci-prize-tier-v, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-row-race, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat),
-html[data-lang="ar"] :is(.ci-tab, .ci-rule-t, .ci-rule-b, .ci-board-head, .ci-prize-tier, .ci-prize-tier-k, .ci-prize-tier-v, .ci-row-handle, .ci-row-prize, .ci-row-sub, .ci-row-w, .ci-row-race, .ci-you, .ci-empty, .ci-rank, .ci-sum-total, .ci-sum-u, .ci-sum-src, .ci-launch-btn, .ci-launch-hint, .ci-rivals, .ci-claim, .ci-players, .ci-players-u, .ci-seat) {
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-}
-html[data-lang="fa"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-board-head, .ci-prize-split, .ci-prize-tier, .ci-prize-tier-txt, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-row-race, .ci-players, .ci-players-u, .ci-seat),
-html[data-lang="ar"] :is(.ci-pin, .ci-sum, .ci-sum-start, .ci-sum-src, .ci-note-row, .ci-launch, .ci-launch-btn, .ci-claim, .ci-board-head, .ci-prize-split, .ci-prize-tier, .ci-prize-tier-txt, .ci-row, .ci-row-start, .ci-row-info, .ci-row-top, .ci-row-end, .ci-row-sub, .ci-row-race, .ci-players, .ci-players-u, .ci-seat) {
+/* The shell publishes data-lang and never flips the document, so the sheet mirrors itself for the
+   two right-to-left tongues. Every numeral stays sealed in its own LTR <bdi> above. */
+html[data-lang="fa"] #challenge-info-modal,
+html[data-lang="ar"] #challenge-info-modal,
+html:lang(fa) #challenge-info-modal,
+html:lang(ar) #challenge-info-modal {
   direction: rtl;
 }
-html[data-lang="fa"] .ci-rule-b,
-html[data-lang="ar"] .ci-rule-b { line-height: 1.6; }
-html.reduced-motion .ci-tab,
-html.reduced-motion .ci-claim,
-html.reduced-motion .ci-launch-btn,
-html.reduced-motion .ci-seat.is-cta { transition: none; }
-@media (max-width: 350px) {
-  .ci-tab { font-size: 10.5px; gap: 4px; }
-  .ci-tab-ico { width: 12px; height: 12px; }
-  .ci-sum { padding: 8px 10px; }
-  /* At 320px the split keeps its place and gives up width instead: rank, total and the live
-     state stay whole, and the two source figures shorten to their own ellipsis. */
-  .ci-sum-src { font-size: 10px; }
-  .ci-sum-total, .ci-sum-total bdi { font-size: 13.5px; }
-  /* The podium badge is the next to go: the handle must stay readable. */
-  .ci-row { padding: 9px 10px; gap: 8px; }
-  .ci-row-sub { font-size: 10px; }
-  .ci-row-w, .ci-row-w bdi { font-size: 14px; }
-  /* the 38px medallion never shrinks; the split strip steps its type down instead */
-  .ci-prize-tier { gap: 4px; padding: 5px 3px; }
-  .ci-prize-tier-ico { width: 12px; height: 12px; }
-  .ci-prize-tier-k { font-size: 8.5px; }
-  .ci-prize-tier-v { font-size: 10.5px; }
-  .ci-rule { padding: 8px; gap: 7px; }
-  .ci-launch-btn { font-size: 10px; height: 42px; padding: 0 6px; gap: 4px; }
-  .ci-launch-ico { width: 13px; height: 13px; }
+
+@media (max-width: 380px) {
+  .ci-title { font-size: 15.5px; }
+  .ci-sub { font-size: 10.5px; }
+  .ci-medal { width: 38px; height: 38px; border-radius: 12px; }
+  .ci-head { grid-template-columns: 38px minmax(0, 1fr) 34px; }
+  .ci-step.is-gold { height: 78px; }
+  .ci-step.is-silver { height: 64px; }
+  .ci-step.is-bronze { height: 60px; }
+  .ci-step-crown { width: 14px; height: 14px; }
+  .ci-seat.is-cta { padding: 0 10px; font-size: 11.5px; }
+  .ci-duel-btn { font-size: 11px; gap: 4px; }
+  .ci-duel-ico { width: 13px; height: 13px; }
+  .ci-row { padding: 9px 10px; }
+  .ci-row-handle { max-width: 118px; }
+  .ci-row-rank { width: 30px; height: 34px; }
 }
 @media (max-height: 680px) {
-  #challenge-info-modal .ci-sheet { max-height: 94vh; max-height: 94dvh; padding-top: 14px; }
-  .ci-sum { padding: 8px 11px; }
-  .ci-row { padding: 9px 12px; }
-  .ci-launch-btn { height: 42px; }
-  .ci-rule { padding: 8px 9px; }
-  .ci-prize-tier { padding: 5px 4px; }
+  #challenge-info-modal .ci-sheet { max-height: 94vh; max-height: 94dvh; padding-top: 12px; gap: 8px; }
+  .ci-podium { gap: 6px; }
+  .ci-step.is-gold { height: 74px; }
+  .ci-step.is-silver { height: 60px; }
+  .ci-step.is-bronze { height: 56px; }
+  .ci-status { padding: 10px; gap: 8px; }
+  .ci-row { min-height: 50px; padding: 8px 10px; }
+  .ci-rule { padding: 9px 10px; }
 }
 
 /* ==========================================================================

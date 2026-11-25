@@ -98,7 +98,7 @@ import {
   CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
   CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
   PRIZE_BY_RANK, TOTAL_PRIZE_POOL, prizeForRank,
-  applyFriendWin, applyHardBotWin, challengeBoard, challengeView, claimSettlement, issueBotTicket,
+  applyFriendWin, applyHardBotWin, challengeBoard, challengeFallbackSeat, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
   type ChallengeBoard, type ChallengeEntry, type ChallengeSettlement,
 } from './challenge';
@@ -11417,7 +11417,15 @@ export class MatchmakerDO {
   /** The challenge's HTTP surface. Every counter here is the room's, never the body's. */
   private async challenge(request: Request, url: URL): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CHALLENGE_CORS });
-    const who = await identifyPlayerRequest(request, this.env);
+    let who = await identifyPlayerRequest(request, this.env);
+    /* A test / desktop WebView has no signed initData. The free-join door accepts the declared
+       seat only on a development door; every production door still requires Telegram's signature. */
+    if (url.pathname === '/api/challenge/join' && request.method === 'POST'
+      && !initDataOf(request) && (!who || who.guest)
+      && (this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname))) {
+      const seat = challengeFallbackSeat(await readBody(request.clone()));
+      if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
+    }
     if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
     if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, CHALLENGE_CORS);
     const now = Date.now();
@@ -11461,7 +11469,8 @@ export class MatchmakerDO {
       const week = seen ? seen.windowStart : -1;
       const entry = this.challengeEntry(who, now);
       this.trimChallenge(now);
-      if (!seen || entry.windowStart !== week) this.persistChallenge();
+      /* A first sighting is durable before the field is answered, exactly like /me. */
+      if (!seen || entry.windowStart !== week) await this.flushChallenge();
       const board = this.challengeBoardFor(entry, now);
       const claimable = this.challengeClaimable(entry.id, now);
       return json({
@@ -11490,7 +11499,11 @@ export class MatchmakerDO {
     }
 
     /* A guest seat may look at the card, but the two tracks and the prize need a verified player. */
-    if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+    if (!who.tgId) return json({
+      ok: false,
+      error: 'telegram_required',
+      auth: who.guest ? 'guest' : 'telegram',
+    }, 403, CHALLENGE_CORS);
 
     /* One-tap enrollment: the hub's free join key. It registers this verified seat on the live
        week at zero wins (the write is idempotent) and answers with the full card + the field. */
@@ -11544,7 +11557,8 @@ export class MatchmakerDO {
          no counter and is paid exactly once, by the row itself. */
       const settlement = this.challengeClaimable(entry.id, now);
       const refusal = claimSettlement(settlement, now);
-      if (!refusal) this.persistChallenge();
+      /* The receipt is durable before it is answered: a reload cannot lose a paid podium. */
+      if (!refusal) await this.flushChallenge();
       return json(view(entry, {
         ok: !refusal,
         error: refusal,

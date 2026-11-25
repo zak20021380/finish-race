@@ -594,3 +594,30 @@ export function challengeView(
     claimedAt: latest ? latest.claimedAt : 0,
   };
 }
+
+/**
+ * A declared seat for a test or desktop WebView, where Telegram's signed `initData` is absent.
+ * The HTTP door only honors this on a development host (`DEV_AUTH` or localhost); a production
+ * door never reaches it, so an unsigned launch cannot claim a Telegram id. The id is normalized
+ * to the same canonical `tg-<digits>` form the verified door produces, and the declared handle
+ * becomes the seat's public name so the board row matches the one the client painted on tap.
+ */
+export interface ChallengeFallbackSeat {
+  playerId: string;
+  tgId: string;
+  name: string;
+}
+
+export function challengeFallbackSeat(raw: unknown): ChallengeFallbackSeat | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as { userId?: unknown; handle?: unknown };
+  const rawId = typeof body.userId === 'number'
+    ? String(body.userId)
+    : typeof body.userId === 'string' ? body.userId.trim() : '';
+  if (!/^[0-9]{1,20}$/.test(rawId)) return null;
+  const declared = typeof body.handle === 'string'
+    ? body.handle.trim().replace(/\s+/g, ' ').slice(0, 40).replace(/^@+/, '')
+    : '';
+  const name = declared ? '@' + declared : '@' + rawId;
+  return { playerId: 'tg-' + rawId, tgId: rawId, name };
+}
