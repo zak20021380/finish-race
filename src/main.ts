@@ -6871,9 +6871,11 @@ interface ChallengeView {
   credited?: boolean;
 }
 
-interface ChallengeRule {
-  t: string;
-  b: string;
+/** One row of the floating rules card: a terse key, a terse value, one accent. */
+interface ChallengeRuleShort {
+  k: string;
+  v: string;
+  tone: 'gold' | 'mint' | 'plain';
 }
 
 interface ChallengeCopy {
@@ -6910,8 +6912,13 @@ interface ChallengeCopy {
   claimOk: string;
   claimFail: string;
   guest: string;
-  boardTab: string;
-  rulesTab: string;
+  /** The board panel's quiet section label above the standings. */
+  boardLive: string;
+  /** The header pill's own short label ("Rules" / "قوانین"). */
+  rulesOpen: string;
+  /** The floating card's headline and its one dismiss key. */
+  rulesTitle: string;
+  rulesCta: string;
   /** The sheet's own headline only: the 50-Star pool is the separate gold pill beside it. */
   sheetTitle: string;
   /** The standings rail's two column names. */
@@ -6935,7 +6942,8 @@ interface ChallengeCopy {
   join: string;
   joinOk: string;
   joinFail: string;
-  rules: ChallengeRule[];
+  /** The floating rules card: four terse key/value rows, never a paragraph. */
+  rulesShort: ChallengeRuleShort[];
   warsOff: string;
 }
 
@@ -6967,8 +6975,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     claimOk: 'جایزه تورنمنت شما ثبت شد',
     claimFail: 'ثبت درخواست ممکن نشد؛ دوباره تلاش کنید',
     guest: 'برای شرکت، مینی‌اپ را داخل تلگرام باز کنید',
-    boardTab: 'جدول رتبه‌بندی',
-    rulesTab: 'قوانین تورنمنت',
+    boardLive: 'جدول رتبه‌بندی زنده',
+    rulesOpen: 'قوانین',
+    rulesTitle: 'قوانین تورنمنت',
+    rulesCta: 'متوجه شدم',
     sheetTitle: 'تورنمنت هفتگی',
     boardHeadStart: 'بازیکن و رتبه',
     boardHeadEnd: 'امتیاز و جایزه',
@@ -6984,19 +6994,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     join: 'شرکت رایگان',
     joinOk: 'در تورنمنت هفتگی ثبت شدی؛ موفق باشی!',
     joinFail: 'ثبت در تورنمنت ممکن نشد؛ دوباره تلاش کنید',
-    rules: [
-      {
-        t: 'جایزه <bdi dir="ltr">3</bdi> نفر برتر هفته',
-        b: 'مجموع جوایز <bdi dir="ltr">50</bdi> استارز است که در پایان هفته بین <bdi dir="ltr">3</bdi> نفر اول تقسیم می‌شود: نفر اول <bdi dir="ltr">25</bdi> استارز، نفر دوم <bdi dir="ltr">15</bdi> استارز و نفر سوم <bdi dir="ltr">10</bdi> استارز.',
-      },
-      {
-        t: 'امتیاز از ربات Hard و دوستان',
-        b: 'هر برد در دوئل با ربات Hard یا برابر دوستان یک امتیاز هفتگی است؛ از هر دوست حداکثر <bdi dir="ltr">3</bdi> برد در هفته حساب می‌شود.',
-      },
-      {
-        t: 'شرط معتبر بودن مسابقه',
-        b: 'فقط مسابقه‌ای معتبر است که حداقل <bdi dir="ltr">45</bdi> ثانیه طول بکشد و دست‌کم <bdi dir="ltr">10</bdi> حرکت ثبت شود.',
-      },
+    rulesShort: [
+      { k: 'جوایز هفتگی', v: '<bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> استارز', tone: 'gold' },
+      { k: 'امتیاز هر برد', v: 'ربات Hard یا دوستان = <bdi dir="ltr">+1</bdi>', tone: 'mint' },
+      { k: 'سقف برد از دوست', v: 'حداکثر <bdi dir="ltr">3</bdi> برد در هفته', tone: 'plain' },
+      { k: 'شرط ثبت برد', v: 'حداقل <bdi dir="ltr">45</bdi> ثانیه و <bdi dir="ltr">10</bdi> حرکت', tone: 'plain' },
     ],
     warsOff: 'موقتاً غیرفعال • به زودی',
   },
@@ -7023,8 +7025,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     claimOk: 'Your tournament prize is recorded',
     claimFail: 'Could not record the claim — try again',
     guest: 'Open this Mini App inside Telegram to compete',
-    boardTab: 'Leaderboard',
-    rulesTab: 'Tournament Rules',
+    boardLive: 'Live Standings',
+    rulesOpen: 'Rules',
+    rulesTitle: 'Tournament Rules',
+    rulesCta: 'Got it',
     sheetTitle: 'Weekly Tournament',
     boardHeadStart: 'Player & rank',
     boardHeadEnd: 'Wins & prize',
@@ -7040,19 +7044,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     join: 'Join Free',
     joinOk: 'You are in the weekly tournament — good luck!',
     joinFail: 'Could not join the tournament — try again',
-    rules: [
-      {
-        t: 'Top-<bdi dir="ltr">3</bdi> weekly payout',
-        b: 'The total prize pool is <bdi dir="ltr">50</bdi> Stars, split at the end of the week between the Top <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars for 1st, <bdi dir="ltr">15</bdi> for 2nd and <bdi dir="ltr">10</bdi> for 3rd.',
-      },
-      {
-        t: 'Scoring with the Hard bot and friends',
-        b: 'Every Hard-bot duel win or friend win adds one weekly point; at most <bdi dir="ltr">3</bdi> wins per friend count each week.',
-      },
-      {
-        t: 'When a match counts',
-        b: 'A match is valid only if it lasts at least <bdi dir="ltr">45</bdi> seconds and records at least <bdi dir="ltr">10</bdi> moves.',
-      },
+    rulesShort: [
+      { k: 'Weekly Prizes', v: '<bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> Stars', tone: 'gold' },
+      { k: 'Win Points', v: 'Hard Bot or Friends = <bdi dir="ltr">+1</bdi>', tone: 'mint' },
+      { k: 'Friend Cap', v: 'Max <bdi dir="ltr">3</bdi> wins / friend', tone: 'plain' },
+      { k: 'Valid Match', v: 'Min <bdi dir="ltr">45</bdi>s &amp; <bdi dir="ltr">10</bdi> moves', tone: 'plain' },
     ],
     warsOff: 'Paused • Back soon',
   },
@@ -7079,8 +7075,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     claimOk: 'Ваш турнирный приз записан',
     claimFail: 'Не удалось отправить заявку — попробуйте ещё раз',
     guest: 'Откройте мини-приложение в Telegram, чтобы участвовать',
-    boardTab: 'Таблица лидеров',
-    rulesTab: 'Правила турнира',
+    boardLive: 'Живая таблица',
+    rulesOpen: 'Правила',
+    rulesTitle: 'Правила турнира',
+    rulesCta: 'Понятно',
     sheetTitle: 'Недельный турнир',
     boardHeadStart: 'Игрок и место',
     boardHeadEnd: 'Победы и приз',
@@ -7096,19 +7094,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     join: 'Участвовать',
     joinOk: 'Вы в недельном турнире — удачи!',
     joinFail: 'Не удалось зарегистрироваться — попробуйте ещё раз',
-    rules: [
-      {
-        t: 'Приз — Топ-<bdi dir="ltr">3</bdi> недели',
-        b: 'Общий призовой фонд — <bdi dir="ltr">50</bdi> Stars; в конце недели он делится между Топ-<bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars за 1-е место, <bdi dir="ltr">15</bdi> за 2-е и <bdi dir="ltr">10</bdi> за 3-е.',
-      },
-      {
-        t: 'Очки за Hard-бота и друзей',
-        b: 'Каждая победа в дуэли с Hard-ботом или над другом даёт одно недельное очко; от каждого друга учитывается не более <bdi dir="ltr">3</bdi> побед в неделю.',
-      },
-      {
-        t: 'Когда матч засчитывается',
-        b: 'Матч действителен, только если длится не менее <bdi dir="ltr">45</bdi> секунд и содержит минимум <bdi dir="ltr">10</bdi> ходов.',
-      },
+    rulesShort: [
+      { k: 'Призы недели', v: '<bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> Stars', tone: 'gold' },
+      { k: 'Очки за победу', v: 'Hard-бот или друзья = <bdi dir="ltr">+1</bdi>', tone: 'mint' },
+      { k: 'Лимит с другом', v: 'Не более <bdi dir="ltr">3</bdi> побед от друга', tone: 'plain' },
+      { k: 'Зачёт матча', v: 'Мин. <bdi dir="ltr">45</bdi> с и <bdi dir="ltr">10</bdi> ходов', tone: 'plain' },
     ],
     warsOff: 'Приостановлено • Скоро вернётся',
   },
@@ -7135,8 +7125,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     claimOk: 'تم تسجيل جائزة البطولة',
     claimFail: 'تعذّر تسجيل الطلب — حاول مرة أخرى',
     guest: 'افتح التطبيق المصغّر داخل تلغرام للمشاركة',
-    boardTab: 'جدول الترتيب',
-    rulesTab: 'قوانين البطولة',
+    boardLive: 'جدول الترتيب المباشر',
+    rulesOpen: 'القوانين',
+    rulesTitle: 'قوانين البطولة',
+    rulesCta: 'فهمت',
     sheetTitle: 'البطولة الأسبوعية',
     boardHeadStart: 'اللاعب والترتيب',
     boardHeadEnd: 'الانتصارات والجائزة',
@@ -7152,19 +7144,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     join: 'انضم مجاناً',
     joinOk: 'تم تسجيلك في البطولة الأسبوعية — حظاً موفقاً!',
     joinFail: 'تعذّر الانضمام إلى البطولة — حاول مرة أخرى',
-    rules: [
-      {
-        t: 'جائزة أول <bdi dir="ltr">3</bdi> في الأسبوع',
-        b: 'مجموع الجوائز <bdi dir="ltr">50</bdi> ستارز ويُقسَم في نهاية الأسبوع على أول <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> ستارز للأول، <bdi dir="ltr">15</bdi> للثاني و<bdi dir="ltr">10</bdi> للثالث.',
-      },
-      {
-        t: 'النقاط عبر روبوت Hard والأصدقاء',
-        b: 'كل انتصار في مبارزة روبوت Hard أو على صديق يمنح نقطة أسبوعية؛ ويُحتسب من كل صديق <bdi dir="ltr">3</bdi> انتصارات كحد أقصى في الأسبوع.',
-      },
-      {
-        t: 'متى تُحتسب المباراة',
-        b: 'تُحتسب المباراة فقط إذا استمرت <bdi dir="ltr">45</bdi> ثانية على الأقل وسجّلت <bdi dir="ltr">10</bdi> حركات على الأقل.',
-      },
+    rulesShort: [
+      { k: 'جوائز الأسبوع', v: '<bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> ستارز', tone: 'gold' },
+      { k: 'نقاط الفوز', v: 'روبوت Hard أو الأصدقاء = <bdi dir="ltr">+1</bdi>', tone: 'mint' },
+      { k: 'حد كل صديق', v: 'حد أقصى <bdi dir="ltr">3</bdi> انتصارات / صديق', tone: 'plain' },
+      { k: 'احتساب المباراة', v: 'على الأقل <bdi dir="ltr">45</bdi> ثانية و <bdi dir="ltr">10</bdi> حركات', tone: 'plain' },
     ],
     warsOff: 'متوقف مؤقتاً • يعود قريباً',
   },
@@ -7191,8 +7175,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     claimOk: 'Tu premio del torneo quedó registrado',
     claimFail: 'No se pudo registrar la solicitud — inténtalo de nuevo',
     guest: 'Abre este Mini App dentro de Telegram para competir',
-    boardTab: 'Clasificación',
-    rulesTab: 'Reglas del torneo',
+    boardLive: 'Clasificación en vivo',
+    rulesOpen: 'Reglas',
+    rulesTitle: 'Reglas del torneo',
+    rulesCta: 'Entendido',
     sheetTitle: 'Torneo semanal',
     boardHeadStart: 'Jugador y puesto',
     boardHeadEnd: 'Victorias y premio',
@@ -7208,19 +7194,11 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     join: 'Unirse gratis',
     joinOk: '¡Ya estás en el torneo semanal — buena suerte!',
     joinFail: 'No se pudo unir al torneo — inténtalo de nuevo',
-    rules: [
-      {
-        t: 'Premio al Top <bdi dir="ltr">3</bdi> de la semana',
-        b: 'El premio total es de <bdi dir="ltr">50</bdi> Stars y se reparte al final de la semana entre el Top <bdi dir="ltr">3</bdi>: <bdi dir="ltr">25</bdi> Stars para el 1.º, <bdi dir="ltr">15</bdi> para el 2.º y <bdi dir="ltr">10</bdi> para el 3.º.',
-      },
-      {
-        t: 'Puntos con el bot Hard y amigos',
-        b: 'Cada victoria contra el bot Hard o contra un amigo suma un punto semanal; solo cuentan <bdi dir="ltr">3</bdi> victorias por amigo a la semana.',
-      },
-      {
-        t: 'Cuándo cuenta una partida',
-        b: 'Solo cuenta si dura al menos <bdi dir="ltr">45</bdi> segundos y registra un mínimo de <bdi dir="ltr">10</bdi> movimientos.',
-      },
+    rulesShort: [
+      { k: 'Premios semanales', v: '<bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> Stars', tone: 'gold' },
+      { k: 'Puntos por victoria', v: 'Bot Hard o amigos = <bdi dir="ltr">+1</bdi>', tone: 'mint' },
+      { k: 'Límite por amigo', v: 'Máx. <bdi dir="ltr">3</bdi> victorias / amigo', tone: 'plain' },
+      { k: 'Partida válida', v: 'Mín. <bdi dir="ltr">45</bdi>s y <bdi dir="ltr">10</bdi> movimientos', tone: 'plain' },
     ],
     warsOff: 'En pausa • Vuelve pronto',
   },
@@ -7236,8 +7214,9 @@ let challengeClaimBusy = false;
 let challengeJoinBusy = false;
 let challengeReady = false;
 let challengeSheet: ModalHandle | null = null;
-let challengeSheetTab: 'board' | 'rules' = 'board';
 let challengeBoardSig = '';
+/** The key that opened the floating rules card, so focus can land back on it. */
+let challengeRulesOpener: HTMLElement | null = null;
 /**
  * This device's own week, painted before the room answers. `isEnrolled` is a one-way latch and
  * the board holds this reader's seat until the room serves its own row. The window end is stored
@@ -7668,15 +7647,20 @@ function paintChallengeList(rows: ChallengeRowView[]): void {
   }
 }
 
-function paintChallengeRules(): void {
+/** The floating rules card, its own pill and the board's section label — one language per paint. */
+function paintChallengeRulesCard(): void {
   const copy = challengeCopy();
-  const nodes = document.querySelectorAll<HTMLElement>('#challenge-info-modal .ci-rule');
-  nodes.forEach((node, index) => {
-    const rule = copy.rules[index];
-    node.hidden = !rule;
-    if (!rule) return;
-    challengeSetHTML('ci-r' + (index + 1) + '-t', rule.t);
-    challengeSetHTML('ci-r' + (index + 1) + '-b', rule.b);
+  challengeSetText('ci-rules-pill-t', copy.rulesOpen);
+  challengeSetHTML('cr-title', copy.rulesTitle);
+  challengeSetText('cr-cta-t', copy.rulesCta);
+  challengeSetText('ci-board-k', copy.boardLive);
+  /* Four rows, painted in place: nothing here rebuilds a node, so an open card never flickers. */
+  copy.rulesShort.forEach((rule, index) => {
+    const n = String(index + 1);
+    challengeSetHTML('cr-r' + n + '-k', rule.k);
+    challengeSetHTML('cr-r' + n + '-v', rule.v);
+    const value = document.getElementById('cr-r' + n + '-v');
+    if (value) value.dataset.tone = rule.tone;
   });
 }
 
@@ -7698,10 +7682,8 @@ function paintChallengeSheetLabels(): void {
   challengeSetText('ci-prize-1-u', copy.prizeUnit);
   challengeSetText('ci-prize-2-u', copy.prizeUnit);
   challengeSetText('ci-prize-3-u', copy.prizeUnit);
-  challengeSetText('ci-tab-board-t', copy.boardTab);
-  challengeSetText('ci-tab-rules-t', copy.rulesTab);
   challengeSetText('ci-empty-t', copy.empty);
-  paintChallengeRules();
+  paintChallengeRulesCard();
 }
 
 function paintChallengeSheet(): void {
@@ -7711,28 +7693,13 @@ function paintChallengeSheet(): void {
   paintChallengeList(rows);
 }
 
-/** One segmented switch: the active tab is the only one in the tab order. */
-function showChallengeTab(tab: 'board' | 'rules'): void {
-  challengeSheetTab = tab;
-  for (const btn of document.querySelectorAll<HTMLElement>('[data-ci-tab]')) {
-    const on = btn.dataset.ciTab === tab;
-    btn.classList.toggle('is-on', on);
-    btn.setAttribute('aria-selected', String(on));
-    btn.tabIndex = on ? 0 : -1;
-  }
-  for (const panel of document.querySelectorAll<HTMLElement>('[data-ci-panel]')) {
-    panel.hidden = panel.dataset.ciPanel !== tab;
-  }
-}
-
-/** Open the hub on one exact tab. `focusClaim` lands the reader on the payout banner. */
-function openChallengeSheet(tab: 'board' | 'rules', opener?: HTMLElement | null, focusClaim = false): void {
+/** Open the hub: it is one board now, the live standings. `focusClaim` lands on the payout banner. */
+function openChallengeSheet(opener?: HTMLElement | null, focusClaim = false): void {
   const root = document.getElementById('challenge-info-modal');
   if (!root) return;
-  if (!challengeSheet) challengeSheet = createModal(root);
+  if (!challengeSheet) challengeSheet = createModal(root, { onClose: () => closeChallengeRules(false) });
   challengeBoardSig = '';
   paintChallengeSheet();
-  showChallengeTab(tab);
   challengeSheet.open(opener ?? null);
   if (focusClaim) {
     const claim = document.getElementById('ci-claim-cta') as HTMLButtonElement | null;
@@ -7970,35 +7937,80 @@ function startTournamentDuel(): void {
   if (!thrown) menu.openFriends();
 }
 
-/** The poster's one key and the hub's segmented switcher, wired once. */
+/**
+ * The floating rules card. It is not a second sheet in the modal stack: it is one fixed overlay
+ * above the hub (z-index 1200 against the sheet's 40), so opening it never touches the standings,
+ * the seat or the scroll underneath — and dismissing it leaves the hub exactly where it was.
+ */
+function openChallengeRules(opener?: HTMLElement | null): void {
+  const modal = document.getElementById('challenge-rules-modal');
+  if (!modal || !modal.hidden) return;
+  paintChallengeRulesCard();
+  challengeRulesOpener = opener ?? null;
+  modal.hidden = false;
+  const card = modal.querySelector<HTMLElement>('.cr-card');
+  try { card?.focus({ preventScroll: true }); } catch { /* nothing focusable */ }
+}
+
+/**
+ * Dismiss only the card: the hub underneath keeps its seat, its board and its scroll. When the hub
+ * is the one closing, focus belongs to the poster key that opened it, so it is not pulled back.
+ */
+function closeChallengeRules(restoreFocus = true): void {
+  const modal = document.getElementById('challenge-rules-modal');
+  if (!modal || modal.hidden) return;
+  const opener = challengeRulesOpener;
+  challengeRulesOpener = null;
+  modal.hidden = true;
+  if (restoreFocus && opener && opener.isConnected) {
+    try { opener.focus({ preventScroll: true }); } catch { /* the key is gone */ }
+  }
+}
+
+/** The poster's one key, the hub's rules pill and its floating card, wired once. */
 function wireChallengeSheet(): void {
   const root = document.getElementById('challenge-info-modal');
   if (!root) return;
-  challengeSheet = createModal(root);
+  /* Closing the hub takes its rules card with it, so no overlay can outlive the sheet. */
+  challengeSheet = createModal(root, { onClose: () => closeChallengeRules(false) });
 
   const enter = document.getElementById('chal-enter-cta');
   enter?.addEventListener('click', () => {
     impact('light');
-    openChallengeSheet('board', enter);
+    openChallengeSheet(enter);
   });
   /* The slim poster label is the payout, not the board: it lands on the claim banner itself. */
   const posterClaim = document.getElementById('chal-claim-cta');
   posterClaim?.addEventListener('click', () => {
     impact('light');
-    openChallengeSheet('board', posterClaim, true);
+    openChallengeSheet(posterClaim, true);
   });
 
-  for (const btn of root.querySelectorAll<HTMLElement>('[data-ci-tab]')) {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.ciTab === 'rules' ? 'rules' : 'board';
-      if (tab === challengeSheetTab) return;
+  /* The header pill is the one door to the rules: the hub itself stays one clean board. */
+  const rulesOpen = document.getElementById('ci-rules-open');
+  rulesOpen?.addEventListener('click', () => {
+    impact('light');
+    openChallengeRules(rulesOpen);
+  });
+
+  const rulesModal = document.getElementById('challenge-rules-modal');
+  if (rulesModal) {
+    /* One delegated tap: the backdrop, the round key and the CTA dismiss only this card. */
+    rulesModal.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target !== rulesModal && !target.closest('[data-chal-rules-close]')) return;
+      event.preventDefault();
       impact('light');
-      showChallengeTab(tab);
-      paintChallengeSheet();
+      closeChallengeRules();
+    });
+    rulesModal.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeChallengeRules();
     });
   }
-
-  showChallengeTab('board');
 }
 
 /** Boot the card: asset, listeners, the first read and the one-second window clock. */

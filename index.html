@@ -3469,12 +3469,13 @@
 
       <!-- ============ Tournament Championship Sheet (slide #0 one key) ============
            A calm obsidian drawer with one 24K-gold hairline: a symmetric header (emblem, title,
-           pool pill, then the live countdown and field on a single metadata row), a borderless
-           three-column podium (silver / gold / bronze), one elevated player hub, then a borderless
-           segmented switch over the live weekly standings and the three rules. Static tonal
-           surfaces only: no backdrop-filter, no keyframes, every figure a Latin digit inside its
-           own <bdi dir="ltr"> run, every glyph an inline currentColor SVG, all painted by
-           src/main.ts from /api/challenge/me. -->
+           pool pill, then the live countdown and field on a single metadata row, with the compact
+           rules pill beside the close key), a borderless three-column podium (silver / gold /
+           bronze), one elevated player hub, then the whole lower half handed to the live weekly
+           standings under one quiet section label. The three long-form rules moved out to the
+           floating #challenge-rules-modal below. Static tonal surfaces only: no backdrop-filter,
+           no keyframes, every figure a Latin digit inside its own <bdi dir="ltr"> run, every glyph
+           an inline currentColor SVG, all painted by src/main.ts from /api/challenge/me. -->
       <div class="vault-modal challenge-info" hidden id="challenge-info-modal">
         <div class="vault-modal-scrim" data-modal-close aria-hidden="true"></div>
         <section class="vault-modal-sheet ci-sheet" role="dialog" aria-modal="true" tabindex="-1"
@@ -3513,11 +3514,22 @@
                   </span>
                 </div>
               </div>
-              <button class="ci-x" type="button" id="ci-close" data-modal-close aria-label="Close">
-                <svg class="ci-x-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false">
-                  <path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6" />
-                </svg>
-              </button>
+              <div class="ci-head-keys">
+                <button class="ci-rules-pill" type="button" id="ci-rules-open" data-chal-rules-open="1"
+                        aria-haspopup="dialog" aria-controls="challenge-rules-modal">
+                  <svg class="ci-rules-pill-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M6.6 3.6h6.5l4.3 4.3v12.5H6.6Z" />
+                    <path d="M13.1 3.6v4.3h4.3" />
+                    <path d="M9.4 12.6h5.2M9.4 15.8h3.4" />
+                  </svg>
+                  <span id="ci-rules-pill-t">قوانین</span>
+                </button>
+                <button class="ci-x" type="button" id="ci-close" data-modal-close aria-label="Close">
+                  <svg class="ci-x-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false">
+                    <path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6" />
+                  </svg>
+                </button>
+              </div>
             </header>
 
             <!-- THE PODIUM: a borderless architectural split. In RTL the first DOM column is the
@@ -3600,32 +3612,12 @@
               </div>
             </section>
 
-            <div class="ci-tabs" role="tablist" aria-label="Tournament board and rules">
-              <button class="ci-tab is-on" type="button" id="ci-tab-board" role="tab"
-                      aria-selected="true" aria-controls="ci-panel-board" data-ci-tab="board">
-                <svg class="ci-tab-ico" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                  <path d="M7.9 2.9h8.2v5.5a4.1 4.1 0 0 1-8.2 0Z" />
-                  <path d="M7.9 4.2H5.3v1.5c0 1.9 1.3 3.4 3.2 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                  <path d="M16.1 4.2h2.6v1.5c0 1.9-1.3 3.4-3.2 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                  <path d="M10.9 11.8h2.2v3.4h-2.2Z" />
-                  <path d="M7.9 15.3h8.2a1.3 1.3 0 0 1 1.3 1.3v1.7H6.6v-1.7a1.3 1.3 0 0 1 1.3-1.3Z" />
-                </svg>
-                <span id="ci-tab-board-t">جدول رتبه‌بندی</span>
-              </button>
-              <button class="ci-tab" type="button" id="ci-tab-rules" role="tab"
-                      aria-selected="false" aria-controls="ci-panel-rules" data-ci-tab="rules">
-                <svg class="ci-tab-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <path d="M6.6 3.6h6.5l4.3 4.3v12.5H6.6Z" />
-                  <path d="M13.1 3.6v4.3h4.3" />
-                  <path d="M9.4 12.6h5.2M9.4 15.8h3.4" />
-                </svg>
-                <span id="ci-tab-rules-t">قوانین تورنمنت</span>
-              </button>
-            </div>
-
             <div class="ci-panels">
-              <section class="ci-panel" id="ci-panel-board" role="tabpanel" aria-labelledby="ci-tab-board" data-ci-panel="board">
-                <ol class="ci-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"><li class="ci-row" data-place="1"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#1</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@navid</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">9</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">16</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">25</bdi> استارز</span></div></li>
+              <section class="ci-panel" id="ci-panel-board" aria-label="Live weekly standings">
+                <div class="ci-board-head">
+                  <span class="ci-board-k" id="ci-board-k">جدول رتبه‌بندی زنده</span>
+                </div>
+                <ol class="ci-list ci-board-list" id="ci-list" data-scroll tabindex="0" aria-label="Weekly participants"><li class="ci-row" data-place="1"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#1</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@navid</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">9</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">16</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">25</bdi> استارز</span></div></li>
 <li class="ci-row" data-place="2"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#2</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@sara_l</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">6</bdi> • ربات Hard <bdi dir="ltr">8</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">14</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">15</bdi> استارز</span></div></li>
 <li class="ci-row" data-place="3"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#3</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@mehdi</bdi></div><span class="ci-row-sub">دوستان <bdi dir="ltr">5</bdi> • ربات Hard <bdi dir="ltr">7</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">12</bdi> برد</span><span class="ci-row-prize"><bdi dir="ltr">10</bdi> استارز</span></div></li>
 <li class="ci-row is-me" data-place="4"><div class="ci-row-start"><span class="ci-row-rank"><bdi dir="ltr">#4</bdi></span><div class="ci-row-info"><div class="ci-row-top"><bdi class="ci-row-handle" dir="ltr">@you</bdi><span class="ci-you">شما</span></div><span class="ci-row-sub">دوستان <bdi dir="ltr">4</bdi> • ربات Hard <bdi dir="ltr">5</bdi></span></div></div><div class="ci-row-end"><span class="ci-row-w"><bdi dir="ltr">9</bdi> برد</span></div></li>
@@ -3641,34 +3633,54 @@
                   <p class="ci-empty-t" id="ci-empty-t">هنوز شرکت‌کننده‌ای ثبت نشده؛ دکمه شرکت رایگان رو بزن و نفر اول شو!</p>
                 </div>
               </section>
-
-              <section class="ci-panel" id="ci-panel-rules" role="tabpanel" aria-labelledby="ci-tab-rules" data-ci-panel="rules" hidden>
-                <ol class="ci-rules" data-scroll tabindex="0" aria-label="Challenge rules">
-                  <li class="ci-rule" data-tone="gold">
-                    <span class="ci-rule-n" aria-hidden="true"><bdi dir="ltr">1</bdi></span>
-                    <span class="ci-rule-txt">
-                      <b class="ci-rule-t" id="ci-r1-t">تقسیم جایزه <bdi dir="ltr">50</bdi> استارز</b>
-                      <span class="ci-rule-b" id="ci-r1-b">پایان هر <bdi dir="ltr">7</bdi> روز، نفر اول <bdi dir="ltr">25</bdi> استارز، نفر دوم <bdi dir="ltr">15</bdi> استارز و نفر سوم <bdi dir="ltr">10</bdi> استارز دریافت می‌کنند.</span>
-                    </span>
-                  </li>
-                  <li class="ci-rule" data-tone="mint">
-                    <span class="ci-rule-n" aria-hidden="true"><bdi dir="ltr">2</bdi></span>
-                    <span class="ci-rule-txt">
-                      <b class="ci-rule-t" id="ci-r2-t">نحوه کسب امتیاز</b>
-                      <span class="ci-rule-b" id="ci-r2-b">هر برد در مقابل ربات سطح Hard یا دوستان (حداکثر <bdi dir="ltr">3</bdi> برد از هر دوست در هفته) برابر با <bdi dir="ltr">1</bdi> امتیاز است.</span>
-                    </span>
-                  </li>
-                  <li class="ci-rule" data-tone="bronze">
-                    <span class="ci-rule-n" aria-hidden="true"><bdi dir="ltr">3</bdi></span>
-                    <span class="ci-rule-txt">
-                      <b class="ci-rule-t" id="ci-r3-t">شرایط ثبت برد</b>
-                      <span class="ci-rule-b" id="ci-r3-b">برای جلوگیری از تقلب، هر مسابقه باید حداقل <bdi dir="ltr">45</bdi> ثانیه زمان و <bdi dir="ltr">10</bdi> حرکت داشته باشد.</span>
-                    </span>
-                  </li>
-                </ol>
-              </section>
             </div>
           </div>
+        </section>
+      </div>
+
+      <!-- ============ Tournament Rules (floating card above the hub) ============
+           Four terse key/value rows and one dismiss key: no paragraph, no scrolling. It floats on
+           its own scrim above #challenge-info-modal, so the hub underneath stays exactly where it
+           was. Static gradients only — no backdrop-filter, no keyframes — and every figure is a
+           Latin digit inside its own <bdi dir="ltr"> run, painted by src/main.ts. -->
+      <div class="challenge-rules" id="challenge-rules-modal" hidden>
+        <section class="cr-card" role="dialog" aria-modal="true" aria-labelledby="cr-title" tabindex="-1">
+          <header class="cr-head">
+            <span class="cr-head-t">
+              <span class="cr-emblem" aria-hidden="true">
+                <svg class="cr-emblem-ico" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                  <path d="M12 2.6 4.6 5.6v6.1c0 4.4 3.1 8.1 7.4 9.7 4.3-1.6 7.4-5.3 7.4-9.7V5.6Z" />
+                </svg>
+              </span>
+              <h2 class="cr-title" id="cr-title">قوانین تورنمنت</h2>
+            </span>
+            <button class="cr-x" type="button" data-chal-rules-close="1" aria-label="Close">
+              <svg class="cr-x-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false">
+                <path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6" />
+              </svg>
+            </button>
+          </header>
+
+          <ul class="cr-rows">
+            <li class="cr-row">
+              <span class="cr-k" id="cr-r1-k">جوایز هفتگی</span>
+              <b class="cr-v" id="cr-r1-v" data-tone="gold"><bdi dir="ltr">25</bdi> / <bdi dir="ltr">15</bdi> / <bdi dir="ltr">10</bdi> استارز</b>
+            </li>
+            <li class="cr-row">
+              <span class="cr-k" id="cr-r2-k">امتیاز هر برد</span>
+              <b class="cr-v" id="cr-r2-v" data-tone="mint">ربات Hard یا دوستان = <bdi dir="ltr">+1</bdi></b>
+            </li>
+            <li class="cr-row">
+              <span class="cr-k" id="cr-r3-k">سقف برد از دوست</span>
+              <b class="cr-v" id="cr-r3-v" data-tone="plain">حداکثر <bdi dir="ltr">3</bdi> برد در هفته</b>
+            </li>
+            <li class="cr-row">
+              <span class="cr-k" id="cr-r4-k">شرط ثبت برد</span>
+              <b class="cr-v" id="cr-r4-v" data-tone="plain">حداقل <bdi dir="ltr">45</bdi> ثانیه و <bdi dir="ltr">10</bdi> حرکت</b>
+            </li>
+          </ul>
+
+          <button class="cr-cta" type="button" data-chal-rules-close="1"><span id="cr-cta-t">متوجه شدم</span></button>
         </section>
       </div>
 

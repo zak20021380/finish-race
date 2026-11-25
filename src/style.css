@@ -47530,6 +47530,28 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 .ci-players bdi { color: #e2e8f0; font-weight: 800; font-variant-numeric: tabular-nums; }
 .ci-players-u { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ci-dot { flex: none; font-size: 11px; color: #475569; }
+.ci-head-keys { flex: none; display: flex; align-items: center; gap: 8px; }
+.ci-rules-pill {
+  flex: none;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ci-rules-pill-ico { flex: none; color: #cbd5e1; }
+.ci-rules-pill:hover { color: #f8fafc; background: rgba(255, 255, 255, .10); border-color: rgba(246, 200, 94, .30); }
+.ci-rules-pill:hover .ci-rules-pill-ico { color: #f6c85e; }
+.ci-rules-pill:active { transform: scale(.97); }
+.ci-rules-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .ci-x {
   flex: none;
   width: 34px;
@@ -47740,43 +47762,26 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 .ci-duel-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ci-duel-ico { flex: none; }
 
-/* ---- D: the borderless segmented switch, the standings and the three rules ---- */
-.ci-tabs {
-  flex: none;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .04);
-}
-.ci-tab {
-  min-height: 38px;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.ci-tab-ico { flex: none; }
-.ci-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ci-tab.is-on {
-  color: #fde68a;
-  background: rgba(246, 200, 94, .16);
-  font-weight: 800;
-}
-.ci-tab:not(.is-on):hover { color: #e2e8f0; background: rgba(255, 255, 255, .04); }
-.ci-tab:active { transform: scale(.985); }
-.ci-tab:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+/* ---- D: the live standings, its quiet section label, and the hard-hidden scrollbars ---- */
 .ci-panels { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ci-board-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+.ci-board-k {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #94a3b8;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .ci-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .ci-panel[hidden] { display: none; }
 .ci-list {
@@ -47790,9 +47795,12 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   gap: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   contain: layout style paint;
 }
+.ci-board-list::-webkit-scrollbar { display: none; }
 .ci-list[hidden] { display: none; }
 .ci-row {
   flex: none;
@@ -47902,56 +47910,119 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
 .ci-empty[hidden] { display: none; }
 .ci-empty-ico { flex: none; color: rgba(246, 200, 94, .55); }
 .ci-empty-t { margin: 0; max-width: 240px; font-size: 13px; font-weight: 600; line-height: 1.6; color: #94a3b8; }
-.ci-rules {
-  flex: 1 1 auto;
-  min-height: 0;
+/* ---- E: the floating rules card — four terse rows over the hub, nothing else ---- */
+#challenge-rules-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 7, 12, .78);
+}
+#challenge-rules-modal[hidden] { display: none !important; }
+.cr-card {
+  width: 100%;
+  max-width: 350px;
+  background: linear-gradient(180deg, #151a26 0%, #0d1018 100%);
+  border: 1px solid rgba(246, 200, 94, .36);
+  border-radius: 20px;
+  padding: 18px 16px 16px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, .8),
+    inset 0 1px 0 rgba(253, 230, 138, .22);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cr-card:focus { outline: none; }
+.cr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.cr-head-t { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cr-emblem { flex: none; display: inline-flex; color: #f6c85e; }
+.cr-emblem-ico { display: block; }
+.cr-title {
   margin: 0;
-  padding: 2px 2px 8px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.3;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cr-x {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .06);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+.cr-x-ico { display: block; }
+.cr-x:hover { color: #f8fafc; background: rgba(255, 255, 255, .10); }
+.cr-x:active { transform: scale(.94); }
+.cr-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.cr-rows {
+  margin: 0;
+  padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  contain: layout style paint;
+  min-width: 0;
 }
-.ci-rule {
-  flex: none;
+.cr-row {
+  background: rgba(255, 255, 255, .03);
+  border-radius: 12px;
+  padding: 10px 12px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
-  padding: 11px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .035);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  min-width: 0;
 }
-.ci-rule-n {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 900;
+.cr-k { min-width: 0; font-size: 11.5px; font-weight: 600; line-height: 1.5; color: #94a3b8; }
+.cr-v {
+  min-width: 0;
+  margin-inline-start: auto;
+  text-align: end;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
-  color: #3a2504;
-  background: linear-gradient(180deg, #ffe9a8, #d9a334);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .50);
+  color: #f8fafc;
 }
-.ci-rule[data-tone="mint"] .ci-rule-n {
-  color: #04261d;
-  background: linear-gradient(180deg, #a7f3d0, #34d399);
+.cr-v[data-tone="gold"] { color: #fde68a; }
+.cr-v[data-tone="mint"] { color: #6ee7b7; }
+.cr-v[data-tone="plain"] { color: #f8fafc; }
+.cr-v bdi { color: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
+.cr-cta {
+  width: 100%;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%);
+  color: #141008;
+  font-size: 13px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
 }
-.ci-rule[data-tone="bronze"] .ci-rule-n {
-  color: #2a1402;
-  background: linear-gradient(180deg, #f0b173, #d97706);
-}
-.ci-rule-txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.ci-rule-t { font-size: 11.5px; font-weight: 900; line-height: 1.45; color: #f8fafc; }
-.ci-rule-b { font-size: 10.5px; font-weight: 500; line-height: 1.75; color: #94a3b8; }
-.ci-rule-b bdi { color: #e2e8f0; font-weight: 900; font-variant-numeric: tabular-nums; }
+.cr-cta:hover { filter: brightness(1.04); }
+.cr-cta:active { transform: scale(.985); filter: none; }
+.cr-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* The shell publishes data-lang and never flips the document, so the sheet mirrors itself for the
    two right-to-left tongues. Every numeral stays sealed in its own LTR <bdi> above. */
@@ -47959,6 +48030,17 @@ html[data-lang="fa"] #challenge-info-modal,
 html[data-lang="ar"] #challenge-info-modal,
 html:lang(fa) #challenge-info-modal,
 html:lang(ar) #challenge-info-modal {
+  direction: rtl;
+}
+
+/* The floating rules card follows the same two right-to-left tongues, and only those. */
+:is(html:lang(fa), html[lang="fa"], html[data-lang="fa"]) #challenge-rules-modal {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html[data-lang="fa"] #challenge-rules-modal,
+html[data-lang="ar"] #challenge-rules-modal,
+html:lang(fa) #challenge-rules-modal,
+html:lang(ar) #challenge-rules-modal {
   direction: rtl;
 }
 
@@ -47970,6 +48052,7 @@ html:lang(ar) #challenge-info-modal {
   .ci-step.is-bronze { height: 58px; }
   .ci-step.is-gold .ci-step-v { font-size: 15px; }
   .ci-seat.is-cta { padding: 0 11px; font-size: 11.5px; }
+  .ci-rules-pill { padding: 0 9px; font-size: 11.5px; gap: 4px; }
   .ci-split { font-size: 10.5px; }
   .ci-duel-btn { font-size: 11.5px; gap: 4px; }
   .ci-row { padding: 9px 10px; }
@@ -47985,7 +48068,8 @@ html:lang(ar) #challenge-info-modal {
   .ci-step.is-bronze { height: 56px; }
   .ci-status { padding: 10px; gap: 8px; }
   .ci-row { min-height: 50px; padding: 8px 10px; }
-  .ci-rule { padding: 9px 10px; }
+  .cr-card { padding: 16px 14px 14px; gap: 12px; }
+  .cr-row { padding: 9px 10px; }
 }
 
 /* ==========================================================================
