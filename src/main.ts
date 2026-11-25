@@ -6811,17 +6811,19 @@ document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop()
    ============================================================================================ */
 
 const CHALLENGE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-/** Mirrors `CHALLENGE_SEASON_EPOCH` in worker/challenge.ts: 2026-11-24T14:30:00Z. */
-const CHALLENGE_SEASON_EPOCH = Date.UTC(2026, 10, 24, 14, 30, 0);
+/** Mirrors `SEASON_EPOCH_V2` in worker/challenge.ts: 2026-11-25T12:15:00Z (the live reset). */
+const CHALLENGE_SEASON_EPOCH = Date.UTC(2026, 10, 25, 12, 15, 0);
 const CHALLENGE_DAY_MS = 24 * 60 * 60 * 1000;
 const CHALLENGE_HOUR_MS = 60 * 60 * 1000;
 /** The countdown turns warm amber for the last six hours of the 168-hour cycle. */
 const CHALLENGE_URGENT_MS = 6 * 60 * 60 * 1000;
-/** One row of the room's live board. The internal player id never leaves the Worker. */
+/** One row of the room's live board: a real name, its public Telegram id and its live figures. */
 interface ChallengeRowView {
   position: number;
-  /** The room's opaque player id for this seat; never printed. */
+  /** The seat's numeric Telegram user id; it is what a profile tap addresses. */
   userId?: string;
+  /** The seat's real Telegram display name — the thing the standing prints, never `@handle`. */
+  displayName?: string;
   handle: string;
   friendWins: number;
   hardBotWins: number;
@@ -6836,6 +6838,9 @@ interface ChallengeView {
   error?: string;
   auth?: string;
   ticket?: string;
+  /** The reader's numeric Telegram id and printable display name. */
+  userId?: string;
+  displayName?: string;
   hardBotWins?: number;
   friendWins?: number;
   totalWins?: number;
@@ -6934,6 +6939,12 @@ interface ChallengeCopy {
   prizeTag: string;
   /** One row's source split: the two win tokens are Latin numbers. */
   rowSub: string;
+  /** The player-profile drawer's sub line: {rank} and {wins} become Latin numbers. */
+  profileSub: string;
+  /** The profile drawer's three stat captions, over Latin figures. */
+  statTotal: string;
+  statFriends: string;
+  statBots: string;
   /** The live-field counter's unit, printed beside a Latin participant count. */
   players: string;
   /** The seated status: the emerald-gold badge in the hub's top telemetry strip. */
@@ -6989,6 +7000,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     empty: 'هنوز شرکت‌کننده‌ای ثبت نشده؛ دکمه شرکت رایگان رو بزن و نفر اول شو!',
     prizeTag: '<bdi dir="ltr">{stars}</bdi> استارز',
     rowSub: 'دوستان <bdi dir="ltr">{friendWins}</bdi> • ربات Hard <bdi dir="ltr">{botWins}</bdi>',
+    profileSub: 'رتبه <bdi dir="ltr">#{rank}</bdi> • <bdi dir="ltr">{wins}</bdi> برد این هفته',
+    statTotal: 'برد این هفته',
+    statFriends: 'برد از دوستان',
+    statBots: 'برد از ربات',
     players: 'شرکت‌کننده',
     enrolled: 'عضو تورنمنت',
     join: 'شرکت رایگان',
@@ -7039,6 +7054,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     empty: 'No participants yet — tap Free Join and take first place!',
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Friends <bdi dir="ltr">{friendWins}</bdi> • Hard bot <bdi dir="ltr">{botWins}</bdi>',
+    profileSub: 'Rank <bdi dir="ltr">#{rank}</bdi> • <bdi dir="ltr">{wins}</bdi> wins this week',
+    statTotal: 'Weekly wins',
+    statFriends: 'Friend wins',
+    statBots: 'Hard bot wins',
     players: 'Players',
     enrolled: 'Enrolled',
     join: 'Join Free',
@@ -7089,6 +7108,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     empty: 'Участников пока нет — нажмите «Участвовать» и станьте первым!',
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Друзья <bdi dir="ltr">{friendWins}</bdi> • Hard-бот <bdi dir="ltr">{botWins}</bdi>',
+    profileSub: 'Место <bdi dir="ltr">#{rank}</bdi> • <bdi dir="ltr">{wins}</bdi> побед за неделю',
+    statTotal: 'Победы недели',
+    statFriends: 'Победы с друзьями',
+    statBots: 'Победы с ботом',
     players: 'Участники',
     enrolled: 'Участник',
     join: 'Участвовать',
@@ -7139,6 +7162,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     empty: 'لا مشاركين بعد — اضغط «انضم مجاناً» وكن الأول!',
     prizeTag: '<bdi dir="ltr">{stars}</bdi> ستارز',
     rowSub: 'الأصدقاء <bdi dir="ltr">{friendWins}</bdi> • روبوت Hard <bdi dir="ltr">{botWins}</bdi>',
+    profileSub: 'الترتيب <bdi dir="ltr">#{rank}</bdi> • <bdi dir="ltr">{wins}</bdi> انتصار هذا الأسبوع',
+    statTotal: 'انتصارات الأسبوع',
+    statFriends: 'انتصارات الأصدقاء',
+    statBots: 'انتصارات الروبوت',
     players: 'مشارك',
     enrolled: 'مشارك',
     join: 'انضم مجاناً',
@@ -7189,6 +7216,10 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
     empty: 'Aún no hay participantes — ¡pulsa Unirse gratis y sé el primero!',
     prizeTag: '<bdi dir="ltr">{stars}</bdi> STARS',
     rowSub: 'Amigos <bdi dir="ltr">{friendWins}</bdi> • Bot Hard <bdi dir="ltr">{botWins}</bdi>',
+    profileSub: 'Puesto <bdi dir="ltr">#{rank}</bdi> • <bdi dir="ltr">{wins}</bdi> victorias esta semana',
+    statTotal: 'Victorias semana',
+    statFriends: 'Victorias amigos',
+    statBots: 'Victorias bot',
     players: 'Jugadores',
     enrolled: 'Inscrito',
     join: 'Unirse gratis',
@@ -7205,7 +7236,12 @@ const CHALLENGE_COPY: Record<LangCode, ChallengeCopy> = {
 };
 
 let challengeView: ChallengeView | null = null;
-let challengeWindowEnd = 0;
+/**
+ * The window end the countdown paints. It starts exactly one full week out, so the very first
+ * frame of a cold boot reads `6d 23h` instead of waiting for the room's first answer; every
+ * served card then replaces it with the room's own window end.
+ */
+let challengeWindowEnd = Date.now() + CHALLENGE_WEEK_MS;
 let challengeRolled = false;
 let challengeRefreshing = false;
 let challengeTicket = '';
@@ -7240,6 +7276,8 @@ const challengeState: ChallengeLocalState = {
 };
 /** The delegated enrollment door is bound once, even across a sheet repaint. */
 let challengeJoinDelegated = false;
+/** The delegated standings-row profile door is bound once, even across a list rebuild. */
+let challengeProfileDelegated = false;
 
 const challengeCopy = (): ChallengeCopy => CHALLENGE_COPY[lang] ?? CHALLENGE_COPY.en;
 
@@ -7314,12 +7352,29 @@ function challengeBdi(value: string): HTMLElement {
   return el;
 }
 
-/** A public handle, as the board prints it: the room already stores the verified at-name. */
-function challengeHandleText(raw: unknown): string {
-  const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text) return '—';
-  if (text.startsWith('@') || text.includes(' ')) return text;
-  return '@' + text;
+/**
+ * This device's own printable name, the way the standings print it: the Telegram
+ * `first_name` + `last_name` from the signed session, then the top-HUD profile name, then the
+ * username with its `@` stripped. It is never prefixed with an at-sign.
+ */
+function challengeDisplayNameLocal(): string {
+  const u = tgUser();
+  const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
+  const hud = (profile.displayName ?? '').trim();
+  const username = (u?.username ?? '').trim().replace(/^@+/, '');
+  const name = (full || hud || username).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
+  return name.slice(0, 64) || 'Player';
+}
+
+/**
+ * One board row's printable name. The room's `displayName` always wins; a legacy row that predates
+ * the field still prints a real name by stripping the `@` off its handle. Never an `@handle`.
+ */
+function challengeRowName(row: ChallengeRowView): string {
+  const display = typeof row.displayName === 'string' ? row.displayName.replace(/^@+/, '').trim() : '';
+  if (display) return display;
+  const handle = (row.handle ?? '').replace(/^@+/, '').trim();
+  return handle || '—';
 }
 
 /** This device's own public handle, the way the room prints it: the `@username`, else the display
@@ -7357,6 +7412,7 @@ function challengeBoardRows(): ChallengeRowView[] {
       out.push({
         position,
         userId: typeof row.userId === 'string' ? row.userId : '',
+        displayName: typeof row.displayName === 'string' ? row.displayName.replace(/^@+/, '').trim() : '',
         handle: typeof row.handle === 'string' ? row.handle : '',
         friendWins: challengeCount(row.friendWins),
         hardBotWins: challengeCount(row.hardBotWins),
@@ -7417,6 +7473,7 @@ function ensureSelfInLeaderboard(): void {
     challengeState.leaderboard.push({
       userId: myUserId,
       position: merged.length + 1,
+      displayName: challengeDisplayNameLocal(),
       handle: challengeLocalHandle(),
       friendWins,
       hardBotWins,
@@ -7610,17 +7667,27 @@ function paintChallengeCard(): void {
 /**
  * One contender row of the championship ladder, built as nodes:
  *
- *   start — a sculpted metallic rank medallion, then the full LTR-sealed @handle with its YOU
+ *   start — a sculpted metallic rank medallion, then the real Telegram display name with its YOU
  *           badge and the muted Hard-bot / friends split;
  *   end   — the tabular weekly total, with that rank's exact 25 / 15 / 10 Star pill beneath it.
  *
- * The handle is text, every figure is a Latin bdi run, and no authored markup carries a handle.
+ * Every row is a real button target: the delegated listener on `#ci-list` reads the seat's
+ * `data-chal-profile-*` and opens the app's existing player-profile drawer for that player.
+ * The name is text, every figure is a Latin bdi run, and no authored markup carries a name.
  */
 function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const copy = challengeCopy();
+  const name = challengeRowName(row);
   const item = document.createElement('li');
   item.className = 'ci-row';
   item.dataset.place = String(row.position);
+  /* The tap's payload: the seat's Telegram id and the exact name this row prints. */
+  item.dataset.chalProfileUid = row.userId ?? '';
+  item.dataset.chalProfileName = name;
+  item.setAttribute('role', 'button');
+  item.tabIndex = 0;
+  /* Plain text only: the visible rank token carries its <bdi>, an aria label must not. */
+  item.setAttribute('aria-label', `${name} · #${row.position} · ${row.totalWins} ${copy.winsWord}`);
   if (row.isMe === true) item.classList.add('is-me');
 
   const start = document.createElement('div');
@@ -7637,11 +7704,13 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   const top = document.createElement('div');
   top.className = 'ci-row-top';
 
-  /* The public handle is one LTR-sealed run, so its at-sign can never flip sides in RTL. */
+  /* The printable name is one bidi-isolated run: a Persian name keeps its RTL order and a Latin
+     one keeps its own, while the digits beneath stay sealed in their LTR runs. */
   const handle = document.createElement('bdi');
-  handle.setAttribute('dir', 'ltr');
+  handle.setAttribute('dir', 'auto');
   handle.className = 'ci-row-handle';
-  handle.textContent = challengeHandleText(row.handle);
+  handle.textContent = name;
+  handle.title = name;
   top.append(handle);
 
   if (row.isMe === true) {
@@ -7653,7 +7722,7 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
 
   const sub = document.createElement('span');
   sub.className = 'ci-row-sub';
-  /* Authored copy plus two integers: nothing here can carry a handle into markup. */
+  /* Authored copy plus two integers: nothing here can carry a name into markup. */
   sub.innerHTML = copy.rowSub
     .replace('{friendWins}', String(row.friendWins))
     .replace('{botWins}', String(row.hardBotWins));
@@ -7672,7 +7741,7 @@ function challengeRowNode(row: ChallengeRowView): HTMLLIElement {
   if (row.position <= 3 && prizeStars > 0) {
     const prize = document.createElement('span');
     prize.className = 'ci-row-prize';
-    /* Authored template plus one integer: no handle can reach this markup. */
+    /* Authored template plus one integer: no name can reach this markup. */
     prize.innerHTML = copy.prizeTag.replace('{stars}', String(prizeStars));
     end.append(prize);
   }
@@ -7687,7 +7756,7 @@ function paintChallengeList(rows: ChallengeRowView[]): void {
   const empty = document.getElementById('ci-empty');
   const copy = challengeCopy();
   const sig = lang + '|' + rows
-    .map((row) => [row.position, row.userId ?? '', row.handle, row.friendWins, row.hardBotWins, row.totalWins, row.prizeStars ?? 0, row.isMe === true ? 1 : 0].join(','))
+    .map((row) => [row.position, row.userId ?? '', challengeRowName(row), row.friendWins, row.hardBotWins, row.totalWins, row.prizeStars ?? 0, row.isMe === true ? 1 : 0].join(','))
     .join(';');
   if (list && sig !== challengeBoardSig) {
     challengeBoardSig = sig;
@@ -7746,6 +7815,127 @@ function paintChallengeSheet(): void {
   paintChallengeTelemetry();
   const rows = challengeBoardRows();
   paintChallengeList(rows);
+}
+
+/* ---------- the existing player-profile drawer, opened from a standing row ----------
+   The app's one player-profile sheet is #sheet-mind: the Ranks ladder and every rival dossier
+   already open it. A tournament row reuses that very drawer instead of growing a second profile
+   surface — only its face is repainted from the row's own live figures. */
+
+/** The shared scrim has to sit above the tournament drawer while the profile is open. */
+function setChallengeProfileLayer(open: boolean): void {
+  document.body.classList.toggle('chal-profile-open', open);
+}
+
+/** The drawer closes by its X, Escape or the scrim; the raised layer flag follows it back down. */
+let challengeProfileWatch: MutationObserver | null = null;
+function watchChallengeProfileClose(sheet: HTMLElement): void {
+  if (challengeProfileWatch) return;
+  challengeProfileWatch = new MutationObserver(() => {
+    if (sheet.hidden) setChallengeProfileLayer(false);
+  });
+  challengeProfileWatch.observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
+}
+
+/**
+ * Paint the app's existing player-profile drawer for one standings row and raise it over the
+ * tournament sheet. Nothing is fetched: the row carries that seat's live challenge figures, so the
+ * profile prints exactly the rank, the weekly total and its two sources the row already showed.
+ */
+function openChallengeProfile(row: ChallengeRowView): void {
+  const sheet = document.getElementById('sheet-mind');
+  if (!sheet) return;
+  /* A guild face left on this shared drawer must not bleed into a player's profile. */
+  sheet.classList.remove('is-guild');
+  sheet.querySelector('.ms-marks')?.classList.remove('is-guild');
+  const copy = challengeCopy();
+  const name = challengeRowName(row);
+  const initial = name.trim().slice(0, 1).toUpperCase() || '?';
+
+  const av = document.getElementById('ms-av');
+  if (av) {
+    av.textContent = initial;
+    av.dataset.len = String(initial.length);
+  }
+  /* The challenge ledger holds no portrait: the monogram is the honest face here. Clearing the
+     handlers too keeps a stale CDN answer from a previous mind from painting over it. */
+  const photo = document.getElementById('ms-av-img') as HTMLImageElement | null;
+  if (photo) {
+    photo.onload = null;
+    photo.onerror = null;
+    photo.hidden = true;
+    photo.removeAttribute('src');
+  }
+  const rank = document.getElementById('ms-rank');
+  if (rank) {
+    rank.hidden = false;
+    rank.textContent = '';
+    rank.append(challengeBdi('#' + row.position));
+    rank.dataset.rank = row.position === 1 ? 'gold'
+      : row.position === 2 ? 'silver'
+        : row.position === 3 ? 'bronze' : 'num';
+  }
+  const flag = document.getElementById('ms-flag');
+  if (flag) flag.textContent = '';
+  const nm = document.getElementById('ms-name');
+  if (nm) {
+    nm.dir = 'auto';
+    nm.textContent = name;
+    nm.title = name;
+  }
+  const sub = document.getElementById('ms-sub');
+  if (sub) {
+    const line = copy.profileSub
+      .replace('{rank}', String(row.position))
+      .replace('{wins}', String(row.totalWins));
+    /* Authored template plus Latin bdi runs only: no name can reach this markup. */
+    sub.innerHTML = (row.isMe === true ? copy.you + ' • ' : '') + line;
+  }
+  sheet.setAttribute('aria-label', `${copy.sheetTitle} · ${name}`);
+
+  /* This is a read-only mirror of the row: the confrontation and squad keys do not belong on it,
+     so the drawer's whole action bar stays hidden while the tournament opened it. */
+  const acts = sheet.querySelector<HTMLElement>('.ms-acts');
+  if (acts) acts.hidden = true;
+
+  const body = document.getElementById('ms-body');
+  if (body) {
+    body.textContent = '';
+    const block = document.createElement('section');
+    block.className = 'ms-block';
+    const head = document.createElement('h3');
+    head.className = 'ms-h';
+    head.textContent = copy.sheetTitle;
+    const stats = document.createElement('div');
+    stats.className = 'ms-stats';
+    stats.setAttribute('role', 'list');
+    const cells: { value: number; label: string }[] = [
+      { value: row.totalWins, label: copy.statTotal },
+      { value: row.friendWins, label: copy.statFriends },
+      { value: row.hardBotWins, label: copy.statBots },
+    ];
+    for (const cell of cells) {
+      const card = document.createElement('div');
+      card.className = 'ms-stat';
+      card.setAttribute('role', 'listitem');
+      card.title = `${cell.label}: ${cell.value}`;
+      const value = document.createElement('b');
+      value.className = 'ms-stat-v';
+      value.append(challengeBdi(String(cell.value)));
+      const label = document.createElement('small');
+      label.className = 'ms-stat-l';
+      label.textContent = cell.label;
+      card.append(value, label);
+      stats.append(card);
+    }
+    block.append(head, stats);
+    body.append(block);
+  }
+
+  impact('light');
+  setChallengeProfileLayer(true);
+  watchChallengeProfileClose(sheet);
+  sheets.open(sheet);
 }
 
 /** Open the hub: it is one board now, the live standings. `focusClaim` lands on the payout banner. */
@@ -7846,6 +8036,7 @@ async function healChallengeEnrollment(myUserId: string): Promise<void> {
   try {
     const view = await challengeCall('/api/challenge/join', {
       userId: myUserId,
+      displayName: challengeDisplayNameLocal(),
       handle: challengeLocalHandle(),
     });
     if (view && view.isEnrolled === true && typeof view.totalWins === 'number') applyChallengeView(view);
@@ -7925,7 +8116,11 @@ async function handleChallengeJoin(): Promise<void> {
 
   /* ---- network reconcile: the seat is already the truth on this device ---- */
   try {
-    const view = await challengeCall('/api/challenge/join', { userId: myUserId, handle: myHandle });
+    const view = await challengeCall('/api/challenge/join', {
+      userId: myUserId,
+      displayName: challengeDisplayNameLocal(),
+      handle: myHandle,
+    });
     if (view && view.isEnrolled === true) {
       applyChallengeView(view);
       showToast(copy.joinOk, 'success', 3400);
@@ -8062,6 +8257,33 @@ function wireChallengeSheet(): void {
     impact('light');
     openChallengeRules(rulesOpen);
   });
+
+  /* A standings row is a profile door. One delegated listener on the list serves every row —
+     including this reader's own row and every rival's — and opens the app's existing player
+     profile drawer above the tournament sheet. Rows are rebuilt freely; this binding survives. */
+  const boardList = document.getElementById('ci-list');
+  if (boardList && !challengeProfileDelegated) {
+    challengeProfileDelegated = true;
+    const activate = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const item = target.closest<HTMLElement>('.ci-row');
+      if (!item || item.parentElement !== boardList) return;
+      const position = Number(item.dataset.place ?? '');
+      const row = Number.isFinite(position)
+        ? challengeBoardRows().find((entry) => entry.position === position) ?? null
+        : null;
+      if (!row) return;
+      event.preventDefault();
+      openChallengeProfile(row);
+    };
+    boardList.addEventListener('click', activate);
+    /* The rows carry role="button" + tabindex="0": Enter and Space must dispatch the same door. */
+    boardList.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+      activate(event);
+    });
+  }
 
   const rulesModal = document.getElementById('challenge-rules-modal');
   if (rulesModal) {

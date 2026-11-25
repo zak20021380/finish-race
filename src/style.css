@@ -47912,10 +47912,24 @@ html[data-channel-wars="off"] :is(#iv-war, .cw-war, .cw-fab, .cw-war-fab, .home-
   background: rgba(255, 255, 255, .035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
   contain: layout style paint;
+  /* Every standing is a profile door: one delegated tap per row opens the player's drawer.
+     Transform + background only — no filter, no keyframes — so the list stays at 60fps. */
+  cursor: pointer;
+  transition: transform .12s ease, background-color .12s ease, box-shadow .12s ease;
 }
+.ci-row:hover:not(:active) {
+  background-color: rgba(255, 255, 255, .065);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
+}
+.ci-row:active { transform: scale(.985); }
+.ci-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .ci-row.is-me {
   background: rgba(16, 185, 129, .09);
   box-shadow: inset 0 1px 0 rgba(110, 231, 183, .18);
+}
+.ci-row.is-me:hover:not(:active) {
+  background-color: rgba(16, 185, 129, .14);
+  box-shadow: inset 0 1px 0 rgba(110, 231, 183, .24);
 }
 .ci-row-start { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ci-row-rank {
@@ -48141,6 +48155,14 @@ html:lang(fa) #challenge-rules-modal,
 html:lang(ar) #challenge-rules-modal {
   direction: rtl;
 }
+
+/* The player-profile drawer opened from a standing row must clear BOTH tournament layers: the
+   hub itself sits on rung 40 of the shared modal stack and the rules card on 1200, so the profile
+   sheet takes 1250 and the shared scrim is lifted just under it (1240) only while that drawer was
+   opened from the tournament. Nothing else in the app changes rung: every other sheet keeps its
+   own 21 and every other scrim its 20. Static z-index only — no filter, no keyframes. */
+#sheet-mind { z-index: 1250; }
+body.chal-profile-open #scrim { z-index: 1240; }
 
 @media (max-width: 380px) {
   .ci-title { font-size: 15.5px; }

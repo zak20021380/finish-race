@@ -98,7 +98,8 @@ import {
   CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
   CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
   PRIZE_BY_RANK, TOTAL_PRIZE_POOL, prizeForRank,
-  applyFriendWin, applyHardBotWin, challengeBoard, challengeFallbackSeat, challengeView, claimSettlement, issueBotTicket,
+  applyFriendWin, applyHardBotWin, challengeBoard, challengeDisplayName, challengeFallbackSeat,
+  challengeSeasonEpoch, challengeSeasonMigrated, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
   type ChallengeBoard, type ChallengeEntry, type ChallengeSettlement,
 } from './challenge';
@@ -3472,6 +3473,9 @@ export class MatchmakerDO {
           try {
             const state = readChallengeState(await storage.get<unknown>(CHALLENGE_KEY));
             const now = Date.now();
+            /* A ledger written under a retired season epoch is re-anchored on the V2 launch
+               instant by that read; the rows themselves are then realigned by the settle below. */
+            const seasonMigrated = challengeSeasonMigrated();
             for (const entry of state.entries) {
               if (now - entry.updatedAt > CHALLENGE_KEEP_MS) continue;
               this.challengeEntries.set(entry.id, entry);
@@ -3481,7 +3485,9 @@ export class MatchmakerDO {
               this.challengeSettlements.push(settlement);
             }
             this.challengeLoaded = true;
-            if (this.settleChallenge(now)) this.persistChallenge();
+            /* The re-anchored epoch is durable BEFORE the first card is answered: a boot that had
+               to migrate writes the whole ledger back immediately. */
+            if (this.settleChallenge(now) || seasonMigrated) await this.flushChallenge();
           } catch { /* a corrupt scorecard starts empty; a claim is proven by its settlement */ }
           this.seedRoles();
           /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
@@ -11217,9 +11223,15 @@ export class MatchmakerDO {
 
   /** This player's scorecard for the current window, created and rolled on first touch. */
   private challengeEntry(who: PlayerAuth, now: number): ChallengeEntry {
+    const displayName = this.challengeDisplayNameFor(who);
     const existing = this.challengeEntries.get(who.playerId);
     if (existing) {
       rollChallengeEntry(existing, now);
+      /* A real name is refreshed in place. The ranking's tie-breaker is `updatedAt`, so a name
+         refresh must never move it — only a credited win or a window roll may. */
+      if (who.tgId && displayName && existing.displayName !== displayName) {
+        existing.displayName = displayName;
+      }
       if (who.tgId && existing.tgId !== who.tgId) {
         existing.tgId = who.tgId;
         existing.handle = this.challengeHandle(who);
@@ -11227,10 +11239,19 @@ export class MatchmakerDO {
       }
       return existing;
     }
-    const entry = newChallengeEntry(who.playerId, who.tgId, this.challengeHandle(who), now);
+    const entry = newChallengeEntry(who.playerId, who.tgId, this.challengeHandle(who), now, displayName);
     this.challengeEntries.set(entry.id, entry);
     this.trimChallenge(now);
     return entry;
+  }
+
+  /**
+   * The printable name a verified seat carries: the Telegram `first_name` + `last_name` that came
+   * out of the signed initData (`PlayerAuth.name`), never the `@username` the handle keeps for the
+   * receipt lines. A seat with no real name falls back to its sanitized handle or its id.
+   */
+  private challengeDisplayNameFor(who: PlayerAuth): string {
+    return challengeDisplayName(who.name, this.challengeHandle(who), who.tgId);
   }
 
   /**
@@ -11246,15 +11267,27 @@ export class MatchmakerDO {
   }
 
   /**
+   * The printable name for a stored card, resolved from the room's own registry: the verified
+   * Telegram first/last name outranks a handle, and the `@` is never part of the printed name.
+   */
+  private challengeDisplayNameOf(playerId: string, tgId: string): string {
+    const record = this.players.get(playerId);
+    return challengeDisplayName(record?.name, this.challengeHandleFor(playerId, tgId), tgId);
+  }
+
+  /**
    * Automatic enrollment: every authenticated Telegram seat that touches the hub (a home-screen
    * read, a leaderboard read, an explicit join) or finishes a 1v1 is registered on the live week's
    * participant table at zero wins. The card is created on first sight and rolled with the window.
    */
   private enrollChallenge(playerId: string, tgId: string, now: number): ChallengeEntry | null {
     if (!/^[0-9]{1,20}$/.test(tgId)) return null;
+    const displayName = this.challengeDisplayNameOf(playerId, tgId);
     const existing = this.challengeEntries.get(playerId);
     if (existing) {
       rollChallengeEntry(existing, now);
+      /* Keep the card's printable name current without touching the ranking tie-breaker. */
+      if (displayName && existing.displayName !== displayName) existing.displayName = displayName;
       if (existing.tgId !== tgId) {
         existing.tgId = tgId;
         existing.handle = this.challengeHandleFor(playerId, tgId);
@@ -11262,7 +11295,7 @@ export class MatchmakerDO {
       }
       return existing;
     }
-    const entry = newChallengeEntry(playerId, tgId, this.challengeHandleFor(playerId, tgId), now);
+    const entry = newChallengeEntry(playerId, tgId, this.challengeHandleFor(playerId, tgId), now, displayName);
     this.challengeEntries.set(entry.id, entry);
     this.trimChallenge(now);
     return entry;
@@ -11282,7 +11315,7 @@ export class MatchmakerDO {
     }
   }
 
-  private challengeSnapshot(): { entries: ChallengeEntry[]; settlements: ChallengeSettlement[] } {
+  private challengeSnapshot(): { entries: ChallengeEntry[]; settlements: ChallengeSettlement[]; seasonEpoch: number } {
     return {
       entries: [...this.challengeEntries.values()].map((entry) => ({
         ...entry,
@@ -11292,6 +11325,9 @@ export class MatchmakerDO {
         friendReceipts: [...entry.friendReceipts],
       })),
       settlements: this.challengeSettlements.map((settlement) => ({ ...settlement })),
+      /* The epoch rides the ledger: a later boot resumes the very same 168-hour grid instead of
+         having to guess (or fall back to the V2 floor) again. */
+      seasonEpoch: challengeSeasonEpoch(),
     };
   }
 
@@ -11345,6 +11381,15 @@ export class MatchmakerDO {
 
   /** The public board plus this reader's own seat on it. Never carries an internal player id. */
   private challengeBoardFor(entry: ChallengeEntry, now: number): ChallengeBoard {
+    /* Refresh every live card's printable name from the room's own registry before the board is
+       ranked: a row written before display names existed still prints the real Telegram first +
+       last name on the next read, even if that rival never opens the hub again. A name refresh is
+       metadata only — it must never move `updatedAt`, the ranking's one tie-breaker. */
+    for (const row of this.challengeEntries.values()) {
+      if (!row.tgId) continue;
+      const name = this.challengeDisplayNameOf(row.id, row.tgId);
+      if (name && row.displayName !== name) row.displayName = name;
+    }
     return challengeBoard([...this.challengeEntries.values()], entry.id, now);
   }
 

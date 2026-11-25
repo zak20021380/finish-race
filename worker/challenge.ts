@@ -41,19 +41,28 @@ export const CHALLENGE_DAYS = 7;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const CHALLENGE_WINDOW_MS = WEEK_MS;
 /**
- * The launch stamp of the very first 168-hour window. The tournament starts on the launch
- * instant instead of the next calendar Monday, so the opening week keeps the whole seven days.
- * Every later round is this instant plus a whole number of `WEEK_MS`.
+ * The V2 launch stamp: November 25, 2026, 12:15 UTC — the instant the current 168-hour cycle was
+ * re-anchored. It is the FLOOR of the season grid: any ledger read back from Durable Object
+ * storage with an older (or missing) stamp is re-stamped on this instant, so testing that ran on
+ * the retired V1 anchor can never leave the live card counting down a partial week.
  */
-export const CHALLENGE_SEASON_EPOCH = Date.UTC(2026, 10, 24, 14, 30, 0);
+export const SEASON_EPOCH_V2 = Date.UTC(2026, 10, 25, 12, 15, 0);
+/**
+ * The launch stamp of the very first 168-hour window the live build runs on. The tournament
+ * starts on the launch instant instead of the next calendar Monday, so the opening week keeps
+ * the whole seven days. Every later round is this instant plus a whole number of `WEEK_MS`.
+ */
+export const CHALLENGE_SEASON_EPOCH = SEASON_EPOCH_V2;
 /** Legacy name for the season epoch, kept for callers that still import the old anchor. */
 export const CHALLENGE_WINDOW_ANCHOR = CHALLENGE_SEASON_EPOCH;
 /**
- * The epoch the live room actually runs on. It defaults to the launch stamp above; a ledger read
- * back from Durable Object storage may carry the stamp it was created with, and adopting it keeps
- * a reboot on the same 168-hour grid instead of drifting the boundary by the restart gap.
+ * The epoch the live room actually runs on. It defaults to the V2 launch stamp above; a ledger
+ * read back from Durable Object storage may carry the stamp it was created with, and adopting it
+ * keeps a reboot on the same 168-hour grid — but only when that stamp is on or after V2.
  */
 let activeSeasonEpoch = CHALLENGE_SEASON_EPOCH;
+/** True when the last `readChallengeState` had to re-anchor an older ledger onto V2. */
+let seasonEpochMigrated = false;
 /** The week's total prize pool, divided across the Top 3 finishers. */
 export const TOTAL_PRIZE_POOL = 50;
 /** The exact payout for each podium rank: 25 / 15 / 10, summing to the 50-Star pool. */
@@ -90,8 +99,13 @@ export interface ChallengeEntry {
   id: string;
   /** The verified numeric Telegram id; empty for a guest seat (which cannot compete). */
   tgId: string;
-  /** Public handle the board prints: `@username` when the registry has one, else the id. */
+  /** Public handle the room keeps for the receipt/settlement lines, e.g. `@username`. */
   handle: string;
+  /**
+   * The printable name the standings show: the verified Telegram `first_name` + `last_name`
+   * (never prefixed with `@`). Falls back to the stored handle or the id when no real name exists.
+   */
+  displayName: string;
   windowStart: number;
   windowEnd: number;
   hardBotWins: number;
@@ -133,9 +147,13 @@ export interface ChallengeState {
   seasonEpoch: number;
 }
 
-/** One public row of the weekly board. The internal `id` is never part of it. */
+/** One public row of the weekly board. The internal room id is never part of it. */
 export interface ChallengeBoardRow {
   position: number;
+  /** The seat's numeric Telegram user id, so a tap can open that player's profile. */
+  userId: string;
+  /** The seat's real Telegram display name — never an `@handle`, never empty. */
+  displayName: string;
   handle: string;
   friendWins: number;
   hardBotWins: number;
@@ -195,6 +213,24 @@ const readStamp = (raw: unknown): number => {
   return n > 0 ? n : 0;
 };
 
+const readName = (raw: unknown, max: number): string =>
+  typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().replace(/^@+/, '').slice(0, max).trim() : '';
+
+/**
+ * The printable name a standings row shows: the verified Telegram `first_name` + `last_name` when
+ * the room holds one, then the sanitized handle (its `@` stripped, so a legacy row prints a name
+ * rather than a handle), and the Telegram id only as the last resort. A returned value is never
+ * empty and never carries a leading at-sign.
+ */
+export function challengeDisplayName(raw: unknown, handle: unknown = '', tgId: unknown = ''): string {
+  const name = readName(raw, 64);
+  if (name) return name;
+  const fallbackHandle = readName(handle, 40);
+  if (fallbackHandle && !/^[0-9]{1,20}$/.test(fallbackHandle)) return fallbackHandle;
+  const id = readName(tgId, 20);
+  return id || fallbackHandle || 'Player';
+}
+
 /** The exact Star payout for a podium rank; 0 for every position outside the Top 3. */
 export function prizeForRank(rank: number): number {
   if (rank === 1) return PRIZE_BY_RANK[1];
@@ -213,13 +249,28 @@ export function challengeSeasonEpoch(): number {
 }
 
 /**
- * Adopt a launch stamp read back from storage. The default launch epoch always wins when the
- * stored value is unusable, so a corrupt field can never move the boundary off the season grid.
+ * Adopt a launch stamp read back from storage.
+ *
+ * The V2 launch stamp is a floor, not a preference: a stamp older than `SEASON_EPOCH_V2` belongs
+ * to a retired/testing ledger, so it is overwritten with V2 on the spot (and the migration is
+ * flagged, so the room writes that decision back immediately). A stamp on or after V2 is adopted
+ * unchanged, which keeps a restart on the very same 168-hour grid.
  */
 export function setChallengeSeasonEpoch(raw: unknown): number {
   const stamp = readStamp(raw);
-  if (stamp > 0) activeSeasonEpoch = stamp;
+  if (stamp >= SEASON_EPOCH_V2) {
+    activeSeasonEpoch = stamp;
+    seasonEpochMigrated = false;
+    return activeSeasonEpoch;
+  }
+  activeSeasonEpoch = SEASON_EPOCH_V2;
+  seasonEpochMigrated = true;
   return activeSeasonEpoch;
+}
+
+/** True when the last ledger read had to re-anchor a retired (or missing) season epoch on V2. */
+export function challengeSeasonMigrated(): boolean {
+  return seasonEpochMigrated;
 }
 
 /** The deterministic week index of `now` inside the season started by `epoch` (never negative). */
@@ -240,12 +291,19 @@ export function challengeWindowAt(now: number, epoch: number = activeSeasonEpoch
 }
 
 /** A brand-new scorecard for the current window. */
-export function newChallengeEntry(id: string, tgId: string, handle: string, now: number): ChallengeEntry {
+export function newChallengeEntry(
+  id: string,
+  tgId: string,
+  handle: string,
+  now: number,
+  displayName = '',
+): ChallengeEntry {
   const window = challengeWindowAt(now);
   return {
     id,
     tgId,
     handle,
+    displayName: challengeDisplayName(displayName, handle, tgId),
     windowStart: window.start,
     windowEnd: window.end,
     hardBotWins: 0,
@@ -269,6 +327,7 @@ const readEntry = (raw: unknown): ChallengeEntry | null => {
     id,
     tgId: /^[0-9]{1,20}$/.test(readText(r.tgId, 20)) ? readText(r.tgId, 20) : '',
     handle: readText(r.handle, 40),
+    displayName: challengeDisplayName(r.displayName, r.handle, r.tgId),
     windowStart: readStamp(r.windowStart) || window.start,
     windowEnd: readStamp(r.windowEnd) || window.end,
     hardBotWins: clampInt(r.hardBotWins, CHALLENGE_WINS_MAX),
@@ -354,10 +413,18 @@ export function readChallengeState(raw: unknown): ChallengeState {
   return out;
 }
 
-/** Start a fresh cycle when the old window closed. Returns true when the entry was reset. */
+/**
+ * Start a fresh cycle when the old window closed. Returns true when the entry was reset.
+ *
+ * A row is also re-anchored when its stored window is NOT the live 168-hour window of `now` (a
+ * ledger written under the retired V1 epoch, or one whose boundary drifted while the room slept).
+ * Without that re-anchor a stale card keeps printing a partial countdown — the `4d 11h` symptom —
+ * even though the live week has already restarted on the V2 launch instant.
+ */
 export function rollChallengeEntry(entry: ChallengeEntry, now: number): boolean {
-  if (now < entry.windowEnd) return false;
   const window = challengeWindowAt(now);
+  const onLiveWindow = entry.windowStart === window.start && entry.windowEnd === window.end;
+  if (onLiveWindow && now < entry.windowEnd) return false;
   entry.windowStart = window.start;
   entry.windowEnd = window.end;
   entry.hardBotWins = 0;
@@ -417,8 +484,9 @@ export function settleChallengeWeek(rows: ChallengeEntry[], now: number): Challe
  * Every verified Telegram seat registered in the active window is listed, even at zero wins, and
  * there is no row cutoff: the whole participating field is returned in the one ranking order
  * (total wins descending, then the earliest `updatedAt` — whoever reached that count first keeps
- * the higher seat). Guest seats never participate, so they hold no row. The internal ids and the
- * per-opponent ledger stay in the room; a row carries the public handle only.
+ * the higher seat). Guest seats never participate, so they hold no row. The room's internal id and
+ * the per-opponent ledger stay in the room; a row carries the numeric Telegram id, the printable
+ * display name and the public handle only.
  */
 export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: number): ChallengeBoard {
   const window = challengeWindowAt(now);
@@ -435,6 +503,8 @@ export function challengeBoard(rows: ChallengeEntry[], selfId: string, now: numb
   return {
     rows: live.map((row, index) => ({
       position: index + 1,
+      userId: row.tgId,
+      displayName: row.displayName || challengeDisplayName('', row.handle, row.tgId),
       handle: row.handle || row.tgId,
       friendWins: row.friendWins,
       hardBotWins: row.hardBotWins,
@@ -559,7 +629,11 @@ export function challengeView(
   return {
     ok: true,
     tgId: entry.tgId,
+    /** The reader's numeric Telegram id when verified; empty for a guest seat. */
+    userId: entry.tgId,
     handle: entry.handle,
+    /** The printable name the card's own seat prints — never an `@handle`. */
+    displayName: entry.displayName || challengeDisplayName('', entry.handle, entry.tgId),
     windowStart: entry.windowStart || window.start,
     windowEnd: entry.windowEnd || window.end,
     endsInMs: Math.max(0, (entry.windowEnd || window.end) - now),
@@ -600,8 +674,8 @@ export function challengeView(
  * is absent, expired or fails its signature check. The join door accepts it for enrollment only:
  * it registers the declared positive Telegram id in the live window at zero wins and never
  * credits a counter from the body. The id is normalized to the same canonical `tg-<digits>` form
- * the verified door produces, and the declared handle (sanitized, up to 32 chars) becomes the
- * seat's public name so the board row matches the one the client painted on tap.
+ * the verified door produces, and the body's `displayName` (the real first + last name the client
+ * painted) becomes the seat's printable name; the declared handle is only the last fallback.
  */
 export interface ChallengeFallbackSeat {
   playerId: string;
@@ -611,7 +685,7 @@ export interface ChallengeFallbackSeat {
 
 export function challengeFallbackSeat(raw: unknown): ChallengeFallbackSeat | null {
   if (!raw || typeof raw !== 'object') return null;
-  const body = raw as { userId?: unknown; handle?: unknown };
+  const body = raw as { userId?: unknown; handle?: unknown; displayName?: unknown };
   const rawId = typeof body.userId === 'number'
     ? (Number.isSafeInteger(body.userId) ? String(body.userId) : '')
     : typeof body.userId === 'string' ? body.userId.trim() : '';
@@ -621,5 +695,10 @@ export function challengeFallbackSeat(raw: unknown): ChallengeFallbackSeat | nul
     ? body.handle.trim().replace(/^@+/, '').replace(/\s+/g, ' ').slice(0, 32).trim()
     : '';
   if (!declared) return null;
-  return { playerId: 'tg-' + rawId, tgId: rawId, name: '@' + declared };
+  /* The real name wins over the handle; the handle (its `@` stripped) is the fallback only. */
+  return {
+    playerId: 'tg-' + rawId,
+    tgId: rawId,
+    name: challengeDisplayName(body.displayName, declared, rawId),
+  };
 }
