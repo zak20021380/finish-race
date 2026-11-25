@@ -3019,8 +3019,9 @@ function showOverlay() {
   /* Friends & Rivals: fold this board's people into the persistent head-to-head roster before
      the board is reset. Bot seats, a struck chair and a 2v2 partner never reach the store. */
   recordFriendsMatch(settledOpponents(won));
-  /* The 7-Day Challenge: a Hard AI win files its ticket report; every settle refreshes the card. */
-  settleChallengeBoard(won);
+  /* The 7-Day Challenge: a Hard AI or friends 1v1 win is filed against the room's signed session
+     the instant the board settles; every other settle only refreshes the card. */
+  recordChallengeMatchWin(won);
   /* A rival who walked out mid-race leaves a machine in the chair. A duel whose only opponent is
      gone has nobody to answer, so its capsule opens dead. A party still has people at the table
      while ANY other seat is held by a person, so it stays alive; the server's rematch consensus
@@ -3894,9 +3895,14 @@ function restart() {
   if (!tutorialStandalone) {
     beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
   }
-  /* The 7-Day Challenge's Hard AI track starts its clock — and mints the room's one-shot ticket —
-     with the board itself, so the 45-second floor is measured from a real start. */
-  if (hardBotDuel) beginChallengeBotBoard();
+  /* The 7-Day Challenge opens its signed session with the board itself: the Hard Bot ladder and a
+     friends 1v1 are the only two boards the weekly race records, and the room stamps the clock
+     this win will be judged against. */
+  if (hardBotDuel) startChallengeMatchSession('hard_bot');
+  else {
+    const rivalId = challengeFriendRival();
+    if (rivalId) startChallengeMatchSession('friend', rivalId);
+  }
   gen++;
   const questGeneration = ++questEpoch;
   /* Every real board files one receipt, whatever the mode: online 1v1, a Play with Friends room,
@@ -6817,6 +6823,13 @@ const CHALLENGE_DAY_MS = 24 * 60 * 60 * 1000;
 const CHALLENGE_HOUR_MS = 60 * 60 * 1000;
 /** The countdown turns warm amber for the last six hours of the 168-hour cycle. */
 const CHALLENGE_URGENT_MS = 6 * 60 * 60 * 1000;
+/**
+ * The room's own floors, mirrored only so this device can decide whether a finished board is even
+ * worth reporting. The room re-proves every one of them against its own clock; nothing here can
+ * award a point, and a board this device declines to file is simply not filed.
+ */
+const CHALLENGE_MIN_SECONDS = 45;
+const CHALLENGE_MIN_MOVES = 10;
 /** One row of the room's live board: a real name, its public Telegram id and its live figures. */
 interface ChallengeRowView {
   position: number;
@@ -6881,6 +6894,15 @@ interface ChallengeView {
   claimedRank?: number | null;
   claimStars?: number;
   credited?: boolean;
+  /** The signed match session: the id and token the room minted at `match/start`. */
+  matchId?: string;
+  matchToken?: string;
+  /** The room's own start stamp for that session, in ms. */
+  startedAt?: number;
+  /** True when `match/finish` actually moved a counter. */
+  recorded?: boolean;
+  /** Why a match door refused the report (`bad_token`, `too_fast`, `friend_cap_reached`, …). */
+  reason?: string;
 }
 
 /** One row of the floating rules card: a terse key, a terse value, one accent. */
@@ -7473,8 +7495,6 @@ let challengeView: ChallengeView | null = null;
 let challengeWindowEnd = Date.now() + CHALLENGE_WEEK_MS;
 let challengeRolled = false;
 let challengeRefreshing = false;
-let challengeTicket = '';
-let challengeBotStartedAt = 0;
 let challengeClaimBusy = false;
 let challengeJoinBusy = false;
 /** One background enrollment repair at a time; only a `/me` miss can schedule it. */
@@ -7487,7 +7507,9 @@ let challengeRulesOpener: HTMLElement | null = null;
 /**
  * This device's own week, painted before the room answers. `isEnrolled` is a one-way latch and
  * the board holds this reader's seat until the room serves its own row. The window end is stored
- * with it, so a reload on the same week never asks the reader to join twice.
+ * with it, so a reload on the same week never asks the reader to join twice. The three counters
+ * are the room's last answer, kept as a floor so a stale reply can never erase a win this card
+ * has already printed; they reset with the window, never on a read.
  */
 interface ChallengeLocalState {
   isEnrolled: boolean;
@@ -7495,6 +7517,9 @@ interface ChallengeLocalState {
   myPosition: number;
   totalParticipants: number;
   weekEnd: number;
+  hardBotWins: number;
+  friendWins: number;
+  totalWins: number;
 }
 const challengeState: ChallengeLocalState = {
   isEnrolled: false,
@@ -7502,6 +7527,9 @@ const challengeState: ChallengeLocalState = {
   myPosition: 0,
   totalParticipants: 0,
   weekEnd: 0,
+  hardBotWins: 0,
+  friendWins: 0,
+  totalWins: 0,
 };
 /** The delegated enrollment door is bound once, even across a sheet repaint. */
 let challengeJoinDelegated = false;
@@ -7707,11 +7735,15 @@ function ensureSelfInLeaderboard(): void {
     challengeIsSelfRow(row, myUserId);
   const merged = challengeBoardRows();
   if (!merged.some(holdsSelf)) {
-    const friendWins = challengeCount(challengeView?.friendWins);
-    const hardBotWins = challengeCount(challengeView?.hardBotWins);
-    const totalWins = typeof challengeView?.totalWins === 'number'
-      ? challengeCount(challengeView.totalWins)
-      : friendWins + hardBotWins;
+    /* The injected row prints the same floor the card does, so a win filed a moment ago is on the
+       board the tap paints — never the older figures the last served card happened to carry. */
+    const friendWins = Math.max(challengeCount(challengeView?.friendWins), challengeState.friendWins);
+    const hardBotWins = Math.max(challengeCount(challengeView?.hardBotWins), challengeState.hardBotWins);
+    const totalWins = Math.max(
+      typeof challengeView?.totalWins === 'number' ? challengeCount(challengeView.totalWins) : 0,
+      challengeState.totalWins,
+      friendWins + hardBotWins,
+    );
     challengeState.leaderboard.push({
       userId: myUserId,
       position: merged.length + 1,
@@ -7799,18 +7831,20 @@ function paintChallengeLabels(): void {
 }
 
 /**
- * The status card's rank pill markup for one live position. The authored template already seals
- * the Latin `#n` in its own `<bdi dir="ltr">`, and this repairs the one case that could still
- * reverse it — a locale line that lost its run — so `#1` can never paint as `1#` in an RTL card.
+ * The status card's rank pill markup for one live position: `رتبه <bdi dir="ltr">#1</bdi>`.
+ *
+ * The authored template owns the hash — every locale writes `#{rank}` inside its own
+ * `<bdi dir="ltr">` run — so the slot is filled with the DIGITS alone. Filling it with a
+ * `#`-prefixed token is what used to print `##1`, and an RTL card reverses that to `1##`; that
+ * double hash is the one bug this function exists to prevent. Only Latin digits reach the slot,
+ * so a served `"#4"` and a served `4` paint the identical pill.
  */
 function challengeRankHTML(position: number | string): string {
-  /* The served position may already arrive as "#4": strip every leading hash and every non-digit
-     before the template's own hash is applied, so the pill can never print "##4". */
-  const clean = String(position).trim().replace(/^#+/, '').replace(/\D+/g, '');
-  const token = '#' + (clean || '0');
-  const sealed = challengeCopy().rank.replace('{rank}', token);
+  const digits = String(position).trim().replace(/\D+/g, '') || '0';
+  const sealed = challengeCopy().rank.replace('{rank}', digits);
   if (/<bdi\b[^>]*>\s*#\d+\s*<\/bdi>/i.test(sealed)) return sealed;
-  return sealed.replace(token, `<bdi dir="ltr">${token}</bdi>`);
+  /* A locale line that lost its run still gets one: the `#digits` token is sealed in LTR. */
+  return sealed.replace('#' + digits, `<bdi dir="ltr">#${digits}</bdi>`);
 }
 
 /**
@@ -7820,9 +7854,16 @@ function challengeRankHTML(position: number | string): string {
 function paintChallengeTelemetry(): void {
   const copy = challengeCopy();
   const view = challengeView;
-  const friend = challengeCount(view?.friendWins);
-  const bot = challengeCount(view?.hardBotWins);
-  const total = typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : friend + bot;
+  /* The room's answer is the truth, but a win filed a moment ago may already be painted: the
+     local counters are a floor, never a second source, so a stale reply cannot erase a win the
+     card has shown and a fresh one cannot be counted twice. */
+  const friend = Math.max(challengeCount(view?.friendWins), challengeState.friendWins);
+  const bot = Math.max(challengeCount(view?.hardBotWins), challengeState.hardBotWins);
+  const total = Math.max(
+    typeof view?.totalWins === 'number' ? challengeCount(view.totalWins) : 0,
+    challengeState.totalWins,
+    friend + bot,
+  );
   const myUserId = String(tgUser()?.id ?? '');
   const board = challengeBoardRows();
   /* This seat's live rank is the row the board holds for it — the room's own answer or the row the
@@ -8233,12 +8274,15 @@ function applyChallengeView(view: ChallengeView): void {
   const liveEnd = typeof view.windowEnd === 'number' && view.windowEnd > Date.now()
     ? view.windowEnd
     : (challengeWindowEnd || localChallengeWindowEnd());
-  /* A new window is a new race: the previous week's optimistic row, rank and field size must not
-     leak into it. The enrollment latch itself is read per window by the stored key below. */
+  /* A new window is a new race: the previous week's optimistic row, rank, field size and counters
+     must not leak into it. The enrollment latch itself is read per window by the stored key. */
   if (challengeState.weekEnd > 0 && challengeState.weekEnd !== liveEnd) {
     challengeState.leaderboard = [];
     challengeState.myPosition = 0;
     challengeState.totalParticipants = 0;
+    challengeState.hardBotWins = 0;
+    challengeState.friendWins = 0;
+    challengeState.totalWins = 0;
   }
   challengeState.weekEnd = liveEnd;
   challengeReadEnrollment(liveEnd);
@@ -8259,9 +8303,18 @@ function applyChallengeView(view: ChallengeView): void {
     challengeCount(view.totalParticipants),
     served.length,
   );
-  /* A room answer that pre-dates the join (or lost the row) must not erase the seat: the local
-     optimistic row and this reader's rank survive until the next answer catches up. */
-  ensureSelfInLeaderboard();
+  /* The counters follow the same rule as the row: a served figure is a floor, so a reply fired
+     before the latest victory cannot walk this card backwards inside its own week. */
+  challengeState.hardBotWins = Math.max(challengeState.hardBotWins, challengeCount(view.hardBotWins));
+  challengeState.friendWins = Math.max(challengeState.friendWins, challengeCount(view.friendWins));
+  challengeState.totalWins = Math.max(
+    challengeState.totalWins,
+    challengeCount(view.totalWins),
+    challengeState.hardBotWins + challengeState.friendWins,
+  );
+  /* A room answer that pre-dates the join (or lost the row) must not erase the seat, and this
+     seat's own row is stamped from the floor so the card and the row printed under it agree. */
+  challengeStampSelfRow();
   paintChallengeCard();
   paintChallengeClock();
 }
@@ -8312,51 +8365,227 @@ async function healChallengeEnrollment(myUserId: string): Promise<void> {
   }
 }
 
-/** A Hard AI board is starting: stamp its clock and mint the room's one-shot ticket. */
-function beginChallengeBotBoard(): void {
-  challengeTicket = '';
-  challengeBotStartedAt = Date.now();
-  const started = challengeBotStartedAt;
-  void (async () => {
-    const view = await challengeCall('/api/challenge/start', {});
-    if (!view || view.ok !== true || typeof view.ticket !== 'string') return;
-    /* A replay may have started (and stamped a newer clock) while this ticket was in flight. */
-    if (challengeBotStartedAt !== started) return;
-    challengeTicket = view.ticket;
-    applyChallengeView(view);
-  })();
+/* ---------- the signed match session: Hard Bot and friends 1v1 ---------- */
+
+/** The two tracks a finished board can be filed against. */
+type ChallengeMatchMode = 'hard_bot' | 'friend';
+
+/**
+ * One live match session: the room's signed token, the mode it was minted for, and the clock this
+ * device started the board on. It is replaced the instant the next board starts and dropped the
+ * instant this one settles, so a token can never be filed against the wrong result.
+ */
+interface ChallengeMatchSession {
+  mode: ChallengeMatchMode;
+  /** The rival's numeric Telegram id; empty on the Hard Bot track. */
+  opponentId: string;
+  matchId: string;
+  matchToken: string;
+  /** This device's board clock. The room keeps its own and judges with that one. */
+  startedAt: number;
+}
+let challengeSession: ChallengeMatchSession | null = null;
+let challengeSessionPending: Promise<void> | null = null;
+/** Bumped on every start: a token answer that lands after a newer board is dropped. */
+let challengeSessionSeq = 0;
+/** The win painted ahead of the room's answer, so a refusal can undo exactly that one. */
+let challengeOptimisticWin: ChallengeMatchMode | '' = '';
+/** Bumped per optimistic paint: a late answer from an older board can never undo a newer one. */
+let challengeOptimisticSeq = 0;
+
+/** A `tg-<digits>` seat id (or a bare id) as its numeric Telegram id, or '' for anything else. */
+function challengeTelegramIdOf(raw: unknown): string {
+  const text = typeof raw === 'string' ? raw.trim().replace(/^tg-/, '') : '';
+  return /^[1-9][0-9]{0,19}$/.test(text) ? text : '';
 }
 
 /**
- * The board settled. A Hard AI win is reported with its ticket + played moves; the room re-proves
- * the 45-second floor itself. Every other board only refreshes the figures (a friend win was
- * already credited by the room's own settlement).
+ * The rival of a friends 1v1 — the only friend board the weekly race counts. A party, a bot-held
+ * seat, a chair that was struck, a seat with no real Telegram id and a self-pairing all read as
+ * '' and therefore open no session at all.
  */
-function settleChallengeBoard(won: boolean): void {
-  const ticket = challengeTicket;
-  const started = challengeBotStartedAt;
-  const botBoard = hardBotDuel;
-  challengeTicket = '';
-  challengeBotStartedAt = 0;
-  if (!botBoard) {
-    void refreshChallengeCard();
-    return;
-  }
-  if (!won || !ticket || !started) {
-    void refreshChallengeCard();
-    return;
-  }
-  const moves = Math.max(0, Math.floor(state.turn));
-  void (async () => {
-    const view = await challengeCall('/api/challenge/report', {
-      ticket: ticket,
-      won: true,
-      moves: moves,
-      difficulty: 'hard',
-      format: '1v1',
+function challengeFriendRival(): string {
+  if (!active || !('seats' in active)) return '';
+  if (sizes.length !== 2 || !sizes.every((n) => n === 1)) return '';
+  const foe = active.seats.find((seat) => seat.side !== localSide);
+  if (!foe || foe.bot === true || foe.left === true) return '';
+  const id = challengeTelegramIdOf(foe.id);
+  const mine = String(tgUser()?.id ?? '');
+  return id && id !== mine ? id : '';
+}
+
+/**
+ * Open a signed session for the board that is starting. Only the Hard Bot ladder and a friends
+ * 1v1 ever call this: an easy or medium bot, a ranked duel and a party are practice boards and
+ * can never be worth a tournament point. The POST is background — a board never waits on it, and
+ * an offline device simply has no token to file when the board ends.
+ */
+function startChallengeMatchSession(mode: ChallengeMatchMode, opponentId = ''): void {
+  const seq = ++challengeSessionSeq;
+  const session: ChallengeMatchSession = {
+    mode,
+    opponentId,
+    matchId: '',
+    matchToken: '',
+    startedAt: Date.now(),
+  };
+  challengeSession = session;
+  challengeOptimisticWin = '';
+  challengeOptimisticSeq = 0;
+  challengeSessionPending = (async () => {
+    const view = await challengeCall('/api/challenge/match/start', {
+      userId: String(tgUser()?.id ?? ''),
+      displayName: challengeDisplayNameLocal(),
+      mode,
+      opponentId,
     });
-    if (view && typeof view.totalWins === 'number') applyChallengeView(view);
-    else void refreshChallengeCard();
+    /* A replay may have started a newer board while this answer was in flight. */
+    if (seq !== challengeSessionSeq || challengeSession !== session) return;
+    if (!view || view.ok !== true
+      || typeof view.matchId !== 'string' || typeof view.matchToken !== 'string') return;
+    session.matchId = view.matchId;
+    session.matchToken = view.matchToken;
+  })();
+}
+
+/** The winning pawn's square, or null for a win the board did not decide by reaching FINISH. */
+function challengeGoalPawn(): { row: number; col: number } | null {
+  const winner = state.winner;
+  if (winner === null) return null;
+  const side = sideOf(state, winner);
+  const done = state.balls.find((ball) => ball.pos.r === 0 && side.includes(ball.team));
+  return done ? { row: done.pos.r, col: done.pos.c } : null;
+}
+
+/**
+ * Stamp this seat's own row with the card's counters, on the board the drawer would paint right
+ * now. It ASSIGNS rather than adds: the row is re-stamped on every room answer and on every
+ * optimistic paint, so an increment here would count one win twice — and because the counters are
+ * a floor, a stale reply can never walk the row back either.
+ */
+function challengeStampSelfRow(): void {
+  const myUserId = String(tgUser()?.id ?? '');
+  const rows = challengeView?.leaderboard;
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || !challengeIsSelfRow(row, myUserId)) continue;
+      row.friendWins = challengeState.friendWins;
+      row.hardBotWins = challengeState.hardBotWins;
+      row.totalWins = challengeState.totalWins;
+    }
+  }
+  for (const row of challengeState.leaderboard) {
+    if (row.isMe !== true) continue;
+    row.friendWins = challengeState.friendWins;
+    row.hardBotWins = challengeState.hardBotWins;
+    row.totalWins = challengeState.totalWins;
+  }
+  ensureSelfInLeaderboard();
+}
+
+/**
+ * Paint the victory the instant the board settles, before the room answers, so the tournament
+ * drawer already shows it when the player opens it. Only an enrolled seat paints ahead — and the
+ * bump is remembered (by sequence, not just by mode), so a refusal can take back exactly this one
+ * win and a late answer from an older board can never undo a newer one. Returns that sequence.
+ */
+function challengeApplyWinFloor(mode: ChallengeMatchMode): number {
+  if (challengeState.isEnrolled !== true) return 0;
+  if (mode === 'hard_bot') challengeState.hardBotWins += 1;
+  else challengeState.friendWins += 1;
+  challengeState.totalWins = challengeState.hardBotWins + challengeState.friendWins;
+  challengeOptimisticWin = mode;
+  challengeOptimisticSeq += 1;
+  challengeStampSelfRow();
+  challengeBoardSig = '';
+  paintChallengeCard();
+  return challengeOptimisticSeq;
+}
+
+/** Take back the optimistic win when the room refused it: the card never keeps a false figure. */
+function challengeUndoWinFloor(seq: number): void {
+  /* A newer board owns the paint now: this answer belongs to a victory already superseded. */
+  if (!seq || seq !== challengeOptimisticSeq) return;
+  const mode = challengeOptimisticWin;
+  challengeOptimisticWin = '';
+  challengeOptimisticSeq = 0;
+  if (!mode) return;
+  if (mode === 'hard_bot') challengeState.hardBotWins = Math.max(0, challengeState.hardBotWins - 1);
+  else challengeState.friendWins = Math.max(0, challengeState.friendWins - 1);
+  challengeState.totalWins = challengeState.hardBotWins + challengeState.friendWins;
+  challengeStampSelfRow();
+  challengeBoardSig = '';
+  paintChallengeCard();
+}
+
+/**
+ * The board settled and the human won it: file the signed victory NOW — before the capsule's
+ * Play Again / Home keys exist to be tapped — so the point is already on the room's ledger when
+ * the tournament drawer opens. The room re-proves the signature, its own clock, the move depth,
+ * the goal row and the per-friend cap; a refusal only undoes the optimistic paint and refreshes.
+ */
+function recordChallengeMatchWin(won: boolean): void {
+  const session = challengeSession;
+  const pending = challengeSessionPending;
+  challengeSession = null;
+  challengeSessionPending = null;
+  challengeSessionSeq += 1;
+  if (!session || !won) {
+    challengeOptimisticWin = '';
+    challengeOptimisticSeq = 0;
+    void refreshChallengeCard();
+    return;
+  }
+  const moveCount = Math.max(0, Math.floor(state.turn));
+  const finalPawnPos = challengeGoalPawn();
+  const lastedMs = Date.now() - session.startedAt;
+  /* This device's own floor: a board that did not last 45 seconds or play 10 moves is not a
+     victory worth filing, and the room would refuse it anyway. */
+  if (lastedMs < CHALLENGE_MIN_SECONDS * 1000 || moveCount < CHALLENGE_MIN_MOVES) {
+    void refreshChallengeCard();
+    return;
+  }
+  const painted = challengeApplyWinFloor(session.mode);
+  void (async () => {
+    /* A token still in flight is awaited, never dropped: the start and the finish are two halves
+       of one session, and the finish is meaningless without the id the start minted. */
+    if (pending) await pending;
+    if (!session.matchId || !session.matchToken) {
+      challengeUndoWinFloor(painted);
+      void refreshChallengeCard();
+      return;
+    }
+    const view = await challengeCall('/api/challenge/match/finish', {
+      userId: String(tgUser()?.id ?? ''),
+      displayName: challengeDisplayNameLocal(),
+      mode: session.mode,
+      opponentId: session.opponentId,
+      matchId: session.matchId,
+      matchToken: session.matchToken,
+      moveCount,
+      durationSec: Math.max(0, Math.round(lastedMs / 1000)),
+      finalPawnPos,
+      moveLog: [],
+    });
+    if (view && typeof view.totalWins === 'number') {
+      /* The room answered with its own card: it is the truth, and it already holds this win. */
+      challengeOptimisticWin = '';
+      challengeOptimisticSeq = 0;
+      applyChallengeView(view);
+      return;
+    }
+    /* `already_recorded` does not refuse the WIN — the room's own settlement (or an earlier
+       report) already paid it, so the figure this card painted is right and the next read
+       confirms it. Every other reason means no counter moved, so the optimistic win goes back. */
+    if (view && view.reason === 'already_recorded') {
+      challengeOptimisticWin = '';
+      challengeOptimisticSeq = 0;
+      void refreshChallengeCard();
+      return;
+    }
+    /* Refused, offline or unreadable: the optimistic win goes back and the next read decides. */
+    challengeUndoWinFloor(painted);
+    void refreshChallengeCard();
   })();
 }
 

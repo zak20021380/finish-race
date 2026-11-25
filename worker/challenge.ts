@@ -33,6 +33,14 @@
  * launch instant with a full week on the clock, and every later round starts exactly one
  * `WEEK_MS` after the one before. The countdown a client paints is the same for every player and
  * a counter can never be farmed across a boundary.
+ *
+ * Track C — the signed match session (`match/start` → `match/finish`). The ticket above is bound to
+ * one board's start time; a session token is bound to the board AND to the seat that opened it, so
+ * a forged HTTP body cannot claim somebody else's victory. The room mints the id, stamps the
+ * clock, and signs `{ matchId, userId, mode, opponentId, startedAt, weekEnd }` with an
+ * HMAC-SHA256 key that lives only in the Durable Object's own storage. Redemption re-proves the
+ * signature, the single-use id, the server clock, the move depth, the goal row and the per-friend
+ * cap before a counter moves. The signing key is the one secret a client never sees.
  */
 
 export const CHALLENGE_KEY = 'challenge.v1';
@@ -81,6 +89,23 @@ export const CHALLENGE_MIN_MOVES = 10;
 export const MAX_WINS_PER_FRIEND = 3;
 /** How long an issued Hard AI ticket stays usable. */
 export const CHALLENGE_TICKET_TTL_MS = 3 * 60 * 60 * 1000;
+/**
+ * The server-clock floor a signed match session must clear before its victory can be redeemed:
+ * 45 seconds minus 3 seconds of network tolerance. A client's board clock starts on the tap and
+ * the room's starts on the request that follows it, so a real 45-second board always arrives
+ * comfortably above this line — while an instant "win" cannot.
+ */
+export const CHALLENGE_MATCH_MIN_MS = (CHALLENGE_MIN_SECONDS - 3) * 1000;
+/** The deepest board a victory report may claim: past this it is a scripted log, not a race. */
+export const CHALLENGE_MATCH_MAX_MOVES = 250;
+/** A session older than this is a stale tab, not a live board: the room refuses to credit it. */
+export const CHALLENGE_MATCH_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+/**
+ * Redeemed match ids the room keeps: pruned by age first, then capped oldest-first. The per-seat
+ * receipts (96 each) are the durable second lock behind it, so this map is a fast path, not the
+ * only proof — which is what lets it stay small enough to ride the one ledger value.
+ */
+export const CHALLENGE_USED_MATCHES_MAX = 1500;
 /** Bounds so one busy room cannot grow an unbounded ledger. */
 export const CHALLENGE_PLAYERS_MAX = 4000;
 export const CHALLENGE_OPPONENTS_MAX = 200;
@@ -145,6 +170,16 @@ export interface ChallengeState {
    * same 168-hour grid; when the field is absent the fixed launch epoch above wins.
    */
   seasonEpoch: number;
+  /**
+   * The HMAC key every match session token is signed with. It is generated once by the room and
+   * persisted with the ledger, so it is never derived from anything a client can read or guess.
+   */
+  matchSecret: string;
+  /**
+   * The match ids already redeemed in the live week (id → redeemed-at). The anti-replay lock: a
+   * token is worth exactly one victory, however many times its request is replayed.
+   */
+  usedMatchIds: Record<string, number>;
 }
 
 /** One public row of the weekly board. The internal room id is never part of it. */
@@ -412,9 +447,21 @@ const readSettlement = (raw: unknown): ChallengeSettlement | null => {
 
 /** Defensive parse of the ledger: an unreadable row is skipped, never fatal. */
 export function readChallengeState(raw: unknown): ChallengeState {
-  const out: ChallengeState = { entries: [], settlements: [], seasonEpoch: activeSeasonEpoch };
+  const out: ChallengeState = {
+    entries: [],
+    settlements: [],
+    seasonEpoch: activeSeasonEpoch,
+    matchSecret: '',
+    usedMatchIds: {},
+  };
   if (!raw || typeof raw !== 'object') return out;
-  const state = raw as { entries?: unknown; settlements?: unknown; seasonEpoch?: unknown };
+  const state = raw as {
+    entries?: unknown;
+    settlements?: unknown;
+    seasonEpoch?: unknown;
+    matchSecret?: unknown;
+    usedMatchIds?: unknown;
+  };
   /* Adopt the stored launch stamp BEFORE the rows are parsed: a row's fallback window must be
      computed on the season the ledger was written under, not on a different default. */
   out.seasonEpoch = setChallengeSeasonEpoch(state.seasonEpoch);
@@ -428,6 +475,16 @@ export function readChallengeState(raw: unknown): ChallengeState {
     for (const row of state.settlements) {
       const settlement = readSettlement(row);
       if (settlement) out.settlements.push(settlement);
+    }
+  }
+  /* The signing key rides the ledger as opaque text. A ledger written before the match pipeline
+     existed carries none, and the room mints one on its first `match/start`. */
+  out.matchSecret = readText(state.matchSecret, 128);
+  const used = state.usedMatchIds;
+  if (used && typeof used === 'object') {
+    for (const key of Object.keys(used).slice(-CHALLENGE_USED_MATCHES_MAX)) {
+      const at = readStamp((used as Record<string, unknown>)[key]);
+      if (at > 0) out.usedMatchIds[key.slice(0, 64)] = at;
     }
   }
   return out;
@@ -608,6 +665,36 @@ export interface FriendWinReport {
 }
 
 /**
+ * The one friend-ledger write: distinct opponent, single-use receipt, per-friend cap, counter.
+ * It judges nothing about the board — every caller has already proven the match its own way (the
+ * room's socket settlement by playing it, the token door by verifying the signature and the
+ * clock) — so two very different proofs can never diverge on what a friend win is worth.
+ */
+function creditFriendWin(
+  entry: ChallengeEntry,
+  now: number,
+  matchId: string,
+  opponentTgId: string,
+): ChallengeRefusal | null {
+  if (!entry.tgId || !/^[0-9]{1,20}$/.test(opponentTgId)) return 'self_opponent';
+  if (opponentTgId === entry.tgId) return 'self_opponent';
+  if (!matchId || entry.friendReceipts.includes(matchId)) return 'duplicate';
+  const beaten = entry.winsByOpponent[opponentTgId] ?? 0;
+  if (beaten >= MAX_WINS_PER_FRIEND) return 'friend_cap';
+  if (Object.keys(entry.winsByOpponent).length >= CHALLENGE_OPPONENTS_MAX
+    && !(opponentTgId in entry.winsByOpponent)) return 'friend_cap';
+  entry.friendReceipts.push(matchId);
+  if (entry.friendReceipts.length > CHALLENGE_RECEIPTS_MAX) {
+    entry.friendReceipts.splice(0, entry.friendReceipts.length - CHALLENGE_RECEIPTS_MAX);
+  }
+  entry.winsByOpponent[opponentTgId] = beaten + 1;
+  /* No ceiling here either: the friend cap above is the only limit that matters. */
+  entry.friendWins = Math.min(CHALLENGE_WINS_MAX, entry.friendWins + 1);
+  entry.updatedAt = now;
+  return null;
+}
+
+/**
  * Apply a room-settled friend win. The caller must already have proven both seats are distinct
  * verified Telegram accounts and computed the duration/moves from its own board.
  */
@@ -618,19 +705,215 @@ export function applyFriendWin(entry: ChallengeEntry, now: number, report: Frien
   if (!report.matchId || entry.friendReceipts.includes(report.matchId)) return 'duplicate';
   if (clampSeconds(report.durationSec) < CHALLENGE_MIN_SECONDS) return 'not_enough_time';
   if (Math.floor(report.moves) < CHALLENGE_MIN_MOVES) return 'not_enough_moves';
-  const beaten = entry.winsByOpponent[report.opponentTgId] ?? 0;
-  if (beaten >= MAX_WINS_PER_FRIEND) return 'friend_cap';
-  if (Object.keys(entry.winsByOpponent).length >= CHALLENGE_OPPONENTS_MAX
-    && !(report.opponentTgId in entry.winsByOpponent)) return 'friend_cap';
-  entry.friendReceipts.push(report.matchId);
-  if (entry.friendReceipts.length > CHALLENGE_RECEIPTS_MAX) {
-    entry.friendReceipts.splice(0, entry.friendReceipts.length - CHALLENGE_RECEIPTS_MAX);
+  return creditFriendWin(entry, now, report.matchId, report.opponentTgId);
+}
+
+/* ---------- the signed match session: mint, verify, redeem ---------- */
+
+/** The only two match kinds the tournament records. Anything else is refused at the door. */
+export type ChallengeMatchMode = 'hard_bot' | 'friend';
+
+/** One match kind, or null for every other value a request body might carry. */
+export function challengeMatchMode(raw: unknown): ChallengeMatchMode | null {
+  return raw === 'hard_bot' || raw === 'friend' ? raw : null;
+}
+
+/** A positive numeric Telegram id from a body field, or ''. Never a signed or decimal value. */
+export function challengeNumericId(raw: unknown): string {
+  const text = typeof raw === 'number'
+    ? (Number.isSafeInteger(raw) ? String(raw) : '')
+    : typeof raw === 'string' ? raw.trim().replace(/^tg-/, '') : '';
+  return /^[1-9][0-9]{0,19}$/.test(text) ? text : '';
+}
+
+/**
+ * Everything a session token proves. `opponentId` is the rival the client names for the friend
+ * track; the room does not take it on faith, it only uses it as the cap key (see
+ * `applyChallengeFriendWin`), because the friends track's own settlement is what pays a win.
+ */
+export interface ChallengeMatchToken {
+  matchId: string;
+  userId: string;
+  mode: ChallengeMatchMode;
+  opponentId: string;
+  startedAt: number;
+  weekEnd: number;
+}
+
+/** The token alphabet: URL-safe base64, so the value can ride a JSON body untouched. */
+const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+function base64UrlOf(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i];
+    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += TOKEN_ALPHABET[a >> 2];
+    out += TOKEN_ALPHABET[((a & 3) << 4) | (b >> 4)];
+    if (i + 1 < bytes.length) out += TOKEN_ALPHABET[((b & 15) << 2) | (c >> 6)];
+    if (i + 2 < bytes.length) out += TOKEN_ALPHABET[c & 63];
   }
-  entry.winsByOpponent[report.opponentTgId] = beaten + 1;
-  /* No ceiling here either: the friend cap above is the only limit that matters. */
-  entry.friendWins = Math.min(CHALLENGE_WINS_MAX, entry.friendWins + 1);
+  return out;
+}
+
+function base64UrlBytes(text: string): Uint8Array | null {
+  const clean = text.replace(/=+$/, '');
+  if (!clean || !/^[A-Za-z0-9_-]+$/.test(clean)) return null;
+  const out: number[] = [];
+  let buffer = 0;
+  let bits = 0;
+  for (const ch of clean) {
+    const value = TOKEN_ALPHABET.indexOf(ch);
+    if (value < 0) return null;
+    buffer = (buffer << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((buffer >> bits) & 0xff);
+      buffer &= (1 << bits) - 1;
+    }
+  }
+  return new Uint8Array(out);
+}
+
+const TOKEN_ENCODER = new TextEncoder();
+const TOKEN_DECODER = new TextDecoder();
+
+/** The room's one signing key, imported fresh per call: `sign` only, never `verify`. */
+function matchHmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    TOKEN_ENCODER.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+}
+
+/**
+ * Sign one match session: `base64url(payload).base64url(hmac)`. The payload travels in the clear —
+ * it is not a secret — but it cannot be altered without the key that only the room holds.
+ */
+export async function signChallengeMatchToken(secret: string, payload: ChallengeMatchToken): Promise<string> {
+  const body = base64UrlOf(TOKEN_ENCODER.encode(JSON.stringify(payload)));
+  const key = await matchHmacKey(secret);
+  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, TOKEN_ENCODER.encode(body)));
+  return body + '.' + base64UrlOf(signature);
+}
+
+/** The exact payload a token carries, or null for a forged, truncated or unreadable one. */
+export async function verifyChallengeMatchToken(
+  secret: string,
+  token: string,
+): Promise<ChallengeMatchToken | null> {
+  if (!secret || !token) return null;
+  const dot = token.indexOf('.');
+  if (dot <= 0 || dot === token.length - 1) return null;
+  const body = token.slice(0, dot);
+  const signature = base64UrlBytes(token.slice(dot + 1));
+  if (!signature) return null;
+  const key = await matchHmacKey(secret);
+  const expected = new Uint8Array(await crypto.subtle.sign('HMAC', key, TOKEN_ENCODER.encode(body)));
+  /* Equal length and equal bytes with no early exit: a timing side channel here would be a
+     signing oracle, which is the one thing this door must not offer. */
+  if (expected.length !== signature.length) return null;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i += 1) diff |= expected[i] ^ signature[i];
+  if (diff !== 0) return null;
+  const bytes = base64UrlBytes(body);
+  if (!bytes) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(TOKEN_DECODER.decode(bytes));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const claim = parsed as Partial<ChallengeMatchToken>;
+  const mode = challengeMatchMode(claim.mode);
+  const matchId = readText(claim.matchId, 64);
+  const userId = challengeNumericId(claim.userId);
+  const startedAt = readStamp(claim.startedAt);
+  const weekEnd = readStamp(claim.weekEnd);
+  if (!mode || !matchId || !userId || !startedAt || !weekEnd) return null;
+  return {
+    matchId,
+    userId,
+    mode,
+    opponentId: challengeNumericId(claim.opponentId),
+    startedAt,
+    weekEnd,
+  };
+}
+
+/**
+ * The 5th gate: a victory report may name the square its winning pawn stands on, and that square
+ * must be the goal row (`row === 0`, the board's FINISH). `null` means the body named no position
+ * at all — the gate is skipped exactly as the report contract allows — while `false` is a board
+ * that claims a win its pawn never reached.
+ */
+export function challengeGoalRow(raw: unknown): boolean | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const pos = raw as { row?: unknown; y?: unknown; r?: unknown };
+  const whole = (value: unknown): number | null => {
+    const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : Number.NaN;
+    return Number.isFinite(n) ? n : null;
+  };
+  const row = whole(pos.row) ?? whole(pos.y) ?? whole(pos.r);
+  if (row === null) return null;
+  return row === 0;
+}
+
+/**
+ * Credit one token-verified Hard Bot victory. The room already proved the signature, the clock,
+ * the depth and the board in `match/finish`, so this door only owns the single-use receipt and
+ * the counter — the same `botReceipts` ledger the ticket door writes, so a board can never be
+ * paid by both.
+ */
+export function applyChallengeBotWin(
+  entry: ChallengeEntry,
+  now: number,
+  matchId: string,
+): ChallengeRefusal | null {
+  rollChallengeEntry(entry, now);
+  if (!matchId) return 'no_ticket';
+  if (entry.botReceipts.includes(matchId)) return 'duplicate';
+  entry.botReceipts.push(matchId);
+  if (entry.botReceipts.length > CHALLENGE_RECEIPTS_MAX) {
+    entry.botReceipts.splice(0, entry.botReceipts.length - CHALLENGE_RECEIPTS_MAX);
+  }
+  /* No ceiling: every verified Hard AI win counts, for as long as the week runs. */
+  entry.hardBotWins = Math.min(CHALLENGE_WINS_MAX, entry.hardBotWins + 1);
   entry.updatedAt = now;
   return null;
+}
+
+/**
+ * Credit one token-verified friend victory. The room already proved the signature, the clock, the
+ * depth and the board in `match/finish`, so this door only owns what is left: the distinct
+ * opponent, the per-friend cap and the single-use receipt — the same ledger the room's socket
+ * settlement writes, so a board can never be paid by both.
+ */
+export function applyChallengeFriendWin(
+  entry: ChallengeEntry,
+  now: number,
+  matchId: string,
+  opponentTgId: string,
+): ChallengeRefusal | null {
+  rollChallengeEntry(entry, now);
+  return creditFriendWin(entry, now, matchId, opponentTgId);
+}
+
+/** Drop redeemed match ids that have aged out, then the oldest ones over the cap. */
+export function trimChallengeMatchIds(used: Map<string, number>, now: number): void {
+  for (const [key, at] of used) {
+    if (now - at > CHALLENGE_KEEP_MS) used.delete(key);
+  }
+  const over = used.size - CHALLENGE_USED_MATCHES_MAX;
+  if (over <= 0) return;
+  const oldest = [...used.entries()].sort((a, b) => a[1] - b[1]).slice(0, over);
+  for (const [key] of oldest) used.delete(key);
 }
 
 /**
@@ -739,5 +1022,25 @@ export function challengeFallbackSeat(raw: unknown): ChallengeFallbackSeat | nul
     playerId: 'tg-' + rawId,
     tgId: rawId,
     name: challengeDisplayName(body.displayName, declared, rawId),
+  };
+}
+
+/**
+ * The declared seat the two match doors accept when the signed `initData` is absent — the same
+ * Telegram Desktop / external WebView case the join door covers, with one difference: a handle is
+ * not required. A match session is a background call the player never sees, so a body that names
+ * a real id and a printable name is enough to open it. It can enroll and it can be signed, but it
+ * still cannot credit a win: the counter only moves when a token the room itself minted for that
+ * id is redeemed against the room's own clock.
+ */
+export function challengeDeclaredSeat(raw: unknown): ChallengeFallbackSeat | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as { userId?: unknown; handle?: unknown; displayName?: unknown };
+  const tgId = challengeNumericId(body.userId);
+  if (!tgId) return null;
+  return {
+    playerId: 'tg-' + tgId,
+    tgId,
+    name: challengeDisplayName(body.displayName, body.handle, tgId),
   };
 }

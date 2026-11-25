@@ -95,12 +95,16 @@ import { REFERRAL_CONFIG, arenaRankOf, utcMonthKey } from '../shared/referralCon
 import { referralBinding, type ReferralBindingPayload } from './referrals';
 import { relicShelter } from '../shared/relic';
 import {
-  CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_PLAYERS_MAX,
+  CHALLENGE_FORFEIT_MIN_SECONDS, CHALLENGE_KEY, CHALLENGE_KEEP_MS, CHALLENGE_MATCH_MAX_AGE_MS,
+  CHALLENGE_MATCH_MAX_MOVES, CHALLENGE_MATCH_MIN_MS, CHALLENGE_MIN_MOVES, CHALLENGE_PLAYERS_MAX,
   CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
   PRIZE_BY_RANK, TOTAL_PRIZE_POOL, prizeForRank,
-  applyFriendWin, applyHardBotWin, challengeBoard, challengeDisplayName, challengeFallbackSeat,
+  applyChallengeBotWin, applyChallengeFriendWin, applyFriendWin, applyHardBotWin, challengeBoard,
+  challengeDeclaredSeat, challengeDisplayName, challengeFallbackSeat, challengeGoalRow,
+  challengeMatchMode, challengeNumericId,
   challengeSeasonEpoch, challengeSeasonMigrated, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
+  signChallengeMatchToken, trimChallengeMatchIds, verifyChallengeMatchToken,
   type ChallengeBoard, type ChallengeEntry, type ChallengeIdentity, type ChallengeSettlement,
 } from './challenge';
 import {
@@ -3265,6 +3269,14 @@ export class MatchmakerDO {
   private challengeIdentities = new Map<string, ChallengeIdentity>();
   /** The locked Top-3 of every week that has already closed, newest last. */
   private challengeSettlements: ChallengeSettlement[] = [];
+  /**
+   * The HMAC-SHA256 key every match session token is signed with. Generated once (32 random
+   * bytes) and persisted with the ledger, so it never leaves the object and is never derived
+   * from anything a client can read. Empty until the first session is minted.
+   */
+  private challengeMatchSecret = '';
+  /** Redeemed match ids of the live week: id → redeemed-at. The anti-replay lock. */
+  private challengeUsedMatches = new Map<string, number>();
   private challengeLoaded = false;
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
@@ -3489,6 +3501,13 @@ export class MatchmakerDO {
             for (const settlement of state.settlements) {
               if (now - settlement.weekEnd > CHALLENGE_KEEP_MS) continue;
               this.challengeSettlements.push(settlement);
+            }
+            /* The match pipeline's own two durable pieces: the signing key it never re-derives,
+               and the ids it has already paid. A ledger from before the pipeline carries neither,
+               and the room mints the key on its first `match/start`. */
+            this.challengeMatchSecret = state.matchSecret;
+            for (const [matchId, at] of Object.entries(state.usedMatchIds)) {
+              this.challengeUsedMatches.set(matchId, at);
             }
             this.challengeLoaded = true;
             /* The re-anchored epoch is durable BEFORE the first card is answered: a boot that had
@@ -11359,9 +11378,18 @@ export class MatchmakerDO {
     for (const id of this.challengeIdentities.keys()) {
       if (!this.challengeEntries.has(id)) this.challengeIdentities.delete(id);
     }
+    /* The anti-replay ledger is bounded on its own clock: aged-out ids go first, then the oldest
+       ones over the cap. The per-seat receipts stay the durable second lock behind it. */
+    trimChallengeMatchIds(this.challengeUsedMatches, now);
   }
 
-  private challengeSnapshot(): { entries: ChallengeEntry[]; settlements: ChallengeSettlement[]; seasonEpoch: number } {
+  private challengeSnapshot(): {
+    entries: ChallengeEntry[];
+    settlements: ChallengeSettlement[];
+    seasonEpoch: number;
+    matchSecret: string;
+    usedMatchIds: Record<string, number>;
+  } {
     return {
       entries: [...this.challengeEntries.values()].map((entry) => ({
         ...entry,
@@ -11374,6 +11402,10 @@ export class MatchmakerDO {
       /* The epoch rides the ledger: a later boot resumes the very same 168-hour grid instead of
          having to guess (or fall back to the V2 floor) again. */
       seasonEpoch: challengeSeasonEpoch(),
+      /* The signing key and the redeemed ids ride it for the same reason: a reboot must not mint
+         a new key (every token in flight would die) nor forget which boards were already paid. */
+      matchSecret: this.challengeMatchSecret,
+      usedMatchIds: Object.fromEntries(this.challengeUsedMatches),
     };
   }
 
@@ -11477,6 +11509,21 @@ export class MatchmakerDO {
   }
 
   /**
+   * The room's own signing key for match session tokens: 32 random bytes as hex, generated once
+   * and kept in the ledger. It is never sent to a client, never derived from a player field and
+   * never rotated on a request — a reboot reads it back, so a token minted before the restart
+   * still verifies.
+   */
+  private challengeMatchKey(): string {
+    if (!this.challengeMatchSecret) {
+      const draw = new Uint8Array(32);
+      crypto.getRandomValues(draw);
+      this.challengeMatchSecret = [...draw].map((n) => n.toString(16).padStart(2, '0')).join('');
+    }
+    return this.challengeMatchSecret;
+  }
+
+  /**
    * Credit a friend win the room itself settled. Called from both settlement paths, so a win is
    * counted once, off the room's clock and the room's turn count — never from a result payload.
    * Both seats must be distinct verified Telegram accounts; a forfeit must clear 60 seconds.
@@ -11513,16 +11560,44 @@ export class MatchmakerDO {
     this.persistChallenge();
   }
 
+  /**
+   * True when the room's own settlement already decided a friends 1v1 this seat just played.
+   *
+   * The friends track has exactly one authoritative writer: `creditChallengeFriendWin`, called
+   * the instant a two-person room settles. A token redemption is only ever the FALLBACK for a
+   * board the room could not settle — a socket that died before the verdict — so when a settled
+   * two-seat room of this player is still held (settled rooms live ten minutes), the room's
+   * verdict is final and the report is refused. Without this the same win would be paid twice,
+   * and a player who LOST a settled board could file a victory the room never awarded.
+   */
+  private challengeFriendSettledByRoom(playerId: string): boolean {
+    for (const live of this.rooms.values()) {
+      if (!live.settled || live.settledAt <= 0) continue;
+      if (live.members.length !== 2) continue;
+      if (!live.members.some((member) => member?.id === playerId)) continue;
+      return true;
+    }
+    return false;
+  }
+
   /** The challenge's HTTP surface. Every counter here is the room's, never the body's. */
   private async challenge(request: Request, url: URL): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CHALLENGE_CORS });
     let who = await identifyPlayerRequest(request, this.env);
     /* A verified Telegram signature always wins. When it is absent, expired or fails its check
        (Telegram Desktop / external WebView), the free-join door accepts the declared seat from
-       the body. Enrollment is the only thing it writes — no win counter is credited from a body. */
-    if (url.pathname === '/api/challenge/join' && request.method === 'POST'
-      && (!who || who.guest)) {
-      const seat = challengeFallbackSeat(await readBody(request.clone()));
+       the body. Enrollment is the only thing it writes — no win counter is credited from a body.
+       The two match doors accept the same declared seat: they are background calls the player
+       never sees, and the token they mint is still bound to the room's own clock and signature. */
+    if (request.method === 'POST' && (!who || who.guest)
+      && (url.pathname === '/api/challenge/join'
+        || url.pathname === '/api/challenge/match/start'
+        || url.pathname === '/api/challenge/match/finish')) {
+      const body = await readBody(request.clone());
+      /* The join door keeps its exact old contract (a declared handle is required there); only
+         the two match doors take the looser declared seat, because they are background calls. */
+      const seat = challengeFallbackSeat(body)
+        ?? (url.pathname === '/api/challenge/join' ? null : challengeDeclaredSeat(body));
       if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
     }
     if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
@@ -11634,6 +11709,110 @@ export class MatchmakerDO {
         /* The client reads either spelling; `weekEnd` is the canonical join answer. */
         weekEnd: entry.windowEnd,
       }), 200, CHALLENGE_CORS);
+    }
+
+    /* ---- the signed match session: a token at board start, a redemption at victory ---- */
+
+    /* Step A. The room mints the id, stamps its own clock and signs the claim — for the verified
+       seat, or for the declared one a desktop WebView had to name. The body's own clock and
+       counters are never signed: only what this object just wrote is. */
+    if (url.pathname === '/api/challenge/match/start') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const body = await readBody(request);
+      const mode = challengeMatchMode(body.mode);
+      if (!mode) return json({ ok: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
+      if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+      const entry = this.challengeEntry(who, now);
+      const matchId = crypto.randomUUID();
+      const matchToken = await signChallengeMatchToken(this.challengeMatchKey(), {
+        matchId,
+        userId: who.tgId,
+        mode,
+        opponentId: mode === 'friend' ? challengeNumericId(body.opponentId) : '',
+        startedAt: now,
+        weekEnd: entry.windowEnd,
+      });
+      this.trimChallenge(now);
+      /* The seat — and the key that signs for it — is durable before the token is answered, so a
+         reload the instant after a board starts still redeems against a stored secret. */
+      await this.flushChallenge();
+      return json({ ok: true, matchId, matchToken, startedAt: now }, 200, CHALLENGE_CORS);
+    }
+
+    /* Step B. The six gates, in order, before a counter can move. Nothing below trusts a body:
+       the signature, the clock and the depth are the room's own readings. */
+    if (url.pathname === '/api/challenge/match/finish') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, CHALLENGE_CORS);
+      const body = await readBody(request);
+      const mode = challengeMatchMode(body.mode);
+      if (!mode) return json({ ok: false, recorded: false, reason: 'bad_mode' }, 400, CHALLENGE_CORS);
+      if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, CHALLENGE_CORS);
+      const matchId = typeof body.matchId === 'string' ? body.matchId.trim().slice(0, 64) : '';
+      const token = typeof body.matchToken === 'string' ? body.matchToken.trim().slice(0, 4096) : '';
+      const claim = await verifyChallengeMatchToken(this.challengeMatchKey(), token);
+      /* Gate 1 — the signature: the token must be the room's own, for this seat, this mode and
+         this exact match id. A forged body dies here, before anything else is read. */
+      if (!claim || claim.matchId !== matchId || claim.userId !== who.tgId || claim.mode !== mode) {
+        return json({ ok: false, recorded: false, reason: 'bad_token' }, 400, CHALLENGE_CORS);
+      }
+      /* Gate 2 — single use: one token is worth one victory, however often it is replayed. */
+      if (this.challengeUsedMatches.has(matchId)) {
+        return json({ ok: false, recorded: false, reason: 'already_recorded' }, 409, CHALLENGE_CORS);
+      }
+      /* Gate 3 — the room's clock. The client's `durationSec` is accepted but never trusted: the
+         token's `startedAt` was stamped by this object, and 42s is the 45s floor less 3s of
+         network tolerance. */
+      const elapsed = now - claim.startedAt;
+      if (elapsed < CHALLENGE_MATCH_MIN_MS) {
+        return json({ ok: false, recorded: false, reason: 'too_fast' }, 400, CHALLENGE_CORS);
+      }
+      if (elapsed > CHALLENGE_MATCH_MAX_AGE_MS) {
+        return json({ ok: false, recorded: false, reason: 'stale_token' }, 409, CHALLENGE_CORS);
+      }
+      /* A win never crosses a boundary: the window the token was signed in must still be open. */
+      if (now >= claim.weekEnd) {
+        return json({ ok: false, recorded: false, reason: 'window_closed' }, 409, CHALLENGE_CORS);
+      }
+      /* Gate 4 — depth: a real board plays at least ten moves, and no board plays 250. */
+      const moveCount = typeof body.moveCount === 'number' && Number.isFinite(body.moveCount)
+        ? Math.floor(body.moveCount) : -1;
+      if (moveCount < CHALLENGE_MIN_MOVES || moveCount > CHALLENGE_MATCH_MAX_MOVES) {
+        return json({ ok: false, recorded: false, reason: 'not_enough_moves' }, 400, CHALLENGE_CORS);
+      }
+      /* Gate 5 — the board: a claimed victory names the goal row its pawn reached. */
+      if (challengeGoalRow(body.finalPawnPos) === false) {
+        return json({ ok: false, recorded: false, reason: 'not_won' }, 400, CHALLENGE_CORS);
+      }
+      /* Gate 6 — the friend track: a distinct opponent, then at most three wins against them. */
+      const opponentId = mode === 'friend' ? challengeNumericId(body.opponentId) : '';
+      if (mode === 'friend' && (!opponentId || opponentId === who.tgId)) {
+        return json({ ok: false, recorded: false, reason: 'self_opponent' }, 400, CHALLENGE_CORS);
+      }
+      const entry = this.challengeEntry(who, now);
+      /* A friends 1v1 the room itself settled is already paid (or already lost): the room's own
+         verdict is final, and this report is only the fallback for a board it never settled. */
+      if (mode === 'friend' && this.challengeFriendSettledByRoom(who.playerId)) {
+        return json({ ok: false, recorded: false, reason: 'already_recorded' }, 409, CHALLENGE_CORS);
+      }
+      const refusal = mode === 'hard_bot'
+        ? applyChallengeBotWin(entry, now, matchId)
+        : applyChallengeFriendWin(entry, now, matchId, opponentId);
+      if (refusal) {
+        const reason = refusal === 'duplicate' ? 'already_recorded'
+          : refusal === 'friend_cap' ? 'friend_cap_reached'
+            : refusal;
+        return json(
+          { ok: false, recorded: false, reason },
+          reason === 'already_recorded' ? 409 : 400,
+          CHALLENGE_CORS,
+        );
+      }
+      /* Paid: the id is spent before the answer leaves, and the whole ledger is durable before
+         the client is told it can stop asking. */
+      this.challengeUsedMatches.set(matchId, now);
+      this.trimChallenge(now);
+      await this.flushChallenge();
+      return json(view(entry, { ok: true, recorded: true }), 200, CHALLENGE_CORS);
     }
 
     if (url.pathname === '/api/challenge/start') {

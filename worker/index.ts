@@ -428,10 +428,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
-  /* The weekly tournament's four doors — /join, /me, /leaderboard and /claim — all live in the
-     Challenge Durable Object. The room proves the caller's signed initData itself (with a gated
-     localhost/dev fallback for desktop WebViews) and owns the ledger: a win is never credited
-     from a request body. */
+  /* The weekly tournament's doors — /join, /me, /leaderboard, /claim, and the signed match
+     pipeline's /match/start and /match/finish — all live in the Challenge Durable Object (the
+     MATCHMAKER singleton that owns the ledger). The room proves the caller's signed initData
+     itself (with a gated localhost/dev fallback for desktop WebViews) and owns the ledger: a win
+     is never credited from a request body, only from a token the room itself signed. */
   if (url.pathname.startsWith('/api/challenge/')) {
     if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
