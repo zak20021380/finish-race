@@ -915,6 +915,12 @@ export interface ServerMetrics {
    * growth chart plots, so the Stats tab reads both cards the same way.
    */
   ads: AdMetricsReading;
+  /**
+   * The newest timestamped things the room actually saw — a registration, a settled board, a
+   * verified ad view — newest first, capped at `ANALYTICS_EVENT_KEEP`. Every entry carries the
+   * exact epoch millisecond it happened, so the panel can print the minute in Tehran's own clock.
+   */
+  events: AnalyticsEvent[];
   /** Stars received from paid invoices (the lifetime VIP/storefront ledger). */
   starsRevenueTotal: number;
   /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
@@ -1018,7 +1024,32 @@ export interface SeriesPoint {
   matches: number;
 }
 
+/**
+ * One timestamped event of the operator's exact-minute log. The room records the instant it
+ * judged, never a bucket edge: the panel prints `ts` in `Asia/Tehran` and the minute is real.
+ */
+export interface AnalyticsEvent {
+  /** What happened: a registration, a settled board, or a verified rewarded-ad completion. */
+  type: 'signup' | 'pvp' | 'bot' | 'ad';
+  /** The exact instant it landed, epoch ms. */
+  ts: number;
+  /** Who or which surface, when the room knows: a player name, a match type, a placement. */
+  label?: string;
+}
+
+/** The event log's cap: the newest rows the panel can list, and the ceiling on what is stored. */
+const ANALYTICS_EVENT_KEEP = 25;
+
+/** The event log, unread: an empty ring plots an empty list, never an invented row. */
+const NO_EVENTS: Pick<ServerMetrics, 'events'> = { events: [] };
+
 /* ---------- durable gameplay counters ---------- */
+
+/** One settled board as the event log keeps it: the instant, and the type that was played. */
+interface MatchLogEntry {
+  ts: number;
+  mode: MatchMode;
+}
 
 /** The counters that outlive an eviction; empty storage means exact zeroes. */
 interface GameMetrics {
@@ -1034,6 +1065,12 @@ interface GameMetrics {
   matchesByModeHour: Record<MatchMode, Record<string, number>>;
   /** The same hourly buckets again, cut by how many seats the board fielded. */
   matchesByPlayersHour: Record<'2' | '3' | '4', Record<string, number>>;
+  /**
+   * The newest settled boards, each with the exact millisecond it settled. Bounded by
+   * `ANALYTICS_EVENT_KEEP`, so the operator's minute-by-minute log costs a few hundred bytes and
+   * can never grow with the playerbase.
+   */
+  matchLog: MatchLogEntry[];
 }
 
 /** The two tags every completed match carries into the bucket counters. */
@@ -1053,6 +1090,7 @@ const zeroGameMetrics = (): GameMetrics => ({
   matchesByHour: {},
   matchesByModeHour: { bot: {}, pvp: {}, arena: {} },
   matchesByPlayersHour: { '2': {}, '3': {}, '4': {} },
+  matchLog: [],
 });
 
 /* ---------- the Nations Cup ledger ---------- */
@@ -1217,6 +1255,28 @@ function readMatchHours(raw: unknown): Record<string, number> {
   return out;
 }
 
+/**
+ * The stored match log, clamped: a real instant inside the retained window, and a mode this room
+ * actually plays. Anything else is dropped rather than printed as a timestamp that never happened.
+ */
+function readMatchLog(raw: unknown): MatchLogEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const now = Date.now();
+  const cutoff = now - MATCH_BUCKET_KEEP_HOURS * HOUR_MS;
+  const out: MatchLogEntry[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const entry = row as Record<string, unknown>;
+    const ts = whole(entry.ts);
+    const mode = entry.mode;
+    if (!ts || ts < cutoff || ts > now + 60_000) continue;
+    if (mode !== 'bot' && mode !== 'pvp' && mode !== 'arena') continue;
+    out.push({ ts, mode });
+  }
+  out.sort((a, b) => a.ts - b.ts);
+  return out.slice(-ANALYTICS_EVENT_KEEP);
+}
+
 /** A stored counter blob, clamped field by field; anything missing is zero. */
 function readGameMetrics(raw: unknown): GameMetrics {
   const r = raw as Partial<GameMetrics> | null | undefined;
@@ -1238,6 +1298,7 @@ function readGameMetrics(raw: unknown): GameMetrics {
       '3': byPlayers('3'),
       '4': byPlayers('4'),
     },
+    matchLog: readMatchLog(r?.matchLog),
   };
 }
 
@@ -1447,8 +1508,12 @@ interface AdLedger {
   hourly: Record<string, AdBucket>;
   /** Keyed by UTC calendar day (`YYYY-MM-DD`), exactly like the growth rings. */
   daily: Record<string, AdBucket>;
-  /** `[eventId, at]`: the receipts that make a retried report idempotent. */
-  receipts: [string, number][];
+  /**
+   * `[eventId, at, placement]`: the receipts that make a retried report idempotent. The placement
+   * rides along so the operator's event log can name the surface a view was served on; a receipt
+   * written before it existed simply has no third element.
+   */
+  receipts: [string, number, AdPlacement?][];
 }
 
 /** One window of the ads payload: how many views, and how many distinct seats behind them. */
@@ -1554,9 +1619,11 @@ function readAdLedger(raw: unknown, now: number): AdLedger {
   readRing(row.daily, led.daily);
   if (Array.isArray(row.receipts)) {
     for (const entry of row.receipts) {
-      if (!Array.isArray(entry) || entry.length !== 2) continue;
+      if (!Array.isArray(entry) || entry.length < 2) continue;
       const id = adEventIdOf(entry[0]);
-      if (id) led.receipts.push([id, whole(entry[1])]);
+      if (!id) continue;
+      const placement = adPlacementOf(entry[2]);
+      led.receipts.push(placement ? [id, whole(entry[1]), placement] : [id, whole(entry[1])]);
     }
   }
   pruneAds(led, now);
@@ -5316,6 +5383,7 @@ export class MatchmakerDO {
     const series = guarded('series', () => this.growthWindows(now, mode), NO_SERIES);
     const ads = guarded('ads', () => this.adsReading(now), NO_ADS);
     const stars = guarded('stars', () => this.starsReading(), NO_STARS);
+    const events = guarded('events', () => this.eventsReading(), NO_EVENTS);
     const environment = guarded('environment', () => this.envLabel(hostname), 'unknown');
     return {
       ok: true,
@@ -5329,6 +5397,7 @@ export class MatchmakerDO {
       ...series,
       ...ads,
       ...stars,
+      ...events,
       degraded,
     };
   }
@@ -5359,6 +5428,34 @@ export class MatchmakerDO {
       vaultPendingPayoutsStars: pendingStars,
       vaultPaidOutStars: paid,
     };
+  }
+
+  /**
+   * The newest timestamped events this room can prove, newest first, capped at
+   * `ANALYTICS_EVENT_KEEP`: a registration from the registry's own `firstSeen`, a settled board
+   * from the bounded match log, and a verified ad view from the receipts ring.
+   *
+   * Not one row is bucketed, rounded or modelled — each carries the exact millisecond the room
+   * judged, which is what lets the panel print the minute on Tehran's clock instead of an hour bin.
+   */
+  private eventsReading(): Pick<ServerMetrics, 'events'> {
+    const out: AnalyticsEvent[] = [];
+    for (const player of this.players.values()) {
+      if (player.firstSeen > 0) out.push({ type: 'signup', ts: player.firstSeen, label: player.name });
+    }
+    for (const entry of this.gameMetrics.matchLog) {
+      const label = entry.mode === 'bot' ? 'VS BOT' : entry.mode === 'arena' ? 'Arena' : 'PVP';
+      out.push({ type: entry.mode === 'bot' ? 'bot' : 'pvp', ts: entry.ts, label });
+    }
+    for (const receipt of this.ads.receipts) {
+      const placement = receipt[2];
+      const label = placement === 'recover_tiq' ? 'TIQ shield'
+        : placement === 'double_coins' ? 'Double coins'
+          : 'Ad view';
+      out.push({ type: 'ad', ts: receipt[1], label });
+    }
+    out.sort((a, b) => b.ts - a.ts);
+    return { events: out.slice(0, ANALYTICS_EVENT_KEEP) };
   }
 
   /** Distinct players whose last sighting falls inside the rolling day, for one slice. */
@@ -5409,6 +5506,7 @@ export class MatchmakerDO {
       ...NO_SERIES,
       ...NO_ADS,
       ...NO_STARS,
+      ...NO_EVENTS,
       degraded: ['telemetry', reasonOf(err)],
     };
   }
@@ -5661,7 +5759,7 @@ export class MatchmakerDO {
     const slot = this.adSlotOf(seat, at);
     this.adStamp(led.hourly, String(Math.floor(at / HOUR_MS)), slot);
     this.adStamp(led.daily, this.growthDayKey(dayIndexOf(at)), slot);
-    led.receipts.push([eventId, at]);
+    led.receipts.push([eventId, at, placement]);
     this.adReceipts.add(eventId);
     pruneAds(led, at);
     /* The receipt set follows the ring exactly: a receipt the prune dropped must not keep
@@ -7617,6 +7715,12 @@ export class MatchmakerDO {
     prune(this.gameMetrics.matchesByHour);
     for (const mode of MATCH_MODES) prune(this.gameMetrics.matchesByModeHour[mode]);
     for (const seats of ['2', '3', '4'] as const) prune(this.gameMetrics.matchesByPlayersHour[seats]);
+    /* the minute-by-minute log: one row per settlement, capped, never a bucket edge */
+    this.gameMetrics.matchLog.push({ ts: now, mode: tag?.mode ?? 'pvp' });
+    const logCutoff = now - MATCH_BUCKET_KEEP_HOURS * HOUR_MS;
+    this.gameMetrics.matchLog = this.gameMetrics.matchLog
+      .filter((entry) => entry.ts >= logCutoff)
+      .slice(-ANALYTICS_EVENT_KEEP);
   }
 
   /** Matches stamped inside a rolling window for one slice, read back from hourly buckets. */

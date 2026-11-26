@@ -417,6 +417,11 @@ export interface ServerMetrics {
    * reads its own exact zeroes rather than inventing a figure.
    */
   ads?: AdsMetrics;
+  /**
+   * The newest timestamped events the room recorded, newest first. Absent on a Worker that predates
+   * the log; the card then prints its empty note rather than inventing a row.
+   */
+  events?: AnalyticsEvent[];
   /** Stars received from paid invoices. */
   starsRevenueTotal: number;
   /** Stars unlocked in the Stars Vault, excluding the free starter gift. */
@@ -442,6 +447,20 @@ export interface SeriesPoint {
   signups: number;
   active: number;
   matches: number;
+}
+
+/**
+ * One row of the operator's exact-minute event log, exactly as the Worker recorded it. `ts` is the
+ * instant the room judged — never a bucket edge — so the card can print the minute it happened in
+ * `Asia/Tehran` instead of the hour bin it was folded into.
+ */
+export interface AnalyticsEvent {
+  /** A registration, a settled board, or a verified rewarded-ad completion. */
+  type: 'signup' | 'pvp' | 'bot' | 'ad';
+  /** The exact instant it landed, epoch ms. */
+  ts: number;
+  /** Who or which surface, when the Worker knew: a player name, a match type, a placement. */
+  label?: string;
 }
 
 /** One window of the ad reading: how many verified views, and how many distinct seats behind them. */
@@ -570,6 +589,28 @@ function normalizeAds(value: unknown): AdsMetrics {
   };
 }
 
+/**
+ * The event log, clamped: a known type, a real instant, a label that cannot carry markup, and only
+ * the newest rows the card can list. A row it cannot trust is dropped, never guessed at.
+ */
+function metricEvents(raw: unknown): AnalyticsEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const now = Date.now();
+  const out: AnalyticsEvent[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const row = entry as Record<string, unknown>;
+    const type = row.type;
+    if (type !== 'signup' && type !== 'pvp' && type !== 'bot' && type !== 'ad') continue;
+    const ts = metricCount(row.ts);
+    if (!ts || ts > now + 60_000) continue;
+    const label = typeof row.label === 'string' ? row.label.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+    out.push(label ? { type, ts, label } : { type, ts });
+  }
+  out.sort((a, b) => b.ts - a.ts);
+  return out.slice(0, 25);
+}
+
 /** The fields a genuine reading always carries; at least one must be present to accept a body. */
 const METRIC_FIELDS = ['timestamp', 'activeRooms', 'totalUsers', 'matchesCompleted', 'series24h'] as const;
 
@@ -622,6 +663,7 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     series7d: metricSeries(row.series7d),
     series30d: metricSeries(row.series30d),
     ads: normalizeAds(row.ads),
+    events: metricEvents(row.events),
     starsRevenueTotal: metricCount(row.starsRevenueTotal),
     vaultUnlockedTotal: metricCount(row.vaultUnlockedTotal),
     vaultPendingPayoutsCount: metricCount(row.vaultPendingPayoutsCount),
@@ -1969,6 +2011,10 @@ export function createAdmin(api: AdminApi): Admin {
   const statTrendSlab = statTrendRead?.closest<HTMLElement>('.adm-trend') ?? null;
   const statTrendTs = $<HTMLElement>('stat-trend-ts');
   const statTrendTok = $<HTMLElement>('stat-trend-tok');
+  /* the exact event log under the window totals: the newest timestamped rows the Worker kept */
+  const statEventsList = $<HTMLElement>('stat-events-list');
+  const statEventsEmpty = $<HTMLElement>('stat-events-empty');
+  const statEventsCount = $<HTMLElement>('stat-events-count');
   /* the watched-ads card: the room's verified completion count, its ring and its placement split */
   const statAdsTotal = $<HTMLElement>('stat-ads-total');
   const statAdsDay = $<HTMLElement>('stat-ads-day');
@@ -2460,6 +2506,24 @@ export function createAdmin(api: AdminApi): Admin {
   /** The figure the executive grid prints: grouped, never a raw run of digits. */
   const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
 
+  /**
+   * Paint a reading as one LTR run: every digit, stamp and count this card prints rides a
+   * `<bdi dir="ltr">`, so a Persian or Arabic panel can mirror the layout without ever
+   * reordering `THU 14:27` or splitting a figure down the middle.
+   */
+  function setLtrText(el: HTMLElement | null, text: string): void {
+    if (!el) return;
+    const first = el.firstElementChild;
+    let bdi = first instanceof HTMLElement && first.tagName === 'BDI' ? first : null;
+    if (!bdi) {
+      el.textContent = '';
+      bdi = document.createElement('bdi');
+      el.append(bdi);
+    }
+    bdi.setAttribute('dir', 'ltr');
+    bdi.textContent = text;
+  }
+
   /** A server-computed percentage, printed as a whole number. */
   const rateText = (n: number): string => `${Math.max(0, Math.min(100, Math.round(n)))}%`;
 
@@ -2492,30 +2556,60 @@ export function createAdmin(api: AdminApi): Admin {
   const TREND_BASE = TREND_PAD.t + TREND_IH;
 
   /**
-   * The chart reads in Tehran time (UTC+3:30), the operator's own clock, rather than the UTC days
-   * the Worker keys its buckets by. One zone-aware formatter is built once and reused: the
-   * inspector repaints on every pointer move, and building an `Intl` object per frame is a real
-   * cost on a phone.
+   * The card reads on Tehran's own clock (`Asia/Tehran`, a strict UTC+03:30) — the operator's clock,
+   * never the device's, and never a hand-added offset. `Intl` owns the shift: mixing `getHours()`
+   * with a `+3.5 * 3600_000` constant is exactly what drifts a pill two to three hours behind the
+   * data it labels.
+   *
+   * Each formatter is built once and reused: the inspector repaints on every pointer move, and
+   * building an `Intl` object per frame is a real cost on a phone.
    */
   const TREND_ZONE = 'Asia/Tehran';
-  /** The suffix the inspector prints after a timestamp, instead of the old hardcoded `UTC`. */
-  const TREND_ZONE_LABEL = 'Tehran';
+  /**
+   * The suffix every stamp carries, so a reading can never be mistaken for the device's clock. An
+   * engine that ships without the zone data falls back to `UTC` and says so, rather than printing
+   * Tehran's label over digits that are not Tehran's.
+   */
+  let TREND_ZONE_LABEL = 'Tehran';
 
-  const trendZoneFmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: TREND_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
+  /** One zone-aware formatter for one job, or the same job in `UTC` when the zone is unknown. */
+  const trendZoneFmt = (options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone: TREND_ZONE, ...options });
+    } catch {
+      TREND_ZONE_LABEL = 'UTC';
+      return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...options });
+    }
+  };
+
+  /**
+   * `Thu 14:27` — the exact instant to the minute, on the operator's wall clock. `hour12: false`
+   * beside `hourCycle: 'h23'` is the pairing that prints `00`–`23` on every engine.
+   */
+  const trendStampFmt = trendZoneFmt({
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, hourCycle: 'h23',
   });
+  /** `Fri Oct 9` — the day a daily bucket opens on, on the Tehran calendar. */
+  const trendDayFmt = trendZoneFmt({ weekday: 'short', month: 'short', day: 'numeric' });
 
-  /** Every field of `ms` exactly as `Asia/Tehran` reads it, keyed by part type, in one pass. */
-  function trendZoneParts(ms: number): Map<string, string> {
+  /** Every field of `ms` exactly as that formatter's zone reads it, keyed by part type. */
+  function trendParts(fmt: Intl.DateTimeFormat, ms: number): Map<string, string> {
     const out = new Map<string, string>();
-    for (const part of trendZoneFmt.formatToParts(new Date(ms))) out.set(part.type, part.value);
+    for (const part of fmt.formatToParts(new Date(ms))) out.set(part.type, part.value);
     return out;
+  }
+
+  /** `14:05` — the zone wall clock of an instant: `00`–`23`, minutes always two digits. */
+  function trendClockOf(ms: number): string {
+    const parts = trendParts(trendStampFmt, ms);
+    const hour = parts.get('hour') ?? '00';
+    return `${hour === '24' ? '00' : hour}:${parts.get('minute') ?? '00'}`;
+  }
+
+  /** `Thu 14:05` — the exact instant, weekday included, as the operator's clock reads it. */
+  function trendStampOf(ms: number): string {
+    const weekday = trendParts(trendStampFmt, ms).get('weekday') ?? '';
+    return `${weekday} ${trendClockOf(ms)}`.trim();
   }
 
   /**
@@ -2523,28 +2617,24 @@ export function createAdmin(api: AdminApi): Admin {
    * readout never inherits whatever punctuation an engine's `en-US` pattern happens to carry.
    */
   function trendDayLabel(ms: number): string {
-    const parts = trendZoneParts(ms);
+    const parts = trendParts(trendDayFmt, ms);
     return `${parts.get('weekday') ?? ''} ${parts.get('month') ?? ''} ${parts.get('day') ?? ''}`.trim();
   }
 
-  /** `14:05` — the Tehran wall clock of an instant, minutes included, from one parsed stamp. */
-  const trendClockOf = (parts: Map<string, string>): string =>
-    `${parts.get('hour') ?? '00'}:${parts.get('minute') ?? '00'}`;
-
   /**
-   * `Fri 14:05` — the Tehran instant an hourly bucket opens on. The minutes are read off the
-   * stamp, never assumed: the Worker keys its buckets to UTC hours, and Tehran runs at +03:30, so
-   * every real bucket edge lands on `:30`. Printing a hardcoded `:00` silently shifted the whole
-   * axis half an hour behind the data it was labelling.
+   * `Thu 13:30 – 14:29` — the exact window a bucket covers, its last minute included, read off the
+   * real edges. The Worker keys its buckets to UTC hours and Tehran runs at +03:30, so an hourly
+   * edge really does land on `:30`; naming both minutes is what keeps the pill from reading like a
+   * rounded `:00` that is half an hour away from the data underneath it. A daily bucket names its
+   * day instead, because nobody scrubs a day bar for a minute.
    */
-  function trendTimeLabel(ms: number): string {
-    const parts = trendZoneParts(ms);
-    return `${parts.get('weekday') ?? ''} ${trendClockOf(parts)}`.trim();
-  }
-
-  /** `Fri 14:05 – 15:05` — the bucket's own span, for the tooltip rather than the narrow pill. */
-  function trendTimeSpan(ms: number, spanMs: number): string {
-    return `${trendTimeLabel(ms)} – ${trendClockOf(trendZoneParts(ms + spanMs))}`;
+  function trendWindowOf(ms: number, spanMs: number): string {
+    const end = ms + Math.max(0, spanMs - 60_000);
+    if (spanMs >= 86_400_000) {
+      return `${trendDayLabel(ms)} · ${trendClockOf(ms)} – ${trendClockOf(end)}`;
+    }
+    const weekday = trendParts(trendStampFmt, ms).get('weekday') ?? '';
+    return `${weekday} ${trendClockOf(ms)} – ${trendClockOf(end)}`.trim();
   }
 
   const TREND_WINDOW: Record<TrendRange, string> = {
@@ -2558,6 +2648,13 @@ export function createAdmin(api: AdminApi): Admin {
     active: 'Active',
     signups: 'Signups',
     matches: 'Matches',
+  };
+
+  /** The short tag the readout prints for the slice on screen, matching the tabs above it. */
+  const TREND_MODE_TAG: Record<TrendMode, string> = {
+    all: 'ALL',
+    pvp: 'PVP',
+    bot: 'VS BOT',
   };
 
   /** The headline for the whole board, where the series name alone says enough. */
@@ -2681,21 +2778,25 @@ export function createAdmin(api: AdminApi): Admin {
   }
 
   /**
-   * The X-axis ticks for the window on screen. The hourly window is labelled against the span
-   * (`-24h .. Now`); the daily windows name the buckets themselves, on the Tehran calendar the
-   * operator reads the plot against.
+   * The X-axis ticks for the window on screen. The hourly window is labelled on the operator's own
+   * clock — each tick is the real opening edge of the bucket under it, and the right edge is `Now`
+   * stamped with the exact current Tehran minute — so the axis can never drift away from the
+   * reading. The daily windows name the buckets themselves, on that same calendar.
    */
   function trendTicks(points: readonly SeriesPoint[]): { x: number; text: string; anchor: string }[] {
     const n = points.length;
     const anchorAt = (k: number, count: number): string =>
       k === 0 ? 'start' : k === count - 1 ? 'end' : 'middle';
     if (trendRange === '24h') {
-      const labels = ['-24h', '-18h', '-12h', '-6h', 'Now'];
-      return labels.map((text, k) => ({
-        x: TREND_PAD.l + (TREND_IW * k) / (labels.length - 1),
-        text,
-        anchor: anchorAt(k, labels.length),
-      }));
+      const out: { x: number; text: string; anchor: string }[] = [];
+      /* three clean edges across the band, taken from the buckets themselves rather than assumed */
+      for (const k of [0, 1, 2] as const) {
+        const index = n > 0 ? Math.round((k * (n - 1)) / 3) : 0;
+        const stamp = n > 0 ? points[index].t : Date.now();
+        out.push({ x: TREND_PAD.l + (TREND_IW * k) / 3, text: trendClockOf(stamp), anchor: anchorAt(k, 4) });
+      }
+      out.push({ x: TREND_PAD.l + TREND_IW, text: `Now ${trendClockOf(Date.now())}`, anchor: 'end' });
+      return out;
     }
     if (n < 1) return [];
     const count = Math.max(2, Math.min(trendRange === '7d' ? 7 : 5, n));
@@ -2703,7 +2804,7 @@ export function createAdmin(api: AdminApi): Admin {
     for (let k = 0; k < count; k++) {
       const f = k / (count - 1);
       const ms = points[Math.min(n - 1, Math.round(f * (n - 1)))].t;
-      const parts = trendZoneParts(ms);
+      const parts = trendParts(trendDayFmt, ms);
       out.push({
         x: TREND_PAD.l + TREND_IW * f,
         text: trendRange === '7d'
@@ -2968,21 +3069,24 @@ export function createAdmin(api: AdminApi): Admin {
     statTrendTs.title = '';
     if (!p) return;
 
-    /* the bucket's opening edge is an epoch stamp, so the zone conversion happens at format
-       time alone: no manual offset arithmetic, and no day-shift around midnight Tehran. */
-    statTrendTs.textContent = `${trendRange === '24h' ? trendTimeLabel(p.t) : trendDayLabel(p.t)}`
-      + ` ${TREND_ZONE_LABEL}`;
-    /* the pill has room for one instant; the tooltip carries the whole bucket it opens */
-    statTrendTs.title = trendRange === '24h'
-      ? `${trendTimeSpan(p.t, TREND_BUCKET_MS[trendRange])} ${TREND_ZONE_LABEL}`
-      : `${trendDayLabel(p.t)} · 24h bucket · ${TREND_ZONE_LABEL}`;
+    /* The bucket edge is an epoch stamp, so the zone conversion happens at format time alone:
+       no manual offset arithmetic, and no day-shift around midnight Tehran. The window names
+       both of its real minutes, its last included, so the pill can never read half an hour off. */
+    const exact = trendWindowOf(p.t, TREND_BUCKET_MS[trendRange]);
+    const slice = TREND_MODE_TAG[trendMode];
+    setLtrText(statTrendTs, (trendRange === '24h' ? exact : trendDayLabel(p.t)) + ' ' + TREND_ZONE_LABEL);
+    /* the tooltip carries the whole bucket: its exact span, the slice that was read and every
+       series' count inside it, so one scrub answers without moving off the point */
+    statTrendTs.title = exact + ' ' + TREND_ZONE_LABEL + ' · ' + slice
+      + ' · active ' + figure(p.active) + ' · signups ' + figure(p.signups)
+      + ' · matches ' + figure(p.matches);
 
     /* the token is the plotted series, so its hue, its word and its number all come from one key */
     statTrendTok.dataset.gtok = trendMetric;
     const label = statTrendTok.querySelector<HTMLElement>('.adm-trend-tok-l');
     const value = statTrendTok.querySelector<HTMLElement>('.adm-trend-tok-v');
-    if (label) label.textContent = TREND_METRIC_LABEL[trendMetric];
-    if (value) value.textContent = figure(p[trendMetric]);
+    if (label) label.textContent = slice + ' ' + TREND_METRIC_LABEL[trendMetric];
+    if (value) setLtrText(value, figure(p[trendMetric]));
   }
 
   /**
@@ -3043,6 +3147,54 @@ export function createAdmin(api: AdminApi): Admin {
     impact('light');
     paintTrend();
     void refreshMetrics();
+  }
+
+  /* ---------- the exact event log: the newest thing the room actually recorded ---------- */
+
+  /** The badge word each event type prints; the hue it takes comes from `data-ev` in CSS. */
+  const EVENT_TYPE_LABEL: Record<AnalyticsEvent['type'], string> = {
+    signup: 'SIGNUP',
+    pvp: 'PVP',
+    bot: 'VS BOT',
+    ad: 'AD',
+  };
+
+  /**
+   * The newest timestamped events, one row each: the badge says what it was, the stamp names the
+   * exact Tehran minute the room judged it, and the copy says who or which surface it was. Every
+   * row is built with `createElement`, because every label here is player-supplied text and a
+   * name is never markup.
+   */
+  function paintEventLog(): void {
+    if (!statEventsList) return;
+    const rows = lastMetrics?.events ?? [];
+    statEventsList.textContent = '';
+    if (statEventsEmpty) statEventsEmpty.hidden = rows.length > 0;
+    if (statEventsCount) setLtrText(statEventsCount, String(rows.length));
+    for (const row of rows.slice(0, 25)) {
+      const item = document.createElement('li');
+      item.className = 'adm-ev-row';
+      item.dataset.ev = row.type;
+
+      const badge = document.createElement('span');
+      badge.className = 'adm-ev-badge';
+      badge.textContent = EVENT_TYPE_LABEL[row.type];
+
+      /* the one stamp the whole card prints: `THU 14:27 TEHRAN`, to the minute, LTR isolated */
+      const stamp = document.createElement('bdi');
+      stamp.className = 'adm-ev-ts';
+      stamp.setAttribute('dir', 'ltr');
+      stamp.textContent = trendStampOf(row.ts) + ' ' + TREND_ZONE_LABEL;
+
+      const label = document.createElement('span');
+      label.className = 'adm-ev-l';
+      label.textContent = row.label || EVENT_TYPE_LABEL[row.type];
+
+      item.title = stamp.textContent + ' · ' + EVENT_TYPE_LABEL[row.type]
+        + (row.label ? ' · ' + row.label : '');
+      item.append(badge, stamp, label);
+      statEventsList.append(item);
+    }
   }
 
   /* ---------- the watched-ads card: one window, one bar per bucket, no modelled figure ---------- */
@@ -3478,6 +3630,7 @@ export function createAdmin(api: AdminApi): Admin {
 
     paintTrend();
     paintAds();
+    paintEventLog();
   }
 
   /**
