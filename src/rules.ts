@@ -814,6 +814,30 @@ export function steps(s: GameState, team: Player = s.turn): Step[] {
   return fwd.length ? fwd : all;
 }
 
+/**
+ * The step a `(square, ball)` pair names right now, or null when the board does not offer it.
+ *
+ * This is the ONE filter behind a legal move: `doMove()` commits exactly what it returns, and
+ * `isLegalMove()` answers the board's move dots with it. Because the Worker imports this same
+ * module and calls the same `apply()`, a square the client lights can never be a square the server
+ * refuses — in a duel and on the wider ten-column party board alike.
+ */
+function stepAt(s: GameState, team: Player, to: Pos, ballId?: number): Step | null {
+  for (const st of steps(s, team)) {
+    if (st.to.c === to.c && st.to.r === to.r && (ballId === undefined || st.ball === ballId)) return st;
+  }
+  return null;
+}
+
+/**
+ * May `s.turn` step a ball onto `to` — and, when `ballId` names one, may THAT ball? Pure, cheap and
+ * side-effect free: it walks the same `steps()` list `doMove()` walks, so the two can never
+ * disagree. The board uses it to decide whether a tap landed on a lit destination; a lookahead or
+ * a test uses it to ask the same question without committing anything.
+ */
+export const isLegalMove = (s: GameState, to: Pos, ballId?: number): boolean =>
+  stepAt(s, s.turn, to, ballId) !== null;
+
 /* ---------- the step graph, as reusable scratch ---------- */
 
 /**
@@ -1254,10 +1278,9 @@ function detached(s: GameState): GameState {
  */
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
   const team = s.turn;
-  const opts = steps(s, team).filter((st) => st.to.c === to.c && st.to.r === to.r
-    && (ballId === undefined || st.ball === ballId));
-  if (!opts.length) return null;
-  const chosen = opts[0].ball;
+  const step = stepAt(s, team, to, ballId);
+  if (!step) return null;
+  const chosen = step.ball;
   /* Every read below runs on private copies. `blownTo` needs the mover standing on the charge, so
      each beat is staged on a throwaway state built from those copies — never on the caller's board. */
   const base = detached(s);

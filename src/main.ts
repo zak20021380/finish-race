@@ -2,8 +2,8 @@ import './style.css';
 import './result.css';
 import {
   CONFIG, MAX_TEAMS, REPEAT_LIMIT, apply, ballById, distField, firstBall, getAutoMove,
-  isEliminated, isLeft, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall, rivalMineAt,
-  sideOf, steps as teamSteps,
+  isEliminated, isLeft, isLegalMove, markLeft, mineCells, minesLeft, newGame, pathOn, reachableBall,
+  rivalMineAt, sideOf, steps as teamSteps,
   view as fogOfWar, wallBudget, wallConflict, wallOk, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
@@ -1562,7 +1562,14 @@ let capsule: CapsuleAction | null = null;
  * centre that means rotate — while a press that crosses `DRAG_SLOP` slides the whole bar instead.
  */
 let wallDrag: { id: number; x: number; y: number; moved: boolean; tap: 'centre' | 'groove' } | null = null;
-const DRAG_SLOP = 6;                             // css px before a press becomes a drag
+/**
+ * How far a press may travel and still be a TAP, in CSS px. It has to clear a thumb's own roll: a
+ * firm tap on a phone drags the contact patch several pixels, and at 6 the same gesture that lit a
+ * groove came back as an aborted drag — the bar slid to a neighbouring line (or was refused) and
+ * the tap the player made never landed. 14 is the smallest drift a real thumb reliably stays
+ * inside, and it is still far short of the distance that means "carry the bar somewhere else".
+ */
+const DRAG_SLOP = 14;                            // css px before a press becomes a drag
 /** One entry per seat: what that seat did last. Sized to the live roster in `restart()`. */
 const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
@@ -3496,6 +3503,52 @@ function crowdLeader(): 0 | 1 | null {
 }
 
 /**
+ * THE BOARD'S OWN FAILSAFE. A friend-room move is optimistic: it is applied here, written to the
+ * socket, and repaired later by the room's authoritative snapshot. If neither the ack, the relays
+ * nor a snapshot ever land — a throttled webview, a socket that died between the write and the
+ * wire, a refusal lost inside a reconnect — the board would sit on a turn nobody can spend and
+ * every lit square on it would look inert. So each committed local action arms ONE timer: when it
+ * fires and the room has said nothing authoritative since the tap, the board is asked to restate
+ * itself. One ask, never a loop: the answer stamps the clock.
+ *
+ * 1200 ms is the room's own retry beat (`MOVE_RETRY_MS`), so this never asks for a board the
+ * client's own move retry is still about to have answered.
+ */
+const MOVE_FAILSAFE_MS = 1200;
+/** When the room last spoke for the board: an ack, a relay or a snapshot. */
+let authoritativeAt = 0;
+let moveFailsafe = 0;
+
+/** The room just said something authoritative — a relayed move, a refusal or a snapshot. */
+function noteAuthoritative(): void {
+  authoritativeAt = Date.now();
+}
+
+/** Arm the one-shot repair check for a move this screen has just committed. */
+function armMoveFailsafe(): void {
+  const session = active;
+  if (!session || !('seats' in session)) return;
+  window.clearTimeout(moveFailsafe);
+  const sentAt = Date.now();
+  moveFailsafe = window.setTimeout(() => {
+    moveFailsafe = 0;
+    /* Left the board, or the race settled: there is nothing to repair and nobody to ask. */
+    if (!active || !('seats' in active) || state.winner !== null) return;
+    if (router.current !== 'game') return;
+    /* The room answered inside the window: the board is its own again. */
+    if (authoritativeAt >= sentAt) return;
+    active.requestSync();
+  }, MOVE_FAILSAFE_MS);
+}
+
+/** Park the failsafe: a fresh board, a settled race or a closing screen owns the next beat. */
+function disarmMoveFailsafe(): void {
+  if (!moveFailsafe) return;
+  window.clearTimeout(moveFailsafe);
+  moveFailsafe = 0;
+}
+
+/**
  * The single door every action comes through — taps, the bot, the blitz timeout and (with
  * `remote`) the rival's moves off the wire — so a networked race animates exactly like a local one.
  */
@@ -3550,6 +3603,10 @@ function play(a: Action, remote = false): boolean {
   setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
   autoPicked = null;             // ...and the next human turn auto-selects its own first ball
   clearNote();
+  /* A LOCAL action on a room board is optimistic: the room has not answered it yet, so arm the one
+     repair check that guarantees this turn can never be spent into silence. A relayed move needs no
+     such thing — it IS the room's answer. */
+  if (!remote && active && 'seats' in active) armMoveFailsafe();
   /* VFX GATE. Nothing on this board may detonate until an action has actually been COMMITTED:
      `apply()` has returned a new state and `state = next` has landed. Hints, hover and selection
      only ever read the board (dotsFor -> reachableBall) and never reach this door. Guarding on a
@@ -3873,6 +3930,10 @@ function restart() {
   /* Replaying a war board is another war match: the channel is owed its points again. */
   warPaid = false;
   warEpoch += 1;
+  /* A new board answers for itself: no repair check armed against the board this one replaces may
+     fire into it. */
+  disarmMoveFailsafe();
+  noteAuthoritative();
   /* every new board is a new match: the last result's celebration (or its defeat sting) cannot
      survive into it */
   stopVictoryFanfare();
@@ -4011,6 +4072,10 @@ function restart() {
  */
 function applyRoomSnapshot(next: GameState, turnLeftMs: number, presence?: Array<{ seat: number; connected: boolean }>): void {
   if (!active) return;
+  /* The room has spoken: every lock this screen was holding against a silent wire is answered on
+     this frame — the pending repair check included. */
+  noteAuthoritative();
+  disarmMoveFailsafe();
   /* The snapshot carries the room's own read of who is seated: any rival it proves connected cannot
      still be "reconnecting", so the pill comes down on the same beat the board lands. */
   if (presence) for (const p of presence) if (p.connected) notePeerActive(p.seat);
@@ -4708,9 +4773,16 @@ function startGame(setup: StartSetup) {
     session.onMove((action, side) => {
       /* A seat that just moved is plainly connected: drop any reconnecting pill naming it. */
       notePeerActive(side);
+      /* A relay is the room speaking for the board: whatever this screen was waiting on is answered. */
+      noteAuthoritative();
+      disarmMoveFailsafe();
       if (state.winner !== null) return;
       if (side === state.turn) {
-        if (!play(action, true) && 'seats' in session) session.requestSync();
+        /* A frame shaped to throw must not wedge the socket handler: a relay the board cannot read
+           is a board that drifted, and the repair is the room's snapshot, never a frozen screen. */
+        let applied = false;
+        try { applied = play(action, true); } catch { applied = false; }
+        if (!applied && 'seats' in session) session.requestSync();
         return;
       }
       /* A relayed move that names a seat which is not up means the two replicas drifted — a
@@ -4732,6 +4804,10 @@ function startGame(setup: StartSetup) {
     session.onPostLeft(() => { if (overlayOpen || finishUnderway()) lockResultForLeft(); });
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
+      /* The room answered — with a refusal. Its snapshot (applied just before this) already repaired
+         the board, so the repair check this seat was holding is spent. */
+      noteAuthoritative();
+      disarmMoveFailsafe();
       notify('error');
       showNote('Move refused — the two boards disagree', true, 2400);
       /* The refusal frame normally carries the authoritative board (which `onSync` applied just
@@ -5122,6 +5198,45 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
   capsule,
 });
 
+/**
+ * THE DESTINATION DOOR. A tap inside a square the board has lit is ALWAYS that move — before the
+ * pawn's own pickup disc, before a wall ghost, before a groove.
+ *
+ * `hitTest` resolves a lit dot by containment, but it answers your OWN pawn with a 44px disc
+ * (`MIN_TOUCH`) first, and on a party board that disc is wider than a cell: a ten-column 10x14 grid
+ * on a phone draws ~30px cells, so 22px of reach reaches 0.73 of a cell past the centre. A tap on
+ * the near half of the dot directly above or beside the pawn therefore came back as the PAWN — and
+ * a tap on the pawn you already hold toggles the selection OFF. The dots vanish with it, and since
+ * `autoPicked` has already spent this turn's auto-pick, they stay gone until the pawn is tapped
+ * again. The board reads as frozen: the square was lit, the finger landed, the pawn never moved.
+ * That is the 3-player lock, and this is the door that closes it.
+ *
+ * The answer is verified by the engine's own `isLegalMove()` — the same list `doMove()` commits
+ * from, on the same board the Worker runs — so a square this plays can never be refused for being
+ * an illegal move.
+ */
+function destinationMove(p: Vec): Action | null {
+  if (state.winner !== null || mineArmed || !canAct()) return null;
+  const L = renderer.layout();
+  const c = L.cell;
+  if (c <= 0) return null;
+  const cell: Pos = { c: Math.floor((p.x - L.ox) / c), r: Math.floor((p.y - L.oy) / c) };
+  if (cell.c < 0 || cell.c >= state.cols || cell.r < 0 || cell.r >= state.rows) return null;
+  /* A LIT square is the contract. With a ball in hand the dots are the only cells that answer, so a
+     tap on any other square keeps its old meaning (a pawn to pick, a groove to aim at, dead space
+     to cancel). With a wall ghost up the dots are off the board, and then the seat's whole side
+     answers — that is the one case where a tap has to beat the ghost rather than the dots. */
+  const ballId = selected ?? undefined;
+  if (ballId !== undefined) {
+    if (!hints.some((h) => h.c === cell.c && h.r === cell.r)) return null;
+  } else if (!ghost?.armed) return null;
+  /* The engine's own predicate, on the live board: a square it will not take is not a destination,
+     so a stale dot (a repaint still owed) can never play a step the board — or the Worker, which
+     runs this same function — would refuse. */
+  if (!isLegalMove(state, cell, ballId)) return null;
+  return { kind: 'move', ball: ballId, to: cell };
+}
+
 /** Clear the wall ghost and anything it was holding (its toolbar included). */
 function disarmWall() {
   wallDrag = null;
@@ -5490,6 +5605,15 @@ canvas.addEventListener('pointerdown', (e) => {
   invalidate();           // the ripple must paint even when the loop is asleep
   if (mineArmed) { tapMine(at(p)); return; }
   const hit = at(p);
+  /* A LIT SQUARE ANSWERS BEFORE THE PAWN DOES. The floating ✓/✕/↻ toolbar is chrome and keeps its
+     absolute priority; everything else on the board yields to a destination the board is offering.
+     That is what stops the pawn's own 44px pickup disc (wider than a cell on a party board) from
+     swallowing the dot beside it and toggling the selection OFF, and it is what stops an armed wall
+     ghost from eating the same tap. `play()` owns the buzz and the step's sound — the tap adds
+     neither, and nothing is committed when this returns null. */
+  const control = hit?.kind === 'confirm' || hit?.kind === 'cancel' || hit?.kind === 'rotate';
+  const dest = control ? null : destinationMove(p);
+  if (dest) { disarmWall(); play(dest); return; }
   /* the toolbar's rotate key fires on press; the ghost's own centre waits for pointerup so the
      same press can turn into a drag instead of rotating under the finger */
   if (hit?.kind === 'rotate' && hit.from === 'capsule') { rotateGhost(); return; }

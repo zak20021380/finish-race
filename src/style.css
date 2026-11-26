@@ -478,6 +478,19 @@ html.game-live .screen.game .card {
   touch-action: none;
 }
 
+/* ---- board input guard: chrome never eats a tap ----
+   The grid is the only pointer target on the slab. Everything that rides it as paint — the clay
+   mount, its four studs, the event callouts, the chat lane, the refusal toast — takes no input, and
+   the HUD wrappers above and below the board own nothing outside their own keys. That is what
+   guarantees a tap on the BOTTOM ROWS reaches the canvas at every viewport height, on the 10x14
+   party grid exactly as on the duel's 8x12 one: no wrapper can shadow the last two rows. Only real
+   controls opt back in, so no key loses its target. */
+.screen.game .board-wrap > :is(.board-frame, .stud, .callouts, .chat-lane, .note) {
+  pointer-events: none;
+}
+.screen.game :is(.g-head, .chips) { pointer-events: none; }
+.screen.game :is(.g-head, .chips) :is(button, [role="button"]) { pointer-events: auto; }
+
 /* ---- floating toast over the lower board: a refusal, a confirm prompt, an event alert ----
    The status pill under the card is gone: every alert fades here instead, so it costs no layout
    height and the board keeps the row it used to lose. stays in the DOM (only opacity changes) so

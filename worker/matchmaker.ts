@@ -10437,23 +10437,15 @@ export class MatchmakerDO {
         ? { ok: false, reason: 'illegal' }
         : live.driver.submit(ref.seat, msg.action, this.substituteBudget(live));
     } catch {
+      /* A frame that throws is a frame REFUSED — and a refusal the seat never hears is a board that
+         freezes under the player's finger, because that seat has already committed the move
+         optimistically. Answer with the same authoritative snapshot the ordinary refusal carries,
+         so the client repairs on this frame instead of waiting out its own failsafe. */
+      this.refuseMove(live, ref.seat, 'illegal');
       return;
     }
     if (!result.ok) {
-      const member = live.members[ref.seat];
-      if (member) {
-        /* A refusal means the two replicas disagreed about the turn (a queued move that crossed a
-           server timeout, a stale optimistic board). The snapshot is the repair, not the toast:
-           without it the client would keep a board nobody else is playing. */
-        this.postTo(member.ws, JSON.stringify({
-          type: 'REJECT',
-          reason: result.reason,
-          state: live.driver.state,
-          seq: live.seq,
-          turnDeadlineMs: live.turnDeadlineMs,
-          turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
-        }));
-      }
+      this.refuseMove(live, ref.seat, result.reason);
       return;
     }
     if (member && msg.moveId) member.lastMoveId = msg.moveId;
@@ -10722,6 +10714,28 @@ export class MatchmakerDO {
       }
     }
     return tiqDeltas;
+  }
+  /**
+   * Answer a seat whose move the board did not take.
+   *
+   * A refusal means the two replicas disagreed about the turn — a queued move that crossed a server
+   * timeout, a stale optimistic board, a frame shaped to throw. The SNAPSHOT is the repair, not the
+   * toast: without it the client would keep a board nobody else is playing, with every lit square
+   * inert because the seat it thinks is up is not the seat the room has. So one frame carries the
+   * reason AND the authoritative `state` / `seq` / clock, and the client drops every pending lock
+   * the moment it lands. There is exactly one refusal path, so no refusal can ever be silent.
+   */
+  private refuseMove(live: LiveRoom, seat: number, reason: string): void {
+    const member = live.members[seat];
+    if (!member) return;
+    this.postTo(member.ws, JSON.stringify({
+      type: 'REJECT',
+      reason,
+      state: live.driver?.state ?? null,
+      seq: live.seq,
+      turnDeadlineMs: live.turnDeadlineMs,
+      turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
+    }));
   }
   /**
    * Hand every event to every human seat except the one that played it — that seat applied its own
