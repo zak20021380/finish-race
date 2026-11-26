@@ -2060,10 +2060,6 @@ export function createAdmin(api: AdminApi): Admin {
   const statTrendSlab = statTrendRead?.closest<HTMLElement>('.adm-trend') ?? null;
   const statTrendTs = $<HTMLElement>('stat-trend-ts');
   const statTrendTok = $<HTMLElement>('stat-trend-tok');
-  /* the exact event log under the window totals: the newest timestamped rows the Worker kept */
-  const statEventsList = $<HTMLElement>('stat-events-list');
-  const statEventsEmpty = $<HTMLElement>('stat-events-empty');
-  const statEventsCount = $<HTMLElement>('stat-events-count');
   /* the watched-ads card: the room's verified completion count, its ring and its placement split */
   const statAdsTotal = $<HTMLElement>('stat-ads-total');
   const statAdsDay = $<HTMLElement>('stat-ads-day');
@@ -3209,54 +3205,6 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshMetrics();
   }
 
-  /* ---------- the exact event log: the newest thing the room actually recorded ---------- */
-
-  /** The badge word each event type prints; the hue it takes comes from `data-ev` in CSS. */
-  const EVENT_TYPE_LABEL: Record<AnalyticsEvent['type'], string> = {
-    signup: 'SIGNUP',
-    pvp: 'PVP',
-    bot: 'VS BOT',
-    ad: 'AD',
-  };
-
-  /**
-   * The newest timestamped events, one row each: the badge says what it was, the stamp names the
-   * exact Tehran minute the room judged it, and the copy says who or which surface it was. Every
-   * row is built with `createElement`, because every label here is player-supplied text and a
-   * name is never markup.
-   */
-  function paintEventLog(): void {
-    if (!statEventsList) return;
-    const rows = lastMetrics?.events ?? [];
-    statEventsList.textContent = '';
-    if (statEventsEmpty) statEventsEmpty.hidden = rows.length > 0;
-    if (statEventsCount) setLtrText(statEventsCount, String(rows.length));
-    for (const row of rows.slice(0, 25)) {
-      const item = document.createElement('li');
-      item.className = 'adm-ev-row';
-      item.dataset.ev = row.type;
-
-      const badge = document.createElement('span');
-      badge.className = 'adm-ev-badge';
-      badge.textContent = EVENT_TYPE_LABEL[row.type];
-
-      /* the one stamp the whole card prints: `THU 14:27 TEHRAN`, to the minute, LTR isolated */
-      const stamp = document.createElement('bdi');
-      stamp.className = 'adm-ev-ts';
-      stamp.setAttribute('dir', 'ltr');
-      stamp.textContent = trendStampOf(row.ts) + ' ' + TREND_ZONE_LABEL;
-
-      const label = document.createElement('span');
-      label.className = 'adm-ev-l';
-      label.textContent = row.label || EVENT_TYPE_LABEL[row.type];
-
-      item.title = stamp.textContent + ' · ' + EVENT_TYPE_LABEL[row.type]
-        + (row.label ? ' · ' + row.label : '');
-      item.append(badge, stamp, label);
-      statEventsList.append(item);
-    }
-  }
-
   /* ---------- the watched-ads card: one window, one bar per bucket, no modelled figure ---------- */
 
   /** The three windows the ad switch selects; each maps to its own ready-to-plot ring. */
@@ -3697,7 +3645,6 @@ export function createAdmin(api: AdminApi): Admin {
 
     paintTrend();
     paintAds();
-    paintEventLog();
   }
 
   /**
