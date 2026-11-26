@@ -602,6 +602,10 @@ const VIP_CONFIG_KEY = 'vip-config';
 const VIP_SALES_KEY = 'vip-sales';
 /** The mandatory channel gate's durable row: the switch and the channel it points at. */
 const FORCE_JOIN_KEY = 'force-join.v1';
+/** The verified-membership cache, keyed by numeric Telegram id: the bot's fact, reused by the app. */
+const CHANNEL_VERIFIED_KEY = 'channel-joined.v1';
+/** How many verified Telegram ids the cache remembers before the oldest is forgotten. */
+const CHANNEL_VERIFIED_MAX = 5_000;
 /** How many receipts the ledger keeps; the audit table reads the newest fifteen. */
 const VIP_RECENT_MAX = 60;
 const VIP_RECENT_REPORT = 15;
@@ -1932,6 +1936,8 @@ export interface PlayerRecord {
   coins: number;
   stars: number;
   referrals: number;
+  /** True once the bot or the Mini App verified this seat inside @Tactix_Official. */
+  channelJoined: boolean;
   /** The squad / channel handle the client reported, or ''. */
   squad: string;
   /** End of the purchased VIP term in ms, or 0. Written only by a verified Stars receipt. */
@@ -2126,6 +2132,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     coins: identity.coins,
     stars: identity.stars,
     referrals: identity.referrals,
+    channelJoined: false,
     squad: identity.squad,
     vipUntil: 0,
     vipPlan: '',
@@ -2206,6 +2213,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     coins: whole(r.coins),
     stars: whole(r.stars),
     referrals: whole(r.referrals),
+    channelJoined: r.channelJoined === true,
     squad: text(r.squad, 24),
     vipUntil: whole(r.vipUntil),
     vipPlan: text(r.vipPlan, 12),
@@ -3560,6 +3568,8 @@ export class MatchmakerDO {
   private wideRadius = WIDE_RADIUS;
   /** Every player the room has met, by seat id — the Users tab's directory. */
   private players = new Map<string, PlayerRecord>();
+  /** Telegram ids the bot (or this room's own check) verified inside the official channel. */
+  private channelVerified = new Set<string>();
   /**
    * The races already folded into the registry, keyed `r:<matchId>:<seatId>` for one seat's
    * verdict on one board and `s:<seatId>|<mode>|<result>` for a practice board that has no id,
@@ -3634,6 +3644,17 @@ export class MatchmakerDO {
           const bans = await storage.get<unknown[]>('bans');
           if (Array.isArray(bans)) {
             for (const id of bans) if (typeof id === 'string' && id) this.banned.add(id);
+          }
+          const verified = await storage.get<unknown[]>(CHANNEL_VERIFIED_KEY);
+          if (Array.isArray(verified)) {
+            for (const id of verified) {
+              if (typeof id === 'string' && TELEGRAM_ID.test(id)) this.channelVerified.add(id);
+            }
+            while (this.channelVerified.size > CHANNEL_VERIFIED_MAX) {
+              const oldest = this.channelVerified.values().next();
+              if (oldest.done) break;
+              this.channelVerified.delete(oldest.value);
+            }
           }
           const roles = await storage.get<unknown[]>('roles');
           if (Array.isArray(roles)) {
@@ -3814,6 +3835,11 @@ export class MatchmakerDO {
        the public router never forwards `/internal/*`, so there is no outside door. */
     if (url.pathname === '/internal/force-join' && request.method === 'GET') {
       return json({ ok: true, config: this.forceJoin }, 200, { 'cache-control': 'no-store' });
+    }
+    /* The bot's verified membership, cached on the player registry so the Mini App gate never asks
+       twice. Internal-only, like the gate row above: the public router never forwards `/internal/*`. */
+    if (url.pathname === '/internal/channel-joined' && request.method === 'POST') {
+      return this.markChannelJoined(request);
     }
     /* Method 1's webhook half: the bot was just made an administrator of a chat, so the squad
        registered for that chat can be verified without the founder pressing anything. Also
@@ -5964,6 +5990,7 @@ export class MatchmakerDO {
       /* A telemetry heartbeat carries no locale: the seat reads English until it next signs in. */
       lang: '',
     }, now);
+    this.stampChannelJoined(record);
     this.players.set(record.id, record);
     this.creditSignup(now);
     this.creditActive(0, now);
@@ -6554,6 +6581,62 @@ export class MatchmakerDO {
   /* ---------- the mandatory channel gate ---------- */
 
   /**
+   * The bot's verification write. Internal-only: the worker entry never forwards `/internal/*`,
+   * so this fact can only be minted by a webhook that already called Telegram's `getChatMember`.
+   */
+  private async markChannelJoined(request: Request): Promise<Response> {
+    const body = await readBody(request);
+    const userId = String(body.userId ?? '').replace(/[^0-9]/g, '').slice(0, 20);
+    if (!TELEGRAM_ID.test(userId)) return json({ ok: false, error: 'bad_user' }, 400);
+    const changed = this.rememberChannelJoined(userId);
+    if (changed) await this.flushRegistry();
+    await this.persistChannelVerified();
+    return json({ ok: true, channelJoined: true }, 200, { 'cache-control': 'no-store' });
+  }
+
+  /** Record one verified Telegram id and stamp every registry row that already owns it. */
+  private rememberChannelJoined(userId: string): boolean {
+    let changed = false;
+    if (!this.channelVerified.has(userId)) {
+      this.channelVerified.add(userId);
+      while (this.channelVerified.size > CHANNEL_VERIFIED_MAX) {
+        const oldest = this.channelVerified.values().next();
+        if (oldest.done) break;
+        this.channelVerified.delete(oldest.value);
+      }
+      changed = true;
+    }
+    for (const p of this.players.values()) {
+      if (p.tgId === userId && !p.channelJoined) {
+        p.channelJoined = true;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** True when this seat's membership is already a fact — never ask Telegram a second time. */
+  private channelJoinedFor(userId: string): boolean {
+    if (!TELEGRAM_ID.test(userId)) return false;
+    if (this.channelVerified.has(userId)) return true;
+    for (const p of this.players.values()) {
+      if (p.tgId === userId && p.channelJoined) return true;
+    }
+    return false;
+  }
+
+  /** Write the verified-id cache through; a store that refuses leaves it live in memory. */
+  private async persistChannelVerified(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      await storage.put(CHANNEL_VERIFIED_KEY, [...this.channelVerified]);
+    } catch {
+      /* the cache stays live for this object's lifetime */
+    }
+  }
+
+  /**
    * The player's own reading. A signed session may only ask about itself; `userId` is accepted as
    * a convenience for the dev door, where there is no signature to name the caller. No identity at
    * all fails open: a browser outside the Mini App has no gate to meet.
@@ -6583,10 +6666,21 @@ export class MatchmakerDO {
       /* Nothing to check against: fail open rather than pretend the player is outside. */
       return json({ ...base, isMember: true, unavailable: true }, 200, { 'cache-control': 'no-store' });
     }
+
+    /* The bot already verified this seat: granting here is what prevents a second prompt. */
+    if (this.channelJoinedFor(userId)) {
+      return json({ ...base, isMember: true, channelJoined: true }, 200, { 'cache-control': 'no-store' });
+    }
+
     const check = await checkChannelMembership(this.env, userId, this.forceJoin.targetChannel);
+    if (check.member && !check.unavailable && this.rememberChannelJoined(userId)) {
+      await this.flushRegistry();
+      await this.persistChannelVerified();
+    }
     return json({
       ...base,
       isMember: check.member,
+      ...(check.member && !check.unavailable ? { channelJoined: true } : {}),
       ...(check.unavailable ? { unavailable: true } : {}),
     }, 200, { 'cache-control': 'no-store' });
   }
@@ -7175,6 +7269,7 @@ export class MatchmakerDO {
       /* A board read carries no locale: the row reads English until its owner signs in. */
       lang: '',
     }, now);
+    this.stampChannelJoined(p);
     this.players.set(p.id, p);
     this.creditSignup(now);
     this.creditActive(0, now);
@@ -7539,6 +7634,7 @@ export class MatchmakerDO {
         coins: 0,
         stars: 0,
         referrals: 0,
+        channelJoined: this.channelVerified.has(tgId),
         squad: '',
         vipUntil: 0,
         vipPlan: '',
@@ -7697,6 +7793,11 @@ export class MatchmakerDO {
     this.creditActive(prev, at);
   }
 
+  /** Copy a bot-verified membership onto a row the moment that row first exists. */
+  private stampChannelJoined(p: PlayerRecord): void {
+    if (!p.channelJoined && p.tgId && this.channelVerified.has(p.tgId)) p.channelJoined = true;
+  }
+
   /**
    * The registry row a connection owns. The canonical seat id wins; a legacy row already carrying
    * this Telegram id is re-keyed onto it; and a device that queued as a guest before it signed in
@@ -7788,6 +7889,7 @@ export class MatchmakerDO {
   private touch(identity: Identity): void {
     const now = Date.now();
     const { player: p, isNew } = this.claimRecord(identity);
+    this.stampChannelJoined(p);
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
     p.country = normalizeCountry(identity.flag) || p.country;

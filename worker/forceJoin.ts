@@ -13,7 +13,7 @@
  * by an operator's mistake. Only an explicit "not a member" answer closes the gate.
  */
 import type { Env } from './env';
-import { CHANNEL_HANDLE, telegramChatLink } from '../shared/config';
+import { telegramChatLink } from '../shared/config';
 
 export interface ForceJoinConfig {
   /** The master switch. Off by default: the arena stays open until an operator arms it. */
@@ -48,13 +48,19 @@ const MEMBER_STATUSES = new Set(['creator', 'administrator', 'member']);
 /** `t.me` paths that are Telegram features, not public channel handles. */
 const RESERVED_HANDLES = new Set(['joinchat', 'share', 'addstickers', 'setlanguage', 'login', 'invoice', 'iv', 'contact']);
 
-/** What the gate points at before an operator chooses: the deployment's own required channel. */
+/** The official channel the bot gate and the Mini App gate both verify. */
+export const OFFICIAL_CHANNEL_HANDLE = 'Tactix_Official';
+
+/** The public link for the official channel, used by the bot's join card. */
+export const OFFICIAL_CHANNEL_URL = `https://t.me/${OFFICIAL_CHANNEL_HANDLE}`;
+
+/** What the gate points at before an operator chooses: the deployment's official channel. */
 export function defaultForceJoinChannel(env: Env): string {
   const configured = (env.REQUIRED_CHANNEL ?? '').trim();
   if (configured) {
-    return normalizeForceJoinChannel(configured)?.targetChannel ?? `@${CHANNEL_HANDLE}`;
+    return normalizeForceJoinChannel(configured)?.targetChannel ?? `@${OFFICIAL_CHANNEL_HANDLE}`;
   }
-  return `@${CHANNEL_HANDLE}`;
+  return `@${OFFICIAL_CHANNEL_HANDLE}`;
 }
 
 /**

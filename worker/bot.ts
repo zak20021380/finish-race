@@ -34,6 +34,9 @@ import {
   answerPreCheckout, handleSuccessfulPayment,
   type PreCheckoutQueryLike, type SuccessfulPaymentLike,
 } from './vip';
+import {
+  checkChannelMembership, OFFICIAL_CHANNEL_HANDLE, OFFICIAL_CHANNEL_URL,
+} from './forceJoin';
 import { BOT_HANDLE } from '../shared/config';
 import {
   ensureReferralCode, readReferralPayload, referralContact, touchReferralUser,
@@ -220,6 +223,80 @@ function playUrlFor(env: Env, origin: string, seat: Seat): string {
   return launchUrl(appUrl(env, origin), seat.startParam);
 }
 
+/* ---------- the localized join gate ---------- */
+
+/** Everything the bot says when a player is outside the official channel. */
+interface JoinGateCopy {
+  text: string;
+  joinBtn: string;
+  verifyBtn: string;
+  notJoined: string;
+  verified: string;
+  unavailable: string;
+}
+
+const JOIN_GATE: Record<BotLang, JoinGateCopy> = {
+  en: {
+    text: '🔒 **One Step Left to Enter the Arena!**\n\nJoin the official **TactiX** channel to unlock matchmaking, weekly tournaments, and rewards (verifying here also unlocks the Mini App automatically):',
+    joinBtn: '📢 Join Official TactiX Channel',
+    verifyBtn: '✅ I Joined • Play Now',
+    notJoined: "❌ You haven't joined @Tactix_Official yet! Tap the Join button first, then verify.",
+    verified: '✅ Channel verified — welcome to the arena!',
+    unavailable: '✅ You are in — opening the arena!',
+  },
+  fa: {
+    text: '🔒 **یک قدم تا ورود به میدان نبرد!**\n\nبرای شروع بازی، شرکت در تورنمنت‌های هفتگی و دریافت جوایز، ابتدا در کانال رسمی **TactiX** عضو شو (با عضویت در اینجا، داخل خود بازی هم بدون معطلی وارد می‌شی):',
+    joinBtn: '📢 عضویت در کانال رسمی TactiX',
+    verifyBtn: '✅ عضو شدم • ورود به بازی',
+    notJoined: '❌ هنوز عضو کانال @Tactix_Official نشدی! ابتدا روی دکمه عضویت بزن و بعد دوباره تایید کن.',
+    verified: '✅ عضویتت تایید شد — خوش آمدی به میدان نبرد!',
+    unavailable: '✅ وارد بازی شو!',
+  },
+  ar: {
+    text: '🔒 **خطوة واحدة لدخول ساحة التحدي!**\n\nانضم إلى قناة **TactiX** الرسمية لفتح اللعب والبطولات الأسبوعية والمكافآت (الانضمام هنا يفتح اللعبة تلقائياً أيضاً):',
+    joinBtn: '📢 الانضمام إلى قناة TactiX الرسمية',
+    verifyBtn: '✅ تم الانضمام • ابدأ اللعب',
+    notJoined: '❌ لم تنضم إلى قناة @Tactix_Official بعد! اضغط على زر الانضمام أولاً ثم تحقق مرة أخرى.',
+    verified: '✅ تم التحقق من عضويتك — مرحباً بك في الساحة!',
+    unavailable: '✅ تفضل بالدخول إلى الساحة!',
+  },
+};
+
+/** The callback that re-checks membership; the start payload rides along when it fits. */
+function joinCallback(lang: BotLang, startParam: string): string {
+  const clean = (startParam ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);
+  return clean ? `join:${lang}:${clean}` : `join:${lang}`;
+}
+
+function joinKeyboard(seat: Seat): Keyboard {
+  const copy = JOIN_GATE[seat.lang];
+  return {
+    inline_keyboard: [
+      [{ text: copy.joinBtn, url: OFFICIAL_CHANNEL_URL }],
+      [{ text: copy.verifyBtn, callback_data: joinCallback(seat.lang, seat.startParam) }],
+    ],
+  };
+}
+
+/** Cache a verified membership in the player registry so the Mini App never asks again. */
+async function syncChannelJoined(env: Env, userId: string): Promise<void> {
+  if (!userId || !env.MATCHMAKER) return;
+  try {
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName('global'));
+    const response = await lobby.fetch(new Request('https://room/internal/channel-joined', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    }));
+    if (!response.ok) {
+      console.warn(`[bot] channel membership cache write refused: HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('[bot] channel membership cache write failed:',
+      error instanceof Error ? error.message : error);
+  }
+}
+
 /* ---------- the two ways a screen reaches the player ---------- */
 
 async function send(token: string, chatId: string, text: string, keyboard: Keyboard): Promise<void> {
@@ -257,6 +334,23 @@ async function ack(token: string, callbackId: string | undefined): Promise<void>
   try {
     await api(token, 'answerCallbackQuery', { callback_query_id: callbackId });
   } catch { /* an ack that does not land is one the client has already timed out on */ }
+}
+
+/** Answer with a visible toast — the alert the join card uses when the player is still outside. */
+async function answer(
+  token: string,
+  callbackId: string | undefined,
+  text: string,
+  showAlert = false,
+): Promise<void> {
+  if (!callbackId) return;
+  try {
+    await api(token, 'answerCallbackQuery', {
+      callback_query_id: callbackId,
+      text,
+      ...(showAlert ? { show_alert: true } : {}),
+    });
+  } catch { /* an answer that does not land is one the client has already timed out on */ }
 }
 
 /* ---------- the webhook ---------- */
@@ -405,7 +499,8 @@ type Screen =
   | { kind: 'greeting' }
   | { kind: 'menu'; lang: BotLang }
   | { kind: 'rules'; lang: BotLang }
-  | { kind: 'invite'; lang: BotLang };
+  | { kind: 'invite'; lang: BotLang }
+  | { kind: 'join'; lang: BotLang; payload: string };
 
 /**
  * What a button asks for. An unrecognised string is not an error — it is a button from a build of
@@ -416,6 +511,11 @@ function screenOf(data: string): Screen | null {
 
   const menu = /^lang:([a-z]{2})$/.exec(data)?.[1];
   if (menu && isBotLang(menu)) return { kind: 'menu', lang: menu };
+
+  /* The verify button carries its language and, when it fits, the deep-link payload it arrived on. */
+  const join = /^join:([a-z]{2})(?::([A-Za-z0-9_-]{1,48}))?$/.exec(data);
+  const joinLang = join?.[1];
+  if (joinLang && isBotLang(joinLang)) return { kind: 'join', lang: joinLang, payload: join?.[2] ?? '' };
 
   const detail = /^menu:(rules|invite):([a-z]{2})$/.exec(data);
   const lang = detail?.[2];
@@ -428,10 +528,26 @@ async function handleCallback(callback: TgCallbackLike, token: string, origin: s
   const userId = idOf(callback.from?.id);
   const screen = screenOf((callback.data ?? '').trim());
 
-  /* Every callback is answered before anything else, so the player's button stops spinning even on
-     a screen the bot cannot draw. */
+  if (!screen || !chatId) {
+    await ack(token, callback.id);
+    return;
+  }
+
+  /* The verify button owns its own answer: it must be able to raise a localized alert. */
+  if (screen.kind === 'join') {
+    await handleJoinVerify(callback, screen, token, origin, env, chatId, userId);
+    return;
+  }
+
+  /* Every other callback is answered before anything else, so the player's button stops spinning
+     even on a screen the bot cannot draw. */
   await ack(token, callback.id);
-  if (!screen || !chatId) return;
+
+  /* A language tap now runs the silent membership pre-check before any menu is painted. */
+  if (screen.kind === 'menu') {
+    await handleLanguageChoice(callback, screen.lang, token, origin, env, chatId, userId);
+    return;
+  }
 
   /* Only a button that names a language changes which language this player is remembered in. */
   const seat = screen.kind === 'greeting'
@@ -444,15 +560,93 @@ async function handleCallback(callback: TgCallbackLike, token: string, origin: s
   const invite = inviteLink(code);
 
   const text = screen.kind === 'greeting' ? render(GREETING)
-    : screen.kind === 'menu' ? render(copy.welcome)
-      : screen.kind === 'rules' ? render(copy.rules)
-        : render(copy.invite).replace('{link}', invite);
+    : screen.kind === 'rules' ? render(copy.rules)
+      : render(copy.invite).replace('{link}', invite);
   const keyboard = screen.kind === 'greeting' ? languagePicker()
-    : screen.kind === 'menu' ? mainMenu(screen.lang, play)
-      : screen.kind === 'rules' ? rulesMenu(screen.lang, play)
-        : inviteMenu(screen.lang, shareUrl(invite, copy.pitch), copy.pitch);
+    : screen.kind === 'rules' ? rulesMenu(screen.lang, play)
+      : inviteMenu(screen.lang, shareUrl(invite, copy.pitch), copy.pitch);
 
   await show(token, chatId, callback.message?.message_id, text, keyboard);
+}
+
+/**
+ * A language was chosen. Check the official channel silently and paint exactly one next screen:
+ * the welcome + Play Now card for a member, or the localized join card for everyone else.
+ */
+async function handleLanguageChoice(
+  callback: TgCallbackLike,
+  lang: BotLang,
+  token: string,
+  origin: string,
+  env: Env,
+  chatId: string,
+  userId: string,
+): Promise<void> {
+  const seat = remember(userId, { lang }, callback.from?.language_code ?? '');
+  const play = playUrlFor(env, origin, seat);
+  const copy = COPY[seat.lang];
+
+  /* Mint the player's permanent invite code on first contact, exactly as the picker always did. */
+  const [membership] = await Promise.all([
+    checkChannelMembership(env, userId, `@${OFFICIAL_CHANNEL_HANDLE}`),
+    ensureReferralCode(env, userId).catch(() => ''),
+  ]);
+
+  if (membership.member) {
+    if (membership.unavailable) {
+      console.warn(`[bot] channel check unavailable for ${userId || 'unknown'}: ${membership.description}. Allowing launch.`);
+    } else {
+      await syncChannelJoined(env, userId);
+    }
+    await show(token, chatId, callback.message?.message_id, render(copy.welcome), mainMenu(seat.lang, play));
+    return;
+  }
+
+  await show(token, chatId, callback.message?.message_id, render(JOIN_GATE[seat.lang].text), joinKeyboard(seat));
+}
+
+/**
+ * The `✅ I Joined` button: re-read Telegram, alert a player who is still outside, and unlock the
+ * welcome card for a verified member. The callback carries the start payload when it fits, so a
+ * friend invite, duel or squad link survives even a cold worker between the two taps.
+ */
+async function handleJoinVerify(
+  callback: TgCallbackLike,
+  screen: { kind: 'join'; lang: BotLang; payload: string },
+  token: string,
+  origin: string,
+  env: Env,
+  chatId: string,
+  userId: string,
+): Promise<void> {
+  if (!userId) {
+    await ack(token, callback.id);
+    return;
+  }
+
+  const seat = remember(userId, {
+    lang: screen.lang,
+    ...(screen.payload ? { startParam: screen.payload } : {}),
+  }, callback.from?.language_code ?? '');
+  const copy = JOIN_GATE[seat.lang];
+  const membership = await checkChannelMembership(env, userId, `@${OFFICIAL_CHANNEL_HANDLE}`);
+
+  if (!membership.member) {
+    await answer(token, callback.id, copy.notJoined, true);
+    return;
+  }
+
+  /* Answer before the cache write: the toast must land while the tap is still alive. */
+  await answer(token, callback.id, membership.unavailable ? copy.unavailable : copy.verified);
+
+  if (membership.unavailable) {
+    console.warn(`[bot] channel re-check unavailable for ${userId}: ${membership.description}. Allowing launch.`);
+  } else {
+    await syncChannelJoined(env, userId);
+  }
+
+  const play = playUrlFor(env, origin, seat);
+  await show(token, chatId, callback.message?.message_id, render(COPY[seat.lang].welcome), mainMenu(seat.lang, play));
 }
 
 async function handleInlineQuery(query: TgInlineQueryLike, token: string, origin: string, env: Env): Promise<void> {
