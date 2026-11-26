@@ -390,6 +390,17 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* The Live Registry's match ledger: one settled race, recorded on the seat's own directory row.
+     A practice board is played entirely on the device and never touches the room, so this is the
+     only door that can carry it into the registry; a PvP room writes the same row at settlement
+     and the room dedupes the client's echo by the match id it minted. Identity is proven inside,
+     exactly like the telemetry door above — the edge only routes. */
+  if (url.pathname === '/api/registry/match') {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   if (url.pathname === '/health') {
     return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
   }

@@ -1845,6 +1845,51 @@ function adDayLabel(ms: number): string {
 /* ---------- the player directory: who the room has seen ---------- */
 
 /**
+ * The registry's own match vocabulary: the three practice levels a local bot race can carry, and
+ * the two live ones. It is deliberately finer than `MatchMode` — the Command Center's history
+ * strip has to tell a Hard-bot win from a Medium-bot win, which the three analytics tags cannot.
+ */
+export type RegistryMatchMode = 'bot_easy' | 'bot_medium' | 'bot_hard' | 'pvp' | 'friend';
+
+/** The closed set above, for folding a request body that arrived from a device. */
+const REGISTRY_MODES: readonly RegistryMatchMode[] = ['bot_easy', 'bot_medium', 'bot_hard', 'pvp', 'friend'];
+
+/** A stored or reported label, or null when it is not one of the five. */
+const registryModeOf = (value: unknown): RegistryMatchMode | null =>
+  (REGISTRY_MODES as readonly string[]).includes(typeof value === 'string' ? value : '')
+    ? (value as RegistryMatchMode)
+    : null;
+
+/** The registry label behind a bot's difficulty. `normal` is what the drawer calls Medium. */
+const botModeOf = (difficulty: unknown): RegistryMatchMode =>
+  difficulty === 'easy' ? 'bot_easy' : difficulty === 'hard' ? 'bot_hard' : 'bot_medium';
+
+/**
+ * One settled race, as the Command Center's history strip lists it. `ts` is the server's own
+ * clock — the moment the room (or the telemetry door) accepted the report — never a client's
+ * timestamp, so a device with a wrong clock cannot rewrite the order of a player's history.
+ */
+export interface RegistryMatchLog {
+  ts: number;
+  mode: RegistryMatchMode;
+  result: 'W' | 'L';
+  durationSec: number;
+  moves: number;
+}
+
+/** How many settled races a registry row remembers. The card scrolls; the blob stays small. */
+const REGISTRY_HISTORY = 15;
+
+/** How long a report without a match id is treated as the same race arriving twice. */
+const MATCH_DEDUPE_MS = 5_000;
+
+/** How long a match id is remembered: long enough for a keepalive report to land after the room. */
+const MATCH_LEDGER_TTL_MS = 60_000;
+
+/** The ledger's ceiling. A busy hour of pairings is far below it; the map is never unbounded. */
+const MATCH_LEDGER_MAX = 512;
+
+/**
  * One player the room has met, as the Command Center's Users tab reads them. The record is the
  * registry entry the Worker persists into its own Durable Object storage, so the directory
  * survives an eviction the same way the room's alarm does. Race telemetry (matches, wins, losses,
@@ -1873,6 +1918,12 @@ export interface PlayerRecord {
   lastSeen: number;
   /** When their last settled race ended, or 0 when they never finished one. */
   lastPlayed: number;
+  /**
+   * The last fifteen settled races, newest first — the Command Center's history strip. Only the
+   * two writers that can judge a board append here: the room's own settlement, and the telemetry
+   * door for the bot races the room never saw. A profile sync never touches it.
+   */
+  recentMatches: RegistryMatchLog[];
   matches: number;
   wins: number;
   losses: number;
@@ -2066,6 +2117,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     firstSeen: now,
     lastSeen: now,
     lastPlayed: 0,
+    recentMatches: [],
     matches: 0,
     wins: 0,
     losses: 0,
@@ -2097,6 +2149,33 @@ function storedAvatar(raw: unknown): string {
   return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
 }
 
+/**
+ * A stored history folded row by row: an unknown mode, a result that is not `W`/`L`, or a stamp
+ * that is not a whole number is dropped rather than repaired, and the list is re-capped on the
+ * way in — a hand-edited blob can neither grow the blob nor invent a race.
+ */
+function readRegistryLog(raw: unknown): RegistryMatchLog[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RegistryMatchLog[] = [];
+  for (const row of raw) {
+    if (out.length >= REGISTRY_HISTORY) break;
+    const r = row as Partial<RegistryMatchLog> | null | undefined;
+    if (!r || typeof r !== 'object') continue;
+    const mode = registryModeOf(r.mode);
+    const result = r.result === 'W' || r.result === 'L' ? r.result : null;
+    const ts = whole(r.ts);
+    if (!mode || !result || ts <= 0) continue;
+    out.push({
+      ts,
+      mode,
+      result,
+      durationSec: Math.min(86_400, whole(r.durationSec)),
+      moves: Math.min(100_000, whole(r.moves)),
+    });
+  }
+  return out;
+}
+
 /** A hydrated record folded field by field: a hand-edited blob is clamped, never trusted. */
 function readPlayer(raw: unknown): PlayerRecord | null {
   const r = raw as Partial<PlayerRecord> | null | undefined;
@@ -2115,6 +2194,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     firstSeen: whole(r.firstSeen),
     lastSeen: whole(r.lastSeen),
     lastPlayed: whole(r.lastPlayed),
+    recentMatches: readRegistryLog(r.recentMatches),
     matches: whole(r.matches),
     /* A hydrated or hand-edited blob can never claim more wins than races played. This is the
        last clamp before a row reaches the leaderboard, so an inflated win figure from an older
@@ -3481,6 +3561,15 @@ export class MatchmakerDO {
   /** Every player the room has met, by seat id — the Users tab's directory. */
   private players = new Map<string, PlayerRecord>();
   /**
+   * The races already folded into the registry, keyed `r:<matchId>:<seatId>` for one seat's
+   * verdict on one board and `s:<seatId>|<mode>|<result>` for a practice board that has no id,
+   * with the moment each was accepted. This is what stops a room settle and the client's own
+   * report of the same board from counting twice, whichever of the two arrives first. Bounded by
+   * `MATCH_LEDGER_MAX` and swept on every write; losing it to an eviction can at worst re-count a
+   * race whose report is still in flight, which is why the window is a minute.
+   */
+  private matchLedger = new Map<string, number>();
+  /**
    * Friends & Rivals: the pairings filed by an accepted `friend_<inviterId>` invite link, keyed by
    * the pair so one friendship can only ever hold one row. Bounded and swept on every write.
    */
@@ -3758,6 +3847,16 @@ export class MatchmakerDO {
         return await this.telemetry(request, url);
       } catch (err) {
         return json({ ok: false, error: 'telemetry_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
+      }
+    }
+    /* The Live Registry's match ledger. A bot race is played entirely on the device, so this is
+       the only way it can reach the directory; a PvP room writes the same row itself and this
+       door dedupes the client's echo by the room's own match id. */
+    if (url.pathname === '/api/registry/match') {
+      try {
+        return await this.registryMatch(request);
+      } catch (err) {
+        return json({ ok: false, error: 'registry_match_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
       }
     }
     /* A completed rewarded video. The player door is proven inside; the body is a placement, an
@@ -5751,6 +5850,89 @@ export class MatchmakerDO {
     }, 200, TELEMETRY_CORS);
   }
 
+  /**
+   * The Live Registry's match door: `POST /api/registry/match`.
+   *
+   * This is how a race the room never saw — a practice board played entirely on the device —
+   * still reaches the directory. The body is the client's account of the race (its label, its
+   * outcome, its clock and its depth); the seat is NOT: identity is proven from the signed
+   * initData exactly like the telemetry door, so a caller can only ever write its own row.
+   *
+   * The write is deduped and monotonic. A PvP room settles on the server, and the client's own
+   * result capsule reports the same board with the same `matchId` — whichever of the two arrives
+   * first claims that seat's key for the board, and the second answers `duplicate: true` and moves
+   * nothing. A report with no id (a bot race has no room to name) is folded in once per
+   * five-second window, so a retried keepalive call cannot count the same practice board twice.
+   */
+  private async registryMatch(request: Request): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: TELEMETRY_CORS });
+    if (request.method !== 'POST') {
+      return json({ ok: false, error: 'method_not_allowed' }, 405, TELEMETRY_CORS);
+    }
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, TELEMETRY_CORS);
+    if (this.restricted(who.playerId)) {
+      return json({ ok: false, error: 'banned' }, 403, TELEMETRY_CORS);
+    }
+
+    const body = await readBody(request);
+    const mode = registryModeOf(body.mode);
+    if (!mode) return json({ ok: false, error: 'invalid_mode' }, 400, TELEMETRY_CORS);
+    const result = body.result === 'W' || body.result === 'L' ? body.result : null;
+    if (!result) return json({ ok: false, error: 'invalid_result' }, 400, TELEMETRY_CORS);
+
+    const matchId = typeof body.matchId === 'string' ? body.matchId.trim().slice(0, 64) : '';
+    /* A board the room settled dedupes on the SEAT's key for that board — the very key the room's
+       own settlement claims — so the client's echo is a duplicate whichever frame wins the race.
+       A practice board has no id, so the seat's own label and outcome inside the five-second
+       window stand in for it: two Hard-bot wins in a row must both count. */
+    const key = matchId !== '' ? `r:${matchId}:${who.playerId}` : `s:${who.playerId}|${mode}|${result}`;
+    if (!this.claimMatchReport(key, matchId !== '' ? MATCH_LEDGER_TTL_MS : MATCH_DEDUPE_MS)) {
+      return json({
+        ok: true,
+        recorded: false,
+        duplicate: true,
+        player: this.players.get(who.playerId) ?? null,
+      }, 200, TELEMETRY_CORS);
+    }
+
+    const now = Date.now();
+    const p = this.telemetryPlayer(who, now);
+    /* A verified seat's name comes from the signed payload and is never overwritten by a body; a
+       guest has none, so the name the device carried is the only one there is. */
+    const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : '';
+    if (!who.name && displayName) p.name = displayName;
+    const username = typeof body.username === 'string' ? body.username.trim().replace(/^@+/, '').slice(0, 40) : '';
+    if (!p.username && username) p.username = username;
+
+    /* The mode clock follows the registry's own vocabulary: a friend duel and a queue pairing are
+       both PvP activity, a practice board is bot activity. */
+    const live = mode === 'pvp' || mode === 'friend';
+    this.markActive(who.playerId, live ? 'pvp' : 'bot');
+    this.recordMatch(p, {
+      mode,
+      result,
+      durationSec: durationSeconds(body.durationSec),
+      moves: whole(body.moves),
+    }, false);
+    /* The answer is the durable write: a count this room acknowledged survives a restart. */
+    await this.flushRegistry();
+
+    return json({
+      ok: true,
+      recorded: true,
+      duplicate: false,
+      mode,
+      result,
+      matches: p.matches,
+      wins: p.wins,
+      losses: p.losses,
+      streak: p.streak,
+      lastPlayedAt: p.lastPlayed,
+      timestamp: new Date(now).toISOString(),
+    }, 200, TELEMETRY_CORS);
+  }
+
   /** The registry row behind a telemetry report, created on the first bot-only session. */
   private telemetryPlayer(who: PlayerAuth, now: number): PlayerRecord {
     const existing = this.players.get(who.playerId);
@@ -7348,6 +7530,7 @@ export class MatchmakerDO {
         firstSeen: now,
         lastSeen: now,
         lastPlayed: 0,
+        recentMatches: [],
         matches: 0,
         wins: 0,
         losses: 0,
@@ -7580,6 +7763,11 @@ export class MatchmakerDO {
     target.referrals = Math.max(target.referrals, guest.referrals);
     target.tiq = Math.max(target.tiq, guest.tiq);
     target.country = target.country || guest.country;
+    /* The two rows are one person's history: their settled races merge newest-first, and the
+       shorter list is the one that gives way. A stamp is still the later of the two. */
+    target.recentMatches = [...(target.recentMatches ?? []), ...(guest.recentMatches ?? [])]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, REGISTRY_HISTORY);
     target.squad = target.squad || guest.squad;
     target.banned = target.banned || guest.banned;
     target.muted = target.muted || guest.muted;
@@ -7626,6 +7814,12 @@ export class MatchmakerDO {
     p.stars = Math.max(p.stars, identity.stars);
     p.referrals = Math.max(p.referrals, identity.referrals);
     p.squad = identity.squad || p.squad;
+    /* RACE CLOCK IS SERVER-OWNED. A connect carries a name, a flag, a wallet and a rating — never
+       a race time. Should a client (or an older build) ever start shipping one, this is the line
+       that keeps a stale save from rewinding `lastPlayed` to the day that save was written: the
+       stamp only ever moves forward, and `recordMatch` is the one writer that moves it. */
+    const incomingPlayed = (identity as unknown as { lastPlayed?: unknown }).lastPlayed;
+    p.lastPlayed = Math.max(p.lastPlayed || 0, whole(incomingPlayed));
     /* Telegram's locale, refreshed on every authenticated connect: a player who switched their
        app to Persian hears about the ladder in Persian from the next push on. A connect that named
        no locale we ship leaves the stored one alone rather than resetting it to English. */
@@ -7668,33 +7862,133 @@ export class MatchmakerDO {
 
   /**
    * The seat's board came to rest: count it. `winner` null means nobody won — an admin abort.
-   * `pvp` is the strict human-opponent gate: ONLY a verified PvP board may mint a ladder win,
-   * extend a streak or bank nation points. A machine-held practice board still records that a
-   * race happened (`matches`) and a defeat (`losses`), but it can never inflate competitive wins.
+   * `pvp` is the strict human-opponent gate for the ONE credit that must never be farmed: nation
+   * points are banked only by a win the room judged against another person. Every settled race —
+   * a bot practice board included — moves the registry's own counters and lands in the history
+   * strip, because that is the record the Command Center prints.
+   *
+   * `report` is the receipt the settlement already knows: the label the board played under, the
+   * room's match id, its depth and its clock. It is what makes the room's write and a client's
+   * later report of the same board one race instead of two.
    */
-  private verdict(id: string, won: boolean | null, pvp: boolean): void {
+  private verdict(
+    id: string,
+    won: boolean | null,
+    pvp: boolean,
+    report: { mode: RegistryMatchMode; matchId: string; moves: number; durationSec: number } = {
+      mode: 'pvp', matchId: '', moves: 0, durationSec: 0,
+    },
+  ): void {
     const p = this.players.get(id);
     if (!p) return;
     p.inMatch = false;
     this.stampSeen(p, Date.now());
     if (won !== null) {
-      p.matches++;
-      p.lastPlayed = p.lastSeen;
-      if (won) {
-        if (pvp) {
-          p.wins++;
-          p.streak++;
-          p.best = Math.max(p.best, p.streak);
-          this.creditNation(p);
-        }
-      } else {
-        p.losses++;
-        p.streak = 0;
+      /* One seat is counted once per board, and the key names the SEAT: a chair struck mid-race
+         settles here and again when the room finishes, and a client that saw the result on its
+         own replica may echo the board before the room's frame reaches it. Whoever arrives first
+         owns the key, so the race between the two can never count a race twice — and a four-seat
+         party still counts all four, because each seat has a key of its own. */
+      const seatKey = report.matchId === '' ? '' : `r:${report.matchId}:${id}`;
+      const fresh = seatKey === '' || this.claimMatchReport(seatKey);
+      if (fresh) {
+        this.recordMatch(p, {
+          mode: report.mode,
+          result: won ? 'W' : 'L',
+          durationSec: report.durationSec,
+          moves: report.moves,
+        }, pvp);
+      } else if (pvp && won) {
+        /* The client's echo got there first and already moved the counters. The nation's points
+           are the room's own verdict and were never a body's to claim, so they are banked here
+           even when the rest of the row was already written. */
+        this.creditNation(p);
       }
     }
     /* Forward-only invariant, even on a seat whose wins came from an older build. */
     p.wins = Math.min(p.matches, p.wins);
     this.persist();
+  }
+
+  /**
+   * Fold one settled race into a registry row — the counters, the streak, the durable "last
+   * played" stamp and the history the Command Center lists. Every write is monotonic: a stamp is
+   * moved forward with `Math.max`, never assigned, so a report that arrives late (or twice, or
+   * from a device whose clock is behind) can never rewind a seat's last race back to days ago.
+   *
+   * `bankNation` is the room's own verdict and nothing else: an HTTP report is a client's word
+   * about a board the room never saw, and a nation's points may not be minted from a body.
+   */
+  private recordMatch(
+    p: PlayerRecord,
+    report: { mode: RegistryMatchMode; result: 'W' | 'L'; durationSec: number; moves: number },
+    bankNation: boolean,
+  ): void {
+    const now = Date.now();
+    p.lastPlayed = Math.max(p.lastPlayed || 0, now);
+    p.lastSeen = Math.max(p.lastSeen || 0, now);
+    p.matches += 1;
+    if (report.result === 'W') {
+      p.wins += 1;
+      p.streak += 1;
+      p.best = Math.max(p.best, p.streak);
+      if (bankNation) this.creditNation(p);
+    } else {
+      p.losses += 1;
+      p.streak = 0;
+    }
+    p.wins = Math.min(p.matches, p.wins);
+    const entry: RegistryMatchLog = {
+      ts: now,
+      mode: report.mode,
+      result: report.result,
+      durationSec: Math.max(0, Math.min(86_400, Math.floor(report.durationSec) || 0)),
+      moves: Math.max(0, Math.min(100_000, Math.floor(report.moves) || 0)),
+    };
+    p.recentMatches = [entry, ...(p.recentMatches ?? [])].slice(0, REGISTRY_HISTORY);
+  }
+
+  /**
+   * Claim one ledger key for a report that is about to be folded in. False means this exact race
+   * (or this seat's verdict on it) was already counted — the second half of a settle-and-report
+   * pair, or a device retrying a call whose answer was lost.
+   *
+   * `windowMs` is what a key means: a match id is remembered for a minute, because the client's
+   * echo of a room board follows the settlement by a heartbeat. A practice board has no id, so its
+   * key is the seat's own label and outcome and it only holds for five seconds — two Hard-bot wins
+   * a player really did string together must both count.
+   */
+  private claimMatchReport(key: string, windowMs = MATCH_LEDGER_TTL_MS): boolean {
+    const now = Date.now();
+    const at = this.matchLedger.get(key) ?? 0;
+    if (at > 0 && now - at <= windowMs) return false;
+    this.matchLedger.set(key, now);
+    this.trimMatchLedger(now);
+    return true;
+  }
+
+  /** Keep the ledger a window, not a leak: expired keys first, then the oldest survivors. */
+  private trimMatchLedger(now: number): void {
+    if (this.matchLedger.size <= MATCH_LEDGER_MAX) return;
+    for (const [key, at] of [...this.matchLedger]) {
+      if (now - at > MATCH_LEDGER_TTL_MS) this.matchLedger.delete(key);
+    }
+    if (this.matchLedger.size <= MATCH_LEDGER_MAX) return;
+    const oldest = [...this.matchLedger.entries()].sort((a, b) => a[1] - b[1]);
+    for (let i = 0; i < oldest.length - MATCH_LEDGER_MAX; i++) this.matchLedger.delete(oldest[i][0]);
+  }
+
+  /** The registry label a room's board played under: the people across from it decide. */
+  private registryModeOfRoom(live: LiveRoom, seatIndex: number): RegistryMatchMode {
+    if (!this.roomPvpSeat(live, seatIndex)) {
+      const roster = live.driver?.room ?? live.room;
+      for (const seat of roster.seats) {
+        if (seat && seat.kind === 'bot') return botModeOf(seat.difficulty);
+      }
+      return 'bot_medium';
+    }
+    /* A code lobby is Play with Friends; the `?room=<n>` pairing is a live PvP race. */
+    return live.code ? 'friend' : 'pvp';
   }
 
   /**
@@ -8403,6 +8697,23 @@ export class MatchmakerDO {
         /* a store that refuses the write: the registry stays in memory */
       }
     });
+  }
+
+  /**
+   * Write the registry through, now. `persist()` is the debounced door every move rides — it is
+   * free because a burst of touches collapses into one flush. A settled race is the one write the
+   * Command Center must be able to read back on the next request, so the match door awaits the
+   * same two keys and answers only once the store has taken them.
+   */
+  private async flushRegistry(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      await storage.put('players', [...this.players.values()]);
+      await storage.put('bans', [...this.banned]);
+    } catch {
+      /* a store that refuses the write: the registry stays live for this object's lifetime */
+    }
   }
 
   /** Every waiting seat is told why and let go. A race already under way is somebody's game. */
@@ -10908,11 +11219,19 @@ export class MatchmakerDO {
     const ladderBefore = paysLadder ? this.ladderOrder() : null;
     const tiqDeltas = this.awardRoomWin(live, winner);
     const humans: RoomMember[] = [];
+    /* The board's own clock and depth: `live.seq` is one tick per accepted mutation, so the
+       registry's history row measures the race the room actually judged, not the capsule's. */
+    const durationSec = Math.max(0, Math.round((Date.now() - live.startedAt) / 1000));
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
       if (!m) continue;
       /* Every occupied seat settles, including a teammate whose socket blipped on the final tick. */
-      this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i));
+      this.verdict(m.id, this.onWinningSide(live, i, winner), this.roomPvpSeat(live, i), {
+        mode: this.registryModeOfRoom(live, i),
+        matchId: live.matchId,
+        moves: live.seq,
+        durationSec,
+      });
       if (m.connected) humans.push(m);
     }
     /* The rivals this victory passed hear about it once the counters behind the order are final:
@@ -11126,7 +11445,12 @@ export class MatchmakerDO {
       member.connected = false;
       member.droppedAt = 0;
       this.setInMatch(member.id, false);
-      this.verdict(member.id, false, this.roomPvpSeat(live, ref.seat));
+      this.verdict(member.id, false, this.roomPvpSeat(live, ref.seat), {
+        mode: this.registryModeOfRoom(live, ref.seat),
+        matchId: live.matchId,
+        moves: live.seq,
+        durationSec: Math.max(0, Math.round((Date.now() - live.startedAt) / 1000)),
+      });
     }
     driver.leave(ref.seat);
     this.collapseLoneTeam(live);
@@ -11470,7 +11794,12 @@ export class MatchmakerDO {
       this.markActive(seat.id, race.mode);
       /* A queue pairing, an Arena cup and an accepted relic duel are always two real sockets:
          no bot can hold a `Race` seat, so every win here is a verified PvP win. */
-      this.verdict(seat.id, winner === null ? null : seat.side === winner, true);
+      this.verdict(seat.id, winner === null ? null : seat.side === winner, true, {
+        mode: 'pvp',
+        matchId: race.matchId,
+        moves: race.plies,
+        durationSec: Math.max(0, Math.round((Date.now() - race.startedAt) / 1000)),
+      });
     }
     /* The 7-Day Challenge's friend track is the room's own settlement, not a client report:
        one credited win per real 1v1 board, with the room's elapsed time and ITS OWN board depth.

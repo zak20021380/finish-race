@@ -49,7 +49,7 @@ import {
 import { getMySquad, squadMark, telegramAvatarUrl } from './squads';
 import {
   directoryAction, directoryCountries, directoryPage, liveRow, PAGE_SIZE, YOU_ID,
-  type AgeBand, type DirFilter, type DirPlayer, type DirSort,
+  type AgeBand, type DirFilter, type DirMatchLog, type DirPlayer, type DirSort,
 } from './players';
 import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
@@ -81,6 +81,38 @@ import {
 
 /** The built-in allowlist. Add Telegram user ids here, or to `VITE_ADMIN_IDS`. */
 export const ADMIN_IDS: readonly string[] = ['1350508522', '1', '1000001'];
+
+/* ---------- the registry card's clock ---------- */
+
+/**
+ * The Users card prints every race time on Tehran's own clock (`Asia/Tehran`, a strict UTC+03:30) —
+ * the operator's clock, never the device's, and never a hand-added offset. One formatter is built
+ * once and reused: the card repaints on every directory read, and an `Intl` object per row is a
+ * real cost on a phone.
+ *
+ * `formatToParts` is used instead of `format()` because `en-GB` prints day-before-month while the
+ * card's contract is `Nov 26, 11:42`. An engine that ships without the zone data falls back to
+ * `UTC` and says so, rather than printing Tehran's label over digits that are not Tehran's.
+ */
+const REGISTRY_STAMP = (() => {
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  };
+  try {
+    return { fmt: new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', ...options }), zone: 'TEHRAN' };
+  } catch {
+    return { fmt: new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options }), zone: 'UTC' };
+  }
+})();
+
+/** `Nov 26, 11:42 TEHRAN` — the exact instant a race settled, on the operator's wall clock. */
+export function tehranStamp(ms: number): string {
+  const parts = new Map<string, string>();
+  for (const part of REGISTRY_STAMP.fmt.formatToParts(new Date(ms))) parts.set(part.type, part.value);
+  const hour = parts.get('hour') ?? '00';
+  const clock = `${hour === '24' ? '00' : hour}:${parts.get('minute') ?? '00'}`;
+  return `${parts.get('month') ?? ''} ${parts.get('day') ?? ''}, ${clock} ${REGISTRY_STAMP.zone}`.trim();
+}
 
 const rawAdminIds =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADMIN_IDS) || '';
@@ -4320,6 +4352,86 @@ export function createAdmin(api: AdminApi): Admin {
     return s;
   }
 
+  /**
+   * The LAST PLAYED tile. A coarse "4d ago" is not an audit reading, so the exact instant leads —
+   * `Nov 26, 11:42 TEHRAN`, in the operator's own zone — and the relative stamp rides underneath
+   * as the at-a-glance half. A seat that has never finished a race says so instead of printing a
+   * clock, which is the only honest reading of a zero stamp.
+   */
+  function userPlayedCell(p: DirPlayer): HTMLElement {
+    const s = document.createElement('span');
+    s.className = 'adm-stat adm-user-played';
+    const b = document.createElement('b');
+    b.className = 'adm-stat-v adm-user-played-v';
+    const when = document.createElement('bdi');
+    when.dir = 'ltr';
+    when.textContent = p.lastPlayed > 0 ? tehranStamp(p.lastPlayed) : 'NEVER';
+    b.append(when);
+    const sub = document.createElement('span');
+    sub.className = 'adm-stat-l adm-user-played-sub';
+    if (p.lastPlayed > 0) {
+      const rel = document.createElement('bdi');
+      rel.dir = 'ltr';
+      rel.textContent = agoOf(p.lastPlayed);
+      sub.append(rel, document.createTextNode(' • LAST PLAYED'));
+    } else {
+      sub.textContent = 'LAST PLAYED';
+    }
+    s.append(b, sub);
+    return s;
+  }
+
+  /** The label each registry mode wears in the history strip. */
+  const MATCH_MODE_TEXT: Record<DirMatchLog['mode'], string> = {
+    bot_easy: 'VS EASY BOT',
+    bot_medium: 'VS MEDIUM BOT',
+    bot_hard: 'VS HARD BOT',
+    friend: 'FRIEND DUEL',
+    pvp: 'PVP MATCH',
+  };
+
+  /** One row of the history strip: the outcome and its level on the left, the instant on the right. */
+  function matchLogRow(m: DirMatchLog): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'adm-user-mh';
+    row.dataset.res = m.result;
+    const left = document.createElement('span');
+    left.className = 'adm-user-mh-l';
+    const badge = document.createElement('b');
+    badge.className = 'adm-user-mh-r';
+    badge.textContent = m.result === 'W' ? 'WIN' : 'LOSS';
+    const mode = document.createElement('span');
+    mode.className = 'adm-user-mh-m';
+    mode.textContent = MATCH_MODE_TEXT[m.mode] ?? 'MATCH';
+    left.append(badge, mode);
+    const when = document.createElement('bdi');
+    when.dir = 'ltr';
+    when.className = 'adm-user-mh-t';
+    when.textContent = tehranStamp(m.ts);
+    row.append(left, when);
+    return row;
+  }
+
+  /**
+   * RECENT MATCHES (TEHRAN): the last fifteen settled races, newest first. It is the one place a
+   * bot practice board and a PvP pairing read side by side, which is what makes the LAST PLAYED
+   * stamp above it verifiable instead of a claim. Nothing is painted for a seat with no history.
+   */
+  function userHistoryStrip(p: DirPlayer): HTMLElement | null {
+    const rows = p.recentMatches ?? [];
+    if (!rows.length) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'adm-user-hist';
+    const head = document.createElement('span');
+    head.className = 'adm-user-hist-h';
+    head.textContent = 'RECENT MATCHES (TEHRAN)';
+    const list = document.createElement('div');
+    list.className = 'adm-user-hist-list';
+    for (const m of rows) list.append(matchLogRow(m));
+    wrap.append(head, list);
+    return wrap;
+  }
+
   /* ---- the advanced toolbar: country, age and the explicit audit sort ---- */
 
   const AGE_LABEL: Record<AgeBand, string> = {
@@ -4613,13 +4725,16 @@ export function createAdmin(api: AdminApi): Admin {
       userStat(figure(p.matches), 'Matches Played'),
       userStat(`${rate}% · ${p.wins}W ${p.losses}L`, 'Win Rate · Record'),
       userStat(`${p.streak} · ${p.best}`, 'Streak · Best'),
-      userStat(p.lastPlayed ? agoOf(p.lastPlayed) : 'Never', 'Last Played'),
+      userPlayedCell(p),
       coinsCell,
       userStat(figure(p.stars), 'Stars Won', 'star'),
       userStat(figure(p.referrals), 'Invited Friends'),
       userStat(p.squad || '—', 'Squad / Channel'),
     );
     detail.append(grid);
+
+    const history = userHistoryStrip(p);
+    if (history) detail.append(history);
 
     const actions = document.createElement('div');
     actions.className = 'adm-user-actions';

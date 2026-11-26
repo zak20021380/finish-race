@@ -28,6 +28,8 @@ export interface DirPlayer {
   firstSeen: number;
   lastSeen: number;
   lastPlayed: number;
+  /** The last fifteen settled races, newest first. Mirrors `RegistryMatchLog` on the wire. */
+  recentMatches: DirMatchLog[];
   matches: number;
   wins: number;
   losses: number;
@@ -45,6 +47,21 @@ export interface DirPlayer {
   muted: boolean;
   inMatch: boolean;
 }
+
+/** The registry's match vocabulary: the three practice levels, plus the two live ones. */
+export type RegistryMatchMode = 'bot_easy' | 'bot_medium' | 'bot_hard' | 'pvp' | 'friend';
+
+/** One settled race as the expanded card lists it. `ts` is the server's own clock. */
+export interface DirMatchLog {
+  ts: number;
+  mode: RegistryMatchMode;
+  result: 'W' | 'L';
+  durationSec: number;
+  moves: number;
+}
+
+const MATCH_MODES: readonly RegistryMatchMode[] = ['bot_easy', 'bot_medium', 'bot_hard', 'pvp', 'friend'];
+const MATCH_HISTORY = 15;
 
 /** The directory views behind the filter chips. `stars` is the economy audit: holders, ranked. */
 export type DirFilter = 'all' | 'active' | 'tiq' | 'flagged' | 'stars';
@@ -115,6 +132,31 @@ const LEGACY_MOCK_ID = /^lp-[0-9a-z]+-[0-9a-z]+$/i;
 const whole = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 
+/** A stored history folded row by row: an unknown mode or result is dropped, never repaired. */
+function readMatchLog(raw: unknown): DirMatchLog[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DirMatchLog[] = [];
+  for (const row of raw) {
+    if (out.length >= MATCH_HISTORY) break;
+    const r = row as Partial<DirMatchLog> | null | undefined;
+    if (!r || typeof r !== 'object') continue;
+    const mode = (MATCH_MODES as readonly string[]).includes(typeof r.mode === 'string' ? r.mode : '')
+      ? (r.mode as RegistryMatchMode)
+      : null;
+    const result = r.result === 'W' || r.result === 'L' ? r.result : null;
+    const ts = whole(r.ts);
+    if (!mode || !result || ts <= 0) continue;
+    out.push({
+      ts,
+      mode,
+      result,
+      durationSec: Math.min(86_400, whole(r.durationSec)),
+      moves: Math.min(100_000, whole(r.moves)),
+    });
+  }
+  return out;
+}
+
 /** Fold a stored or hand-edited row field by field; bad rows are dropped, never trusted. */
 function readRow(raw: unknown): DirPlayer | null {
   const r = raw as Partial<DirPlayer> | null | undefined;
@@ -130,6 +172,7 @@ function readRow(raw: unknown): DirPlayer | null {
     firstSeen: whole(r.firstSeen),
     lastSeen: whole(r.lastSeen),
     lastPlayed: whole(r.lastPlayed),
+    recentMatches: readMatchLog(r.recentMatches),
     matches: whole(r.matches),
     wins: whole(r.wins),
     losses: whole(r.losses),
@@ -289,6 +332,9 @@ export function liveRow(face: { name: string; tiq: number; squad: string }): Dir
     firstSeen: stored?.firstSeen || now,
     lastSeen: now,
     lastPlayed: s.games > 0 ? now : 0,
+    /* The device's own save carries a tally, not a ledger: the strip is the registry's, so an
+       offline seat shows no history rather than an invented one. */
+    recentMatches: [],
     matches: s.games,
     wins: s.wins,
     losses: s.losses,

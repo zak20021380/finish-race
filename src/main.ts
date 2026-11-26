@@ -110,7 +110,10 @@ import {
 import { channelGateBlocks, initJoinGate, raiseChannelGate } from './joinGate';
 import type { VsRival, VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
-import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
+import {
+  beginMatch, finishMatch, initTelemetry, registryModeOfBot, reportRegistryMatch, setIdle,
+  type RegistryMatchMode,
+} from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
 import {
   createReferralQuestMatch, isReferralQuestActive, onReferralQuestChange, referralQuestUser,
@@ -1342,6 +1345,19 @@ function paintRendererPerspective(reset = false): void {
 const rankedPvp = (): boolean => {
   if (!active || room || 'seats' in active) return false;
   return matchMode() !== 'bot';
+};
+
+/**
+ * The Live Registry's label for the board on screen — the finer vocabulary the Command Center's
+ * history strip prints. A practice race carries the level it was played at; a private room is a
+ * friend duel; the matchmaker's queue and the Arena cup are PvP. `matchMode()` stays the analytics
+ * tag the growth rings count, and this reads it rather than restating it.
+ */
+const registryModeOfBoard = (): RegistryMatchMode => {
+  const live = matchMode();
+  if (live === 'bot') return registryModeOfBot(difficulty);
+  /* A room is Play with Friends; the queue and the cup are a live PvP race. */
+  return active && 'seats' in active ? 'friend' : 'pvp';
 };
 
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
@@ -3005,7 +3021,10 @@ function showOverlay() {
      Home after the duel" from a stray tab hop during an invite launch that never reached a board. */
   inviteDuelSettled = true;
   /* The board reached its result: one match report, measured from `restart()`. A lesson has no
-     clock open, so this is a no-op there. */
+     clock open, so this is a no-op there. The Live Registry's ledger rides the very same clock —
+     it is filed first, because `finishMatch()` is what closes it — so every practice board, friend
+     duel and PvP pairing lands on the player's directory row at the moment it settles. */
+  reportRegistryMatch(registryModeOfBoard(), localWon() ? 'W' : 'L', turnsPlayed);
   finishMatch();
   clearResultMotion();
   /* a fresh settlement owns a fresh budget: last match's claims must never pay this one */

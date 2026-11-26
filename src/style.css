@@ -23542,6 +23542,91 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
+
+/* ---- the registry card's LAST PLAYED tile: the exact Tehran instant over its relative stamp ---- */
+.adm-user-played { gap: 3px; }
+.adm-user-played .adm-user-played-v {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #f8fafc;
+}
+.adm-user-played-sub {
+  display: block;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: .03em;
+  color: #94a3b8;
+}
+
+/* ---- RECENT MATCHES: a scrollable strip of settled races, newest first ---- */
+.adm-user-hist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  min-width: 0;
+}
+.adm-user-hist-h {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: #94a3b8;
+}
+.adm-user-hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .16) transparent;
+}
+.adm-user-mh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .03);
+  font-size: 11px;
+}
+.adm-user-mh-l {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.adm-user-mh-r {
+  flex: none;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  color: #fb7185;
+}
+.adm-user-mh[data-res="W"] .adm-user-mh-r { color: #34d399; }
+.adm-user-mh-m {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-user-mh-t {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  white-space: nowrap;
+}
 .adm-user-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

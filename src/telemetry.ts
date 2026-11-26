@@ -8,11 +8,18 @@
  */
 import { workerUrl } from './adminApi';
 import { guestId } from './storage';
-import { tgInitData } from './telegram';
+import { tgInitData, tgUser } from './telegram';
 import { playerCountOf, type MatchMode, type PlayerCount } from '../shared/telemetry';
 
 /** One heartbeat a minute: short enough to stay inside the rolling day, long enough to be free. */
 const HEARTBEAT_MS = 60_000;
+
+/**
+ * The Live Registry's own label for a settled board. It is deliberately finer than `MatchMode`:
+ * the Command Center's history strip names the level a practice race was played at, which the
+ * three analytics tags cannot. Mirrors `RegistryMatchMode` in `worker/matchmaker.ts`.
+ */
+export type RegistryMatchMode = 'bot_easy' | 'bot_medium' | 'bot_hard' | 'pvp' | 'friend';
 
 export interface MatchStart {
   mode: MatchMode;
@@ -99,6 +106,46 @@ export function finishMatch(): void {
 /** The player left the board before a verdict: nothing to report, and no live mode to credit. */
 export function setIdle(): void {
   current = null;
+}
+
+/** The level behind a practice board, folded onto the registry's own labels. */
+export function registryModeOfBot(level: string): RegistryMatchMode {
+  return level === 'easy' ? 'bot_easy' : level === 'hard' ? 'bot_hard' : 'bot_medium';
+}
+
+/**
+ * The board settled: file it in the Live Registry.
+ *
+ * The result capsule is the one moment a race is finished and the app is still awake, so this is
+ * where every match — a practice board the room never saw, a friend duel, a queue pairing —
+ * reaches the directory. The clock and the room's match id come off the same `current` record
+ * `beginMatch()` opened, which is what lets the server dedupe a PvP board the room already
+ * settled against this client's echo of it.
+ *
+ * Fire-and-forget, exactly like the telemetry above: a dropped report must never hold up the
+ * result card, and a lesson (no clock open) files nothing at all.
+ */
+export function reportRegistryMatch(
+  mode: RegistryMatchMode,
+  result: 'W' | 'L',
+  moves: number,
+): void {
+  const match = current;
+  if (!match) return;
+  const durationSec = Math.max(0, Math.round((Date.now() - match.startedAt) / 1000));
+  const user = tgUser();
+  const name = [user?.first_name, user?.last_name].filter((part): part is string => !!part).join(' ');
+  send('/api/registry/match', {
+    userId: user?.id === undefined || user?.id === null ? '' : String(user.id),
+    displayName: name.slice(0, 40),
+    username: user?.username ?? '',
+    mode,
+    result,
+    durationSec,
+    moves: Math.max(0, Math.floor(moves) || 0),
+    ts: Date.now(),
+    ...(match.matchId ? { matchId: match.matchId } : {}),
+  });
 }
 
 /** Start the heartbeat once per page. The first beat is immediate, so an idle app is still seen. */
