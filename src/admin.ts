@@ -371,7 +371,13 @@ export interface ServerMetrics {
   matchesByMode24h: Record<MatchMode, number>;
   /** Matches inside the rolling 24 hours, one count per seat count. */
   matchesByPlayers24h: Record<'2' | '3' | '4', number>;
-  /** Distinct players active in the requested slice in the rolling last 24 hours. */
+  /** Matches settled since `00:00:00` Tehran today: the aggregate, then both card slices. */
+  matchesTodayTotal: number;
+  /** Real PvP boards settled since `00:00:00` Tehran today. */
+  matchesTodayPvp: number;
+  /** Practice boards against the machine settled since `00:00:00` Tehran today. */
+  matchesTodayBot: number;
+  /** Distinct players active inside the requested slice in the rolling last 24 hours. */
   active24h: number;
   minesPlaced: number;
   /** Retired rolling-log counter; the Worker always reports 0. */
@@ -380,6 +386,8 @@ export interface ServerMetrics {
   referringPlayers: number;
   /** Players whose last activity falls inside the rolling last 24 hours. */
   dau: number;
+  /** Distinct players whose last sighting landed since `00:00:00` Tehran today. */
+  activeToday: number;
   /** Players whose last activity falls inside the rolling last 7 days. */
   wau: number;
   /** Players whose last activity falls inside the rolling last 30 days. */
@@ -640,11 +648,15 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     matches24h: metricCount(row.matches24h),
     matchesByMode24h: metricModeCounts(row.matchesByMode24h),
     matchesByPlayers24h: metricPlayerCounts(row.matchesByPlayers24h),
+    matchesTodayTotal: metricCount(row.matchesTodayTotal),
+    matchesTodayPvp: metricCount(row.matchesTodayPvp),
+    matchesTodayBot: metricCount(row.matchesTodayBot),
     active24h: metricCount(row.active24h),
     minesPlaced: metricCount(row.minesPlaced),
     logsSpawned: metricCount(row.logsSpawned),
     referrals: metricCount(row.referrals),
     referringPlayers: metricCount(row.referringPlayers),
+    activeToday: metricCount(row.activeToday),
     dau: metricCount(row.dau),
     wau: metricCount(row.wau),
     mau: metricCount(row.mau),
@@ -1987,6 +1999,11 @@ export function createAdmin(api: AdminApi): Admin {
   const statNewToday = $<HTMLElement>('stat-new-today');
   const statNewWeek = $<HTMLElement>('stat-new-week');
   const statNewMonth = $<HTMLElement>('stat-new-month');
+  /* today's matches: the strict 00:00 Tehran slice the Worker folds from its own settlement log */
+  const statMatchesMeta = $<HTMLElement>('stat-matches-meta');
+  const statMatchesToday = $<HTMLElement>('stat-matches-today');
+  const statMatchesPvp = $<HTMLElement>('stat-matches-today-pvp');
+  const statMatchesBot = $<HTMLElement>('stat-matches-today-bot');
   /* the Stars economy on this tab is one reading: the invoice revenue the Worker settled.
      The payout queue is painted by the Controls tab, from its own cards. */
   const statStarsIncome = $<HTMLElement>('stat-stars-income');
@@ -2527,10 +2544,21 @@ export function createAdmin(api: AdminApi): Admin {
   /** A server-computed percentage, printed as a whole number. */
   const rateText = (n: number): string => `${Math.max(0, Math.min(100, Math.round(n)))}%`;
 
-  /** `14:05:22` — the exact clock of a reading, in this device's timezone. */
-  const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  });
+  /** `14:05:22` — the exact clock of a reading, always on Tehran's own day, never the device's. */
+  const clockOf = (ms: number): string => {
+    try {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Tehran',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(new Date(ms));
+    } catch {
+      /* an engine without the zone data still prints a real clock, labelled UTC by its digits */
+      return new Date(ms).toLocaleTimeString('en-GB', {
+        timeZone: 'UTC',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      });
+    }
+  };
 
   /* ---------- the trend chart: one bounded window, one series at a time, plain inline SVG ---------- */
 
@@ -3500,14 +3528,21 @@ export function createAdmin(api: AdminApi): Admin {
     if (statActive) statActive.textContent = metric(concurrency);
     paintPhrase(statActiveMeta, 'admTotal', m?.totalUsers, '— Total');
     paintPhrase(statLiveRooms, 'admActiveRooms', m?.activeRooms, '— active rooms');
-    if (statDau) statDau.textContent = metric(m?.dau);
+    /* "امروز" is the strict 00:00 Tehran day, never a rolling 24-hour subtraction */
+    if (statDau) setLtrText(statDau, metric(m?.activeToday));
     if (statMau) statMau.textContent = metric(m?.mau);
 
-    /* ---- new signups: rolling first-seen cohorts, plus the registry size for context ---- */
+    /* ---- new signups: the Tehran-today cohort first, then the rolling weekly/monthly windows ---- */
     paintPhrase(statGrowthMeta, 'admRegistered', m?.totalUsers, '— registered');
-    if (statNewToday) statNewToday.textContent = metric(m?.signupsToday);
+    if (statNewToday) setLtrText(statNewToday, metric(m?.signupsToday));
     if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
     if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
+
+    /* ---- today's matches: one strict 00:00 Tehran slice, split the way the board is played ---- */
+    paintPhrase(statMatchesMeta, 'admMatchesTotal', m?.matchesCompleted, '— total');
+    if (statMatchesToday) setLtrText(statMatchesToday, metric(m?.matchesTodayTotal));
+    if (statMatchesPvp) setLtrText(statMatchesPvp, metric(m?.matchesTodayPvp));
+    if (statMatchesBot) setLtrText(statMatchesBot, metric(m?.matchesTodayBot));
 
     /* ---- Stars revenue: the one invoice figure this tab carries ---- */
     if (statStarsIncome) statStarsIncome.textContent = metric(m?.starsRevenueTotal);

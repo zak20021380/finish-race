@@ -3768,9 +3768,9 @@
                   <span class="adm-card-s" id="stat-live-rooms">— active rooms</span>
                 </div>
                 <div class="adm-card">
-                  <span class="adm-card-l" data-i18n-html="admToday24h">Today (24h)</span>
+                  <span class="adm-card-l" data-i18n="admToday24h">Today (24h)</span>
                   <b class="adm-card-v" id="stat-dau">—</b>
-                  <span class="adm-card-s" data-i18n-html="admActiveIn24h">Active in 24h</span>
+                  <span class="adm-card-s" data-i18n-html="admSinceMidnight">Since 00:00 Tehran</span>
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n-html="admThisMonth30d">This Month (30d)</span>
@@ -3790,7 +3790,7 @@
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admToday">Today</span>
                   <b class="adm-card-v" id="stat-new-today">—</b>
-                  <span class="adm-card-s" data-i18n-html="admLast24h">Last 24h</span>
+                  <span class="adm-card-s" data-i18n-html="admSinceMidnight">Since 00:00 Tehran</span>
                 </div>
                 <div class="adm-card">
                   <span class="adm-card-l" data-i18n="admThisWeek">This Week</span>
@@ -3801,6 +3801,35 @@
                   <span class="adm-card-l" data-i18n="admThisMonth">This Month</span>
                   <b class="adm-card-v" id="stat-new-month">—</b>
                   <span class="adm-card-s" data-i18n-html="admLast30d">Last 30d</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- B0. today's matches: the strict 00:00:00 Tehran day, never a rolling 24-hour
+                 window. Every settled board stamps its own exact millisecond into the Worker's
+                 Tehran-day ledger, so the aggregate and the two ways the board is played hold the
+                 same boundary as the "امروز" cards above. Same executive header and three-card
+                 obsidian grid, same gold figure, zero new motion. -->
+            <section class="adm-block" data-accent="gold" aria-labelledby="stat-matches-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-matches-title" data-i18n="admMatchesToday">Today's Matches</h3>
+                <span class="adm-block-s" id="stat-matches-meta">— total</span>
+              </div>
+              <div class="adm-grid">
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admMatchesTodayAll">Today total</span>
+                  <b class="adm-card-v" id="stat-matches-today"><bdi dir="ltr">—</bdi></b>
+                  <span class="adm-card-s" data-i18n-html="admSinceMidnight">Since 00:00 Tehran</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admMatchesTodayPvp">Competitive</span>
+                  <b class="adm-card-v" id="stat-matches-today-pvp"><bdi dir="ltr">—</bdi></b>
+                  <span class="adm-card-s" data-i18n-html="admSinceMidnight">Since 00:00 Tehran</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-l" data-i18n="admMatchesTodayBot">Bot</span>
+                  <b class="adm-card-v" id="stat-matches-today-bot"><bdi dir="ltr">—</bdi></b>
+                  <span class="adm-card-s" data-i18n-html="admSinceMidnight">Since 00:00 Tehran</span>
                 </div>
               </div>
             </section>

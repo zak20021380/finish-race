@@ -19501,6 +19501,21 @@ html[data-lang="ar"] #stat-active-meta {
   unicode-bidi: isolate;
 }
 
+/* the "بازی‌های امروز" strip is the same executive block as the two rows above it: its end-side
+   total reads as one RTL sentence ("کل بازی‌ها: 1,204") while the figure it quotes stays an LTR
+   run, and the three figures keep the gold card baseline. No motion, no blur, no new material. */
+html[data-lang="fa"] #stat-matches-meta,
+html[data-lang="ar"] #stat-matches-meta {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+#stat-matches-today,
+#stat-matches-today-pvp,
+#stat-matches-today-bot {
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+}
+
 /* ---- one clay slab under each executive section: title row, content beneath ---- */
 .adm-slab {
   display: flex;

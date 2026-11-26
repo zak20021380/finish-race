@@ -861,6 +861,16 @@ export interface ServerMetrics {
   matchesByMode24h: Record<MatchMode, number>;
   /** Matches inside the rolling 24 hours, one count per seat count. */
   matchesByPlayers24h: Record<'2' | '3' | '4', number>;
+  /**
+   * Matches settled since `00:00:00` Tehran today — the operator's calendar day, not a rolling
+   * window. Read from the Tehran-day ledger each settlement stamps its own `Date.now()` into, so
+   * the boundary is exact to the millisecond instead of the half-hour an hourly bucket cannot cut.
+   */
+  matchesTodayTotal: number;
+  /** Real PvP boards settled since `00:00:00` Tehran today. */
+  matchesTodayPvp: number;
+  /** Practice boards against the machine settled since `00:00:00` Tehran today. */
+  matchesTodayBot: number;
   /** Distinct players active inside the requested slice in the rolling last 24 hours. */
   active24h: number;
   /** Mine actions accepted by the authoritative board. */
@@ -871,6 +881,11 @@ export interface ServerMetrics {
   referrals: number;
   /** Registry players credited with at least one referral. */
   referringPlayers: number;
+  /**
+   * Distinct players whose last sighting landed since `00:00:00` Tehran today. The strict day the
+   * "امروز" card reads; `dau` keeps its rolling 24-hour meaning for the ratios that quote it.
+   */
+  activeToday: number;
   /** Players whose last activity falls inside the rolling last 24 hours. */
   dau: number;
   /** Players whose last activity falls inside the rolling last 7 days. */
@@ -943,7 +958,7 @@ export interface ServerMetrics {
 type PopulationReading = Pick<
   ServerMetrics,
   | 'totalUsers' | 'telegramUsers' | 'referrals' | 'referringPlayers'
-  | 'dau' | 'wau' | 'mau' | 'returningUsersToday' | 'returningShare'
+  | 'activeToday' | 'dau' | 'wau' | 'mau' | 'returningUsersToday' | 'returningShare'
   | 'signupsToday' | 'signupsWeek' | 'signupsMonth' | 'retentionRateD1'
   | 'avgMatchesPerPlayer' | 'activationRate' | 'coreRetention' | 'dailyActiveRatio' | 'viralShare'
 >;
@@ -954,6 +969,7 @@ const NO_POPULATION: PopulationReading = {
   telegramUsers: 0,
   referrals: 0,
   referringPlayers: 0,
+  activeToday: 0,
   dau: 0,
   wau: 0,
   mau: 0,
@@ -1071,6 +1087,16 @@ interface GameMetrics {
    * can never grow with the playerbase.
    */
   matchLog: MatchLogEntry[];
+  /**
+   * The operator's "today" ledger: matches settled per Tehran calendar day, keyed by the Tehran
+   * day index (`Math.floor((ts + 12_600_000) / 86_400_000)`). Every settlement stamps the exact
+   * `Date.now()` it judged with, so `00:00:00` Tehran is a real millisecond boundary here — the
+   * UTC hour buckets above cannot cut a day that opens at `20:30` UTC. Bounded by
+   * `TEHRAN_DAY_KEEP`, and a day nothing was played on is simply absent (an exact zero).
+   */
+  matchesByTehranDay: Record<string, number>;
+  /** The same Tehran-day ledger cut by the match type that was played. */
+  matchesByModeTehranDay: Record<MatchMode, Record<string, number>>;
 }
 
 /** The two tags every completed match carries into the bucket counters. */
@@ -1083,6 +1109,8 @@ const GAME_METRICS_KEY = 'game-metrics.v1';
 /** The width of one match bucket, and how many hours of buckets stay in storage. */
 const HOUR_MS = 3_600_000;
 const MATCH_BUCKET_KEEP_HOURS = 8 * 24;
+/** How many Tehran calendar days the "today" ledger keeps: a full week, pruned on every stamp. */
+const TEHRAN_DAY_KEEP = 7;
 
 const zeroGameMetrics = (): GameMetrics => ({
   matchesCompleted: 0,
@@ -1091,6 +1119,8 @@ const zeroGameMetrics = (): GameMetrics => ({
   matchesByModeHour: { bot: {}, pvp: {}, arena: {} },
   matchesByPlayersHour: { '2': {}, '3': {}, '4': {} },
   matchLog: [],
+  matchesByTehranDay: {},
+  matchesByModeTehranDay: { bot: {}, pvp: {}, arena: {} },
 });
 
 /* ---------- the Nations Cup ledger ---------- */
@@ -1299,6 +1329,12 @@ function readGameMetrics(raw: unknown): GameMetrics {
       '4': byPlayers('4'),
     },
     matchLog: readMatchLog(r?.matchLog),
+    matchesByTehranDay: readTehranDays(r?.matchesByTehranDay),
+    matchesByModeTehranDay: {
+      bot: readTehranDays(r?.matchesByModeTehranDay?.['bot']),
+      pvp: readTehranDays(r?.matchesByModeTehranDay?.['pvp']),
+      arena: readTehranDays(r?.matchesByModeTehranDay?.['arena']),
+    },
   };
 }
 
@@ -1353,6 +1389,49 @@ const dayKeyOf = (index: number): string => new Date(index * DAY_MS).toISOString
 
 /** The UTC day index a timestamp falls in. */
 const dayIndexOf = (ms: number): number => Math.floor(ms / DAY_MS);
+
+/* ---------- Tehran's calendar day: the operator's "today" ---------- */
+
+/**
+ * Tehran's permanent `UTC+03:30` offset. Iran has run no daylight saving since 2022, so the
+ * operator's day opens at one fixed instant every single day: `00:00:00` Tehran is exactly
+ * `20:30:00` UTC. A constant is therefore the honest encoding of the zone — not an approximation.
+ */
+const TEHRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000; // 12,600,000 ms
+
+/**
+ * The exact instant that opens the operator's "today": `00:00:00` Tehran, as epoch ms (UTC).
+ *
+ * `now - 86_400_000` is never this number: it slides with the wall clock, so an evening read
+ * includes yesterday morning and the "Today" cards quietly report a rolling window. This one is
+ * pinned to the calendar day itself, so every read from `00:00:00` to `23:59:59.999` Tehran folds
+ * the same window.
+ */
+const getTehranMidnightUtcMs = (nowMs = Date.now()): number =>
+  Math.floor((nowMs + TEHRAN_OFFSET_MS) / DAY_MS) * DAY_MS - TEHRAN_OFFSET_MS;
+
+/** The Tehran calendar day index an instant belongs to: the key of the "today" ledger. */
+const tehranDayIndexOf = (ms: number): number => Math.floor((ms + TEHRAN_OFFSET_MS) / DAY_MS);
+
+/**
+ * A stored Tehran-day bucket map, clamped: only whole counts inside the retained days survive.
+ * A stale row (yesterday's, or a future one a clock skew wrote) is dropped rather than summed
+ * into today, so the card can never inherit a previous day's activity.
+ */
+function readTehranDays(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const newestDay = tehranDayIndexOf(Date.now());
+  const oldestDay = newestDay - TEHRAN_DAY_KEEP;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d{1,12}$/.test(key)) continue;
+    const day = Number(key);
+    if (day < oldestDay || day > newestDay) continue;
+    const count = whole(value);
+    if (count > 0) out[String(day)] = count;
+  }
+  return out;
+}
 
 /** A stored `YYYY-MM-DD` key back to its day index; a malformed key is `NaN` and gets pruned. */
 function dayKeyIndex(key: string): number {
@@ -5369,6 +5448,10 @@ export class MatchmakerDO {
         '3': this.matchesInWindowForPlayers(ACTIVE_MS, now, '3'),
         '4': this.matchesInWindowForPlayers(ACTIVE_MS, now, '4'),
       },
+      /* the operator's "today": since the exact 00:00:00 Tehran instant, per type */
+      matchesTodayTotal: this.matchesToday(now),
+      matchesTodayPvp: this.matchesToday(now, 'pvp'),
+      matchesTodayBot: this.matchesToday(now, 'bot'),
       minesPlaced: this.gameMetrics.minesPlaced,
       active24h: mode === 'all' ? this.activeInWindow(now) : this.activeInWindow(now, mode),
     }), {
@@ -5376,6 +5459,9 @@ export class MatchmakerDO {
       matches24h: 0,
       matchesByMode24h: { bot: 0, pvp: 0, arena: 0 },
       matchesByPlayers24h: { '2': 0, '3': 0, '4': 0 },
+      matchesTodayTotal: 0,
+      matchesTodayPvp: 0,
+      matchesTodayBot: 0,
       minesPlaced: 0,
       active24h: 0,
     });
@@ -5500,6 +5586,9 @@ export class MatchmakerDO {
       matches24h: 0,
       matchesByMode24h: { bot: 0, pvp: 0, arena: 0 },
       matchesByPlayers24h: { '2': 0, '3': 0, '4': 0 },
+      matchesTodayTotal: 0,
+      matchesTodayPvp: 0,
+      matchesTodayBot: 0,
       active24h: 0,
       minesPlaced: 0,
       logsSpawned: 0,
@@ -5511,8 +5600,15 @@ export class MatchmakerDO {
     };
   }
 
-  /** The registry sweep behind the population figures: one pass, every cohort, no allocation. */
+  /**
+   * The registry sweep behind the population figures: one pass, every cohort, no allocation.
+   *
+   * Two of them are the operator's calendar day, not a rolling window: `activeToday` and
+   * `signupsToday` both start at the exact `00:00:00` Tehran instant this read was taken in. The
+   * ratios that quote `dau` keep their rolling 24-hour meaning, so nothing downstream shifts.
+   */
   private populationReading(now: number): PopulationReading {
+    const tehranMidnight = getTehranMidnightUtcMs(now);
     const dayAgo = now - ACTIVE_MS;
     const weekAgo = now - WEEK_MS;
     const monthAgo = now - MONTH_MS;
@@ -5521,6 +5617,7 @@ export class MatchmakerDO {
     let totalMatches = 0;
     let activatedPlayers = 0;
     let corePlayers = 0;
+    let activeToday = 0;
     let dau = 0;
     let wau = 0;
     let mau = 0;
@@ -5540,6 +5637,7 @@ export class MatchmakerDO {
       totalMatches += p.matches;
       if (p.matches >= 1) activatedPlayers++;
       if (p.matches >= 3) corePlayers++;
+      if (p.lastSeen >= tehranMidnight) activeToday++;
       if (p.lastSeen >= dayAgo) dau++;
       if (p.lastSeen >= weekAgo) wau++;
       if (p.lastSeen >= monthAgo) mau++;
@@ -5549,7 +5647,7 @@ export class MatchmakerDO {
         retainedCohort++;
         if (p.lastSeen >= p.firstSeen + ACTIVE_MS) retainedD1++;
       }
-      if (p.firstSeen >= dayAgo) signupsToday++;
+      if (p.firstSeen >= tehranMidnight) signupsToday++;
       if (p.firstSeen >= weekAgo) signupsWeek++;
       if (p.firstSeen >= monthAgo) signupsMonth++;
     }
@@ -5559,6 +5657,7 @@ export class MatchmakerDO {
       telegramUsers: telegram.size,
       referrals,
       referringPlayers,
+      activeToday,
       dau,
       wau,
       mau,
@@ -7691,8 +7790,9 @@ export class MatchmakerDO {
 
   /**
    * Stamp completed matches into their UTC-hour buckets, once for the aggregate and once for each
-   * tag it carries. Only the retained window is kept, so the blob stays small while the rolling
-   * 24-hour figures stay exact.
+   * tag it carries — and into the operator's Tehran-day ledger, with the same exact `now` every
+   * settlement judged. Only the retained windows are kept, so the blob stays small while the
+   * rolling 24-hour figures and the strict `00:00:00` Tehran "today" figures both stay exact.
    */
   private stampMatchesByHour(matches: number, tag?: MatchTag, now = Date.now()): void {
     if (matches <= 0) return;
@@ -7706,6 +7806,13 @@ export class MatchmakerDO {
       add(this.gameMetrics.matchesByModeHour[tag.mode]);
       add(this.gameMetrics.matchesByPlayersHour[String(tag.players) as '2' | '3' | '4']);
     }
+    /* the operator's calendar day: the same settlement, stamped under the Tehran day it fell in */
+    const tehranDay = String(tehranDayIndexOf(now));
+    const addDay = (map: Record<string, number>): void => {
+      map[tehranDay] = whole(map[tehranDay]) + matches;
+    };
+    addDay(this.gameMetrics.matchesByTehranDay);
+    if (tag) addDay(this.gameMetrics.matchesByModeTehranDay[tag.mode]);
     const oldest = hour - MATCH_BUCKET_KEEP_HOURS;
     const prune = (map: Record<string, number>): void => {
       for (const stored of Object.keys(map)) {
@@ -7715,12 +7822,31 @@ export class MatchmakerDO {
     prune(this.gameMetrics.matchesByHour);
     for (const mode of MATCH_MODES) prune(this.gameMetrics.matchesByModeHour[mode]);
     for (const seats of ['2', '3', '4'] as const) prune(this.gameMetrics.matchesByPlayersHour[seats]);
+    /* the day ledger ages out by calendar day, not by hour: seven Tehrans and no more */
+    const oldestTehranDay = tehranDayIndexOf(now) - TEHRAN_DAY_KEEP;
+    const pruneDays = (map: Record<string, number>): void => {
+      for (const stored of Object.keys(map)) {
+        if (Number(stored) < oldestTehranDay) delete map[stored];
+      }
+    };
+    pruneDays(this.gameMetrics.matchesByTehranDay);
+    for (const mode of MATCH_MODES) pruneDays(this.gameMetrics.matchesByModeTehranDay[mode]);
     /* the minute-by-minute log: one row per settlement, capped, never a bucket edge */
     this.gameMetrics.matchLog.push({ ts: now, mode: tag?.mode ?? 'pvp' });
     const logCutoff = now - MATCH_BUCKET_KEEP_HOURS * HOUR_MS;
     this.gameMetrics.matchLog = this.gameMetrics.matchLog
       .filter((entry) => entry.ts >= logCutoff)
       .slice(-ANALYTICS_EVENT_KEEP);
+  }
+
+  /**
+   * Matches settled since `00:00:00` Tehran today, read back from the day ledger the exact
+   * settlement timestamp stamped. A day nothing was settled on has no row, which is exactly zero.
+   */
+  private matchesToday(now = Date.now(), mode?: MatchMode): number {
+    const day = String(tehranDayIndexOf(now));
+    const buckets = mode ? this.gameMetrics.matchesByModeTehranDay[mode] : this.gameMetrics.matchesByTehranDay;
+    return whole(buckets[day]);
   }
 
   /** Matches stamped inside a rolling window for one slice, read back from hourly buckets. */
