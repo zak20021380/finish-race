@@ -100,13 +100,20 @@ import {
   CHALLENGE_SETTLEMENTS_MAX, CHALLENGE_STARS, CHALLENGE_TICKET_TTL_MS, MAX_WINNERS, MAX_WINS_PER_FRIEND,
   PRIZE_BY_RANK, TOTAL_PRIZE_POOL, prizeForRank,
   applyChallengeBotWin, applyChallengeFriendWin, applyFriendWin, applyHardBotWin, challengeBoard,
-  challengeDeclaredSeat, challengeDisplayName, challengeFallbackSeat, challengeGoalRow,
+  challengeDisplayName, challengeGoalRow,
   challengeMatchMode, challengeNumericId,
   challengeSeasonEpoch, challengeSeasonMigrated, challengeView, claimSettlement, issueBotTicket,
   newChallengeEntry, readChallengeState, rollChallengeEntry, settleChallengeWeek,
   signChallengeMatchToken, trimChallengeMatchIds, verifyChallengeMatchToken,
   type ChallengeBoard, type ChallengeEntry, type ChallengeIdentity, type ChallengeSettlement,
 } from './challenge';
+import {
+  MATCH_MAX_AGE_MS, MATCH_MIN_MS, MATCH_NO_REWARD, MATCH_OPEN_MAX, MATCH_RATE,
+  RateWindow, chargeFriendlyQuota, completeMatch, countsForLeaderboard, expireMatch,
+  friendlyPairKey, friendlyQuotaSpent, isOperatorSeat, matchFinishGate, matchKindOf, matchSeatOf,
+  newMatchRecord, openMatchesOf, readMatchLedger, trimFriendlyQuota, trimMatchLedger, utcDay,
+  type MatchKind, type MatchLedgerState, type MatchRecord, type MatchRefusal, type MatchReward,
+} from './matches';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
@@ -131,7 +138,7 @@ function wallClashesWithState(state: GameState, w: Wall): boolean {
 const TELEMETRY_CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'POST, OPTIONS',
-  'access-control-allow-headers': 'content-type, x-telegram-init-data, x-detour-dev-player',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, x-guest-id, x-detour-dev-player',
   'access-control-max-age': '86400',
 };
 
@@ -1869,6 +1876,14 @@ const botModeOf = (difficulty: unknown): RegistryMatchMode =>
   difficulty === 'easy' ? 'bot_easy' : difficulty === 'hard' ? 'bot_hard' : 'bot_medium';
 
 /**
+ * The registry's own label for a board, folded onto the match ledger's three modes. A code lobby
+ * is a `friendly` board, a practice board against any bot is `ai`, and only the queue pairing is
+ * `pvp` — the one kind that may move a ladder point.
+ */
+const matchKindOfRegistry = (mode: RegistryMatchMode): MatchKind =>
+  mode === 'pvp' ? 'pvp' : mode === 'friend' ? 'friendly' : 'ai';
+
+/**
  * One settled race, as the Command Center's history strip lists it. `ts` is the server's own
  * clock — the moment the room (or the telemetry door) accepted the report — never a client's
  * timestamp, so a device with a wrong clock cannot rewrite the order of a player's history.
@@ -2119,7 +2134,10 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     country: normalizeCountry(identity.flag),
     avatar: identity.player.avatar,
     age: Math.min(120, Math.max(0, Math.floor(identity.age))),
-    tiq: Math.max(0, Math.floor(identity.tiq)),
+    /* A NEW SEAT STARTS AT ZERO. The connect's `tiq` is the client's own claim, and the ladder
+       pays only for a `pvp` board this room settled — so a fresh row begins with nothing and
+       climbs from `payMatchReward`. */
+    tiq: 0,
     firstSeen: now,
     lastSeen: now,
     lastPlayed: 0,
@@ -3058,6 +3076,28 @@ function adminIdOf(raw: unknown): string {
  * State lives under its own key, never on the evictable PlayerRecord directory.
  */
 const STARS_VAULT_KEY = 'stars-vault.v1';
+
+/**
+ * The server-authoritative match ledger: one row per board the room opened, the moment it was
+ * stamped, and the single flip that settles it. It lives under its own key so a corrupt row can
+ * never keep the registry, the vault or the alarm from coming up — and so a settlement is durable
+ * before the client that asked for it is answered.
+ */
+const MATCHES_KEY = 'matches.v1';
+
+/**
+ * The status a refusal answers with. A refusal has to read as what it is: `404` for an id this
+ * room never minted, `403` for a caller who is not on the row, `409` for a receipt already spent
+ * (the replay case), and `400` for a claim the gates could not believe.
+ */
+function matchRefusalStatus(refusal: MatchRefusal | null): number {
+  if (refusal === 'unknown_match') return 404;
+  if (refusal === 'not_participant') return 403;
+  if (refusal === 'not_active' || refusal === 'expired') return 409;
+  return 400;
+}
+
+
 /** Bound the legacy day/opponent audit arrays; neither array qualifies the new quest. */
 const VAULT_RING = 48;
 const VAULT_PAYOUTS_MAX = 600;
@@ -3518,6 +3558,18 @@ export class MatchmakerDO {
   /** Redeemed match ids of the live week: id → redeemed-at. The anti-replay lock. */
   private challengeUsedMatches = new Map<string, number>();
   private challengeLoaded = false;
+  /* ---- the server-authoritative match ledger: every board, and the one door a point uses ---- */
+  /** Open and settled rows by match id. Bounded by `MATCHES_MAX` and swept on every write. */
+  private matches = new Map<string, MatchRecord>();
+  /**
+   * `pairKey|utcDay` → friendly boards already paid to that pairing. A duo cannot meet twice an
+   * hour for a week and walk the board up with it.
+   */
+  private friendlyQuota: Record<string, number> = {};
+  /** Per-seat sliding windows for `match/start` and `match/end`. In memory, never persisted. */
+  private matchRates = new RateWindow();
+  /** A match-ledger write is already scheduled: many settlements, one flush. */
+  private matchesDirty = false;
   /** Pairings this object has announced: it keeps repeat pairings from reusing an id. */
   private paired = 0;
   /** Every race still being played, by match id. */
@@ -3776,6 +3828,18 @@ export class MatchmakerDO {
                to migrate writes the whole ledger back immediately. */
             if (this.settleChallenge(now) || seasonMigrated) await this.flushChallenge();
           } catch { /* a corrupt scorecard starts empty; a claim is proven by its settlement */ }
+          /* The match ledger rides its own key and try, for the same reason as everything above:
+             a row this build cannot read must never keep the room from coming up. Rows are loaded
+             through the defensive parser, then swept — an abandoned board is expired on boot
+             rather than left payable a week later. */
+          try {
+            const ledger: MatchLedgerState = readMatchLedger(await storage.get<unknown>(MATCHES_KEY));
+            const now = Date.now();
+            trimMatchLedger(ledger, now);
+            trimFriendlyQuota(ledger.friendly, utcDay(now));
+            for (const row of ledger.matches) this.matches.set(row.matchId, row);
+            this.friendlyQuota = ledger.friendly;
+          } catch { /* an unreadable ledger starts empty: the next start mints a fresh row */ }
           this.seedRoles();
           /* A legacy install heals on boot: the duplicate guests a random-seat build left behind
              are forgotten and written back before the first directory or leaderboard read. */
@@ -3873,6 +3937,16 @@ export class MatchmakerDO {
         return await this.telemetry(request, url);
       } catch (err) {
         return json({ ok: false, error: 'telemetry_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
+      }
+    }
+    /* The server-authoritative match session: a row at board start, one atomic flip at board
+       end. Identity is proven inside from the signed initData — a body may never name a seat —
+       and both doors are rate limited per seat before they read a byte. */
+    if (url.pathname === '/api/match/start' || url.pathname === '/api/match/end') {
+      try {
+        return await this.matchSession(request, url);
+      } catch (err) {
+        return json({ ok: false, error: 'match_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
       }
     }
     /* The Live Registry's match ledger. A bot race is played entirely on the device, so this is
@@ -5876,6 +5950,292 @@ export class MatchmakerDO {
     }, 200, TELEMETRY_CORS);
   }
 
+  /* ---------- the server-authoritative match session ---------- */
+
+  /**
+   * `POST /api/match/start` and `POST /api/match/end` — the only two doors a point comes through.
+   *
+   * THE IDENTITY DOOR IS STRICT HERE, and deliberately stricter than the tournament's. There is
+   * no declared-seat fallback and no guest fallback: `identifyPlayerRequest` proves the caller
+   * from the signed `initData` header, and a request that cannot prove one is refused outright.
+   * A body field called `userId` is never read — not for the seat, not for the opponent, not for
+   * the winner. That is the whole point of the endpoint.
+   *
+   * Both doors are rate limited per seat BEFORE the body is parsed, so a script burns its
+   * allowance without costing this object a JSON parse. The limit is per verified Telegram
+   * account, which is the thing a farm actually needs.
+   */
+  private async matchSession(request: Request, url: URL): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: TELEMETRY_CORS });
+    if (request.method !== 'POST') {
+      return json({ ok: false, error: 'method_not_allowed' }, 405, TELEMETRY_CORS);
+    }
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, TELEMETRY_CORS);
+    /* A guest holds no ladder position and no wallet, so it has nothing this door could pay. */
+    if (!who.tgId) return json({ ok: false, error: 'telegram_required' }, 403, TELEMETRY_CORS);
+    if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, TELEMETRY_CORS);
+
+    const start = url.pathname === '/api/match/start';
+    const rule = start ? MATCH_RATE.start : MATCH_RATE.end;
+    const now = Date.now();
+    const allowance = this.matchRates.take(`${start ? 'start' : 'end'}:${who.playerId}`, rule, now);
+    if (!allowance.ok) {
+      return json({
+        ok: false,
+        error: 'rate_limited',
+        retryAfterMs: allowance.retryAfterMs,
+      }, 429, { ...TELEMETRY_CORS, 'retry-after': String(Math.max(1, Math.ceil(allowance.retryAfterMs / 1000))) });
+    }
+
+    const body = await readBody(request);
+
+    /* ---- Step A: the room mints the row ---- */
+    if (start) {
+      const mode = matchKindOf(body.mode);
+      if (!mode) return json({ ok: false, error: 'bad_mode' }, 400, TELEMETRY_CORS);
+      const opponent = matchSeatOf(body.opponentId);
+      /* A RANKED ROW MUST NAME A REAL RIVAL. `pvp` is the only mode that pays a ladder point, so
+         a row with nobody on the other side would be a solo stopwatch: open, wait fifteen
+         seconds, claim a win. Both competitive modes therefore require a distinct verified seat
+         opposite; only a practice board may be opened alone. */
+      if (mode !== 'ai') {
+        if (!opponent || opponent === 'ai' || !opponent.startsWith('tg-')) {
+          return json({ ok: false, error: 'opponent_required' }, 400, TELEMETRY_CORS);
+        }
+      }
+      if (opponent && opponent === who.playerId) {
+        return json({ ok: false, error: 'self_opponent' }, 400, TELEMETRY_CORS);
+      }
+      /* An abandoned tab must not accumulate open rows: three is more than any one player can
+         hold at once, and a script that opens a thousand boards is refused here. */
+      this.trimMatches(now);
+      if (openMatchesOf(this.matches.values(), who.playerId) >= MATCH_OPEN_MAX) {
+        return json({ ok: false, error: 'too_many_open_matches' }, 429, TELEMETRY_CORS);
+      }
+      const matchId = crypto.randomUUID();
+      const record = newMatchRecord(matchId, who.playerId, opponent, mode, now);
+      this.matches.set(matchId, record);
+      /* Durable BEFORE the answer: a board that starts on a token this room forgot is a win the
+         player can never claim. */
+      await this.flushMatches();
+      return json({
+        ok: true,
+        matchId,
+        mode,
+        player1Id: record.player1Id,
+        player2Id: record.player2Id,
+        startedAt: now,
+        serverTime: now,
+        minMs: MATCH_MIN_MS,
+      }, 200, TELEMETRY_CORS);
+    }
+
+    /* ---- Step B: the row is settled, exactly once ---- */
+    const matchId = typeof body.matchId === 'string' ? body.matchId.trim().slice(0, 64) : '';
+    const record = matchId ? this.matches.get(matchId) ?? null : null;
+    /* The winner is a SEAT, never a score: `tg-<digits>`, a guest seat, or the literal `ai`. */
+    const winnerId = matchSeatOf(body.winnerId);
+    const refusal = matchFinishGate(record, who.playerId, winnerId, now);
+    if (refusal || !record) {
+      return json({
+        ok: false,
+        recorded: false,
+        reason: refusal ?? 'unknown_match',
+      }, matchRefusalStatus(refusal), TELEMETRY_CORS);
+    }
+    /* The pairing allowance is the one gate that can still refuse a row that passed every check:
+       two people replaying the same duel all afternoon are not competing, they are farming. A
+       refused board is expired on the spot so it cannot be retried a minute later.
+       It is charged on a WIN only — a loss costs the pairing nothing — and it applies to both
+       competitive kinds: two boards a day for a friendly duel, three wins a day against one
+       ranked rival. A practice board has no rival to farm. */
+    const kind: MatchKind | null = record.mode === 'ai' ? null : record.mode;
+    const pair = kind && record.player2Id ? friendlyPairKey(record.player1Id, record.player2Id) : '';
+    if (kind && pair && winnerId === who.playerId
+      && friendlyQuotaSpent(this.friendlyQuota, pair, utcDay(now), kind)) {
+      expireMatch(record, now);
+      await this.flushMatches();
+      return json({ ok: false, recorded: false, reason: 'friendly_cap' }, 409, TELEMETRY_CORS);
+    }
+    if (kind && pair && winnerId === who.playerId) {
+      chargeFriendlyQuota(this.friendlyQuota, pair, utcDay(now), kind);
+    }
+
+    /* THE FLIP COMES FIRST, BEFORE A SINGLE POINT MOVES. The gate above read `status`; this is
+       the only write of it, and a Durable Object is single-threaded — so a concurrent replay
+       either arrives before this line (and is served first) or after it (and reads `completed`).
+       Nothing is ever paid on a row that is still `active` after this call returns. */
+    completeMatch(record, winnerId, now);
+    record.moves = whole(body.moves);
+    /* The registry row is opened before the point is paid into it: a client that settles a board
+       without ever holding a socket would otherwise be told it was paid while nothing landed. */
+    const me = this.telemetryPlayer(who, now);
+    const paid = this.payMatchReward(record, who.playerId);
+    await this.flushMatches();
+    return json({
+      ok: true,
+      recorded: true,
+      matchId,
+      mode: record.mode,
+      winnerId,
+      won: winnerId === who.playerId,
+      reward: paid,
+      /** The leaderboard line only. Zero unless this was a `pvp` win. */
+      tiq: paid.tiq,
+      coins: paid.coins,
+      xp: paid.xp,
+      /** The seat's server-side totals after the settlement — the only figures a client may paint. */
+      totalTiq: me ? me.tiq : 0,
+      wins: me ? me.wins : 0,
+      matches: me ? me.matches : 0,
+      serverTime: now,
+    }, 200, TELEMETRY_CORS);
+  }
+
+  /**
+   * Pay one settled board to the seat that played it.
+   *
+   * The reward comes from the ROW (`completeMatch` computed it from the mode and the winner), so
+   * nothing here reads a body. Leaderboard points move only for `pvp`, and they move through
+   * `rankOvertakes` exactly like the room's own settlement — the ladder is one ranking rule.
+   *
+   * `xp` is returned for the client to paint but never stored: XP is a cosmetic progression the
+   * device owns, and giving the server a second copy of it would only be a second thing to drift.
+   */
+  private payMatchReward(record: MatchRecord, actorId: string): MatchReward {
+    const won = record.winnerId === actorId;
+    if (!won) return MATCH_NO_REWARD;
+    const reward = record.reward;
+    const p = this.players.get(actorId);
+    /* NOTHING IS PAID INTO A ROW THAT DOES NOT EXIST. The caller guarantees the registry row (see
+       `matchSession`), and this is the honest fallback if it ever does not: answering "paid" for a
+       reward that landed nowhere is worse than answering "nothing". */
+    if (!p) return MATCH_NO_REWARD;
+    if (reward.tiq > 0 && countsForLeaderboard(record.mode)) {
+      /* Read the ladder before the climb, exactly like a socket connect does, so the rival this
+         win passes is told about it by the same push. */
+      const before = this.ladderOrder();
+      p.tiq = Math.max(0, Math.floor(p.tiq)) + reward.tiq;
+      this.rankOvertakes(before, { [p.id]: reward.tiq });
+    }
+    if (reward.coins > 0) p.coins = Math.max(0, Math.floor(p.coins)) + reward.coins;
+    this.persist();
+    return reward;
+  }
+
+  /** Sweep the ledger and keep it durable in one turn. */
+  private trimMatches(now: number): void {
+    const state: MatchLedgerState = { matches: [...this.matches.values()], friendly: this.friendlyQuota };
+    trimMatchLedger(state, now);
+    trimFriendlyQuota(state.friendly, utcDay(now));
+    this.matches = new Map(state.matches.map((row) => [row.matchId, row]));
+    this.friendlyQuota = state.friendly;
+    this.matchesDirty = true;
+  }
+
+  /** Schedule a ledger write. Settlements await `flushMatches` instead: a paid row is durable. */
+  private persistMatches(): void {
+    if (this.matchesDirty || !this.state?.storage) return;
+    this.matchesDirty = true;
+    void Promise.resolve().then(() => {
+      this.matchesDirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        void storage.put(MATCHES_KEY, {
+          matches: [...this.matches.values()],
+          friendly: this.friendlyQuota,
+        }).catch(() => undefined);
+      } catch {
+        /* a store that refuses the write: the ledger stays live for this object's lifetime */
+      }
+    });
+  }
+
+  /**
+   * Write the ledger through, now. A settlement the client was told about has to survive an
+   * eviction — otherwise the answer says "paid" and the row says nothing ever happened.
+   */
+  private async flushMatches(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      await storage.put(MATCHES_KEY, {
+        matches: [...this.matches.values()],
+        friendly: this.friendlyQuota,
+      });
+    } catch {
+      /* a store that refuses the write: the ledger stays live for this object's lifetime */
+    }
+  }
+
+  /**
+   * Mint the ranked row for a queue pairing, at the instant the race starts.
+   *
+   * Only verified Telegram seats get a row: a guest holds no ladder position, so a pairing that
+   * involves one is a race without a receipt. The id is derived from the race's own, so a resumed
+   * or re-announced pairing can never open a second row for the same board.
+   */
+  private openRoomMatch(race: Race): void {
+    const [first, second] = race.seats;
+    if (!first || !second) return;
+    if (!first.id.startsWith('tg-') || !second.id.startsWith('tg-')) return;
+    const matchId = `pvp-${race.matchId}`;
+    if (this.matches.has(matchId)) return;
+    const now = race.startedAt || Date.now();
+    this.trimMatches(now);
+    this.matches.set(matchId, newMatchRecord(matchId, first.id, second.id, 'pvp', now));
+    this.persistMatches();
+  }
+
+  /**
+   * The room judged a board itself, so its verdict completes the seat's open row before the
+   * client's own report can. This is what makes a lost ranked race un-claimable: by the time the
+   * loser's app calls `match/end` with itself as the winner, the row is already `completed` with
+   * the room's answer, and `not_active` is all it gets back.
+   *
+   * The row is matched by seat, mode and recency — the room's own socket ids are not the client's
+   * match ids, so there is nothing else to join on. A miss is not an error: a board the client
+   * never opened simply has no row to close.
+   */
+  private settleOpenMatch(id: string, mode: MatchKind, won: boolean, now: number): MatchRecord | null {
+    if (!this.matches.size) return null;
+    let newest: MatchRecord | null = null;
+    for (const row of this.matches.values()) {
+      if (row.status !== 'active') continue;
+      if (row.player1Id !== id || row.mode !== mode) continue;
+      if (now - row.startedAt > MATCH_MAX_AGE_MS) continue;
+      if (!newest || row.startedAt > newest.startedAt) newest = row;
+    }
+    if (!newest) return null;
+    /* The verdict names the winner, and the row says which seat this caller is: the other side
+       wins a loss. Deriving it from the row rather than assuming "the opener is player one" is
+       what stops a loser's own settlement from recording them as the winner. */
+    const winnerId = won ? id : (newest.player1Id === id ? newest.player2Id : newest.player1Id) || 'ai';
+    /* THE SAME FLOOR THE HTTP DOOR ENFORCES. A scripted socket can send legal moves as fast as
+       the room will accept them, so a board settled under 15 seconds is recorded and paid
+       nothing — otherwise the gate would only bind the client that plays honestly. */
+    const tooFast = now - newest.startedAt < MATCH_MIN_MS;
+    completeMatch(newest, winnerId, now);
+    if (tooFast) newest.reward = MATCH_NO_REWARD;
+    /* The pairing allowance applies to the room's path exactly as it does to the HTTP one — a
+       board past it is still recorded, it simply pays nothing. Otherwise the cap would only bind
+       the client that plays fair and let a socket farm straight past it. */
+    const kind: MatchKind | null = newest.mode === 'ai' ? null : newest.mode;
+    const pair = kind && newest.player2Id ? friendlyPairKey(newest.player1Id, newest.player2Id) : '';
+    if (won && kind && pair) {
+      if (friendlyQuotaSpent(this.friendlyQuota, pair, utcDay(now), kind)) {
+        newest.reward = MATCH_NO_REWARD;
+      } else {
+        chargeFriendlyQuota(this.friendlyQuota, pair, utcDay(now), kind);
+      }
+    }
+    this.trimMatches(now);
+    this.persistMatches();
+    return newest;
+  }
+
   /**
    * The Live Registry's match door: `POST /api/registry/match`.
    *
@@ -5902,18 +6262,36 @@ export class MatchmakerDO {
     }
 
     const body = await readBody(request);
-    const mode = registryModeOf(body.mode);
-    if (!mode) return json({ ok: false, error: 'invalid_mode' }, 400, TELEMETRY_CORS);
-    const result = body.result === 'W' || body.result === 'L' ? body.result : null;
-    if (!result) return json({ ok: false, error: 'invalid_result' }, 400, TELEMETRY_CORS);
-
+    const now = Date.now();
+    /* THE RESULT IS NOT IN THE BODY. `result`, `score`, `points` and `wins` are read by nobody:
+       the outcome comes from the match row this room minted at `match/start` and settled at
+       `match/end` (or by the room's own verdict on a socket). A report that names no row is a
+       claim with no board behind it, and it is refused rather than folded in. */
     const matchId = typeof body.matchId === 'string' ? body.matchId.trim().slice(0, 64) : '';
+    const record = matchId ? this.matches.get(matchId) ?? null : null;
+    if (!record) {
+      return json({ ok: false, recorded: false, reason: 'no_match_session' }, 409, TELEMETRY_CORS);
+    }
+    if (record.player1Id !== who.playerId && record.player2Id !== who.playerId) {
+      return json({ ok: false, recorded: false, reason: 'not_participant' }, 403, TELEMETRY_CORS);
+    }
+    if (record.status !== 'completed') {
+      /* The row is still open (or was expired): nothing has been judged yet, so there is no
+         result to fold in. The client's own settlement is what closes it. */
+      return json({ ok: false, recorded: false, reason: 'match_not_settled' }, 409, TELEMETRY_CORS);
+    }
+    /* The registry's label is cosmetic — it names the difficulty the history strip prints — so it
+       is read from the body, but only where it cannot contradict the row's own kind. */
+    const declared = registryModeOf(body.mode);
+    const mode: RegistryMatchMode = record.mode === 'pvp'
+      ? 'pvp'
+      : record.mode === 'friendly' ? 'friend' : (declared && declared !== 'pvp' && declared !== 'friend' ? declared : 'bot_medium');
+    const result: 'W' | 'L' = record.winnerId === who.playerId ? 'W' : 'L';
+
     /* A board the room settled dedupes on the SEAT's key for that board — the very key the room's
-       own settlement claims — so the client's echo is a duplicate whichever frame wins the race.
-       A practice board has no id, so the seat's own label and outcome inside the five-second
-       window stand in for it: two Hard-bot wins in a row must both count. */
-    const key = matchId !== '' ? `r:${matchId}:${who.playerId}` : `s:${who.playerId}|${mode}|${result}`;
-    if (!this.claimMatchReport(key, matchId !== '' ? MATCH_LEDGER_TTL_MS : MATCH_DEDUPE_MS)) {
+       own settlement claims — so the client's echo is a duplicate whichever frame wins the race. */
+    const key = `r:${record.matchId}:${who.playerId}`;
+    if (!this.claimMatchReport(key)) {
       return json({
         ok: true,
         recorded: false,
@@ -5922,7 +6300,6 @@ export class MatchmakerDO {
       }, 200, TELEMETRY_CORS);
     }
 
-    const now = Date.now();
     const p = this.telemetryPlayer(who, now);
     /* A verified seat's name comes from the signed payload and is never overwritten by a body; a
        guest has none, so the name the device carried is the only one there is. */
@@ -5940,7 +6317,7 @@ export class MatchmakerDO {
       result,
       durationSec: durationSeconds(body.durationSec),
       moves: whole(body.moves),
-    }, false);
+    }, { bankNation: false, ranked: countsForLeaderboard(record.mode) });
     /* The answer is the durable write: a count this room acknowledged survives a restart. */
     await this.flushRegistry();
 
@@ -6971,11 +7348,33 @@ export class MatchmakerDO {
   }
 
   /**
+   * The seats this room appointed, in the two spellings the registry uses. `ADMIN_IDS` is not in
+   * here: it is the deployment's own root allowlist, and `isOperatorSeat` reads it from `env` so a
+   * cold or wiped role registry can never let a root back onto the board.
+   */
+  private operatorSeats(): Set<string> {
+    const out = new Set<string>();
+    for (const key of this.admins.keys()) {
+      if (/^[0-9]{1,20}$/.test(key)) out.add(`tg-${key}`);
+      else out.add(key);
+    }
+    return out;
+  }
+
+  /** Is this seat an operator, and therefore off every public ladder? One rule, one module. */
+  private operatorSeat(id: string, operators: ReadonlySet<string>): boolean {
+    return isOperatorSeat(id, this.env, operators);
+  }
+
+  /**
    * The public Mind Ladder: the room's own TIQ registry, ranked live. A banned seat is never
-   * published, and a zero-TIQ seat has not earned a place yet. The caller's own reading —
-   * verified initData when the Mini App supplies one, or the explicit `tiq` the Home card
-   * sends — is ranked by the same comparator, so the strip under the board and the rows above
-   * it can never disagree.
+   * published, a zero-TIQ seat has not earned a place yet, and an operator's row is excluded
+   * entirely — an admin can grant themselves any number, so their rank is not one anybody can
+   * compete for.
+   *
+   * THE SCORE IS THE ROOM'S. The caller's own `?tiq=` is read by nobody: it used to be folded in
+   * with `Math.max`, which let any device put itself at the top of the board by editing a query
+   * string. A row prints what `payMatchReward` awarded it and nothing else.
    */
   private async mindsBoard(request: Request, url: URL): Promise<{
     ok: true;
@@ -6995,9 +7394,9 @@ export class MatchmakerDO {
     const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
     const mineId = tgId ? `tg-${tgId}` : '';
     const mine = mineId ? this.players.get(mineId) : undefined;
-    const rawTiq = Number(url.searchParams.get('tiq'));
-    const reported = Number.isFinite(rawTiq) ? clamp(Math.floor(rawTiq), 0, 10_000_000) : 0;
-    const myTiq = Math.max(0, Math.floor(mine?.tiq ?? 0), reported);
+    /* THE CALLER'S OWN SCORE IS READ FROM ITS ROW, NOT FROM THE QUERY STRING. A `?tiq=` on a
+       leaderboard read was a free first place. */
+    const myTiq = Math.max(0, Math.floor(mine?.tiq ?? 0));
     /* The published win figure is the verified PvP tally clamped to the races behind it —
        a client cannot talk a bot streak into a ladder row. */
     const myWins = Math.min(Math.max(0, Math.floor(mine?.matches ?? 0)), Math.max(0, Math.floor(mine?.wins ?? 0)));
@@ -7008,9 +7407,10 @@ export class MatchmakerDO {
        displayed name, highest TIQ first. Ranks are assigned to THAT field, so "sanna" can only
        ever hold one place at their real score. */
     this.purgeGhosts();
+    const operators = this.operatorSeats();
     const field = this.canonicalRows(
       [...this.players.values()]
-        .filter((p) => !p.banned && !this.banned.has(p.id))
+        .filter((p) => !p.banned && !this.banned.has(p.id) && !this.operatorSeat(p.id, operators))
         .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
     )
       .map((p) => ({
@@ -7027,7 +7427,9 @@ export class MatchmakerDO {
       .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
     const inField = !!mineId && field.some((p) => p.id === mineId);
-    const total = field.length + (myTiq > 0 && !inField && !selfBanned ? 1 : 0);
+    /* An operator reading the board is not on it, so the strip under it must not rank them either. */
+    const selfOperator = !!mineId && this.operatorSeat(mineId, operators);
+    const total = field.length + (myTiq > 0 && !inField && !selfBanned && !selfOperator ? 1 : 0);
     const players = field.slice(0, limit).map((p, i) => ({
       rank: i + 1,
       id: p.id,
@@ -7040,7 +7442,7 @@ export class MatchmakerDO {
     }));
 
     let you: { rank: number; tiq: number; total: number; inBoard: boolean } | null = null;
-    if (myTiq > 0 && !selfBanned) {
+    if (myTiq > 0 && !selfBanned && !selfOperator) {
       /* The caller's own live reading may be newer than the record the room last saw; rank it
          against the field rather than trusting its stored seat, then say whether that rank landed
          inside the rows just returned. */
@@ -7065,8 +7467,9 @@ export class MatchmakerDO {
    * their order come out identical, and the sort happens once instead of twice.
    */
   private ladderOrder(): PlayerRecord[] {
+    const operators = this.operatorSeats();
     const rows = [...this.players.values()]
-      .filter((p) => !p.banned && !this.banned.has(p.id) && p.tiq > 0)
+      .filter((p) => !p.banned && !this.banned.has(p.id) && p.tiq > 0 && !this.operatorSeat(p.id, operators))
       .sort(ladderOrderOf);
     return this.canonicalRows(rows);
   }
@@ -7862,7 +8265,10 @@ export class MatchmakerDO {
     target.coins = Math.max(target.coins, guest.coins);
     target.stars = Math.max(target.stars, guest.stars);
     target.referrals = Math.max(target.referrals, guest.referrals);
-    target.tiq = Math.max(target.tiq, guest.tiq);
+    /* NO TIQ LAUNDERING. A guest row's rating was a query-string claim, so folding it into the
+       signed seat would be a way to walk an arbitrary number onto the ladder: play as a guest
+       with `?tiq=99999`, then sign in and inherit it. The signed seat keeps the figure the room
+       awarded it, and the guest's is dropped with the guest. */
     target.country = target.country || guest.country;
     /* The two rows are one person's history: their settled races merge newest-first, and the
        shorter list is the one that gives way. A stamp is still the later of the two. */
@@ -7895,15 +8301,12 @@ export class MatchmakerDO {
     p.country = normalizeCountry(identity.flag) || p.country;
     p.avatar = storedAvatar(identity.player.avatar) || p.avatar;
     if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
-    /* The socket's own TIQ reading is the one climb no board settles: a player who won on another
-       device arrives here already higher, and the rivals it moves down are exactly as real as a
-       room win's. The ladder is read before the assignment, and only when the reading actually
-       climbs for a seat that owns a chat — a deployment with no bot has nobody to tell. */
-    const beforeTiq = p.tiq;
-    const nextTiq = Math.max(0, Math.floor(identity.tiq));
-    const climbs = nextTiq > beforeTiq && chatIdOf(p.id) !== '' && botTokenOf(this.env) !== '';
-    const ladderBefore = climbs ? this.ladderOrder() : null;
-    p.tiq = nextTiq;
+    /* TIQ IS NOT A CONNECT FIELD. The query string's `tiq` is a client's claim about its own
+       rating, and a claim is exactly what a ladder may not be built on: `?tiq=9999999` used to
+       climb this row to the top of the public board. The figure now moves in exactly one place —
+       `payMatchReward`, off a `pvp` row this room minted and settled — and a connect leaves it
+       alone. `identity.tiq` still seeds the MATCHMAKING BAND (a UX hint about who to pair with),
+       which is harmless because it can no longer buy a rank. */
     /* A first sighting is a signup and an active player at once, and `freshPlayer` has already
        stamped its clock; every later one just moves the seat forward through the rings. */
     if (isNew) {
@@ -7934,9 +8337,6 @@ export class MatchmakerDO {
       this.players.set(p.id, p);
     }
     this.persist();
-    /* The same push a settled board sends, under the same guardrails: `rankOvertakes` decides for
-       itself whether the rival this climb passed is offline, cooled down, or unreachable. */
-    if (ladderBefore) this.rankOvertakes(ladderBefore, { [p.id]: nextTiq - beforeTiq });
   }
 
   /**
@@ -7986,12 +8386,19 @@ export class MatchmakerDO {
     p.inMatch = false;
     this.stampSeen(p, Date.now());
     if (won !== null) {
-      /* One seat is counted once per board, and the key names the SEAT: a chair struck mid-race
-         settles here and again when the room finishes, and a client that saw the result on its
-         own replica may echo the board before the room's frame reaches it. Whoever arrives first
-         owns the key, so the race between the two can never count a race twice — and a four-seat
-         party still counts all four, because each seat has a key of its own. */
-      const seatKey = report.matchId === '' ? '' : `r:${report.matchId}:${id}`;
+      /* THE ROOM SPEAKS FIRST. Its verdict closes this seat's open match row before the client's
+         own report can reach the same door, so a player who lost a ranked board cannot later
+         claim it — by then the row reads `completed` with the room's winner. The row's id then
+         becomes the dedupe key, which is what makes the client's echo the same race rather than
+         a second one. */
+      const kind = matchKindOfRegistry(report.mode);
+      const settled = this.settleOpenMatch(id, kind, won, Date.now());
+      /* The room judged it, so the room pays it: the ladder point for a ranked win, the coins
+         for anything else, and nothing at all for a loss. A row that was already settled returns
+         null above, so this can never pay a board twice. */
+      if (settled) this.payMatchReward(settled, id);
+      const ledgerId = settled ? settled.matchId : report.matchId;
+      const seatKey = ledgerId === '' ? '' : `r:${ledgerId}:${id}`;
       const fresh = seatKey === '' || this.claimMatchReport(seatKey);
       if (fresh) {
         this.recordMatch(p, {
@@ -7999,7 +8406,7 @@ export class MatchmakerDO {
           result: won ? 'W' : 'L',
           durationSec: report.durationSec,
           moves: report.moves,
-        }, pvp);
+        }, { bankNation: pvp, ranked: countsForLeaderboard(kind) });
       } else if (pvp && won) {
         /* The client's echo got there first and already moved the counters. The nation's points
            are the room's own verdict and were never a body's to claim, so they are banked here
@@ -8020,24 +8427,33 @@ export class MatchmakerDO {
    *
    * `bankNation` is the room's own verdict and nothing else: an HTTP report is a client's word
    * about a board the room never saw, and a nation's points may not be minted from a body.
+   *
+   * `ranked` is the leaderboard gate. A board only counts toward `wins`, `streak` and `best` when
+   * it was a `pvp` match this room minted and settled — the three figures the public ladder sorts
+   * and prints. Every board still counts as PLAYED (`matches`, `losses`, the history strip), so
+   * the directory stays an honest activity record while the ladder stays a competitive one.
    */
   private recordMatch(
     p: PlayerRecord,
     report: { mode: RegistryMatchMode; result: 'W' | 'L'; durationSec: number; moves: number },
-    bankNation: boolean,
+    opts: { bankNation: boolean; ranked: boolean },
   ): void {
     const now = Date.now();
     p.lastPlayed = Math.max(p.lastPlayed || 0, now);
     p.lastSeen = Math.max(p.lastSeen || 0, now);
     p.matches += 1;
     if (report.result === 'W') {
-      p.wins += 1;
-      p.streak += 1;
-      p.best = Math.max(p.best, p.streak);
-      if (bankNation) this.creditNation(p);
+      /* The win counter, the streak and the nation's points are the ranked line: a practice
+         board or a friendly duel moves none of them. */
+      if (opts.ranked) {
+        p.wins += 1;
+        p.streak += 1;
+        p.best = Math.max(p.best, p.streak);
+        if (opts.bankNation) this.creditNation(p);
+      }
     } else {
       p.losses += 1;
-      p.streak = 0;
+      if (opts.ranked) p.streak = 0;
     }
     p.wins = Math.min(p.matches, p.wins);
     const entry: RegistryMatchLog = {
@@ -9490,6 +9906,11 @@ export class MatchmakerDO {
     first.race = race;
     second.race = race;
     this.races.set(matchId, race);
+    /* THE ROOM OPENS THE RANKED ROW. `MATCH_FOUND` deliberately withholds the rival's seat from
+       the client, so the client cannot open this row — and should not: the room knows both seats
+       and stamped the clock at the instant the race began, which is exactly what a ranked row is.
+       This is the row `verdict` closes and `payMatchReward` pays when the board settles. */
+    this.openRoomMatch(race);
     this.setInMatch(first.id, true);
     this.setInMatch(second.id, true);
 
@@ -12295,40 +12716,19 @@ export class MatchmakerDO {
   /** The challenge's HTTP surface. Every counter here is the room's, never the body's. */
   private async challenge(request: Request, url: URL): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CHALLENGE_CORS });
-    let who = await identifyPlayerRequest(request, this.env);
-    /* A verified Telegram signature always wins. When it is absent, expired or fails its check
-       (Telegram Desktop / external WebView), the free-join door accepts the declared seat from
-       the body. Enrollment is the only thing it writes — no win counter is credited from a body.
-       The two match doors accept the same declared seat: they are background calls the player
-       never sees, and the token they mint is still bound to the room's own clock and signature. */
-    if (request.method === 'POST' && (!who || who.guest)
-      && (url.pathname === '/api/challenge/join'
-        || url.pathname === '/api/challenge/match/start'
-        || url.pathname === '/api/challenge/match/finish')) {
-      const body = await readBody(request.clone());
-      /* The join door keeps its exact old contract (a declared handle is required there); only
-         the two match doors take the looser declared seat, because they are background calls. */
-      const seat = challengeFallbackSeat(body)
-        ?? (url.pathname === '/api/challenge/join' ? null : challengeDeclaredSeat(body));
-      if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
-    } else if (request.method === 'GET' && (!who || who.guest)
-      && (url.pathname === '/api/challenge/me' || url.pathname === '/api/challenge/leaderboard')) {
-      /* THE READ DOORS ANSWER FOR THE SAME SEAT THE WRITE DOORS CREDITED. Without signed
-         `initData` (Telegram Desktop, an external WebView) the match doors already open a session
-         for the seat the body declares, and a redeemed token then moves THAT row's counter. If the
-         card were read as the anonymous guest seat instead, the win would be real in the ledger and
-         invisible on the card — the exact "my win did not record" report. One normalization
-         (`challengeDeclaredSeat` → `tg-<digits>`) now resolves all four doors, so `/join`,
-         `/match/start`, `/match/finish` and `/me` always address the same entry of the same
-         `weekStart` window. The declaration reads only a public card and enrolls a zero-win seat,
-         exactly like the POST join door it mirrors — it can never credit anything. */
-      const seat = challengeDeclaredSeat({
-        userId: url.searchParams.get('userId') ?? '',
-        displayName: url.searchParams.get('displayName') ?? '',
-        handle: url.searchParams.get('handle') ?? '',
-      });
-      if (seat) who = { playerId: seat.playerId, tgId: seat.tgId, guest: false, name: seat.name };
-    }
+    /* IDENTITY IS THE SIGNATURE, AND NOTHING ELSE.
+     *
+     * These doors used to fall back to a seat DECLARED in the body (`challengeFallbackSeat` /
+     * `challengeDeclaredSeat`) when `initData` was missing or failed its check. That was a hole,
+     * not a convenience: a body saying `{ userId: 123456789 }` addressed somebody else's card,
+     * somebody else's enrollment and — through the match doors — somebody else's signed session.
+     * A tournament that pays Stars cannot have a door where an id in a JSON body is a credential.
+     *
+     * So there is no fallback any more. A caller that cannot produce a valid signature is a guest
+     * (read-only) or a 401, exactly as `/api/match/*` already behaves. A desktop WebView without
+     * a Mini App session reads the card as a guest and can no longer enter the race — the honest
+     * outcome for a client the server cannot identify. */
+    const who = await identifyPlayerRequest(request, this.env);
     if (!who) return json({ ok: false, error: 'unauthorized' }, 401, CHALLENGE_CORS);
     if (this.restricted(who.playerId)) return json({ ok: false, error: 'banned' }, 403, CHALLENGE_CORS);
     const now = Date.now();
@@ -12538,8 +12938,12 @@ export class MatchmakerDO {
         trace('match/finish goal row', { mode, matchId, finalPawnPos: body.finalPawnPos, reason: 'not_won' });
         return refuse('not_won', 400);
       }
-      /* Gate 6 — the friend track: a distinct opponent, then at most three wins against them. */
-      const opponentId = mode === 'friend' ? challengeNumericId(body.opponentId) : '';
+      /* Gate 6 — the friend track: a distinct opponent, then at most three wins against them.
+         THE OPPONENT COMES FROM THE SIGNED TOKEN, NOT FROM THE BODY. It was read off
+         `body.opponentId`, which made the per-friend cap advisory: a farmer simply named a new
+         rival on every finish and the cap never bound. The token was signed at `match/start`
+         with the rival this board was opened against, so that is the value the cap reads. */
+      const opponentId = mode === 'friend' ? claim.opponentId : '';
       if (mode === 'friend' && (!opponentId || opponentId === who.tgId)) {
         return refuse('self_opponent', 400);
       }

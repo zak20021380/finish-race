@@ -111,8 +111,8 @@ import { channelGateBlocks, initJoinGate, raiseChannelGate } from './joinGate';
 import type { VsRival, VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
 import {
-  beginMatch, finishMatch, initTelemetry, registryModeOfBot, reportRegistryMatch, setIdle,
-  type RegistryMatchMode,
+  beginMatch, finishMatch, initTelemetry, openMatchSession, registryModeOfBot, setIdle,
+  settleMatchSession, type MatchSessionMode, type RegistryMatchMode,
 } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
 import {
@@ -1358,6 +1358,16 @@ const registryModeOfBoard = (): RegistryMatchMode => {
   if (live === 'bot') return registryModeOfBot(difficulty);
   /* A room is Play with Friends; the queue and the cup are a live PvP race. */
   return active && 'seats' in active ? 'friend' : 'pvp';
+};
+
+/**
+ * The same three-way split in the match ledger's own vocabulary. It decides what a settled board
+ * is worth: only `pvp` pays a ladder point, so a practice board or a friendly duel can be
+ * recorded all afternoon without moving a rank.
+ */
+const matchSessionModeOfBoard = (): MatchSessionMode => {
+  const label = registryModeOfBoard();
+  return label === 'pvp' ? 'pvp' : label === 'friend' ? 'friendly' : 'ai';
 };
 
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
@@ -3021,10 +3031,11 @@ function showOverlay() {
      Home after the duel" from a stray tab hop during an invite launch that never reached a board. */
   inviteDuelSettled = true;
   /* The board reached its result: one match report, measured from `restart()`. A lesson has no
-     clock open, so this is a no-op there. The Live Registry's ledger rides the very same clock —
-     it is filed first, because `finishMatch()` is what closes it — so every practice board, friend
-     duel and PvP pairing lands on the player's directory row at the moment it settles. */
-  reportRegistryMatch(registryModeOfBoard(), localWon() ? 'W' : 'L', turnsPlayed);
+     clock open, so this is a no-op there. The settlement now runs through the room's own match
+     row — `POST /api/match/end` applies the participant / active / 15-second gates, flips the row
+     to `completed` before anything is paid, and only then echoes the result into the registry
+     under the same id. A refused settlement files nothing at all. */
+  settleMatchSession(localWon(), registryModeOfBoard(), turnsPlayed);
   finishMatch();
   clearResultMotion();
   /* a fresh settlement owns a fresh budget: last match's claims must never pay this one */
@@ -3974,6 +3985,13 @@ function restart() {
      replayed it from the pause sheet. */
   if (!tutorialStandalone) {
     beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
+    /* The room's own record of this board. It mints the id and stamps the clock the 15-second
+       floor is measured against — the client's clock never decides whether a win is old enough.
+       A RANKED PAIRING IS NOT OPENED HERE: `MATCH_FOUND` withholds the rival's seat, so this
+       device cannot name one, and the room — which knows both seats and started the clock — owns
+       that row from the pairing itself. */
+    const sessionMode = matchSessionModeOfBoard();
+    if (sessionMode !== 'pvp') openMatchSession(sessionMode, challengeFriendRival() || '');
   }
   /* The 7-Day Challenge opens its signed session with the board itself: the Hard Bot ladder and a
      friends 1v1 are the only two boards the weekly race records, and the room stamps the clock
@@ -7720,24 +7738,10 @@ async function challengeCall(path: string, body?: Record<string, unknown>): Prom
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
   if (body) headers['content-type'] = 'application/json';
-  else {
-    /* THE READ DOORS NAME THE SAME SEAT THE WRITE DOORS NAME. A Mini App normally proves itself
-       with signed `initData`; a Telegram Desktop / external WebView session without one is exactly
-       the declared-seat case the join and match doors already accept from a POST body. The read
-       doors take that same declaration as a query string, so `/join`, `/match/start`,
-       `/match/finish` and `/me` can never resolve two different rows for one person — a win
-       credited to `tg-<id>` while the card is read for the anonymous `guest-<id>` is precisely how
-       a recorded victory looks unrecorded. */
-    const declaredId = String(tgUser()?.id ?? '');
-    if (/^[1-9][0-9]{0,19}$/.test(declaredId)) {
-      const identity = new URLSearchParams({
-        userId: declaredId,
-        displayName: challengeDisplayNameLocal(),
-        handle: challengeLocalHandle(),
-      });
-      url += (url.includes('?') ? '&' : '?') + identity.toString();
-    }
-  }
+  /* NO DECLARED SEAT ON THE WIRE. These calls used to append `userId`/`displayName`/`handle` to
+     every read so a desktop WebView without `initData` could address "its" row. The room no longer
+     accepts a declared seat — an id in a query string is not a credential — so the parameters are
+     gone. A session that cannot sign reads as a guest, which is exactly what it is. */
   try {
     const answer = await fetch(url, {
       method: body ? 'POST' : 'GET',
@@ -8638,8 +8642,8 @@ function startChallengeMatchSession(mode: ChallengeMatchMode, opponentId = ''): 
   challengeDebug('match/start →', { mode, opponentId, seq });
   challengeSessionPending = (async () => {
     const view = await challengeCall('/api/challenge/match/start', {
-      userId: String(tgUser()?.id ?? ''),
-      displayName: challengeDisplayNameLocal(),
+      /* No `userId`: the room reads the seat from the signature, and a body field naming one is
+         ignored. Sending it would only invite the belief that it still counts. */
       mode,
       opponentId,
     });
@@ -8806,8 +8810,8 @@ function recordChallengeMatchWin(won: boolean): void {
       finalPawnPos,
     });
     const view = await challengeCall('/api/challenge/match/finish', {
-      userId: String(tgUser()?.id ?? ''),
-      displayName: challengeDisplayNameLocal(),
+      /* The seat and the rival both come from the signed token the room minted at `match/start`;
+         nothing here names an identity. */
       mode: session.mode,
       opponentId: session.opponentId,
       matchId: session.matchId,

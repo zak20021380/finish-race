@@ -482,7 +482,12 @@ console.log('\n-- the player directory --');
   const all = await list();
   const row = all.players.find((p) => p.name === 'Ada');
   ok('the directory lists the seat the room just met', !!row, JSON.stringify(all.players));
-  ok('with the telemetry the client sent', row?.tiq === 1200 && row?.country === 'PL', JSON.stringify(row));
+  /* THE RATING IS NOT A CONNECT FIELD ANY MORE. `?tiq=1200` used to land on the row verbatim, which
+     is how a query string could buy a place on the public ladder. A row now starts at zero and
+     climbs only from a `pvp` match the room minted and settled; the cosmetic fields still arrive,
+     and the queue still reads the same `tiq` as a pairing hint. */
+  ok('the row keeps the profile but not the claimed rating',
+    row?.tiq === 0 && row?.country === 'PL', JSON.stringify(row));
   ok('and the economy the client reported',
     row?.coins === 250 && row?.referrals === 3 && row?.squad === 'pit-crew', JSON.stringify(row));
   ok('a guest seat carries no numeric id', row?.tgId === '');

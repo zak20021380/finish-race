@@ -17,6 +17,8 @@ const root = path.resolve(here, '..');
 const SUITES = [
   { name: 'countries registry', script: 'verify-countries.mjs', stripTypes: false },
   { name: 'mines', script: 'mines-check.mjs', stripTypes: true },
+  { name: 'match ledger', script: 'verify-matches.mjs', stripTypes: true },
+  { name: 'match session endpoints', script: 'verify-worker-match-session.mjs', stripTypes: false },
   { name: 'walls', script: 'walls-check.mjs', stripTypes: true },
   { name: 'room', script: 'room-check.mjs', stripTypes: true },
   { name: 'bot tiers', script: 'bot-tiers-check.mjs', stripTypes: true },

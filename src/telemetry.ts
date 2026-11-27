@@ -108,44 +108,102 @@ export function setIdle(): void {
   current = null;
 }
 
-/** The level behind a practice board, folded onto the registry's own labels. */
-export function registryModeOfBot(level: string): RegistryMatchMode {
-  return level === 'easy' ? 'bot_easy' : level === 'hard' ? 'bot_hard' : 'bot_medium';
+/* ---------- the server-authoritative match session ---------- */
+
+/**
+ * The three kinds of board the room records. Only `pvp` is worth a ladder point — `friendly` and
+ * `ai` are recorded so a played board is still a played board, and pay in currency only.
+ */
+export type MatchSessionMode = 'pvp' | 'friendly' | 'ai';
+
+/**
+ * The board's open session. `matchId` is a promise because the POST is background: a board never
+ * waits on the network to start, and a device that is offline simply has no id to settle with.
+ */
+interface OpenSession {
+  mode: MatchSessionMode;
+  /** The rival's seat id, or '' when nobody was named (a practice board names `ai`). */
+  opponentId: string;
+  startedAt: number;
+  matchId: Promise<string>;
+}
+
+let session: OpenSession | null = null;
+
+/** This seat's own room id, or '' outside Telegram. */
+function ownSeat(): string {
+  const user = tgUser();
+  const id = user?.id;
+  return id === undefined || id === null ? '' : `tg-${String(id)}`;
+}
+
+/** One JSON POST to the room, resolving to its body or null. Never throws at the caller. */
+async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  const url = workerUrl(path);
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    return (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * The board settled: file it in the Live Registry.
+ * Open the room's record of this board. `POST /api/match/start` mints the id and stamps the
+ * server's clock — the clock the 15-second floor is measured against, so a client cannot shorten
+ * a board by lying about when it began.
  *
- * The result capsule is the one moment a race is finished and the app is still awake, so this is
- * where every match — a practice board the room never saw, a friend duel, a queue pairing —
- * reaches the directory. The clock and the room's match id come off the same `current` record
- * `beginMatch()` opened, which is what lets the server dedupe a PvP board the room already
- * settled against this client's echo of it.
- *
- * Fire-and-forget, exactly like the telemetry above: a dropped report must never hold up the
- * result card, and a lesson (no clock open) files nothing at all.
+ * Called once per board from `restart()`. The previous session, if any, is simply dropped: a board
+ * that was replaced before it settled has no result worth filing.
  */
-export function reportRegistryMatch(
-  mode: RegistryMatchMode,
-  result: 'W' | 'L',
-  moves: number,
-): void {
-  const match = current;
-  if (!match) return;
-  const durationSec = Math.max(0, Math.round((Date.now() - match.startedAt) / 1000));
-  const user = tgUser();
-  const name = [user?.first_name, user?.last_name].filter((part): part is string => !!part).join(' ');
-  send('/api/registry/match', {
-    userId: user?.id === undefined || user?.id === null ? '' : String(user.id),
-    displayName: name.slice(0, 40),
-    username: user?.username ?? '',
+export function openMatchSession(mode: MatchSessionMode, opponentId = ''): void {
+  session = {
     mode,
-    result,
-    durationSec,
-    moves: Math.max(0, Math.floor(moves) || 0),
-    ts: Date.now(),
-    ...(match.matchId ? { matchId: match.matchId } : {}),
-  });
+    opponentId,
+    startedAt: Date.now(),
+    matchId: post('/api/match/start', { mode, opponentId })
+      .then((body) => (body && typeof body.matchId === 'string' ? body.matchId : '')),
+  };
+}
+
+/**
+ * The board reached its result: settle it, then file the registry echo under the SAME match id.
+ *
+ * The winner is a seat, never a score. On a win it is this device's own verified seat; on a loss
+ * it is the rival's — `ai` for a practice board, so the room never has to guess who won a board
+ * with one human on it.
+ *
+ * `recorded !== true` is the honest answer for a refused settlement (too fast, replayed, or a
+ * board the room already judged), and in that case nothing is echoed: the registry door only
+ * folds in a match the room itself settled, so an echo without one would be refused anyway.
+ */
+export function settleMatchSession(won: boolean, registryMode: RegistryMatchMode, moves: number): void {
+  const live = session;
+  session = null;
+  if (!live) return;
+  const durationSec = Math.max(0, Math.round((Date.now() - live.startedAt) / 1000));
+  const moveCount = Math.max(0, Math.floor(moves) || 0);
+  void (async () => {
+    const matchId = await live.matchId;
+    if (!matchId) return;
+    const winnerId = won ? ownSeat() : (live.opponentId || 'ai');
+    if (!winnerId) return;
+    const answer = await post('/api/match/end', { matchId, winnerId, moves: moveCount });
+    if (!answer || answer.recorded !== true) return;
+    send('/api/registry/match', {
+      mode: registryMode,
+      result: won ? 'W' : 'L',
+      durationSec,
+      moves: moveCount,
+      matchId,
+    });
+  })();
+}
+
+/** The level behind a practice board, folded onto the registry's own labels. */
+export function registryModeOfBot(level: string): RegistryMatchMode {
+  return level === 'easy' ? 'bot_easy' : level === 'hard' ? 'bot_hard' : 'bot_medium';
 }
 
 /** Start the heartbeat once per page. The first beat is immediate, so an idle app is still seen. */

@@ -439,11 +439,22 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lobby.fetch(request);
   }
 
+  /* The server-authoritative match session. `POST /api/match/start` mints a row and stamps the
+     room's clock; `POST /api/match/end` runs the participant / active / 15-second gates and flips
+     the row to `completed` before a single point moves. Both prove the caller from the signed
+     initData inside the room — the edge only routes, and a body may never name a seat. */
+  if (url.pathname === '/api/match/start' || url.pathname === '/api/match/end') {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   /* The weekly tournament's doors — /join, /me, /leaderboard, /claim, and the signed match
      pipeline's /match/start and /match/finish — all live in the Challenge Durable Object (the
      MATCHMAKER singleton that owns the ledger). The room proves the caller's signed initData
-     itself (with a gated localhost/dev fallback for desktop WebViews) and owns the ledger: a win
-     is never credited from a request body, only from a token the room itself signed. */
+     itself and owns the ledger: a win is never credited from a request body, only from a token
+     the room itself signed for a seat the signature named. There is no declared-seat fallback —
+     an id in a JSON body is not a credential. */
   if (url.pathname.startsWith('/api/challenge/')) {
     if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
